@@ -1,0 +1,234 @@
+# Mutation legs for the content-based ConstructorIdentity decision (FS-GG/.github#5113). Each leg reverts ONE guard
+# of the constructor closure, the git evidence reader or the preflight decision, and requires the leg's checks to fail:
+# tests/coord-board-v2-projection and the end-to-end preflight test in tests/board-v2-import/run.py (see leg.sh).
+#
+#     scripts/gate-mutate.py --specs tests/coord-constructor-identity-mutation/specs.yml
+#
+# Each leg rebuilds FS.GG.Coord.GitHub and BoardV2Import and runs about 220 tests plus one end-to-end test (about two
+# minutes), so this is an on-demand sweep, run when V2ConstructorClosure.fs, the ConstructorIdentity check or its
+# evidence reader change. tests/coord-constructor-identity-mutation/run.sh checks on every PR that each `find` still
+# matches. CI17 guards against over-correction (refusing an empty diff), not under-correction.
+mutations:
+- id: CI1/closure-change-admitted
+  gate: a changed closure path refuses ConstructorIdentity
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2Preflight.fs
+  find: '| Known content when content.ChangedInsideClosure <> 0 ->'
+  replace: '| Known content when false ->'
+  breaks: a main that changed the planner, the hosts or the build configuration is admitted as if it were the installed constructor
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI2/non-descendant-admitted
+  gate: a main that does not descend from the constructor refuses
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2Preflight.fs
+  find: '| Known content when not content.BuiltIsAncestor -> unsupported ConstructorIdentity ConstructorNotAncestorOfMain []'
+  replace: '| Known content when false -> unsupported ConstructorIdentity ConstructorNotAncestorOfMain []'
+  breaks: an unrelated or older main whose diff happens to miss the closure is admitted, so the comparison is no longer anchored on history
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI3/evidence-pair-unbound
+  gate: content evidence decides only for the exact pair of revisions it was read for
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2Preflight.fs
+  find: '| Known content when content.Built <> built || content.Main <> main ->'
+  replace: '| Known content when false ->'
+  breaks: evidence read for another constructor or another main can support this one
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI4/unread-evidence-supports
+  gate: unread closure evidence is Unknown, never support
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2Preflight.fs
+  find: '| NotObserved kind -> unknown ConstructorIdentity ConstructorClosure kind []'
+  replace: '| NotObserved kind -> supported ConstructorIdentity "mutant"'
+  breaks: 'a failed git read or an underivable closure admits a moved main: the check fails open'
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI5/empty-closure-supports
+  gate: an empty closure is not evidence
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2Preflight.fs
+  find: '| Known content when content.ClosureEntries <= 0 ->'
+  replace: '| Known content when false ->'
+  breaks: a closure that covers nothing reports zero changed paths and admits every descendant main
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI6/transitive-references-dropped
+  gate: the closure follows every ProjectReference, link and Import
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2ConstructorClosure.fs
+  find: '                                            pending.Push path'
+  replace: '                                            ignore path'
+  breaks: a change in a referenced project (FS.GG.Coord.Core, telemetry) or a linked source is outside the closure
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI7/shadow-rule-dropped
+  gate: an added file at the root or beside an exact closure path is a change
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2ConstructorClosure.fs
+  find: (change.Status = 'A' && shadows closure change.Path)
+  replace: 'false'
+  breaks: a new Directory.Build.rsp, NuGet.config variant or src/Directory.Build.props can change the build without touching a listed path
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI8/property-path-admitted
+  gate: an MSBuild property path the derivation cannot resolve refuses
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2ConstructorClosure.fs
+  find: if replaced.Contains "$(" then Error
+  replace: if false then Error
+  breaks: an item under $(SomeDir) resolves to a literal path that names nothing, so its real source is silently outside the closure
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI9/escape-admitted
+  gate: a path escaping the repository refuses
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2ConstructorClosure.fs
+  find: '| ".." -> if segments.Count = 0 then escaped <- true else segments.RemoveAt(segments.Count - 1)'
+  replace: '| ".." -> if segments.Count = 0 then () else segments.RemoveAt(segments.Count - 1)'
+  breaks: a reference above the repository root is clamped to a repository path instead of refusing
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI10/broad-prefix-admitted
+  gate: a closure prefix must be at least a second-level directory
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2ConstructorClosure.fs
+  find: 'else fail ("constructor closure directory is too broad: " + prefix)'
+  replace: else prefixes.Add prefix |> ignore
+  breaks: a reference to a whole top-level tree is admitted, so the closure no longer means the constructor's sources
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI11/listing-entry-unchecked
+  gate: only A, D, M and T change entries are admitted
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2ConstructorClosure.fs
+  find: not (List.contains status [ "A"; "D"; "M"; "T" ])
+  replace: (status = "")
+  breaks: an unmerged, rename or unknown entry is read as a plain path change, so an unexpected listing is not refused
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI12/truncated-listing-admitted
+  gate: a truncated change listing refuses
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2ConstructorClosure.fs
+  find: elif not (text.EndsWith("\000", StringComparison.Ordinal)) then Error "change listing is truncated"
+  replace: elif false then Error "change listing is truncated"
+  breaks: a listing cut off at the byte bound is parsed as complete and can omit a changed closure path
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI13/root-host-dropped
+  gate: every host project is a closure root
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2ConstructorClosure.fs
+  find: |2
+              "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+  replace: ''
+  breaks: the engine host, its kernel and telemetry are outside the closure although they run the enrollment commands
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI14/ancestor-directory-files-dropped
+  gate: every ancestor Directory.Build.* and Directory.Packages.props is inside, present or not
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2ConstructorClosure.fs
+  find: for name in [ "Directory.Build.props"; "Directory.Build.targets"; "Directory.Packages.props" ] do
+  replace: 'for name in ([]: string list) do'
+  breaks: adding src/Directory.Build.props changes every project build and is not a closure change
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI15/ancestry-not-read
+  gate: ancestry is read with git merge-base
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: elif mergeBase <> built then
+  replace: elif false then
+  breaks: a main that does not descend from the constructor is reported as a descendant
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI16/underivable-closure-is-evidence
+  gate: an underivable closure is unobserved, not an empty change set
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: |2-
+                            match V2ConstructorClosure.derive files read with
+                            | Error _ -> V2Preflight.NotObserved V2Preflight.Incomplete
+  replace: |2-
+                            match V2ConstructorClosure.derive files read with
+                            | Error _ -> V2Preflight.Known { Built = built; Main = main; BuiltIsAncestor = true; ClosureEntries = 1; ChangedOutsideClosure = 0; ChangedInsideClosure = 0 }
+  breaks: a closure the derivation refused is reported as unchanged and admits the moved main
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI17/empty-diff-refused
+  gate: an empty change listing is a successful read (the over-correction leg)
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: gitCapture true repository
+  replace: gitCapture false repository
+  breaks: a main that differs from the constructor only by empty commits is refused as unreadable
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh
+- id: CI18/command-not-wired
+  gate: route-preflight reads the evidence for a differing live or asserted main
+  command:
+  - bash
+  - tests/coord-constructor-identity-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: |2
+                         observeConstructorContent repository built main
+  replace: |2
+                         V2Preflight.NotObserved V2Preflight.NotEvaluated
+  breaks: the command never reads the closure, so every moved main stays refused and the installed-release route is unusable again
+  anchor:
+    pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-constructor-identity-mutation/leg.sh

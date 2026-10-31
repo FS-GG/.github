@@ -45,6 +45,7 @@ module V2PreflightTests =
           ConstructorRevision = Known main
           ProtectedMain = Known main
           ProtectedMainFreshness = LiveMain
+          ConstructorContent = NotObserved NotEvaluated
           PredecessorPrivate = Known privateJson
           PredecessorPublic = Known publicJson
           RuntimeBinding = Known(runtimeOf privateJson mergeSha)
@@ -159,7 +160,12 @@ module V2PreflightTests =
     let ``constructor identity: a different source revision is unsupported and an unreadable one is unknown`` () =
         let healthyReport = runPlan (healthy 5)
         Assert.True(isSupported (verdictOf healthyReport ConstructorIdentity))
-        expectUnsupported ConstructorIdentity ConstructorDiffersFromMain ConstructorBuild (runPlan { healthy 5 with ConstructorRevision = Known(String.replicate 40 "2") })
+        // A different revision with no content evidence decides nothing (#5113); with a changed closure it is unsupported.
+        let built = String.replicate 40 "2"
+        expectUnknown ConstructorIdentity ConstructorClosure NotEvaluated (runPlan { healthy 5 with ConstructorRevision = Known built })
+        let changed = { Built = built; Main = main; BuiltIsAncestor = true; ClosureEntries = 40; ChangedOutsideClosure = 0; ChangedInsideClosure = 1 }
+        expectUnsupported ConstructorIdentity ConstructorDiffersFromMain ConstructorBuild
+            (runPlan { healthy 5 with ConstructorRevision = Known built; ConstructorContent = Known changed })
         expectUnknown ConstructorIdentity SourceRevision Unreadable (runPlan { healthy 5 with ConstructorRevision = NotObserved Unreadable })
         expectUnknown ConstructorIdentity ProtectedMain NotSupplied (runPlan { healthy 5 with ProtectedMain = NotObserved NotSupplied })
 

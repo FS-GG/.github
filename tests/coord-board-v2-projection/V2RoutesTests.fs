@@ -189,7 +189,7 @@ module V2RoutesTests =
 
     let private bindInputs (successorPrivate: string) (successorPublic: string) (privateJson: string) (publicJson: string) : EnrollmentInputs =
         { Request = request; Facts = Known(facts, Live); ConstructorRevision = Known(String.replicate 40 "1"); ProtectedMain = Known(String.replicate 40 "1")
-          ProtectedMainFreshness = LiveMain; PredecessorPrivate = Known privateJson; PredecessorPublic = Known publicJson; RuntimeBinding = NotObserved NotSupplied
+          ProtectedMainFreshness = LiveMain; ConstructorContent = NotObserved NotEvaluated; PredecessorPrivate = Known privateJson; PredecessorPublic = Known publicJson; RuntimeBinding = NotObserved NotSupplied
           SuccessorPrivate = Known successorPrivate; SuccessorMergeSha = Known(String.replicate 40 "5"); SuccessorPublic = Known successorPublic
           InstalledReaderSha256 = Known(String.replicate 64 "a"); KnownInstalledReaders = Set.ofList [ String.replicate 64 "a" ]; KnownLiftedCapReaders = Set.empty; KnownCap500Readers = Set.empty
           LockedFSharpCoreHash = Known "h"; CachedFSharpCoreHash = Known "h"; MemoryHeadroomBytes = Known(Some 4294967296L); HostMemAvailableBytes = Known 8589934592L
@@ -242,7 +242,10 @@ module V2RoutesTests =
     let ``ConstructorIdentity: only a live or asserted main can support or refuse, a local tracking ref is unknown either way`` () =
         let privateJson, publicJson, successorPrivate, successorPublic = healthyBind ()
         let inputs = bindInputs successorPrivate successorPublic privateJson publicJson
-        let differing = { inputs with ConstructorRevision = Known(String.replicate 40 "2") }
+        let built = String.replicate 40 "2"
+        let changedClosure =
+            { Built = built; Main = String.replicate 40 "1"; BuiltIsAncestor = true; ClosureEntries = 40; ChangedOutsideClosure = 3; ChangedInsideClosure = 1 }
+        let differing = { inputs with ConstructorRevision = Known built; ConstructorContent = Known changedClosure }
         let verdict (changed: EnrollmentInputs) freshness = verdictOf (run ProgrammeEnrollmentSuccessor PlanSuccessor { changed with ProtectedMainFreshness = freshness }) ConstructorIdentity
         Assert.Equal(Unsupported(ConstructorDiffersFromMain, ConstructorBuild), verdict differing LiveMain)
         Assert.Equal(Unsupported(ConstructorDiffersFromMain, ConstructorBuild), verdict differing AssertedMain)
@@ -258,6 +261,41 @@ module V2RoutesTests =
             Assert.Contains("asserted", asserted)
         | other -> failwithf "%A" other
         Assert.Equal(0, exitCode (run ProgrammeEnrollmentSuccessor BindRuntime { inputs with ProtectedMainFreshness = LiveMain }).Overall)
+
+    // ---- #5113: ConstructorIdentity decides a later main from the constructor closure, not commit-id equality ----
+
+    [<Fact>]
+    let ``ConstructorIdentity: a descendant main with an unchanged closure is supported, and each other content is not`` () =
+        let privateJson, publicJson, successorPrivate, successorPublic = healthyBind ()
+        let main = String.replicate 40 "1"
+        let built = String.replicate 40 "2"
+        let unchanged = { Built = built; Main = main; BuiltIsAncestor = true; ClosureEntries = 40; ChangedOutsideClosure = 7; ChangedInsideClosure = 0 }
+        let inputs = { bindInputs successorPrivate successorPublic privateJson publicJson with ConstructorRevision = Known built; ConstructorContent = Known unchanged }
+        let verdict (changed: EnrollmentInputs) = verdictOf (run ProgrammeEnrollmentSuccessor PlanSuccessor changed) ConstructorIdentity
+        // The installed-release case of cohort 90: main moved past the constructor, nothing in its closure changed.
+        match verdict inputs, verdict { inputs with ProtectedMainFreshness = AssertedMain } with
+        | SupportedForNextStage live, SupportedForNextStage asserted ->
+            Assert.Contains("unchanged", live)
+            Assert.Contains("live remote head", live)
+            Assert.Contains("asserted", asserted)
+        | other -> failwithf "%A" other
+        Assert.Equal(0, exitCode (run ProgrammeEnrollmentSuccessor BindRuntime inputs).Overall)
+        // Causal: one changed closure path refuses, naming the count only.
+        let changed = run ProgrammeEnrollmentSuccessor PlanSuccessor { inputs with ConstructorContent = Known { unchanged with ChangedInsideClosure = 1 } }
+        Assert.Equal(Unsupported(ConstructorDiffersFromMain, ConstructorBuild), verdictOf changed ConstructorIdentity)
+        Assert.Equal<string list>([ "1" ], (findingOf changed ConstructorIdentity).Subjects)
+        Assert.Equal(10, exitCode changed.Overall)
+        // Causal: a main that does not descend from the constructor refuses even with no changed path.
+        Assert.Equal(Unsupported(ConstructorNotAncestorOfMain, ConstructorBuild), verdict { inputs with ConstructorContent = Known { unchanged with BuiltIsAncestor = false } })
+        // Evidence for another pair of revisions decides nothing, in either direction.
+        Assert.Equal(Unknown { Input = ConstructorClosure; Kind = NotEvaluated }, verdict { inputs with ConstructorContent = Known { unchanged with Built = String.replicate 40 "3" } })
+        Assert.Equal(Unknown { Input = ConstructorClosure; Kind = NotEvaluated }, verdict { inputs with ConstructorContent = Known { unchanged with Main = String.replicate 40 "3" } })
+        // A read failure or an underivable closure is never support (fail closed), and neither is an empty closure.
+        Assert.Equal(Unknown { Input = ConstructorClosure; Kind = ReadFailed }, verdict { inputs with ConstructorContent = NotObserved ReadFailed })
+        Assert.Equal(Unknown { Input = ConstructorClosure; Kind = Incomplete }, verdict { inputs with ConstructorContent = NotObserved Incomplete })
+        Assert.Equal(Unknown { Input = ConstructorClosure; Kind = Incomplete }, verdict { inputs with ConstructorContent = Known { unchanged with ClosureEntries = 0 } })
+        // A local tracking ref stays Unknown even with unchanged content: the reference itself may be stale.
+        Assert.Equal(Unknown { Input = ProtectedMain; Kind = NotLive }, verdict { inputs with ProtectedMainFreshness = LocalTrackingRef })
 
     // ---- disposition 4: a 404 that may be invisibility ----
 
