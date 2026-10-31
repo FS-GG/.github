@@ -91,26 +91,29 @@ Prefer the first: it touches one context and leaves every other protection as it
 rights. These are the REST calls for branch protection; they are documented here and were not run when this was
 written, so read the state back after each one.
 
-**A. Remove the context from the required list for one merge, then put it back.**
+**A. Remove the context from the required list for one merge, then put it back.** Both calls build the full
+`checks` array from a live read, so the other contexts and their app pins (`app_id` 15368) are carried over
+as they are now, and `strict` keeps its current value (`false` at the time of writing). Nothing is typed in by
+hand that could go stale.
 
 ```bash
+API=repos/FS-GG/.github/branches/main/protection/required_status_checks
+
 # remove (the PR can now merge with the job red)
-echo '["no-silent-revert"]' | gh api -X DELETE \
-  repos/FS-GG/.github/branches/main/protection/required_status_checks/contexts --input -
-gh api repos/FS-GG/.github/branches/main/protection/required_status_checks/contexts   # readback: no-silent-revert absent
+gh api "$API" -q '{strict: .strict, checks: (.checks | map(select(.context != "no-silent-revert")) | map({context, app_id}))}' \
+  | gh api -X PATCH "$API" --input -
+gh api "$API" -q '.checks[].context'          # readback: no-silent-revert absent, the other eight present
 
 # ... merge the PR ...
 
-# restore
-echo '["no-silent-revert"]' | gh api -X POST \
-  repos/FS-GG/.github/branches/main/protection/required_status_checks/contexts --input -
-gh api repos/FS-GG/.github/branches/main/protection/required_status_checks/contexts   # readback: no-silent-revert present
+# restore, with the app pin
+gh api "$API" -q '{strict: .strict, checks: ((.checks | map({context, app_id})) + [{context: "no-silent-revert", app_id: 15368}] | unique_by(.context))}' \
+  | gh api -X PATCH "$API" --input -
+gh api "$API" -q '.checks[] | select(.context == "no-silent-revert")'   # readback: app_id 15368
 ```
 
 While the context is off the list, every PR on `main` is unprotected by it, not only the one being merged, so keep
-the window to the single merge. The other required contexts pin their app (`app_id` 15368, see `checks` in
-`gh api repos/FS-GG/.github/branches/main/protection/required_status_checks`); the POST above adds the context
-without a pin. If the flip made it pinned, restore it the way the flip did.
+the window to the single merge.
 
 **B. Relax `enforce_admins` for one merge, then enforce it again.** Broader, because an administrator then
 merges past every required context, not just this one. Use it only when A cannot apply.
@@ -127,6 +130,13 @@ gh api repos/FS-GG/.github/branches/main/protection/enforce_admins -q .enabled  
 
 Whether a cap override deserves an automated, owner-only path is a repository-settings decision that belongs to
 the integrator.
+
+## Making the check required (the flip)
+
+Owner action, and a repository setting, so this PR does not do it. The restore command above is also the flip:
+it adds `no-silent-revert` with `app_id` 15368 to the existing `checks` array and leaves `strict` as it is.
+Run it once the warning band has been reviewed and the job has a green run on the base, and read it back with
+`gh api repos/FS-GG/.github/branches/main/protection/required_status_checks -q '.checks[] | select(.context == "no-silent-revert")'`.
 
 ## Protecting the check (proposed, not applied)
 
