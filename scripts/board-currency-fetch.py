@@ -341,6 +341,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--owner", default="FS-GG")
     ap.add_argument("--project", type=int, default=3)
     ap.add_argument("--out", required=True)
+    # 10 pages of 50 is the 500-item board limit (#5119); a larger board is refused, never read partially. Pages of
+    # 100 would save two requests at 222 items but cost more points (2 per page, 6 in total instead of 5), so 50 stays.
     ap.add_argument("--max-pages", type=int, default=10, help="GraphQL pages of 50 items (default 10)")
     args = ap.parse_args(argv)
     rules = _rules()
