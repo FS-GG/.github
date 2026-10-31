@@ -5,10 +5,13 @@ namespace FS.GG.Coord.GitHub
 module internal V2InspectionAcquisition =
     open Transport
 
+    /// The most compatible fixed GraphQL reads aliased into one provider request: 25 (it was 10; #5119).
+    val batchSize: int
+
     /// Evaluate a read-only projection after resolving all its discovered requests.
     /// Exact requests share only this phase's bounded native responses; a new call
     /// reacquires every determining read, including original failures and final barriers.
-    /// Batches contain at most ten compatible fixed GraphQL requests. Variables and root
+    /// Batches contain at most `batchSize` compatible fixed GraphQL requests. Variables and root
     /// aliases retain exact identities; unknown/partial/malformed replies remain failures.
     /// Unsupported query forms use independent native reads. Pagination is still drained
     /// and checked by the original decoders, rather than inferred from batch success.

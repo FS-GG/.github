@@ -21,7 +21,7 @@ let ``bounded batches preserve every opaque identity and final phases reread`` (
         match sent.Body with
         | Query(document, variables) ->
             Assert.DoesNotContain("mutation", document)
-            Assert.InRange(variables.Length, 1, 10)
+            Assert.InRange(variables.Length, 1, V2InspectionAcquisition.batchSize)
             for name, value in variables do
                 let number = match value with VNumber value -> int value | _ -> failwith "number"
                 let alias = if name = "number" then "repository" else name.Replace("number", "repository")
@@ -32,10 +32,12 @@ let ``bounded batches preserve every opaque identity and final phases reread`` (
     let evaluate (phase: IGitHubTransport) =
         [1..45] |> List.map (fun number -> GraphQl.read phase (request number) (fun data -> Ok(data.GetProperty("repository").GetProperty("issue").GetProperty("id").GetString())))
     let first = V2InspectionAcquisition.run transport evaluate
-    Assert.Equal(5, calls)
+    // 45 reads in batches of 25 (#5119; it was 10, five sends): two sends.
+    Assert.Equal(25, V2InspectionAcquisition.batchSize)
+    Assert.Equal(2, calls)
     Assert.Equal<string>([1..45] |> List.map (fun number -> $"I_{number}"), first |> List.map (Result.defaultWith (Errors.explain >> failwith)))
     let final = V2InspectionAcquisition.run transport evaluate
-    Assert.Equal(10, calls)
+    Assert.Equal(4, calls)
     Assert.True((first = final))
 
 [<Fact>]
@@ -198,3 +200,40 @@ let ``one character variable and root alias retain their exact GraphQL names`` (
     Assert.Contains("b1_a:node(id:$b1_n)", actual)
     Assert.Equal(Ok "I_1", results[0])
     Assert.Equal(Ok "I_2", results[1])
+
+[<Fact>]
+let ``a 500-row successor inspection folds blockers and Work level and stays inside the row-scaled budget`` () =
+    // #5119: the 207-row cohort-90 inspection took 2,502 reads and exhausted the flat 500-send ceiling. Blockers now ride on
+    // the native observation, Work level on the planning membership read, and reads are batched 25 at a time.
+    let rows = [1..V2Projection.maximumProgrammeRows] |> List.map (fun number -> $"I_budget_{number}", { ProgrammeFixture.issue with Number = 6000 + number }, "docs/coordination/programme.md")
+    let selected = ProgrammeFixture.enroll { ProgrammeFixture.successorBinding () with SelectedIssues = rows |> List.map (fun (id, issue, _) -> id, $"{issue.Owner}/{issue.Repository}#{issue.Number}") |> Map.ofList } rows
+    let subjects = Collections.Generic.Dictionary<string, int>()
+    let count (request: Request) result =
+        let key = if request.Subject.EndsWith(" native observation", StringComparison.Ordinal) then "native observation"
+                  elif request.Subject.EndsWith(" native blocked_by", StringComparison.Ordinal) then "native blocked_by"
+                  else request.Subject
+        subjects[key] <- (match subjects.TryGetValue key with | true, value -> value + 1 | _ -> 1)
+        result
+    let reads = ProgrammeFixture.successorTransportFor selected rows (Some "Delivery") count
+    let report = V2ProjectionSource.inspectFixed reads selected None
+    Assert.True(report.Evidence.PopulationGap.IsNone, string report.Evidence.PopulationGap)
+    Assert.True(report.MembershipGap.IsNone, string report.MembershipGap)
+    Assert.All(report.Items, fun item ->
+        Assert.Equal("Current", item.SourceCurrentness)
+        Assert.True(item.Evidence.DependencyReadComplete)
+        Assert.Equal(Some("Delivery", Some "delivery-option"), item.Planning |> Option.bind _.WorkLevel)
+        Assert.True(item.WorkItem.Value.Complete))
+    let lookup key = match subjects.TryGetValue key with | true, value -> value | _ -> 0
+    // Initial and final barrier read each row's native observation once; no separate dependency or classification read.
+    Assert.Equal(2 * rows.Length, lookup "native observation")
+    Assert.Equal(0, lookup "native blocked_by")
+    Assert.Equal(0, lookup "selected work classification")
+    // Two REST permission snapshots remain; every other read is aliased GraphQL.
+    Assert.Equal(2, reads.RestCalls)
+    let sends = reads.GraphQlCalls + reads.RestCalls
+    // Measured 1,517 sends before #5119 (REST blocked_by and 10 reads per batch); the flat historical 500 now suffices.
+    Assert.InRange(sends, 1, 250)
+    Assert.InRange(sends, 1, V2Projection.refreshRequestCeiling rows.Length)
+    let perRow = (report.Items |> List.sumBy _.Evidence.Reads) / rows.Length
+    Assert.InRange(perRow, 1, 13)
+    Assert.Empty reads.Mutations

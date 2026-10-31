@@ -277,6 +277,67 @@ module V2ProjectionSource =
             | :? UriFormatException
             | :? ArgumentException -> Error(Malformed(subject, "unreadable native dependency snapshot"))
 
+    // Programme bindings read the native issue and its blockers in ONE GraphQL query (#5119). The separate REST
+    // `dependencies/blocked_by` read was two sends per row per inspection (initial plus final barrier), about two thirds
+    // of all sends, and REST reads are never batched. The blocker checks are the REST reader's, applied to the GraphQL
+    // shape: an FS-GG issue (never a pull request: `blockedBy` yields issues only), exact canonical URL, node identity,
+    // revision and OPEN/CLOSED state, and fewer than 50 blockers with a matching totalCount, or completeness is unknown.
+    let private readProgrammeIssueDetails (transport: IGitHubTransport) (binding: Binding) (issue: IssueRef) =
+        let subject = $"{issue.Owner}/{issue.Repository}#{issue.Number} native observation"
+        let blockersSubject = $"{issue.Owner}/{issue.Repository}#{issue.Number} native blocked_by"
+        let document = "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { nameWithOwner issue(number: $number) { id number updatedAt state url body repository { nameWithOwner } blockedBy(first: 50) { totalCount nodes { id number updatedAt state url repository { nameWithOwner } } } } } rateLimit { cost remaining } }"
+        GraphQl.read transport (query document [ "owner", VString issue.Owner; "repo", VString issue.Repository; "number", VNumber(double issue.Number) ] subject) (fun data ->
+            let repository = data.GetProperty "repository"
+            let native = repository.GetProperty "issue"
+            let expected = $"{issue.Owner}/{issue.Repository}"
+            let nodeId = native.GetProperty("id").GetString()
+            let updated = native.GetProperty("updatedAt").GetString()
+            let state = native.GetProperty("state").GetString()
+            match DateTimeOffset.TryParse updated with
+            | true, _ when repository.GetProperty("nameWithOwner").GetString() = expected
+                           && native.GetProperty("repository").GetProperty("nameWithOwner").GetString() = expected
+                           && native.GetProperty("number").GetInt32() = issue.Number
+                           && not (String.IsNullOrWhiteSpace nodeId)
+                           && (state = "OPEN" || state = "CLOSED")
+                           && native.GetProperty("body").ValueKind = JsonValueKind.String
+                           && native.GetProperty("url").GetString() = $"https://github.com/{expected}/issues/{issue.Number}" ->
+                let observation: NativeObservation =
+                    { Issue = issue; NodeId = nodeId; UpdatedAt = updated; State = state; Url = native.GetProperty("url").GetString()
+                      BodySha256 = native.GetProperty("body").GetString() |> System.Text.Encoding.UTF8.GetBytes |> System.Security.Cryptography.SHA256.HashData |> Convert.ToHexStringLower }
+                let blockers =
+                    try
+                        let connection = native.GetProperty "blockedBy"
+                        let nodes = connection.GetProperty "nodes"
+                        let total = connection.GetProperty("totalCount").GetInt32()
+                        if connection.ValueKind <> JsonValueKind.Object || nodes.ValueKind <> JsonValueKind.Array then Error(Malformed(blockersSubject, "unreadable native dependency snapshot"))
+                        elif total >= 50 || nodes.GetArrayLength() >= 50 then Error(Malformed(blockersSubject, "native dependency bound reached; completeness unknown"))
+                        elif total <> nodes.GetArrayLength() then Error(Malformed(blockersSubject, "native dependency snapshot incomplete or denied"))
+                        else
+                            let parsed = nodes.EnumerateArray() |> Seq.map (fun node ->
+                                let parts = node.GetProperty("repository").GetProperty("nameWithOwner").GetString().Split('/')
+                                let number = node.GetProperty("number").GetInt32()
+                                let url = node.GetProperty("url").GetString()
+                                if parts.Length <> 2 || parts[0] <> (if binding.BindingVersion = 3 then binding.Owner else "FS-GG") || String.IsNullOrWhiteSpace parts[1]
+                                   || url <> $"https://github.com/{parts[0]}/{parts[1]}/issues/{number}"
+                                   || (binding.BindingVersion = 3 && not (binding.Repositories.Contains $"{parts[0]}/{parts[1]}")) then
+                                    Error(Malformed(blockersSubject, "native blocker identity is not an FS-GG issue"))
+                                else
+                                    let blocker: NativeObservation =
+                                        { Issue = { Owner = parts[0]; Repository = parts[1]; Number = number }
+                                          NodeId = node.GetProperty("id").GetString(); UpdatedAt = node.GetProperty("updatedAt").GetString()
+                                          State = node.GetProperty("state").GetString(); Url = url; BodySha256 = "" }
+                                    if number <= 0 || String.IsNullOrWhiteSpace blocker.NodeId || not (fst (DateTimeOffset.TryParse blocker.UpdatedAt))
+                                       || (blocker.State <> "OPEN" && blocker.State <> "CLOSED") then Error(Malformed(blockersSubject, "native blocker node identity missing/mismatched"))
+                                    else Ok blocker) |> Seq.toList
+                            match parsed |> List.tryPick (function Error error -> Some error | _ -> None) with
+                            | Some error -> Error error
+                            | None -> Ok(parsed |> List.choose (function Ok blocker -> Some blocker | _ -> None))
+                    with
+                    | :? Collections.Generic.KeyNotFoundException
+                    | :? InvalidOperationException -> Error(Malformed(blockersSubject, "unreadable native dependency snapshot"))
+                Ok(observation, native.GetProperty("body").GetString(), blockers)
+            | _ -> Error(Malformed(subject, "native identity or revision is unreadable/mismatched")))
+
     // The single hard-coded programme issue URL admitted as an owning plan (see readPlan).
     let programmePlanIssueUrl = "https://github.com/FS-GG/.github/issues/3008"
 
@@ -452,10 +513,13 @@ module V2ProjectionSource =
         let mutable currentDeliverable = None
         let mutable deliverables = []
         let mutable deliverableGap = Some "Native issue body was not collected"
+        let details =
+            if isProgrammeBinding binding then readProgrammeIssueDetails transport binding row.Issue |> Result.map (fun (observation, body, blockers) -> observation, body, Some blockers)
+            else readIssueDetails transport row.Issue |> Result.map (fun (observation, body) -> observation, body, None)
         let verification =
-            match readIssueDetails transport row.Issue with
+            match details with
             | Error error -> Error error
-            | Ok(observation, body) ->
+            | Ok(observation, body, folded) ->
                 owner <- ownerField binding body
                 let declaration, references, gap = deliverableField binding body
                 currentDeliverable <- declaration
@@ -465,7 +529,7 @@ module V2ProjectionSource =
                 if observation.NodeId <> row.NodeId then Ok(Refused "native issue node identity changed")
                 elif not (isProgrammeBinding binding) && (observation.UpdatedAt <> row.UpdatedAt || observation.State <> "OPEN") then Ok(Stale None)
                 else
-                    match readBlockedBy transport binding row.Issue with
+                    match (match folded with Some blockers -> blockers | None -> readBlockedBy transport binding row.Issue) with
                     | Error error -> Error error
                     | Ok observed ->
                         dependencies <- observed
@@ -877,6 +941,10 @@ module V2ProjectionSource =
         | Some expected, Some intent, Some field ->
             try
                 let classification =
+                  match intent.WorkLevel with
+                  // Read with the planning membership in the same query (#5119); identity and option checks already applied.
+                  | Some observed -> Ok observed
+                  | None ->
                     let document = "query($itemId: ID!) { node(id: $itemId) { ... on ProjectV2Item { id project { id } content { ... on Issue { id } } workLevel: fieldValueByName(name: \"Work level\") { __typename ... on ProjectV2ItemFieldSingleSelectValue { name optionId field { ... on ProjectV2SingleSelectField { id } } } } } } rateLimit { cost remaining } }"
                     GraphQl.read transport (query document ["itemId", VId intent.ItemId] "selected work classification") (fun data ->
                         let node = data.GetProperty "node"

@@ -181,11 +181,17 @@ module V2Projection =
     let maximumProgrammeRows = 500
 
     // The bounded refresh/inspect request ceiling, scaled by the selected population (#5119). It was a flat 500 sends,
-    // which the 207-row cohort-90 inspection exhausted (2,502 reads, all rows Unknown). The measured fixture cost of the
-    // batched inspection is about 3.1 sends per row (635 at 207 rows); 4 per row plus a fixed 64 keeps headroom, and the
-    // old 500 stays the floor so no smaller binding loses budget. Above maximumProgrammeRows the binding is refused
+    // which the 207-row cohort-90 inspection exhausted (2,502 reads, all rows Unknown). With blockers and Work level folded
+    // into the per-row reads and 25 reads per batch, the fixture inspection costs well under one send per row; 2 per row
+    // plus a fixed 64 keeps headroom for real pagination and PR joins, and the old 500 stays the floor. Above maximumProgrammeRows the binding is refused
     // before any send, so the ceiling never needs to exceed the value at that cap.
-    let refreshRequestCeiling (selectedRows: int) = max 500 (64 + 4 * min (max selectedRows 0) maximumProgrammeRows)
+    let refreshRequestCeiling (selectedRows: int) = max 500 (64 + 2 * min (max selectedRows 0) maximumProgrammeRows)
+
+    // The bounded refresh/inspect deadline, scaled the same way (#5119). It was a flat 270 seconds. The live 207-row
+    // cohort-90 inspection took 126 seconds once the reads per row were cut, which projects to about 305 seconds at 500
+    // rows. 60 seconds plus 0.7 per selected row, never below 270, is 410 seconds at the 500-row cap, which leaves the
+    // existing 30-second transport timeout inside the refresh job's 8-minute limit.
+    let refreshDeadlineSeconds (selectedRows: int) = max 270.0 (60.0 + 0.7 * float (min (max selectedRows 0) maximumProgrammeRows))
 
     let private payloadRows (binding: Binding) (bytes: byte array) : IoResult<(string * string * string) list> =
         try
@@ -554,7 +560,7 @@ module V2Projection =
 
     type PlanningObservation =
         { ItemId: string; Status: string option; Roadmap: string option; Track: string option
-          Observation: string option; MembershipPages: int }
+          Observation: string option; MembershipPages: int; WorkLevel: (string * string option) option }
 
     let private readPlanningLegacy (transport: IGitHubTransport) (binding: Binding) (request: Request) =
         let admitted = validateBinding binding |> Result.bind (fun () ->
@@ -594,7 +600,7 @@ module V2Projection =
                                         else Ok(Some(value.GetProperty("text").GetString()))
                                     select "status" binding.Status |> Result.bind (fun status -> roadmap |> Result.bind (fun roadmap ->
                                         select "track" binding.Track |> Result.bind (fun track -> select "observation" binding.Observation |> Result.map (fun observation ->
-                                            { ItemId = itemId; Status = status; Roadmap = roadmap; Track = track; Observation = observation; MembershipPages = pages }))))))))))
+                                            { ItemId = itemId; Status = status; Roadmap = roadmap; Track = track; Observation = observation; MembershipPages = pages; WorkLevel = None }))))))))))
 
     // Read the successor's membership and planning values together. Each invocation still
     // reads the exact schema, and every membership page independently joins the owner and
@@ -610,7 +616,7 @@ module V2Projection =
                 let expected: ExactProject = { Owner = binding.Owner; Number = binding.ProjectNumber; Title = binding.ProjectTitle; Id = binding.ProjectId }
                 bootstrapExactProject transport expected |> Result.bind (fun board ->
                     verifyFieldSchema binding board |> Result.bind (fun () ->
-                        let document = "query($projectOwner:String!,$owner:String!,$repo:String!,$number:Int!,$after:String){organization(login:$projectOwner){id login} repository(owner:$owner,name:$repo){nameWithOwner issue(number:$number){id number projectItems(first:50,after:$after){totalCount pageInfo{hasNextPage endCursor} nodes{id project{id} content{... on Issue{id number repository{nameWithOwner}}} status:fieldValueByName(name:\"Status\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}} roadmap:fieldValueByName(name:\"Roadmap\"){__typename ... on ProjectV2ItemFieldTextValue{text field{... on ProjectV2Field{id}}}} track:fieldValueByName(name:\"Track\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}} observation:fieldValueByName(name:\"Observation\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}}}}}} rateLimit{cost remaining}}"
+                        let document = "query($projectOwner:String!,$owner:String!,$repo:String!,$number:Int!,$after:String){organization(login:$projectOwner){id login} repository(owner:$owner,name:$repo){nameWithOwner issue(number:$number){id number projectItems(first:50,after:$after){totalCount pageInfo{hasNextPage endCursor} nodes{id project{id} content{... on Issue{id number repository{nameWithOwner}}} status:fieldValueByName(name:\"Status\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}} roadmap:fieldValueByName(name:\"Roadmap\"){__typename ... on ProjectV2ItemFieldTextValue{text field{... on ProjectV2Field{id}}}} track:fieldValueByName(name:\"Track\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}} observation:fieldValueByName(name:\"Observation\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}}" + (if binding.WorkLevel.IsSome then " workLevel:fieldValueByName(name:\"Work level\"){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}}" else "") + "}}}} rateLimit{cost remaining}}"
                         let mutable pages = 0
                         let fetch after =
                             let variables =
@@ -671,9 +677,26 @@ module V2Projection =
                                              || value.GetProperty("field").GetProperty("id").GetString() <> binding.RoadmapFieldId then
                                             invalid "Roadmap field identity/type differs"
                                         else Ok(Some(value.GetProperty("text").GetString()))
+                                    // The Work level classification rides on this membership read (#5119), with the same field and
+                                    // option identity checks the former separate `selected work classification` read applied.
+                                    let workLevel =
+                                        match binding.WorkLevel with
+                                        | None -> Ok None
+                                        | Some field ->
+                                            let value = node.GetProperty "workLevel"
+                                            if value.ValueKind = JsonValueKind.Null then Ok(Some("Unknown", None))
+                                            else
+                                                let name = value.GetProperty("name").GetString()
+                                                let option = value.GetProperty("optionId").GetString()
+                                                if value.GetProperty("__typename").GetString() <> "ProjectV2ItemFieldSingleSelectValue"
+                                                   || value.GetProperty("field").GetProperty("id").GetString() <> field.Id
+                                                   || Map.tryFind name field.Options <> Some option then
+                                                    invalid "Work level field/value differs from bound schema"
+                                                else Ok(Some(name, Some option))
                                     select "status" binding.Status |> Result.bind (fun status -> roadmap |> Result.bind (fun roadmap ->
-                                        select "track" binding.Track |> Result.bind (fun track -> select "observation" binding.Observation |> Result.map (fun observation ->
-                                            { ItemId = itemId; Status = status; Roadmap = roadmap; Track = track; Observation = observation; MembershipPages = pages }))))
+                                        select "track" binding.Track |> Result.bind (fun track -> select "observation" binding.Observation |> Result.bind (fun observation ->
+                                            workLevel |> Result.map (fun workLevel ->
+                                            { ItemId = itemId; Status = status; Roadmap = roadmap; Track = track; Observation = observation; MembershipPages = pages; WorkLevel = workLevel })))))
                                 with
                                 | :? Collections.Generic.KeyNotFoundException
                                 | :? InvalidOperationException -> invalid "unreadable bound planning fields"

@@ -539,10 +539,17 @@ Coordination board and its readers to 500 items, so `maximumProgrammeRows` is no
 250-row table can never admit them. More than 500 rows are unsupported. The byte bounds are unchanged. The cohort-90 binding measured
 37,938 payload bytes and 62,651 binding bytes at 207 rows, which projects to about 92 KiB and 150 KiB at 500.
 
-The bounded refresh and inspection request ceiling was a flat 500 sends. The 207-row cohort-90 inspection exhausted it, with
-2,502 reads and all 207 rows `Unknown`. It is now `V2Projection.refreshRequestCeiling`: 64 sends plus 4 per selected row, never
-below 500. That is 892 sends at 207 rows and 2,064 at 500. The measured fixture cost of the batched inspection is 635 sends at 207
-rows and 1,517 at 500. The 270-second deadline is unchanged, so reducing the reads per row is the next change. The
+The bounded refresh and inspection request ceiling was a flat 500 sends and a 270-second deadline. The 207-row cohort-90
+inspection exhausted it, with 2,502 reads and all 207 rows `Unknown`. Three changes cut the reads per row:
+- A programme binding reads each issue's blockers in the native observation GraphQL query (`blockedBy`, with the REST reader's checks), not a separate REST `dependencies/blocked_by` read. That read was two unbatched sends per row.
+- A binding-5 successor reads Work level in its planning membership query, not a separate `selected work classification` read.
+- Inspection batches alias 25 reads per send instead of 10.
+
+The fixture inspection now takes 81 sends at 207 rows and 175 at 500, down from 635 and 1,517. The live read-only run of the
+207-row binding completed in 126 seconds for 92 GraphQL points and 17 REST reads, with 204 sources Current and no membership or
+population gap. The ceiling is now `V2Projection.refreshRequestCeiling`: 64 sends plus 2 per selected row, never below 500 (1,064 at
+500 rows). The deadline is `V2Projection.refreshDeadlineSeconds`: 60 seconds plus 0.7 per selected row, never below 270 (410 at
+500 rows). The
 complete-membership read refuses a board whose `totalCount` exceeds `maximumBoardItems` (500) on its first page, rather than paging
 up to the limit.
 

@@ -118,6 +118,10 @@ module V2Projection =
     /// historical 500, and scaled by the selected population up to `maximumProgrammeRows`.
     val refreshRequestCeiling: selectedRows: int -> int
 
+    /// The bounded refresh/inspect deadline in seconds for a binding that selects this many rows: never below the
+    /// historical 270, scaled by the selected population up to `maximumProgrammeRows` (410 seconds at 500 rows).
+    val refreshDeadlineSeconds: selectedRows: int -> float
+
     /// Validate the reviewed binding without performing IO.
     val validateBinding: binding: Binding -> IoResult<unit>
 
@@ -171,7 +175,9 @@ module V2Projection =
 
     /// Fresh immutable owner/schema/native membership and four planning values. Performs queries only;
     /// unseeded fields remain None, incomplete or mismatched identities remain errors. No projection.
+    /// `WorkLevel` is read in the same membership query for a binding-5 successor with a bound Work level field
+    /// (#5119): `Some("Unknown", None)` when unset, `Some(name, Some optionId)` when set, `None` when not read.
     type PlanningObservation =
         { ItemId: string; Status: string option; Roadmap: string option; Track: string option
-          Observation: string option; MembershipPages: int }
+          Observation: string option; MembershipPages: int; WorkLevel: (string * string option) option }
     val readPlanning: transport: IGitHubTransport -> binding: Binding -> request: Request -> IoResult<PlanningObservation>
