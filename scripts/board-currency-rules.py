@@ -50,7 +50,10 @@ comments. Each finding has a stable ID `<rule>:<subject>:<reason>` with no ages 
       no open PR referencing it.
   R9  Hierarchy: an open Delivery has a parent that is a Project 3 Outcome; an Outcome is not a child of
       a Delivery.
-  U   The input needed for a verdict could not be read. Unknown is never a pass (.github#266).
+  U   The input needed for a verdict could not be read. Unknown is never a pass (.github#266). That covers
+      an unreadable card; comments that were not read (R2, R3, R4) or a Root comment the fetch truncated
+      with no marker visible (R2, R3); an unresolved blocker; a truncated sub-issue or blocked-by list;
+      and an unreadable parent card (R1, R9).
 
 An Outcome with a Root `fsgg:outcome-closure-proposed/v1` marker still yields R5/R6 (the board still
 claims open work that is not open) with `pending: "closure-proposed"`, so the report separates findings
@@ -171,6 +174,11 @@ def root_comments(item: dict, roots: set[str]) -> list[dict] | None:
         return None
     picked = [c for c in comments if str(c.get("author", "")).lower() in roots and parse_time(c.get("createdAt"))]
     return sorted(picked, key=lambda c: (parse_time(c["createdAt"]), str(c.get("id"))))
+
+
+def any_truncated(comments: list[dict]) -> bool:
+    """True when the fetch cut a Root comment short: a marker past the cut cannot be seen."""
+    return any(c.get("truncated") is True for c in comments)
 
 
 def has_marker(comments: list[dict], pattern: re.Pattern) -> bool:
@@ -303,7 +311,10 @@ def evaluate(snapshot: dict, params: dict | None = None) -> list[dict]:
                  private=priv, pr=True, prState=state)
         parent = d.get("parent") or {}
         parent_item = board.by_ref.get(ref_key(parent.get("repo"), parent.get("number"))) if parent else None
-        if parent_item is None or parent_item.get("workLevel") != "Outcome":
+        if parent_item is not None and parent_item.get("unreadable"):
+            emit("U", subject, "r1-parent-unreadable", "the Delivery's parent card could not be read",
+                 private=priv, verdict="unknown", pr=True)
+        elif parent_item is None or parent_item.get("workLevel") != "Outcome":
             emit("R1", subject, "no-parent-outcome",
                  f"{tense} routine PR's Delivery has no parent Outcome on Project 3", private=priv, pr=True,
                  prState=state)
@@ -348,7 +359,12 @@ def evaluate(snapshot: dict, params: dict | None = None) -> list[dict]:
             if comments is None:
                 emit("U", subject, "r2-comments-unread", "Outcome acceptance marker could not be read",
                      verdict="unknown", **kw)
-            elif not has_marker(comments, ACCEPTED):
+            elif has_marker(comments, ACCEPTED):
+                pass
+            elif any_truncated(comments):
+                emit("U", subject, "r2-comments-unread", "a Root comment was truncated; the marker may be past the cut",
+                     verdict="unknown", **kw)
+            else:
                 emit("R2", subject, "outcome-unaccepted",
                      "Outcome closed as completed without a Root fsgg:outcome-accepted/v1 marker", **kw)
 
@@ -367,7 +383,10 @@ def evaluate(snapshot: dict, params: dict | None = None) -> list[dict]:
             native = item.get("blockedBy") if isinstance(item.get("blockedBy"), dict) else {}
             native_nodes = [n for n in native.get("nodes") or [] if isinstance(n, dict)]
             native_complete = native.get("total") == len(native_nodes)
-            marker = blocked_on_refs(comments) if comments is not None else None
+            # A truncated Root comment may hold the newest marker (newest wins, and an empty one clears), so
+            # with truncation only native blockers can pass the card; everything else is Unknown.
+            truncated = comments is not None and any_truncated(comments)
+            marker = blocked_on_refs(comments) if comments is not None and not truncated else None
             blockers = {ref_key(n.get("repo"), n.get("number")): n.get("state") for n in native_nodes}
             for ref in marker or []:
                 blockers.setdefault(ref, board.state_of(ref))
@@ -376,7 +395,8 @@ def evaluate(snapshot: dict, params: dict | None = None) -> list[dict]:
                 for c in open_child_items)
             if any(s == "OPEN" for s in blockers.values()) or via_child:
                 pass
-            elif not native_complete or comments is None or any(s is None for s in blockers.values()):
+            elif (not native_complete or comments is None or truncated
+                  or any(s is None for s in blockers.values())):
                 emit("U", subject, "r3-blockers-unread", "blocker state could not be read", verdict="unknown", **kw)
             elif not blockers:
                 emit("R3", subject, "no-blocker",
@@ -388,7 +408,10 @@ def evaluate(snapshot: dict, params: dict | None = None) -> list[dict]:
         if status in ACTIVE:
             if level == "Delivery":
                 evidence = open_prs if status == "In progress" else ready_prs
-                if not evidence:
+                if not evidence and item.get("comments") is None:
+                    emit("U", subject, "r4-comments-unread",
+                         "comments were not read, so the activity set is incomplete", verdict="unknown", **kw)
+                elif not evidence:
                     signals = [parse_time(item.get("contentUpdatedAt")), parse_time(item.get("statusUpdatedAt"))]
                     signals += [parse_time(x.get("updatedAt")) for x in linked]
                     signals += [parse_time(c.get("createdAt")) for c in (item.get("comments") or [])]
@@ -429,7 +452,9 @@ def evaluate(snapshot: dict, params: dict | None = None) -> list[dict]:
         # R9
         parent = item.get("parent")
         parent_item = board.by_ref.get(ref_key(parent.get("repo"), parent.get("number"))) if parent else None
-        if level == "Delivery":
+        if parent_item is not None and parent_item.get("unreadable") and level in ("Delivery", "Outcome"):
+            emit("U", subject, "r9-parent-unreadable", "the parent card could not be read", verdict="unknown", **kw)
+        elif level == "Delivery":
             if not parent:
                 emit("R9", subject, "orphan-delivery", "Delivery has no parent issue", **kw)
             elif parent_item is None:
@@ -527,6 +552,9 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(render_report(result))
         return 0
     except NoVerdict as exc:
+        if args.cmd == "check":
+            # A findings file left by an earlier run must not be read as this run's verdict.
+            Path(args.out).unlink(missing_ok=True)
         print(f"board-currency: NO VERDICT: {exc}", file=sys.stderr)
         return NO_VERDICT
 

@@ -557,10 +557,108 @@ class Fetch(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(json.loads(out.read_text())["items"][0]["subIssues"]["total"], 150)
 
+    def test_failure_removes_an_earlier_snapshot(self):
+        (self.dir / "snapshot.json").write_text("{}")
+        proc, out = self.run_fetch({"graphql": [1, ""]})
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse(out.exists())
+
+    def test_root_comments_are_kept_whole_and_other_long_comments_are_flagged(self):
+        node = copy.deepcopy(self.NODE)
+        node["status"] = {"name": "Blocked", "updatedAt": RECENT}
+        marker = "<!-- fsgg:blocked-on/v1 FS-GG/x#5 -->"
+        root_long = json.dumps({"id": 1, "user": {"login": ROOT_LOGIN}, "created_at": RECENT, "body": "x" * 9000 + marker})
+        other_long = json.dumps({"id": 2, "user": {"login": "someone"}, "created_at": RECENT, "body": "y" * 9000})
+        short = json.dumps({"id": 3, "user": {"login": "someone"}, "created_at": RECENT, "body": "ok"})
+        proc, out = self.run_fetch({"graphql": [0, self.page([node])], "search/issues": [0, self.EMPTY_SEARCH],
+                                    "/comments": [0, "\n".join((root_long, other_long, short)) + "\n"]})
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        comments = json.loads(out.read_text())["items"][0]["comments"]
+        self.assertEqual([c["truncated"] for c in comments], [False, True, False])
+        self.assertTrue(comments[0]["body"].endswith(marker))
+        self.assertEqual(len(comments[1]["body"]), 4000)
+
     def test_the_fetch_writes_no_board_field(self):
         text = FETCH_PATH.read_text()
         for forbidden in ("mutation", "item-edit", "updateProjectV2", "-X POST", "--method"):
             self.assertNotIn(forbidden, text)
+
+
+class UnknownLegs(unittest.TestCase):
+    """Every rule whose input can be missing says Unknown, never a verdict, and never silently passes."""
+
+    def test_r1_unreadable_parent_is_unknown(self):
+        snap = healthy(); snap["items"][0]["unreadable"] = True
+        found = R.evaluate(snap)
+        self.assertIn("U:FS-GG/.github#10:r1-parent-unreadable", [f["id"] for f in found])
+        self.assertFalse([f for f in found if f["rule"] == "R1"])
+
+    def test_r2_truncated_root_comment_without_visible_marker_is_unknown(self):
+        o = issue(1, level="Outcome", status="Done", state="CLOSED", reason="COMPLETED", closed_at=RECENT,
+                  comments=[dict(comment("long note"), truncated=True)])
+        found = ids(board([o]))
+        self.assertIn("U:FS-GG/.github#1:r2-comments-unread", found)
+        self.assertNotIn("R2:FS-GG/.github#1:outcome-unaccepted", found)
+        o["comments"] = [dict(comment("<!-- fsgg:outcome-accepted/v1 --> long"), truncated=True)]
+        self.assertEqual(ids(board([o])), [])
+
+    def test_r3_truncation_voids_marker_blockers_but_not_native_ones(self):
+        snap = healthy(); snap["pullRequests"] = []
+        snap["items"][1].update(status="Blocked", comments=[dict(comment("<!-- fsgg:blocked-on/v1 FS-GG/x#5 -->"), truncated=True)])
+        snap["refStates"] = {"FS-GG/x#5": "OPEN"}
+        found = ids(snap)
+        self.assertIn("U:FS-GG/.github#2:r3-blockers-unread", found)
+        self.assertFalse([i for i in found if i.startswith("R3")])
+        snap["items"][1]["blockedBy"] = {"total": 1, "nodes": [{"repo": "FS-GG/y", "number": 6, "state": "OPEN"}]}
+        self.assertFalse([i for i in ids(snap) if i.startswith(("R3", "U"))])
+
+    def test_r4_unread_comments_are_unknown_without_pr_evidence(self):
+        snap = healthy(); snap["pullRequests"] = []
+        snap["items"][1].update(comments=None, contentUpdatedAt=RECENT, statusUpdatedAt=RECENT)
+        found = ids(snap)
+        self.assertIn("U:FS-GG/.github#2:r4-comments-unread", found)
+        self.assertFalse([i for i in found if i.startswith("R4")])
+        snap = healthy(); snap["items"][1]["comments"] = None  # open PR is evidence on its own
+        self.assertFalse([i for i in ids(snap) if i.startswith(("R4", "U"))])
+
+    def test_r5_truncated_closed_children_are_unknown(self):
+        o = issue(1, level="Outcome", status="In progress", comments=[], subs=[("FS-GG/.github", 7, "CLOSED")], sub_total=2)
+        found = ids(board([o]))
+        self.assertIn("U:FS-GG/.github#1:r6-children-unread", found)
+        self.assertNotIn("R5:FS-GG/.github#1:children-complete", found)
+
+    def test_r7_unreadable_card_is_unknown_not_missing_fields(self):
+        snap = healthy()
+        snap["items"].append({"itemId": "PVTI_x", "unreadable": True, "status": None, "track": None, "workLevel": None})
+        snap["project"]["totalCount"] = 3
+        found = ids(snap)
+        self.assertIn("U:draft:PVTI_x:unreadable", found)
+        self.assertFalse([i for i in found if i.startswith("R7")])
+
+    def test_r8_unreadable_delivery_is_unknown(self):
+        snap = healthy(); snap["items"][1].update(unreadable=True, status="Ready")
+        found = ids(snap)
+        self.assertIn("U:FS-GG/.github#2:unreadable", found)
+        self.assertFalse([i for i in found if i.startswith(("R8", "R1"))])
+
+    def test_r9_unreadable_parent_is_unknown(self):
+        snap = healthy(); snap["pullRequests"] = []; snap["items"][0]["unreadable"] = True
+        found = ids(snap)
+        self.assertIn("U:FS-GG/.github#2:r9-parent-unreadable", found)
+        self.assertFalse([i for i in found if i.startswith("R9")])
+
+
+class StaleOutput(unittest.TestCase):
+    def test_check_removes_an_earlier_findings_file_on_no_verdict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out = Path(tmp) / "s.json", Path(tmp) / "f.json"
+            out.write_text("{\"stale\": true}")
+            snap = healthy(); snap["complete"] = False
+            src.write_text(json.dumps(snap))
+            proc = subprocess.run([sys.executable, str(RULES_PATH), "check", "--snapshot", str(src), "--out", str(out)],
+                                  capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 2)
+            self.assertFalse(out.exists())
 
 
 class ShadowWorkflow(unittest.TestCase):
