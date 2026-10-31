@@ -48,6 +48,13 @@ class Refused(RuntimeError):
     pass
 
 
+class JournalMainMoved(Refused):
+    """The physical journal ref moved between the opening and closing reads of one read().
+
+    Typed so a caller may re-read after the ref settles (#5108); nothing was validated or kept.
+    """
+
+
 class GitAPI(Protocol):
     def get(self, path: str) -> dict | list: ...
 
@@ -640,7 +647,7 @@ class ProtectedReleaseJournal:
             current = lineage[-1]
         second = self.api.get(path)
         if second.get("object", {}).get("sha") != physical:
-            raise Refused("journal head moved during read")
+            raise JournalMainMoved("journal head moved during read")
         if "continuation" in current and (not _claimed_state(current) or self.continuation_owner is None
                 or canonical(current["continuation"]["execution"]) != canonical(self.continuation_owner)):
             raise Refused("claimed .104 continuation is consumed by another invocation/profile")

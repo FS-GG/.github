@@ -26,7 +26,7 @@ from release_successor_admission import SingleOperatorAdmission, publisher_conte
 from release_successor_execution import Refused, advance, ordered_effects, full_transition
 from release_successor_journal import (ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical,
     ReleaseSuspension, ALLOWED_SUCCESSOR, CURRENT_RELEASE, SUSPENDED_REF, SUSPENSION_PATH, strict_suspension,
-    SUSPENSION_SCHEMA, SUSPENDED_ORIGINAL, SUSPENSION_DECISION)
+    SUSPENSION_SCHEMA, SUSPENDED_ORIGINAL, SUSPENSION_DECISION, JournalMainMoved)
 from release_successor_provider import (GitHubAPI, MetadataRequestBudget, INSTALL_METADATA_REQUEST_CEILING, LiveProvider, NotFound, sanitized_dispatch_diagnostic,
                                        VerifiedOriginalTagTransport, approved_original_tag_transport,
                                        AUTH_PROTOCOL, AUTH_PROFILE, decode_auth_frame, validate_auth_binding, validate_auth_payload)
@@ -651,6 +651,103 @@ def authority_main(api):
     return obj["sha"]
 
 
+# The Authority settlement writer lands bursts of about four commits roughly eight seconds
+# apart (#5108). A main read that differs only because such a burst landed inside a check
+# window is re-read until two reads AUTHORITY_SETTLE_SECONDS apart agree. The protected
+# conclusion (destination absence before genesis, or the exact journal state at recovery)
+# is then re-derived at the settled head and must be unchanged: a changed conclusion is
+# real divergence and refuses. Waiting is bounded per publisher run, not per check: one
+# AuthorityRereadBudget allows at most AUTHORITY_REREAD_BUDGET_SECONDS of sleeps in total
+# (10 waits of 15 s), after which a still-moving main refuses as before.
+AUTHORITY_SETTLE_SECONDS = 15
+AUTHORITY_SETTLE_ATTEMPTS = 8
+AUTHORITY_REREAD_ATTEMPTS = 3
+AUTHORITY_REREAD_BUDGET_SECONDS = 150
+
+
+class AuthorityMainMoved(Refused):
+    """Authority main moved inside one read-only classification sandwich; safe to re-read."""
+
+
+class AuthorityRereadBudget:
+    """One publisher run's total settle wait. Shared by every re-read in that run."""
+
+    def __init__(self, seconds=None, *, sleep=None):
+        self.remaining = AUTHORITY_REREAD_BUDGET_SECONDS if seconds is None else seconds
+        self._sleep = sleep
+        self.waits = 0
+
+    def wait(self, seconds):
+        require(self.remaining >= seconds, "Authority main did not settle within the publisher's bounded re-read budget")
+        self.remaining -= seconds
+        self.waits += 1
+        (time.sleep if self._sleep is None else self._sleep)(seconds)
+
+
+def settled_authority_main(api, budget, *, seconds=None, attempts=None):
+    """Return an Authority main head unchanged across two reads `seconds` apart, or refuse."""
+    seconds = AUTHORITY_SETTLE_SECONDS if seconds is None else seconds
+    attempts = AUTHORITY_SETTLE_ATTEMPTS if attempts is None else attempts
+    previous = authority_main(api)
+    for _ in range(attempts):
+        budget.wait(seconds)
+        current = authority_main(api)
+        if current == previous:
+            return current
+        previous = current
+    raise Refused("Authority main did not settle within the bounded re-read window")
+
+
+def stable_journal_destination(api, logical_ref, budget):
+    """Classify the destination inside its main sandwich, re-classifying at a settled main on drift."""
+    for attempt in range(AUTHORITY_REREAD_ATTEMPTS):
+        if attempt:
+            settled_authority_main(api, budget)
+        try:
+            return classify_journal_destination(api, logical_ref)
+        except AuthorityMainMoved:
+            continue
+    raise Refused("Authority main moved during destination classification after bounded re-reads")
+
+
+def require_stable_destination(api, logical_ref, fresh, physical, detail, budget):
+    """Return a head at which the classified destination still holds; refuse real divergence."""
+    if authority_main(api) == physical:
+        return physical
+    settled_authority_main(api, budget)
+    again, head = stable_journal_destination(api, logical_ref, budget)
+    require(again == fresh, f"{detail}: Authority journal destination changed")
+    return head
+
+
+def read_journal_at_stable_main(journal, api, physical, detail, budget):
+    """Read the journal inside a main sandwich; an unrelated main move is re-read once settled.
+
+    A move between the outer reads, or inside journal.read() itself (its typed
+    JournalMainMoved), is re-read at a settled head. The physical head itself may differ from
+    the classification head `physical` (unrelated Authority writes), but the journal's
+    selected logical head must not: every accepted read must bind the logical journal head
+    that existed at classification, and every re-read the exact same state. Any other
+    journal is real divergence after genesis and refuses.
+    """
+    require(getattr(journal, "main_directory", False) is True, "stable journal re-read requires main-directory storage")
+    baseline = journal._main_head(physical)
+    expected = None
+    for attempt in range(AUTHORITY_REREAD_ATTEMPTS):
+        opening = authority_main(api) if attempt == 0 else settled_authority_main(api, budget)
+        try:
+            state = journal.read()
+        except JournalMainMoved:
+            continue
+        observed = journal._observed
+        require(observed is not None and observed.head == baseline and (expected is None or state == expected),
+                f"Authority journal changed during {detail}")
+        expected = state
+        if authority_main(api) == opening:
+            return opening
+    raise Refused(f"Authority main moved during {detail} after bounded re-reads")
+
+
 def classify_journal_destination(api, logical_ref):
     """Return (fresh, physical head); nested read failures never mean absence."""
     prefix = "refs/heads/fsgg/v2/journal/release/"
@@ -703,7 +800,8 @@ def classify_journal_destination(api, logical_ref):
         pass
     else:
         raise Refused("selected legacy release journal still exists; separate disposition required")
-    require(authority_main(api) == physical, "Authority main moved during destination classification")
+    if authority_main(api) != physical:
+        raise AuthorityMainMoved("Authority main moved during destination classification")
     return not present, physical
 
 
@@ -716,7 +814,8 @@ def prepare_release_journal(journal, ledger_api, admission, provider, api, manif
     if original_0103_selection is not None:
         require(not recovery_checkpoint, "original .103 selection conflicts with recovery checkpoint")
         validate_original_0103_seam(original_0103_selection, manifest, intent, candidate_source, publisher_sha, journal.ref)
-    fresh, physical = classify_journal_destination(ledger_api, journal.ref)
+    budget = AuthorityRereadBudget()  # One bounded settle budget for this publisher run.
+    fresh, physical = stable_journal_destination(ledger_api, journal.ref, budget)
     require(not original_tag_recovery or (original_0103_selection is not None and not fresh),
             "original tag recovery requires the existing original journal; no genesis")
     if fresh:
@@ -731,16 +830,15 @@ def prepare_release_journal(journal, ledger_api, admission, provider, api, manif
             raise Refused("successor tag already exists outside the protected journal")
         require(provider._release() is None, "successor release already exists outside the protected journal")
         uniqueness()
-        require(authority_main(ledger_api) == physical, "Authority main moved before journal preparation")
+        physical = require_stable_destination(ledger_api, journal.ref, fresh, physical,
+                                              "Authority main moved before journal preparation", budget)
         require(admission.authorize(manifest["contentId"], "journal", "intent", manifest["contentId"]),
                 "release journal initialization admission denied")
         if preflight_only:
             return True
         journal.initialize(intent)
     else:
-        require(authority_main(ledger_api) == physical, "Authority main moved before journal recovery")
-        journal.read()
-        require(authority_main(ledger_api) == physical, "Authority main moved during journal recovery")
+        read_journal_at_stable_main(journal, ledger_api, physical, "journal recovery", budget)
         require(not preflight_only or original_tag_recovery,
                 "preflight requires an unused release journal and version")
         if candidate_source != publisher_sha:
