@@ -474,8 +474,8 @@ module BoardV2Application =
     type private MigrationAdmission =
         { Prepared: V2Migration.Prepared; Directory: string; WindowUntil: DateTimeOffset }
 
-    /// Resolves the shared writer lock for a project and a legacy lock name (board-reconciler design §8, #5126).
-    /// Production resolves `V2WriterLock.production`; every test seam injects a private directory instead.
+    // Resolves the shared writer lock for a project and a legacy lock name (board-reconciler design §8, #5126).
+    // Production resolves V2WriterLock.production; every test seam injects a private directory instead.
     type private WriterLock = string -> string -> V2WriterLock.Location
 
     let private productionWriterLock : WriterLock =
