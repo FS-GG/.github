@@ -240,7 +240,12 @@ def linkage_of(pr: dict, lookup, *, anonymous_unreadable: bool = False) -> tuple
     list of (rule, reason): [] means linked; a ("U", ...) entry means no verdict."""
     own = ref_key(pr.get("repo"), pr.get("number"))
     refs = sorted(pr_refs(str(pr.get("repo", "")), pr.get("body")) - {own})
-    cards = [lookup(r) for r in refs]
+    # A PR is never a Delivery (or an Outcome): a PR-typed card counts as off the board, as it does in the
+    # board-linkage check and the merge gate.
+    def card(ref: str) -> dict | None:
+        found = lookup(ref)
+        return None if isinstance(found, dict) and found.get("type") == "PullRequest" else found
+    cards = [card(r) for r in refs]
     if any(c is not None and c.get("unreadable") for c in cards) or (anonymous_unreadable and None in cards):
         return [("U", "r1-reference-unreadable")], None
     cards = [c for c in cards if c is not None]
@@ -256,7 +261,7 @@ def linkage_of(pr: dict, lookup, *, anonymous_unreadable: bool = False) -> tuple
     elif pr.get("state") == "OPEN" and d.get("status") == "Done":
         out.append(("R1", "delivery-done"))
     parent = d.get("parent") or {}
-    parent_card = lookup(ref_key(parent.get("repo"), parent.get("number"))) if parent else None
+    parent_card = card(ref_key(parent.get("repo"), parent.get("number"))) if parent else None
     if parent and (parent_card is None and anonymous_unreadable or parent_card is not None and parent_card.get("unreadable")):
         out.append(("U", "r1-parent-unreadable"))
     elif parent_card is None or parent_card.get("workLevel") != "Outcome":

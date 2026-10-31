@@ -300,7 +300,7 @@ Outcome is never rolled up automatically.
 result carries `boardGate` (`linked`, `overridden`, `refused`, `unknown`, `unavailable` or
 `not-applicable`), a fixed-vocabulary `boardGateReason`, and `boardTransition` (`noop`, `written`,
 `refused-preimage`, `uncertain`, `not-applicable`, or advisory `would-write:<Status>` and
-`would-refuse-preimage`). Three points refine the steps above:
+`would-refuse-preimage`, plus `refused-custody` in enforce). These points refine the steps above:
 
 - `scripts/board-currency-rules.py` is not distributed to receiver workspaces. Where it is absent the
   gate reports `unavailable`: advisory records it, and enforce returns `indeterminate` (fail-closed).
@@ -313,6 +313,33 @@ result carries `boardGate` (`linked`, `overridden`, `refused`, `unknown`, `unava
   identities, and the live Status field with its options (the option ID is resolved from that schema).
   The gate requires an adjacent re-read to equal the preimage before the single send. It reports
   `written` only when the readback equals the preimage with Status alone moved to the target.
+  **Root accepted this item-scoped substitute guard for this writer** (#5106 review): for the selected
+  item it is at least as strict as the whole-project helpers, and its scope is disclosed here.
+- **Durable possible-send custody.** Before the send, enforce writes one JSON record per (repository,
+  PR) to a private directory (`--board-gate-custody`, default `$XDG_STATE_HOME/fsgg/board-gate`). The
+  record carries the Delivery, item, preimage and target, and is keyed by repository and PR alone so a
+  later run can find it before it knows anything else. The directory must be owned by the running user and
+  is tightened to mode 0700. The record is written atomically and fsynced, with the directory fsynced too.
+  If it cannot be written, nothing is sent (`refused-custody`). After a readback that proves the target,
+  the record is atomically rewritten to `verified`. The record holds identities and Status names only.
+- **Crash recovery is read-only.** A run that died after the send leaves a `possible-send` record on a PR
+  that is now merged. The next enforce run takes the already-merged path, finds the record, and reads back
+  without sending: `boardGateReason: custody-readback` with `boardTransition: written` (Status equals the
+  recorded target, record rewritten to `verified`) or `uncertain` (anything else, including a failed or
+  malformed read; the record stays). A `verified` record reports `written` with no read. As defence in
+  depth, the write path also refuses to overwrite an existing record (`uncertain`, no send).
+- **Enforce runs only from the FS-GG/.github checkout.** `--board-gate enforce` is refused, by `main()` and
+  again by `summarize()` itself, unless the running copy sits in a checkout that holds
+  `scripts/board-currency-rules.py` and whose `origin` is exactly FS-GG/.github on github.com. The URL is
+  parsed, not suffix-matched: `https://github.com/FS-GG/.github[.git][/]` with no userinfo, port, query or
+  fragment, `ssh://git@github.com/FS-GG/.github[.git]`, or `git@github.com:FS-GG/.github[.git]`; host and
+  path compare case-insensitively. The receiver copy distributed by the drivers package can therefore never
+  enforce, and the default in the distributed bytes stays `advisory` (a test and a mutant pin it).
+  Flipping that default is not how phase 3 starts: Root runs the `.github` copy with `--board-gate enforce`.
+- **A PR is never a Delivery.** A reference that resolves to a pull request counts as off the board in
+  all three places: the merge gate, the board-linkage check and the observer's `linkage_of()`.
+- **An overridden PR gets no Status transition.** Only a `linked` verdict names a verified Delivery to
+  move. An override records `boardGate: overridden` and `boardTransition: not-applicable`.
 
 ### (c) The hourly observer
 
@@ -339,7 +366,7 @@ fewer per hour. Failing the run on new finding IDs is phase 3.
 | Write | Who | Automatic? |
 |---|---|---|
 | Delivery Status after merge (table above) | `routine-delivery.py` as the merging credential | Yes: deterministic, guarded, read back |
-| Status Done when an issue closes | GitHub's built-in project workflow "Item closed → Done", the **only** writer of Done | Yes, once enabled. Root decided to enable it (decision 2); it is an owner UI action, requested and pending at the time of writing |
+| Status Done when an issue closes | GitHub's built-in project workflow "Item closed → Done", the **only** writer of Done | Yes. Enabled by the owner (decision 2); read back `enabled: true` on 2026-10-31 |
 | Sub-issue added to the project | GitHub's built-in "Auto-add sub-issues to project" | **No.** Turned off by the owner and read back `enabled: false` on 2026-10-31 ([issuecomment-6540378933](https://github.com/FS-GG/.github/issues/4730#issuecomment-6540378933)); cards come from batched enrollment |
 | Accepting an Outcome (marker plus close) | Root | **No.** This is a Root decision |
 | Closing a Delivery | Root, or a closing keyword the PR author chose | No, except through the closing keyword |
@@ -454,8 +481,8 @@ From [issuecomment-6540490608](https://github.com/FS-GG/.github/issues/4730#issu
 1. Rule set `fsgg:board-currency-rules/v1` is approved as the phase-1 basis; phase 1 goes to
    independent review before merge. The phase-2 R1 additions (`overridden`, carrying, identity-less Unknown) are version 2
    and need their own approval with phase 2.
-2. The built-in "Item closed → Done" project workflow will be turned on. It is an owner UI action and
-   has been requested. It is the only writer of Done (§2b).
+2. The built-in "Item closed → Done" project workflow is turned on (owner UI action; read back
+   `enabled: true` on 2026-10-31). It is the only writer of Done (§2b).
 3. Tracking issue: reuse #4985, renamed to the board-currency findings issue.
 4. Post-merge Status: In review by default, or In progress when the PR body carries
    `fsgg:delivery-continues/v1`. Done follows Root's acceptance, which is closing the issue.
