@@ -65,15 +65,17 @@ FRESHNESS DETAILS
 
 The cadence is read from the workflow's own `cron:` lines (union of all of them): the longest gap between
 consecutive firings over the next 62 days, so a weekday-only cron has a 3-day gap and a monthly one 31. Overdue
-means the newest run created by a `schedule` event on main is older than max(2 x cadence, 2 hours). The floor
+means the newest fulfilling run is older than max(2 x cadence, 2 hours); a fulfilling run is one created by a
+`schedule` event on main, or a `workflow_dispatch` run whose actor and triggering actor are the hourly fdev
+dispatcher's token owner (`collect --dispatcher-login`; Root decision on #4990: the dispatcher is the designed
+fallback for a dropped cron). The observer's own current run is never counted. The floor
 keeps a 5-minute cron from paging on GitHub's ordinary queueing delay. A scheduled workflow with no scheduled
 run is a finding once it has been registered for longer than that threshold, and is listed as pending before
 that. An unparsable cron, or a failed read, is UNKNOWN. A freshness finding has its own key (`stale:<file>`) so
 its start and end each produce one comment.
 
 THIS OBSERVER IS SCHEDULED TOO. If GitHub stops firing its cron nothing here can say so: the only reader of its
-staleness is another observer. The board-drift observer runs hourly and is the natural reader; see the pull
-request for the proposed reciprocal check.
+staleness is another observer. The board-drift observer runs hourly and reads it (rule s, #4990).
 
 DEDUPE
 ======
@@ -130,6 +132,8 @@ BODY_LIMIT = 60000
 MARKER_KEYS_LIMIT = 12000
 STALE_FACTOR = 2
 STALE_FLOOR = dt.timedelta(hours=2)
+SCHEDULE_READ = 3
+DISPATCH_READ = 10
 CRON_HORIZON_DAYS = 62
 READ_WORKERS = 8  # concurrent REST reads; ~200 sequential reads would take minutes
 RUN_PAGE = 10  # completed runs read per workflow and event, to find the latest conclusive one
@@ -538,10 +542,21 @@ def hours(delta: dt.timedelta) -> str:
     return f"{delta.total_seconds() / 3600:.1f}h"
 
 
-def freshness(name: str, crons: list[str], meta: dict, newest: dict | None, now: dt.datetime) -> dict | None:
+def freshness(name: str, crons: list[str], meta: dict, newest: dict | None, now: dt.datetime,
+              dispatched: dict | None = None) -> dict | None:
     """PURE. A freshness evidence dict for one scheduled workflow, 'pending' for a grace case, or None when fresh.
 
-    `meta` is the workflow object ({state, created_at}); `newest` the newest run created by a schedule event on main."""
+    `meta` is the workflow object ({state, created_at}); `newest` the newest run created by a schedule event on main;
+    `dispatched` the newest `workflow_dispatch` run by the hourly dispatcher's token owner (Root decision on #4990:
+    the dispatcher is the designed fallback for a dropped cron, so it fulfils the schedule). The newer of the two is
+    judged against the same allowance."""
+    kind = "scheduled"
+    if dispatched is not None:
+        got, theirs = parse_time(dispatched.get("created_at")), parse_time((newest or {}).get("created_at"))
+        if got is None:
+            raise ValueError("newest dispatcher run has no created_at")
+        if newest is None or theirs is None or got > theirs:
+            newest, kind = dispatched, "dispatcher"
     period = cadence(crons, now)
     limit = freshness_threshold(period)
     state = meta.get("state")
@@ -562,7 +577,7 @@ def freshness(name: str, crons: list[str], meta: dict, newest: dict | None, now:
         raise ValueError("newest run has no created_at")
     if now - last > limit:
         return {"event": "schedule", "conclusion": "overdue", "runId": newest.get("id"), "url": newest.get("html_url"),
-                "detail": f"last scheduled run {last.strftime('%Y-%m-%dT%H:%MZ')}, {hours(now - last)} ago; "
+                "detail": f"last {kind} run {last.strftime('%Y-%m-%dT%H:%MZ')}, {hours(now - last)} ago; "
                           f"cadence {hours(period)}, allowance {hours(limit)}"}
     return None
 
@@ -662,7 +677,8 @@ def read_all(items: list, fn) -> list:
         return list(pool.map(safe, items))
 
 
-def collect(plan: dict, needs: object, repo: str, run_id: str | None, now: dt.datetime) -> dict:
+def collect(plan: dict, needs: object, repo: str, run_id: str | None, now: dt.datetime,
+            dispatcher_login: str | None = None) -> dict:
     fresh, unknown = fresh_results(plan, needs)
     evidence: dict[str, list[dict]] = {}
     superseded: dict[str, list[dict]] = {}
@@ -695,18 +711,32 @@ def collect(plan: dict, needs: object, repo: str, run_id: str | None, now: dt.da
     pending: list[str] = []
     def read_schedule(name: str):
         meta = gh_json(f"repos/{repo}/actions/workflows/{name}")
-        runs = gh_json(f"repos/{repo}/actions/workflows/{name}/runs?branch=main&event=schedule&per_page=1")
+        # Three newest, not one: the current run (this observer's own, when scheduled) is excluded below, or a
+        # scheduled night would always find itself and its own freshness check could never fire.
+        runs = gh_json(f"repos/{repo}/actions/workflows/{name}/runs?branch=main&event=schedule&per_page={SCHEDULE_READ}")
         listed = runs.get("workflow_runs") if isinstance(runs, dict) else None
         if not isinstance(meta, dict) or not isinstance(listed, list):
             raise RuntimeError("unexpected workflow or run-list shape")
-        return meta, listed
+        listed = [r for r in listed if isinstance(r, dict) and str(r.get("id")) != str(run_id)]
+        dispatched = None
+        if dispatcher_login:
+            runs = gh_json(f"repos/{repo}/actions/workflows/{name}/runs?branch=main&event=workflow_dispatch&per_page={DISPATCH_READ}")
+            rows = runs.get("workflow_runs") if isinstance(runs, dict) else None
+            if not isinstance(rows, list):
+                raise RuntimeError("unexpected dispatch run-list shape")
+            mine = [r for r in rows if isinstance(r, dict) and str(r.get("id")) != str(run_id)
+                    and r.get("event") == "workflow_dispatch" and r.get("created_at")
+                    and ((r.get("actor") or {}).get("login") == dispatcher_login)
+                    and ((r.get("triggering_actor") or {}).get("login") == dispatcher_login)]
+            dispatched = max(mine, key=lambda r: r["created_at"]) if mine else None
+        return meta, listed, dispatched
 
     for name, (status, got) in zip(plan["latestSchedule"], read_all(plan["latestSchedule"], read_schedule)):
         if status == "err":
             unknown.append({"workflow": name, "source": "freshness", "why": str(got)})
             continue
         try:
-            verdict = freshness(name, plan["crons"][name], got[0], got[1][0] if got[1] else None, now)
+            verdict = freshness(name, plan["crons"][name], got[0], got[1][0] if got[1] else None, now, got[2])
         except ValueError as exc:
             unknown.append({"workflow": name, "source": "freshness", "why": f"cannot judge the schedule: {exc}"})
             continue
@@ -776,7 +806,7 @@ def cmd_collect(args: argparse.Namespace) -> int:
         now = parse_time(args.now) if args.now else dt.datetime.now(dt.timezone.utc)
         if now is None:
             raise NoVerdict(f"--now {args.now!r} is not an ISO timestamp")
-        doc = collect(plan, needs, args.repo, args.run_id, now)
+        doc = collect(plan, needs, args.repo, args.run_id, now, args.dispatcher_login)
     except (NoVerdict, OSError, json.JSONDecodeError) as exc:
         print(f"main-health-observer: NO VERDICT: {exc.__class__.__name__}: {exc}", file=sys.stderr)
         return NO_VERDICT
@@ -1008,6 +1038,8 @@ def main(argv: list[str] | None = None) -> int:
     col.add_argument("--run-id", default=os.environ.get("GITHUB_RUN_ID"))
     col.add_argument("--out", required=True)
     col.add_argument("--now", default=None, help="ISO timestamp override, for tests")
+    col.add_argument("--dispatcher-login", default=None,
+                     help="login of the hourly dispatcher's token owner; its workflow_dispatch runs fulfil a schedule")
     col.set_defaults(func=cmd_collect)
 
     rep = sub.add_parser("report", help="open, update or close the single report issue")

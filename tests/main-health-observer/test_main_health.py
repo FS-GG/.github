@@ -366,7 +366,7 @@ class Collect(unittest.TestCase):
     def fresh_schedule_routes(self, wfname, created=None, state="active", registered="2026-01-01T00:00:00Z"):
         runs = [] if created is None else [{"id": 3, "created_at": created, "html_url": "https://github.com/x/3"}]
         return [
-            {"match": f"workflows/{wfname}/runs?branch=main&event=schedule&per_page=1", "stdout": json.dumps({"workflow_runs": runs})},
+            {"match": f"workflows/{wfname}/runs?branch=main&event=schedule&per_page=3", "stdout": json.dumps({"workflow_runs": runs})},
             {"match": f"workflows/{wfname}", "endswith": f"workflows/{wfname}", "stdout": json.dumps({"state": state, "created_at": registered})},
         ]
 
@@ -603,6 +603,29 @@ class Freshness(unittest.TestCase):
                 self.assertEqual(found["conclusion"], "overdue")
                 self.assertIn(state, found["detail"])
 
+    def dispatched_check(self, crons, newest_ago, dispatched_ago, registered_ago=1000):
+        meta = {"state": "active", "created_at": ago(registered_ago)}
+        newest = None if newest_ago is None else {"id": 5, "created_at": ago(newest_ago), "html_url": "https://github.com/x/5"}
+        disp = {"id": 6, "created_at": ago(dispatched_ago), "html_url": "https://github.com/x/6"}
+        return MH.freshness("w.yml", crons, meta, newest, NOW, disp)
+
+    def test_a_dispatcher_run_fulfils_a_dropped_cron(self):
+        self.assertIsNone(self.dispatched_check(["23 * * * *"], newest_ago=30, dispatched_ago=0.9))
+        self.assertIsNone(self.dispatched_check(["17 6 * * *"], newest_ago=None, dispatched_ago=3, registered_ago=24 * 30))
+
+    def test_the_newer_of_schedule_and_dispatcher_is_judged_with_the_same_allowance(self):
+        self.assertIsNone(self.dispatched_check(["23 * * * *"], newest_ago=0.5, dispatched_ago=40))
+        self.assertIsNone(self.dispatched_check(["23 * * * *"], newest_ago=30, dispatched_ago=1.9))
+        late = self.dispatched_check(["23 * * * *"], newest_ago=30, dispatched_ago=2.1)
+        self.assertEqual(late["conclusion"], "overdue")
+        self.assertIn("last dispatcher run", late["detail"])
+        self.assertEqual(self.dispatched_check(["23 * * * *"], newest_ago=2.1, dispatched_ago=40)["detail"].split(",")[0][:19], "last scheduled run ")
+
+    def test_an_unparsable_dispatcher_run_is_a_value_error_not_health(self):
+        meta = {"state": "active", "created_at": ago(9)}
+        with self.assertRaises(ValueError):
+            MH.freshness("w.yml", ["23 * * * *"], meta, None, NOW, {"id": 1})
+
     def test_missing_timestamps_are_value_errors_not_health(self):
         with self.assertRaises(ValueError):
             MH.freshness("w.yml", ["23 * * * *"], {"state": "active"}, None, NOW)
@@ -646,8 +669,8 @@ class FreshnessInCollect(Collect):
 
     def test_freshness_read_errors_and_bad_shapes_are_unknown(self):
         for label, extra in (
-            ("api", [{"match": "workflows/canary.yml/runs?branch=main&event=schedule&per_page=1", "rc": 1}]),
-            ("shape", [{"match": "workflows/canary.yml/runs?branch=main&event=schedule&per_page=1", "stdout": json.dumps({"workflow_runs": "x"})}]),
+            ("api", [{"match": "workflows/canary.yml/runs?branch=main&event=schedule&per_page=3", "rc": 1}]),
+            ("shape", [{"match": "workflows/canary.yml/runs?branch=main&event=schedule&per_page=3", "stdout": json.dumps({"workflow_runs": "x"})}]),
             ("meta", [{"match": "workflows/canary.yml", "endswith": "workflows/canary.yml", "rc": 1}]),
             ("meta-shape", [{"match": "workflows/canary.yml", "endswith": "workflows/canary.yml", "stdout": "[]"}]),
         ):
@@ -679,6 +702,105 @@ class FreshnessInCollect(Collect):
         doc = self.stale_doc(routes)
         self.assertEqual([f["key"] for f in doc["findings"]], [f"stale:{MH.OBSERVER_WORKFLOW}"])
         self.assertFalse([c for c in self.gh.calls() if f"{MH.OBSERVER_WORKFLOW}/runs?branch=main&event=schedule&status" in " ".join(c["argv"])])
+
+
+class FreshnessDispatcherAndCurrentRun(Collect):
+    """The dispatcher fallback (Root decision on #4990) and the exclusion of this observer's own current run."""
+
+    LOGIN = "EHotwagner"
+
+    def sched_routes(self, wfname, schedule_ago, dispatches):
+        runs = [{"id": 3, "created_at": ago(schedule_ago), "html_url": "https://github.com/x/3"}] if schedule_ago is not None else []
+        return [
+            {"match": f"workflows/{wfname}/runs?branch=main&event=schedule&per_page=3", "stdout": json.dumps({"workflow_runs": runs})},
+            {"match": f"workflows/{wfname}/runs?branch=main&event=workflow_dispatch&per_page=10",
+             "stdout": json.dumps({"workflow_runs": dispatches})},
+            {"match": f"workflows/{wfname}", "endswith": f"workflows/{wfname}",
+             "stdout": json.dumps({"state": "active", "created_at": ago(24 * 90)})},
+        ]
+
+    @staticmethod
+    def drow(rid, hours, actor="EHotwagner", triggering=None, event="workflow_dispatch"):
+        return {"id": rid, "event": event, "created_at": ago(hours), "html_url": f"https://github.com/x/{rid}",
+                "actor": {"login": actor}, "triggering_actor": {"login": triggering or actor}}
+
+    def collect_with(self, wfname, schedule_ago, dispatches, login=LOGIN):
+        routes = self.without_schedule_routes(self.green_routes(), wfname)
+        for other in self.plan["latestSchedule"]:
+            if other != wfname:
+                routes += self.fresh_schedule_routes(other, created="2026-10-31T06:00:00Z")
+                routes += [{"match": f"workflows/{other}/runs?branch=main&event=workflow_dispatch&per_page=10",
+                            "stdout": json.dumps({"workflow_runs": []})}]
+        routes += self.sched_routes(wfname, schedule_ago, dispatches)
+        self.gh.set(routes)
+        return MH.collect(self.plan, self.needs(), "FS-GG/.github", "999", NOW, login)
+
+    def test_a_dispatch_by_the_dispatcher_keeps_a_dropped_cron_fresh_and_nothing_else_does(self):
+        keys = lambda d: [f["key"] for f in d["findings"]]
+        self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(7, 1)])), [])
+        self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(7, 1, actor="someone")])), ["stale:canary.yml"])
+        self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(7, 1, triggering="someone")])), ["stale:canary.yml"])
+        self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(7, 1, actor="someone", triggering=self.LOGIN)])), ["stale:canary.yml"])
+        self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(7, 1, event="push")])), ["stale:canary.yml"])
+        self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(999, 0.1)])), ["stale:canary.yml"])
+        self.assertEqual(keys(self.collect_with("canary.yml", 60, [self.drow(7, 80)])), ["stale:canary.yml"])
+
+    def test_without_a_dispatcher_login_the_dispatch_list_is_not_read(self):
+        routes = self.without_schedule_routes(self.green_routes(), "canary.yml") + self.sched_routes("canary.yml", 60, [self.drow(7, 1)])
+        self.gh.set(routes)
+        doc = MH.collect(self.plan, self.needs(), "FS-GG/.github", "999", NOW)
+        self.assertEqual([f["key"] for f in doc["findings"]], ["stale:canary.yml"])
+        self.assertFalse([c for c in self.gh.calls() if "event=workflow_dispatch" in " ".join(c["argv"])])
+
+    def test_a_failed_or_malformed_dispatch_read_is_unknown_never_stale(self):
+        for bad in ({"rc": 1}, {"stdout": json.dumps({"workflow_runs": "x"})}):
+            routes = [{"match": "workflows/canary.yml/runs?branch=main&event=workflow_dispatch&per_page=10", **bad}] + \
+                self.sched_routes("canary.yml", 60, [])
+            others = [r for r in self.without_schedule_routes(self.green_routes(), "canary.yml")]
+            for other in self.plan["latestSchedule"]:
+                if other != "canary.yml":
+                    others += [{"match": f"workflows/{other}/runs?branch=main&event=workflow_dispatch&per_page=10",
+                                "stdout": json.dumps({"workflow_runs": []})}]
+            self.gh.set(routes + others)
+            doc = MH.collect(self.plan, self.needs(), "FS-GG/.github", "999", NOW, self.LOGIN)
+            self.assertIn(("canary.yml", "freshness"), [(u["workflow"], u["source"]) for u in doc["unknown"]], bad)
+            self.assertEqual(doc["findings"], [])
+
+    def test_this_observers_current_scheduled_run_does_not_make_its_own_schedule_look_fresh(self):
+        self.plan["latestSchedule"] = sorted(self.plan["latestSchedule"] + [MH.OBSERVER_WORKFLOW])
+        self.plan["crons"][MH.OBSERVER_WORKFLOW] = ["47 8 * * *"]
+        runs = [{"id": 999, "created_at": ago(0.01), "html_url": "https://github.com/x/999"},
+                {"id": 998, "created_at": ago(60), "html_url": "https://github.com/x/998"}]
+        routes = self.without_schedule_routes(self.green_routes(), MH.OBSERVER_WORKFLOW) + [
+            {"match": f"workflows/{MH.OBSERVER_WORKFLOW}/runs?branch=main&event=schedule&per_page=3", "stdout": json.dumps({"workflow_runs": runs})},
+            {"match": f"workflows/{MH.OBSERVER_WORKFLOW}", "endswith": f"workflows/{MH.OBSERVER_WORKFLOW}",
+             "stdout": json.dumps({"state": "active", "created_at": ago(24 * 90)})}]
+        self.gh.set(routes)
+        doc = MH.collect(self.plan, self.needs(), "FS-GG/.github", "999", NOW)
+        self.assertEqual([f["key"] for f in doc["findings"]], [f"stale:{MH.OBSERVER_WORKFLOW}"])
+
+    def test_the_cli_flag_reaches_the_judgement(self):
+        routes = self.without_schedule_routes(self.green_routes(), "canary.yml")
+        for other in self.plan["latestSchedule"]:
+            routes += [{"match": f"workflows/{other}/runs?branch=main&event=workflow_dispatch&per_page=10",
+                        "stdout": json.dumps({"workflow_runs": [self.drow(7, 1)] if other == "canary.yml" else []})}]
+        routes += [{"match": "workflows/canary.yml/runs?branch=main&event=schedule&per_page=3",
+                    "stdout": json.dumps({"workflow_runs": [{"id": 3, "created_at": ago(60), "html_url": "https://github.com/x/3"}]})}]
+        routes += [{"match": "workflows/canary.yml", "endswith": "workflows/canary.yml",
+                    "stdout": json.dumps({"state": "active", "created_at": ago(24 * 90)})}]
+        for other in self.plan["latestSchedule"]:
+            if other != "canary.yml":
+                routes += self.fresh_schedule_routes(other, created="2026-10-31T06:00:00Z")
+        self.gh.set(routes)
+        proc, out = self.cli(json.dumps(self.needs()), ["--dispatcher-login", self.LOGIN])
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(json.loads(out.read_text())["findings"], [])
+        proc, out = self.cli(json.dumps(self.needs()))
+        self.assertEqual([f["key"] for f in json.loads(out.read_text())["findings"]], ["stale:canary.yml"])
+
+    def test_the_workflow_passes_the_dispatcher_login_to_collect(self):
+        text = (ROOT / ".github/workflows/main-health-observer.yml").read_text()
+        self.assertIn("--dispatcher-login EHotwagner", text)
 
 
 # --------------------------------------------------------------------------------------------------
