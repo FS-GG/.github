@@ -1,0 +1,37 @@
+# Gates for the LEARN operator r6 (deployment/learn-finite-profile/operator), Refs #4647.
+#
+# r6 is the imported operator r5 plus a reviewed diff. The suite pins the size of that diff, tests the changed functions extracted from
+# the shipped bytes, and executes the whole script through its refusal gates with a scripted fake of subprocess.run against temporary
+# fixtures. stdlib only; no credential, no network, no container, no root, no systemd.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
+name: learn-operator-r6-selftest
+
+on:
+  pull_request:
+    paths:
+      - "deployment/learn-finite-profile/operator/**"
+      - "deployment/learn-finite-profile/baseline/libexec/learn-operator-r5.py"
+      - "tests/learn-operator-r6/**"
+      - ".github/workflows/learn-operator-r6-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deployment/learn-finite-profile/operator/**"
+      - "deployment/learn-finite-profile/baseline/libexec/learn-operator-r5.py"
+      - "tests/learn-operator-r6/**"
+      - ".github/workflows/learn-operator-r6-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the operator r6 gates
+        run: python3 tests/learn-operator-r6/run.py
