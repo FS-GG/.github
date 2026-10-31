@@ -62,10 +62,11 @@ the PR body or in any commit message of the branch:
 Tokens are commit SHAs (7-40 hex) or `#<PR>` (resolved to the squash commit whose subject ends `(#N)`),
 optionally followed by `:<path-glob>` to limit the token to the files it is meant for. Each reverted line
 is attributed with `git blame` and is covered only when the commit that introduced it is named, within
-that token's scope; the output says how many lines each token covered, and a token that covered nothing. Naming a commit that does not account for the reverted lines declares nothing. A commit
-message marker lands in the squash message, so the declaration is durable in history; the body is read
-from the event payload and, deliberately, an edit to it does NOT re-run CI (#4730 CI load): to declare
-after the fact, push a commit whose message carries the marker.
+that token's scope; the output says how many lines each token covered, and a token that covered nothing.
+Naming a commit that does not account for the reverted lines declares nothing. A commit message marker
+lands in the squash message, so the declaration is durable in history. The workflow passes the PR body as
+--body-file from the event payload, and an edit to the body re-runs the check, so a body declaration is read
+live. The refusal prints the marker in its scoped form, one `<sha>:<path>` token per file.
 
 FAIL CLOSED (#266). Exit 0 is the only green. 1 = refused. 3 = no verdict: shallow history, an unreadable
 object, no common ancestor, a merge conflict, or any cap in CAPS reached (never a silent truncation). A
@@ -336,6 +337,7 @@ class Finding:
     uncovered_lines: int = 0                    # weight not accounted for by a declared commit
     uncovered: set[str] = field(default_factory=set)            # introducing commits not declared
     covered_by: dict[str, int] = field(default_factory=dict)    # declaration token -> lines it covered here
+    blob: str = ""                              # identity of the file content dropped from; identical mirrors share it
 
 
 def landed_lines(hunks: list[Hunk]) -> dict[int, str]:
@@ -382,20 +384,22 @@ def analyse_file(repo: str, landed: Entry, effect: Entry, history: Callable[[], 
     if before == after and before != now:
         # R is exactly what the file was before the landed work: wholly reverted (or never existing).
         if binary_landed:
-            return Finding(path, "binary", [], weight=REFUSE_LINES)
-        return Finding(path, "whole-file", sorted(added), weight=len(added)) if added else None
+            return Finding(path, "binary", [], weight=REFUSE_LINES, blob=now)
+        return Finding(path, "whole-file", sorted(added), weight=len(added), blob=now) if added else None
     binary_effect, effect_hunks = blob_hunks(repo, now, after)
     if binary_landed or binary_effect:
         # Binary: only identity is decidable. Deleting a binary the landed work changed is a revert.
-        return Finding(path, "binary", [], weight=REFUSE_LINES) if after is None and before is not None else None
+        return Finding(path, "binary", [], weight=REFUSE_LINES, blob=now) if after is None and before is not None else None
     if not added:
         return None
     base_count: Counter = Counter()
     result_count: Counter = Counter()
     lost: Counter = Counter()
     loaded = False
-    reverted: list[int] = []
+    dropped: list[int] = []
+    plus_all: list[str] = []
     for h in effect_hunks:
+        plus_all.extend(h.plus)             # new text anywhere in the file counts, hunk or not
         if h.old_count == 0:
             continue
         hit = [(h.old_start + i, c) for i, c in enumerate(h.minus) if (h.old_start + i) in added]
@@ -408,19 +412,21 @@ def analyse_file(repo: str, landed: Entry, effect: Entry, history: Callable[[], 
                 if count > result_count[key]:
                     lost[key] = count - result_count[key]
             loaded = True
-        dropped = []
         for n, content in hit:
             key = content.strip()
             if lost[key] > 0:
                 lost[key] -= 1
                 dropped.append(n)
-        # EDIT credit is per line, never per hunk: only a plus line whose text the file never held in the window
-        # (before or after the landed work) offsets one dropped line. One new line beside a stale restore, or a
-        # `# removed` comment after a deletion, therefore hides one line, not the whole hunk.
-        fresh = sum(1 for x in h.plus if substantive(x) and x.strip() not in history()) if any(
-            substantive(x) for x in h.plus) else 0
-        reverted.extend(dropped[min(fresh, len(dropped)):])
-    return Finding(path, "lines", sorted(reverted), weight=len(reverted)) if reverted else None
+    if not dropped:
+        return None
+    # EDIT credit is per line, pooled over the file, never per hunk: each line the result adds to this file whose
+    # text the file never held in the window (before or after the landed work) offsets one dropped landed line.
+    # An honest refactor that rewrites a section and adds its replacement elsewhere in the file nets out; one new
+    # line beside a stale restore, or a `# removed` comment after a deletion, hides one line, not the hunk.
+    known = history()
+    fresh = sum(1 for x in plus_all if substantive(x) and x.strip() not in known)
+    reverted = dropped[min(fresh, len(dropped)):]
+    return Finding(path, "lines", sorted(reverted), weight=len(reverted), blob=now) if reverted else None
 
 
 def resurrected(repo: str, gone: Entry, back: Entry) -> Finding | None:
@@ -429,12 +435,12 @@ def resurrected(repo: str, gone: Entry, back: Entry) -> Finding | None:
     old_binary, old_lines = blob_lines(repo, gone.old_sha)
     new_binary, new_lines = blob_lines(repo, back.new_sha)
     if old_binary or new_binary:
-        return Finding(back.new_path, "resurrected", [], weight=REFUSE_LINES) if same else None
+        return Finding(back.new_path, "resurrected", [], weight=REFUSE_LINES, blob=back.new_sha) if same else None
     old = Counter(x.strip() for x in old_lines if substantive(x))
     new = Counter(x.strip() for x in new_lines if substantive(x))
     held = sum(min(count, old[key]) for key, count in new.items())
     weight = max(0, held - (sum(new.values()) - held))
-    return Finding(back.new_path, "resurrected", [], weight=weight) if weight else None
+    return Finding(back.new_path, "resurrected", [], weight=weight, blob=back.new_sha) if weight else None
 
 
 def blob_text(repo: str, sha: str | None) -> list[str]:
@@ -561,7 +567,25 @@ class Result:
 
     @property
     def undeclared(self) -> int:
-        return sum(f.uncovered_lines for f in self.findings)
+        """Undeclared dropped lines, counting identical mirrors once.
+
+        The skill roots (`.claude/skills`, `.agents/skills`, ...) hold byte-identical copies, so one honest edit
+        to a skill drops the same lines in every root. Findings on the same file content (`blob`) with the same
+        dropped lines are one revert seen N times; the largest undeclared share of the group counts."""
+        groups: dict[tuple, int] = {}
+        for f in self.findings:
+            key = (f.blob, f.kind, tuple(f.lines), f.weight) if f.blob else (f.path,)
+            groups[key] = max(groups.get(key, 0), f.uncovered_lines)
+        return sum(groups.values())
+
+    @property
+    def mirrors(self) -> list[list[str]]:
+        """Groups of findings counted once because they are identical copies of one file."""
+        groups: dict[tuple, list[str]] = {}
+        for f in self.findings:
+            if f.blob:
+                groups.setdefault((f.blob, f.kind, tuple(f.lines), f.weight), []).append(f.path)
+        return [sorted(paths) for paths in groups.values() if len(paths) > 1]
 
     @property
     def refused(self) -> bool:
@@ -637,6 +661,27 @@ def analyse(repo: str, base_rev: str, head_rev: str, *, lookback: int, lookback_
     return Result(base, head, point, floor, tree, len(both) + len(back), findings, declared, unresolved, skipped, refuse_lines)
 
 
+def scoped_marker(result: Result, limit: int = 8) -> str:
+    """`reverts=` tokens of the form `<sha>:<path-glob>`, one per file, or per directory past `limit` files."""
+    paths: dict[str, set[str]] = {}
+    for f in result.findings:
+        for commit in f.uncovered:
+            paths.setdefault(commit, set()).add(f.path)
+
+    def safe(path: str) -> str:
+        return re.sub(r"[\s,>]", "?", re.sub(r"([\[\]*?])", r"[\1]", path))
+
+    tokens: list[str] = []
+    for commit in sorted(paths):
+        files = sorted(paths[commit])
+        if len(files) <= limit:
+            tokens += [f"{commit[:12]}:{safe(p)}" for p in files]
+        else:
+            dirs = sorted({"/".join(p.split("/")[:2]) + "/**" if p.count("/") >= 2 else p for p in files})
+            tokens += [f"{commit[:12]}:{safe(d)}" for d in dirs]
+    return ",".join(tokens)
+
+
 def render(result: Result) -> str:
     out = [f"{NAME}: base {result.base[:8]} head {result.head[:8]} branch-point {(result.point or '-')[:8]} "
            f"lookback-floor {(result.floor or '-')[:8]} candidates {result.candidates} "
@@ -653,14 +698,17 @@ def render(result: Result) -> str:
         out.append(f"  declaration {d.token}{scope}: covers {d.covered} dropped line(s){note}")
     if result.unresolved:
         out.append(f"  unresolvable declaration token(s): {', '.join(result.unresolved)}")
+    for group in result.mirrors:
+        out.append(f"  identical copies counted once toward the bound: {', '.join(group)}")
     undeclared = sorted({c for f in result.findings for c in f.uncovered})
     if undeclared:
         out.append("")
         out.append("This merge removes content that landed on the base within the lookback window and puts")
         out.append("nothing new in its place. If that is intended, name the commits in a commit message of the")
-        out.append("branch (or in the PR body when the PR is opened); append `:<path-glob>` to limit a name to")
-        out.append("the files you mean to revert:")
-        out.append(f"    <!-- fsgg:declared-revert/v1 reverts={','.join(n[:12] for n in undeclared)} -->")
+        out.append("branch or in the PR body (an edit to the body re-runs this check). Scoped to the files that")
+        out.append("lose lines, which is what to prefer:")
+        out.append(f"    <!-- fsgg:declared-revert/v1 reverts={scoped_marker(result)} -->")
+        out.append("Dropping the `:<glob>` part names the commit for every file it touched, which is broader.")
         out.append("If it is not intended, the branch carries an older copy of these files: rebuild it on the")
         out.append("current base instead of resolving the conflict toward the branch's side.")
     return "\n".join(out)
@@ -709,6 +757,7 @@ def main(argv: list[str]) -> int:
             "base": result.base, "head": result.head, "branchPoint": result.point, "floor": result.floor,
             "resultTree": result.result_tree, "candidates": result.candidates, "undeclaredLines": result.undeclared,
             "refused": result.refused,
+            "mirrors": result.mirrors,
             "findings": [{"path": f.path, "kind": f.kind, "lines": f.weight, "undeclared": f.uncovered_lines,
                           "commits": sorted(f.commits), "coveredBy": f.covered_by} for f in result.findings],
             "declarations": [{"token": d.token, "scope": d.scope, "covered": d.covered} for d in result.declared],

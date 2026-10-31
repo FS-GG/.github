@@ -13,10 +13,14 @@ holds the definitions. Delivered under [.github#4730](https://github.com/FS-GG/.
   100 first-parent commits or 7 days of commit date, whichever reaches further. The window is anchored on the
   branch point, not on the merge base, because #4977's branch was built on #4968's own squash and the merge
   base therefore already held the deleted lines.
-- **Edit versus revert.** Inside a hunk that drops landed lines, each added line whose text the file never held
-  in the window offsets one dropped line. Anything else is a drop: a pure deletion, a restored older version, or
-  text the file already held. A line that moves within its file is not dropped. Consolidating 50 landed lines
-  into 20 new ones therefore counts the 30 that vanished.
+- **Edit versus revert.** Per file, each added line anywhere in the result whose text the file never held in the
+  window offsets one dropped landed line. Anything left over is a drop: a pure deletion, a restored older version,
+  or text the file already held. A line that moves within its file is not dropped. A refactor that rewrites a
+  section and adds its replacement elsewhere in the same file nets out; one new line beside a stale restore, or a
+  `# removed` comment after a deletion, hides one line and no more.
+- **Mirrors.** Findings on byte-identical files with the same dropped lines (the skill roots hold copies of each
+  other) count once toward the bound, and the output says which paths were folded together. Copies that differ
+  are counted separately.
 - **Resurrection.** A file the window deleted or renamed away, and that the result has again, counts its
   restored lines the same way.
 - **Bound.** The check refuses at 30 undeclared dropped lines and warns below that. A restored or deleted binary
@@ -24,7 +28,7 @@ holds the definitions. Delivered under [.github#4730](https://github.com/FS-GG/.
 
 ## Declaring a revert
 
-Name the commits in a commit message of the branch, or in the PR body when the PR is opened:
+Name the commits in a commit message of the branch, or in the PR body:
 
 ```text
 <!-- fsgg:declared-revert/v1 reverts=dd7665f6,#4968:src/**,#4976:tests/producer-fence-attacks/run.py -->
@@ -33,8 +37,12 @@ Name the commits in a commit message of the branch, or in the PR body when the P
 A token is a commit SHA (7 to 40 hex) or `#PR` (the squash commit whose subject ends `(#PR)`), optionally
 followed by `:path-glob`. Each dropped line is attributed with `git blame` and is covered only when a token names
 the commit that introduced it, within that token's scope. The job summary prints the lines each declaration
-covered and flags one that covers nothing. A body edit does not re-run CI (CI load); to declare late, push a
-commit whose message carries the marker.
+covered and flags one that covers nothing. The refusal prints the marker in its scoped form, one
+`<sha>:<path>` token per file (per directory past eight files), ready to paste.
+
+An edit to the PR body re-runs the job (about ten seconds), and the body is read from that run's event payload,
+so a declaration added to the body is read live. A manual re-run replays the old payload; edit the body or push
+a commit instead. A marker in a commit message also works and lands in the squash message.
 
 Globs are path-segment globs: `*` and `?` never cross `/`, and a whole `**` segment spans directories.
 
@@ -73,3 +81,20 @@ the check can reason about, not that it is clean. The human route:
 
 Whether the job should be required, and whether a cap override deserves an automated, maintainer-only path,
 are repository-settings decisions that belong to the integrator.
+
+## Protecting the check (proposed, not applied)
+
+A PR can edit the workflow and the script it runs from the base, but those edits only take effect after merge.
+To make that merge a deliberate one, a repository owner could add a CODEOWNERS entry and require code-owner
+review. This is a repository setting and is proposed here only:
+
+```text
+/.github/workflows/landed-revert-guard.yml   @FS-GG/<owners>
+/scripts/check-landed-reverts.py             @FS-GG/<owners>
+/scripts/lib/gate.py                         @FS-GG/<owners>
+/registry/landed-revert-allowlist.json       @FS-GG/<owners>
+```
+
+`tests/landed-reverts/run.py` already pins the base-read behaviour: it runs the workflow's own step against a head
+that replaces the script with `sys.exit(0)` and requires the stale tree to be refused anyway, and the mutation
+corpus has a leg that makes the step run the head's script.
