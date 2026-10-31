@@ -32,10 +32,12 @@ name: board-drift-observer
 #
 # A cron GitHub stops firing leaves no red run and no issue, so the two scheduled observers watch each
 # other. The main-health observer judges this workflow's schedule from outside. This workflow judges the
-# nightly main-health observer (no `schedule` run in 2 days) and its own PREVIOUS scheduled run (none in 2
-# hours; the current run is excluded, or it would always find itself). The read uses the run's GITHUB_TOKEN
-# with `actions: read` in the read job (two REST calls per workflow), so the Project 3 App token is not
-# widened. A failed read becomes a finding, not a red run: a dead Actions API must not also silence the
+# nightly main-health observer (no fulfilling run in 2 days) and its own PREVIOUS fulfilling run (none in 2
+# hours; the current run is excluded, or it would always find itself). A fulfilling run is a `schedule` run
+# or a `workflow_dispatch` run by the hourly fdev dispatcher (the token owner), the designed fallback for a
+# dropped cron (Root decision on #4990). The read uses the run's GITHUB_TOKEN with `actions: read` in the
+# read job (three REST calls per workflow), so the Project 3 App token is not widened. A failed read becomes
+# a finding, not a red run: a dead Actions API must not also silence the
 # board report. The self-check is reported by a run, so it shows only when a run happens; a total stop of
 # this workflow is the main-health observer's to report.
 #
@@ -130,6 +132,7 @@ jobs:
           set -euo pipefail
           python3 scripts/board-drift-schedule-fetch.py --repo "$GITHUB_REPOSITORY" \
             --workflow main-health-observer.yml --workflow board-drift-observer.yml \
+            --dispatcher-login EHotwagner \
             --out "$SCRATCH/schedule.json"
 
       # The placeholder key is used here and nowhere else: only this step needs it, and the report job

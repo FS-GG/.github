@@ -36,7 +36,9 @@ THE RULES (a finding carries the letter)
      phrased without those words, or a ruling made outside a comment on the card). A comment that
      carries ACK_TOKEN is a disposition and is never itself a ruling.
   s  A watched workflow's cron has stopped firing (SCHEDULE_WATCH): the nightly main-health observer has no
-     `schedule` run newer than 2 days, or this observer's own PREVIOUS scheduled run is older than 2 hours.
+     fulfilling run newer than 2 days, or this observer's own PREVIOUS fulfilling run is older than 2 hours.
+     A fulfilling run is a `schedule` run or a `workflow_dispatch` run by the hourly fdev dispatcher (Root
+     decision on #4990: the dispatcher is the designed fallback for a dropped cron).
      Not a card rule: it reads schedule.json (board-drift-schedule-fetch.py), the mutual half of the
      main-health observer's freshness check. Reported in the same issue, with no ack route (nothing on a
      card to comment on): it clears when the schedule fires again. LIMIT: the self-check is reported by a
@@ -478,33 +480,39 @@ def schedule_finding(file: str, kind: str, text: str, role: str) -> dict:
 
 
 def schedule_findings(doc: object, now: dt.datetime) -> list[dict]:
-    """PURE. Rule s: a watched workflow whose newest `schedule` run is too old, never ran, is absent or
-    disabled, or could not be read. A watched workflow missing from the document counts as unreadable."""
+    """PURE. Rule s: a watched workflow whose newest fulfilling run is too old, never ran, is absent or
+    disabled, or could not be read. A fulfilling run is a `schedule` run, or a `workflow_dispatch` run that
+    the hourly fdev dispatcher triggered (the designed fallback for a dropped cron; the fetch decides which
+    dispatches qualify, by actor and event). A watched workflow missing from the document counts as
+    unreadable."""
     validate_schedule(doc)
     entries = {e.get("file"): e for e in doc["workflows"] if isinstance(e, dict)}
     out: list[dict] = []
     for file, (limit, role) in SCHEDULE_WATCH.items():
-        who = "this observer's previous scheduled run" if role == "self" else "the scheduled run"
+        who = "this observer's previous fulfilling run" if role == "self" else "the fulfilling run"
         entry = entries.get(file)
         state = (entry or {}).get("state")
         if state == "absent":
             out.append(schedule_finding(file, "absent", f"workflow file not found on the default branch ({who} cannot exist)", role))
             continue
-        created, newest = parse_time((entry or {}).get("createdAt")), parse_time((entry or {}).get("newestScheduleRunAt"))
-        if state != "ok" or created is None or (entry or {}).get("newestScheduleRunAt") and newest is None:
+        created = parse_time((entry or {}).get("createdAt"))
+        times = [parse_time((entry or {}).get(k)) for k in ("newestScheduleRunAt", "newestDispatchRunAt")]
+        given = [(entry or {}).get(k) for k in ("newestScheduleRunAt", "newestDispatchRunAt")]
+        if state != "ok" or created is None or any(g and t is None for g, t in zip(given, times)):
             out.append(schedule_finding(file, "unreadable", "schedule history could not be read (no verdict on this schedule)", role))
             continue
         if entry.get("workflowState") != "active":
             out.append(schedule_finding(file, "disabled", f"workflow state is {entry.get('workflowState')!r}: a disabled workflow does not fire", role))
             continue
+        newest = max((t for t in times if t is not None), default=None)
         if newest is None:
             if now - created > limit:
-                out.append(schedule_finding(file, "never-ran", f"no scheduled run since the workflow was registered {iso(created)} "
-                                            f"(more than {format_limit(limit)})", role))
+                out.append(schedule_finding(file, "never-ran", f"no scheduled or dispatcher run since the workflow was registered "
+                                            f"{iso(created)} (more than {format_limit(limit)})", role))
             continue
         if now - newest > limit:
-            out.append(schedule_finding(file, "stale", f"newest scheduled run {iso(newest)} is older than {format_limit(limit)}; "
-                                        f"{who} is overdue", role))
+            out.append(schedule_finding(file, "stale", f"newest scheduled or dispatcher run {iso(newest)} is older than "
+                                        f"{format_limit(limit)}; {who} is overdue", role))
     return out
 
 

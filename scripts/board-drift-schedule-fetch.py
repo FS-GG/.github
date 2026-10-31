@@ -7,8 +7,8 @@ board-drift's schedule (its freshness check), and this read lets board-drift jud
 main-health observer and its own previous scheduled run. The judgement is a pure function in
 board-drift-observer.py (rule s); this file is the only IO.
 
-READ-ONLY and BOUNDED: two REST reads per workflow (the workflow object, then its five newest runs with
-`event=schedule`), made with the workflow's GITHUB_TOKEN under `actions: read`. The Project 3 App token is
+READ-ONLY and BOUNDED: three REST reads per workflow (the workflow object, its five newest runs with
+`event=schedule`, its ten newest runs with `event=workflow_dispatch`), made with the workflow's GITHUB_TOKEN under `actions: read`. The Project 3 App token is
 not used and not widened.
 
 A read that fails is RECORDED, not fatal: the entry carries state `unreadable` (or `absent` for HTTP 404),
@@ -16,7 +16,13 @@ and the observer turns that into a finding. "I could not look" is never "no drif
 dead Actions API must not also silence the board report, so a per-workflow failure does not fail the step.
 Only a misconfigured call (no repository, no workflow) exits non-zero.
 
-THE CURRENT RUN IS EXCLUDED from "newest scheduled run" (GITHUB_RUN_ID). Otherwise a scheduled board-drift
+A DISPATCH BY THE DISPATCHER FULFILS THE SCHEDULE (Root decision on #4990). GitHub drops cron runs; the hourly
+fdev dispatcher fires the observer with `workflow_dispatch` as the designed fallback. A dispatch run qualifies
+only when its event is `workflow_dispatch` and both its `actor` and `triggering_actor` are `--dispatcher-login`
+(the token owner). A dispatch by anyone else, or a re-run (a different triggering actor), does not. The fetch
+records the newest qualifying run; whether it is recent enough is the judgement's, against the same limit.
+
+THE CURRENT RUN IS EXCLUDED from "newest scheduled run" (GITHUB_RUN_ID), for both kinds of run. Otherwise a scheduled board-drift
 run would always find itself and the self-check could never fire: what is judged is the run BEFORE this one.
 
 Failure text is fixed (a label and an exit code), never a response body.
@@ -35,6 +41,7 @@ from pathlib import Path
 
 SCHEDULE_SCHEMA = "fsgg:board-drift-schedule/v1"
 RUNS_PER_PAGE = 5
+DISPATCH_RUNS_PER_PAGE = 10
 
 
 def now_iso(now: dt.datetime | None = None) -> str:
@@ -58,9 +65,14 @@ def gh_json(path: str) -> tuple[str, object]:
         return "unreadable", None
 
 
-def read_workflow(repo: str, file: str, current_run: str | None) -> dict:
+def login(user: object) -> str | None:
+    return user.get("login") if isinstance(user, dict) and isinstance(user.get("login"), str) else None
+
+
+def read_workflow(repo: str, file: str, current_run: str | None, dispatcher: str) -> dict:
     entry: dict = {"file": file, "state": "unreadable", "workflowState": None, "createdAt": None,
-                   "newestScheduleRunAt": None, "newestScheduleRunId": None}
+                   "newestScheduleRunAt": None, "newestScheduleRunId": None,
+                   "newestDispatchRunAt": None, "newestDispatchRunId": None}
     status, workflow = gh_json(f"repos/{repo}/actions/workflows/{file}")
     if status != "ok":
         entry["state"] = status
@@ -83,6 +95,19 @@ def read_workflow(repo: str, file: str, current_run: str | None) -> dict:
     if others:
         newest = max(others, key=lambda r: r["created_at"])
         entry["newestScheduleRunAt"], entry["newestScheduleRunId"] = newest["created_at"], newest["id"]
+
+    status, runs = gh_json(f"repos/{repo}/actions/workflows/{file}/runs?event=workflow_dispatch&per_page={DISPATCH_RUNS_PER_PAGE}")
+    if status != "ok" or not isinstance(runs, dict) or not isinstance(runs.get("workflow_runs"), list):
+        return entry
+    # No qualifying row in the page is not an error: the dispatcher is only a second way to fulfil the
+    # schedule. A failed or malformed read IS (above): the judgement must not call a schedule stale when
+    # it could not look at the fallback.
+    dispatched = [r for r in runs["workflow_runs"] if isinstance(r, dict) and str(r.get("id")) != str(current_run)
+                  and r.get("event") == "workflow_dispatch" and r.get("created_at")
+                  and login(r.get("actor")) == dispatcher and login(r.get("triggering_actor")) == dispatcher]
+    if dispatched:
+        newest = max(dispatched, key=lambda r: r["created_at"])
+        entry["newestDispatchRunAt"], entry["newestDispatchRunId"] = newest["created_at"], newest["id"]
     entry["state"] = "ok"
     return entry
 
@@ -91,6 +116,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--workflow", action="append", required=True, help="workflow file name; repeatable")
     ap.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY"))
+    ap.add_argument("--dispatcher-login", required=True,
+                    help="login of the hourly dispatcher's token owner; its workflow_dispatch runs fulfil the schedule")
     ap.add_argument("--out", required=True)
     ap.add_argument("--now", help="ISO timestamp recorded as fetchedAt (default: the wall clock; tests inject)")
     args = ap.parse_args(argv)
@@ -105,11 +132,11 @@ def main(argv: list[str] | None = None) -> int:
         print("board-drift-schedule-fetch: no repository (--repo or GITHUB_REPOSITORY)", file=sys.stderr)
         return 1
     current = os.environ.get("GITHUB_RUN_ID") or None
-    entries = [read_workflow(args.repo, f, current) for f in args.workflow]
+    entries = [read_workflow(args.repo, f, current, args.dispatcher_login) for f in args.workflow]
     doc = {"schema": SCHEDULE_SCHEMA, "fetchedAt": now_iso(now), "currentRunId": current, "workflows": entries}
     Path(args.out).write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     for e in entries:
-        print(f"board-drift-schedule-fetch: {e['file']} {e['state']} newest={e['newestScheduleRunAt']}")
+        print(f"board-drift-schedule-fetch: {e['file']} {e['state']} newest={e['newestScheduleRunAt']} dispatched={e['newestDispatchRunAt']}")
     return 0
 
 

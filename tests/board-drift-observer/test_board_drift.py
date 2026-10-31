@@ -1253,12 +1253,15 @@ class CurrencyConvergence(unittest.TestCase):
 # ---- rule s: a watched workflow's cron stopped firing --------------------------------------------
 
 PEER, SELF_WF = "main-health-observer.yml", "board-drift-observer.yml"
+DISPATCHER = "EHotwagner"
 
 
-def sched_entry(file, newest_hours=None, created_hours=24 * 30, state="ok", workflow_state="active"):
+def sched_entry(file, newest_hours=None, created_hours=24 * 30, state="ok", workflow_state="active", dispatched_hours=None):
     return {"file": file, "state": state, "workflowState": workflow_state, "createdAt": hours_ago(created_hours),
             "newestScheduleRunAt": hours_ago(newest_hours) if newest_hours is not None else None,
-            "newestScheduleRunId": 1 if newest_hours is not None else None}
+            "newestScheduleRunId": 1 if newest_hours is not None else None,
+            "newestDispatchRunAt": hours_ago(dispatched_hours) if dispatched_hours is not None else None,
+            "newestDispatchRunId": 2 if dispatched_hours is not None else None}
 
 
 def sched_doc(peer=None, self_=None):
@@ -1290,7 +1293,35 @@ class RuleS(unittest.TestCase):
         found = OBS.schedule_findings(sched_doc(peer=sched_entry(PEER, 72), self_=sched_entry(SELF_WF, 5)), NOW)
         self.assertEqual(sorted(f["ref"] for f in found), [f"workflow:{SELF_WF}", f"workflow:{PEER}"])
         self_one = [f for f in found if f["role"] == "self"][0]
-        self.assertIn("previous scheduled run", self_one["text"])
+        self.assertIn("previous fulfilling run", self_one["text"])
+
+    def test_a_fresh_dispatcher_run_fulfils_a_stale_or_dropped_schedule(self):
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, 30, dispatched_hours=0.9))), [])
+        self.assertEqual(s_findings(sched_doc(peer=sched_entry(PEER, 72, dispatched_hours=20))), [])
+        # A cron that never fired but is covered by the dispatcher is not "never-ran".
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, None, created_hours=24 * 30, dispatched_hours=1))), [])
+
+    def test_the_dispatcher_run_is_judged_against_the_same_limit_strictly(self):
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, 30, dispatched_hours=2))), [])
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, 30, dispatched_hours=2.1))), [(f"workflow:{SELF_WF}", "stale")])
+        self.assertEqual(s_findings(sched_doc(peer=sched_entry(PEER, 72, dispatched_hours=49))), [(f"workflow:{PEER}", "stale")])
+
+    def test_the_newest_of_the_two_kinds_is_the_one_judged(self):
+        # A fresh schedule run is not made stale by an older dispatcher run, and the text names both kinds.
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, 0.5, dispatched_hours=40))), [])
+        found = OBS.schedule_findings(sched_doc(self_=sched_entry(SELF_WF, 30, dispatched_hours=5)), NOW)
+        self.assertIn("2026-10-30T13:00:00Z", found[0]["text"])
+        self.assertIn("scheduled or dispatcher run", found[0]["text"])
+
+    def test_an_unparsable_dispatcher_timestamp_is_unreadable_not_fresh(self):
+        bad = sched_entry(SELF_WF, 30)
+        bad["newestDispatchRunAt"] = "not-a-date"
+        self.assertEqual(s_findings(sched_doc(self_=bad)), [(f"workflow:{SELF_WF}", "unreadable")])
+
+    def test_a_document_without_dispatch_fields_still_judges_the_schedule_alone(self):
+        old = sched_entry(SELF_WF, 5)
+        del old["newestDispatchRunAt"], old["newestDispatchRunId"]
+        self.assertEqual(s_findings(sched_doc(self_=old)), [(f"workflow:{SELF_WF}", "stale")])
 
     def test_never_ran_is_a_finding_only_after_the_allowance_since_registration(self):
         young = sched_doc(peer=sched_entry(PEER, None, created_hours=30))
@@ -1455,6 +1486,8 @@ class ScheduleConvergence(unittest.TestCase):
         run = steps[names.index("Evaluate the drift rules")]["run"]
         self.assertIn('--currency "$SCRATCH/currency.json"', run)
         self.assertIn('--schedule "$SCRATCH/schedule.json"', run)
+        fetch_run = steps[names.index("Read the schedule history of the watched workflows")]["run"]
+        self.assertIn("--dispatcher-login EHotwagner", fetch_run)
         self.assertLess(names.index("Read the schedule history of the watched workflows"), names.index("Evaluate the drift rules"))
         self.assertLess(names.index("Read Project 3 for the board-currency rules (read-only)"), names.index("Evaluate the drift rules"))
 
@@ -1492,6 +1525,9 @@ class ScheduleFetch(unittest.TestCase):
         gh.write_text(FAKE_ACTIONS_GH)
         gh.chmod(gh.stat().st_mode | stat.S_IXUSR)
         self.state = Path(d.name, "state.json")
+        replies = dict(replies)
+        for path in [k for k in replies if "/actions/workflows/" in k and "/runs" not in k]:
+            replies.setdefault(path + "/runs?event=workflow_dispatch&per_page=10", {"total_count": 0, "workflow_runs": []})
         self.state.write_text(json.dumps({"calls": [], "replies": replies}))
         env = {"BOARD_DRIFT_GH": str(gh), "FAKE_SCHED_STATE": str(self.state), "GITHUB_RUN_ID": "9"}
         prev = {k: os.environ.get(k) for k in env}
@@ -1502,7 +1538,7 @@ class ScheduleFetch(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d, "schedule.json")
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                rc = SCHED.main(["--repo", REPO, "--out", str(out), "--now", iso_now(),
+                rc = SCHED.main(["--repo", REPO, "--out", str(out), "--now", iso_now(), "--dispatcher-login", DISPATCHER,
                                  *[a for f in files for a in ("--workflow", f)]])
             return rc, (json.loads(out.read_text()) if out.exists() else None)
 
@@ -1516,19 +1552,25 @@ class ScheduleFetch(unittest.TestCase):
                 {"total_count": len(rows) if total is None else total, "workflow_runs": rows})
 
     @staticmethod
-    def row(rid, hours, event="schedule"):
-        return {"id": rid, "event": event, "created_at": hours_ago(hours)}
+    def row(rid, hours, event="schedule", actor=DISPATCHER, triggering=None):
+        return {"id": rid, "event": event, "created_at": hours_ago(hours), "actor": {"login": actor},
+                "triggering_actor": {"login": triggering or actor}}
+
+    @staticmethod
+    def dispatch(file, rows):
+        return (f"repos/{REPO}/actions/workflows/{file}/runs?event=workflow_dispatch&per_page=10",
+                {"total_count": len(rows), "workflow_runs": rows})
 
     def replies(self, *pairs):
         return dict(pairs)
 
-    def test_reads_two_calls_per_workflow_and_picks_the_newest_schedule_run(self):
+    def test_reads_three_calls_per_workflow_and_picks_the_newest_schedule_run(self):
         self.stub(self.replies(self.wf(PEER), self.runs(PEER, [self.row(5, 30), self.row(4, 6), self.row(3, 50)])))
         rc, doc = self.fetch(PEER)
         self.assertEqual(rc, 0)
         e = doc["workflows"][0]
         self.assertEqual((e["state"], e["newestScheduleRunId"], e["newestScheduleRunAt"]), ("ok", 4, hours_ago(6)))
-        self.assertEqual(len(json.loads(self.state.read_text())["calls"]), 2)
+        self.assertEqual(len(json.loads(self.state.read_text())["calls"]), 3)
 
     def test_the_recorded_clock_is_the_injected_one_and_a_bad_clock_fails_closed(self):
         self.stub(self.replies(self.wf(PEER), self.runs(PEER, [self.row(5, 6)])))
@@ -1537,7 +1579,7 @@ class ScheduleFetch(unittest.TestCase):
         err = io.StringIO()
         with tempfile.TemporaryDirectory() as d, contextlib.redirect_stderr(err):
             for bad in ("yesterday", "2026-10-30T18:00:00"):
-                self.assertEqual(SCHED.main(["--repo", REPO, "--workflow", PEER, "--out", str(Path(d, "x.json")), "--now", bad]), 1, bad)
+                self.assertEqual(SCHED.main(["--repo", REPO, "--dispatcher-login", DISPATCHER, "--workflow", PEER, "--out", str(Path(d, "x.json")), "--now", bad]), 1, bad)
         self.assertEqual(err.getvalue().count("--now is not an ISO timestamp"), 2)
 
     def test_the_current_run_is_excluded_so_the_self_check_judges_the_previous_one(self):
@@ -1553,6 +1595,39 @@ class ScheduleFetch(unittest.TestCase):
         _, doc = self.fetch(SELF_WF)
         e = doc["workflows"][0]
         self.assertEqual((e["state"], e["newestScheduleRunAt"]), ("ok", None))
+
+    def test_a_dispatch_by_the_dispatcher_is_recorded_and_excludes_the_current_run(self):
+        self.stub(self.replies(self.wf(SELF_WF), self.runs(SELF_WF, [self.row(7, 30)]),
+                               self.dispatch(SELF_WF, [self.row(9, 0, "workflow_dispatch"), self.row(8, 0.9, "workflow_dispatch"),
+                                                      self.row(6, 1.9, "workflow_dispatch")])))
+        _, doc = self.fetch(SELF_WF)
+        e = doc["workflows"][0]
+        self.assertEqual((e["state"], e["newestDispatchRunId"], e["newestDispatchRunAt"]), ("ok", 8, hours_ago(0.9)))
+        self.assertEqual(s_findings(doc | {"workflows": [e, sched_entry(PEER, 1)]}), [])
+
+    def test_only_the_dispatcher_fulfils_by_actor_and_triggering_actor_and_event(self):
+        rows = [self.row(3, 0.5, "workflow_dispatch", actor="someone-else"),
+                self.row(4, 0.4, "workflow_dispatch", actor=DISPATCHER, triggering="someone-else"),
+                self.row(5, 0.3, "workflow_dispatch", actor="someone-else", triggering=DISPATCHER),
+                self.row(6, 0.2, "push"),
+                {"id": 7, "event": "workflow_dispatch", "created_at": hours_ago(0.1)}]
+        self.stub(self.replies(self.wf(SELF_WF), self.runs(SELF_WF, [self.row(2, 30)]), self.dispatch(SELF_WF, rows)))
+        _, doc = self.fetch(SELF_WF)
+        e = doc["workflows"][0]
+        self.assertEqual((e["state"], e["newestDispatchRunAt"]), ("ok", None))
+        self.assertEqual(s_findings(doc | {"workflows": [e, sched_entry(PEER, 1)]}), [(f"workflow:{SELF_WF}", "stale")])
+
+    def test_a_failed_or_malformed_dispatch_read_is_unreadable_never_a_stale_schedule(self):
+        path = self.dispatch(SELF_WF, [])[0]
+        for bad in ("FAIL", "not json", {"total_count": 0}):
+            self.stub(self.replies(self.wf(SELF_WF), self.runs(SELF_WF, [self.row(2, 30)]), (path, bad)))
+            self.assertEqual(self.fetch(SELF_WF)[1]["workflows"][0]["state"], "unreadable", bad)
+
+    def test_a_full_page_of_other_peoples_dispatches_is_not_an_error(self):
+        rows = [self.row(i, 0.1 * i, "workflow_dispatch", actor="someone-else") for i in range(10, 20)]
+        self.stub(self.replies(self.wf(SELF_WF), self.runs(SELF_WF, [self.row(2, 0.5)]),
+                               (self.dispatch(SELF_WF, [])[0], {"total_count": 40, "workflow_runs": rows})))
+        self.assertEqual(self.fetch(SELF_WF)[1]["workflows"][0]["state"], "ok")
 
     def test_a_non_schedule_row_is_ignored(self):
         self.stub(self.replies(self.wf(PEER), self.runs(PEER, [self.row(5, 1, event="workflow_dispatch")], total=1)))
@@ -1585,7 +1660,7 @@ class ScheduleFetch(unittest.TestCase):
         prev = os.environ.pop("GITHUB_REPOSITORY", None)
         self.addCleanup(lambda: prev and os.environ.__setitem__("GITHUB_REPOSITORY", prev))
         with tempfile.TemporaryDirectory() as d, contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(SCHED.main(["--workflow", PEER, "--out", str(Path(d, "x.json"))]), 1)
+            self.assertEqual(SCHED.main(["--workflow", PEER, "--dispatcher-login", DISPATCHER, "--out", str(Path(d, "x.json"))]), 1)
 
     def test_failure_text_never_carries_a_response_body(self):
         text = (ROOT / "scripts/board-drift-schedule-fetch.py").read_text()
