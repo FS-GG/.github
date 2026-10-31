@@ -91,6 +91,33 @@ expect "a docstring mention of the shim is not an engine call" 0 "OK" "$T"
 T="$(tree "$WORK/j")"; wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' "      # scripts/audit.sh would need it" "      - run: |" "          # scripts/audit.sh" "          echo hi"
 expect "a comment naming an engine script is not a call" 0 "OK" "$T"
 
+# 2b. what counts as provisioning (the first cut accepted too much)
+RELBUILD='      - run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore --configuration Release'
+T="$(tree "$WORK/m1")"; wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' '      - run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Debug' "      - run: scripts/audit.sh"
+expect "an explicit Debug build does not provision the Release path the shim reads" 1 "a.yml [j]" "$T"
+T="$(tree "$WORK/m2")"; wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' '      - run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj' "      - run: scripts/audit.sh"
+expect "a build with no configuration (Debug by default) does not provision" 1 "a.yml [j]" "$T"
+T="$(tree "$WORK/m3")"; wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' "$RELBUILD" "      - run: scripts/audit.sh"
+expect "a --configuration Release build provisions" 0 "OK" "$T"
+T="$(tree "$WORK/m4")"; wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' '      - run: dotnet tool install -g fantomas' "      - run: scripts/audit.sh"
+expect "installing some other dotnet tool does not provision the engine" 1 "a.yml [j]" "$T"
+T="$(tree "$WORK/m5")"; wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' '      - run: dotnet tool install -g FS.GG.Coord.Cli --version 1' '      - run: dotnet tool install -g fs.gg.coord.cli' "      - run: scripts/audit.sh"
+expect "installing fs.gg.coord.cli provisions" 0 "OK" "$T"
+# composite actions
+comp() { mkdir -p "$1/.github/actions/$2"; printf 'name: c\nruns:\n  using: composite\n  steps:\n%s\n' "$3" > "$1/.github/actions/$2/action.yml"; }
+T="$(tree "$WORK/c1")"; comp "$T" eng "    - shell: bash
+      run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release"
+wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' "      - uses: ./.github/actions/eng" "      - run: scripts/audit.sh"
+expect "a local composite action that builds the engine provisions the steps after it" 0 "OK" "$T"
+T="$(tree "$WORK/c2")"; comp "$T" runit "    - shell: bash
+      run: scripts/audit.sh"
+wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' "      - uses: ./.github/actions/runit"
+expect "a local composite action that RUNS the engine with no build is refused" 1 "a.yml [j]" "$T"
+T="$(tree "$WORK/c3")"; comp "$T" noop "    - shell: bash
+      run: echo hello"
+wf "$T" a.yml '{ schedule: [{ cron: "0 4 * * *" }] }' "      - uses: ./.github/actions/noop" "      - run: scripts/audit.sh"
+expect "a composite action that does not build leaves a later engine call refused" 1 "a.yml [j]" "$T"
+
 # 3. no verdict ---------------------------------------------------------------------------------
 T="$WORK/empty"; mkdir -p "$T/.github/workflows" "$T/scripts"
 expect "no workflows: no verdict" 3 "nothing to audit" "$T"

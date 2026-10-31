@@ -30,6 +30,17 @@ workflow_call trigger:
      of FS.GG.Coord.Cli, a `dotnet tool restore|install`, or a step/job/workflow `env:` that names
      FSGG_COORD_ENGINE_BIN. "Earlier" is the point: a build after the first use is the same failure.
 
+WHAT COUNTS AS PROVISIONING, precisely (the first cut accepted too much): a `dotnet build|publish|run`
+naming FS.GG.Coord.Cli with an explicit Release configuration (the shim looks under bin/Release/, and
+`dotnet build` defaults to Debug); a `dotnet tool install` that installs fs.gg.coord.cli (not any tool);
+`dotnet tool restore`; or FSGG_COORD_ENGINE_BIN. The steps of a LOCAL composite action (`uses: ./...`) are
+inlined, so a build or an engine call inside one is judged in order.
+
+KNOWN FALSE NEGATIVE, stated rather than hidden: a step that runs a script which runs ANOTHER script which
+runs the engine (two levels) is not seen. A path-reference closure was tried and rejected: it matched
+docstrings and data (policy-checkers.json) and turned 2 true findings into 18 false ones. Closing it needs a
+call graph that knows invocation from mention.
+
 It is a static reading of the working tree: no API, no network, no credentials. Examining zero
 workflows is a failure to audit, not a clean audit.
 
@@ -60,9 +71,15 @@ ENGINE_NAME = re.compile(r"fsgg-coord(?![-\w.])|FSGG_COORD_(?:ENGINE_)?BIN")
 # does, and never runs it), so prose cannot count. It RESOLVES the engine only through the env var
 # that overrides it or a quoted path component naming it.
 ENGINE_NAME_PY = re.compile(r"FSGG_COORD_(?:ENGINE_)?BIN|[\"']fsgg-coord[\"']")
-PROVISION_RUN = re.compile(
-    r"dotnet\s+(?:build|publish|run)\b[^\n]*FS\.GG\.Coord\.Cli|dotnet\s+tool\s+(?:restore|install)\b"
-)
+# What provisions the engine the shim can find. Three false negatives of the first cut are closed here:
+#   * a build must be a RELEASE build: the shim looks at src/FS.GG.Coord.Cli/bin/Release/..., and
+#     `dotnet build` defaults to Debug, so a bare or `-c Debug` build leaves the same exit 69 behind;
+#   * `dotnet tool install` counts only when it installs the engine (fs.gg.coord.cli), not any tool;
+#   * `dotnet tool restore` still counts (the receiver shape: the manifest names the engine).
+BUILD_CMD = re.compile(r"dotnet\s+(?:build|publish|run)\b([^\n]*)")
+RELEASE_FLAG = re.compile(r"(?:^|\s)(?:-c|--configuration)(?:\s+|=)Release\b", re.IGNORECASE)
+TOOL_RESTORE = re.compile(r"dotnet\s+tool\s+restore\b")
+TOOL_INSTALL = re.compile(r"dotnet\s+tool\s+install\b([^\n]*)")
 PROVISION_ENV = re.compile(r"FSGG_COORD_ENGINE_BIN")
 
 
@@ -116,14 +133,58 @@ def runs_engine(run: str, scripts: set[str]) -> bool:
     return any(re.search(re.escape(s) + r"(?![-\w.])", code) for s in scripts)
 
 
+def provisions_run(run: str) -> bool:
+    """Does this shell text build, install or restore an engine the shim can resolve?"""
+    code = strip_comments(run)
+    for m in BUILD_CMD.finditer(code):
+        rest = m.group(1)
+        if "FS.GG.Coord.Cli" in rest and RELEASE_FLAG.search(rest):
+            return True
+    for m in TOOL_INSTALL.finditer(code):
+        if "fs.gg.coord.cli" in m.group(1).lower():
+            return True
+    return bool(TOOL_RESTORE.search(code))
+
+
 def provisions(step: dict, wf_env: object, job_env: object) -> bool:
-    run = strip_comments(str(step.get("run") or ""))
-    if PROVISION_RUN.search(run):
+    if provisions_run(str(step.get("run") or "")):
         return True
     for env in (wf_env, job_env, step.get("env")):
         if isinstance(env, dict) and any(PROVISION_ENV.search(str(k)) for k in env):
             return True
     return False
+
+
+def expand_steps(steps: list, root: str, depth: int = 0) -> list:
+    """Inline the steps of every LOCAL composite action (`uses: ./path`), in order, so a build or an
+    engine call hidden inside one is judged where it runs. A local action that is missing or not a
+    composite is left as a plain step (it cannot be read, and it is not claimed to provision)."""
+    out: list = []
+    for step in steps:
+        uses = step.get("uses") if isinstance(step, dict) else None
+        if isinstance(uses, str) and uses.startswith("./") and depth < 4:
+            base = os.path.join(root, uses[2:])
+            for name in ("action.yml", "action.yaml"):
+                path = os.path.join(base, name)
+                if os.path.isfile(path):
+                    try:
+                        with open(path, encoding="utf-8") as fh:
+                            action = yaml.safe_load(fh)
+                    except yaml.YAMLError as e:
+                        raise GateError(f"{os.path.relpath(path, root)}: not parsable as YAML — {e}") from e
+                    inner = ((action or {}).get("runs") or {}).get("steps")
+                    if isinstance(inner, list):
+                        label = step.get("name") or uses
+                        for sub in expand_steps(inner, root, depth + 1):
+                            if isinstance(sub, dict):
+                                sub = {**sub, "name": sub.get("name") or f"{label} (composite)"}
+                            out.append(sub)
+                        break
+            else:
+                out.append(step)
+            continue
+        out.append(step)
+    return out
 
 
 def audit(root: str) -> tuple[list[str], int]:
@@ -156,6 +217,7 @@ def audit(root: str) -> tuple[list[str], int]:
             if not isinstance(steps, list):
                 continue
             provisioned = False
+            steps = expand_steps(steps, root)
             for i, step in enumerate(steps):
                 if not isinstance(step, dict):
                     continue
