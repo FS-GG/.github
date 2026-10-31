@@ -1,0 +1,8 @@
+{"schema":"fsgg.board-tend-snapshot/1","observedAt":"2026-11-01T12:00:00Z",
+ "cards":[
+  {"itemId":"I-outcome","ref":"FS-GG/x#10","status":"Ready","subIssues":[{"ref":"FS-GG/x#11","open":true},{"ref":"FS-GG/x#12","open":true}]},
+  {"itemId":"I-child","ref":"FS-GG/x#11","status":"Ready","parent":"FS-GG/x#10"},
+  {"itemId":"I-conflict","ref":"FS-GG/x#12","status":"Ready","parent":"FS-GG/x#10","intendedLine":"Work level: Outcome"},
+  {"itemId":"I-orphan","ref":"FS-GG/x#13","status":"Ready","intendedLine":"Work level: Delivery"},
+  {"itemId":"I-bare","ref":"FS-GG/x#14","status":"Ready"}
+ ]}

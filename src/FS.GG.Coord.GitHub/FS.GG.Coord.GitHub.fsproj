@@ -97,6 +97,8 @@
     <Compile Include="V2ProjectionSource.fs" />
     <Compile Include="V2Enrollment.fsi" />
     <Compile Include="V2Enrollment.fs" />
+    <Compile Include="V2Tend.fsi" />
+    <Compile Include="V2Tend.fs" />
     <Compile Include="V2Custody.fsi" />
     <Compile Include="V2Custody.fs" />
     <Compile Include="V2NativeResolve.fsi" />
