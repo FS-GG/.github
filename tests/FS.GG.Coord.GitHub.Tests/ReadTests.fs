@@ -3583,3 +3583,54 @@ let ``#3274 renamed comparison row without its previous name fails closed`` () =
     match Reads.compareCommitPaths (serving body) "FS-GG" ".github" ancestor descendant with
     | Error(Malformed(_, reason)) -> Assert.Contains("previous_filename", reason)
     | result -> failwithf "a rename missing its old path must be unreadable: %A" result
+
+// ---- one issue's state and native parent (.github#5100) ----------------------------------------------
+
+[<Fact>]
+let ``#5100 issueParent reads the exact state and the native parent`` () =
+    let transport =
+        serving
+            """{"data":{"repository":{"issue":{"state":"OPEN","parent":{"number":4730,"repository":{"nameWithOwner":"FS-GG/.github"}}}}}}"""
+
+    match Reads.issueParent transport "FS-GG" ".github" 5100 with
+    | Ok facts ->
+        Assert.True(facts.Open)
+
+        Assert.Equal(
+            Some
+                {
+                    Owner = "FS-GG"
+                    Repo = ".github"
+                    Number = 4730
+                },
+            facts.Parent
+        )
+    | other -> failwith $"a clean parent read must parse — got %A{other}"
+
+[<Fact>]
+let ``#5100 issueParent reads an explicit null parent as measured none and CLOSED as closed`` () =
+    let transport =
+        serving """{"data":{"repository":{"issue":{"state":"CLOSED","parent":null}}}}"""
+
+    match Reads.issueParent transport "FS-GG" ".github" 5100 with
+    | Ok facts ->
+        Assert.False(facts.Open)
+        Assert.Equal(None, facts.Parent)
+    | other -> failwith $"an explicit null parent is a measured none — got %A{other}"
+
+[<Fact>]
+let ``#5100 issueParent fails closed on every unreadable shape`` () =
+    let refused (name: string) (body: string) =
+        match Reads.issueParent (serving body) "FS-GG" ".github" 5100 with
+        | Error _ -> ()
+        | Ok facts -> failwith $"%s{name}: expected a failed read, got %A{facts}"
+
+    refused "absent parent key" """{"data":{"repository":{"issue":{"state":"OPEN"}}}}"""
+    refused "unknown state" """{"data":{"repository":{"issue":{"state":"MAYBE","parent":null}}}}"""
+    refused "absent state" """{"data":{"repository":{"issue":{"parent":null}}}}"""
+    refused "unnameable parent" """{"data":{"repository":{"issue":{"state":"OPEN","parent":{"number":4730}}}}}"""
+    refused "missing issue" """{"data":{"repository":{"issue":null}}}"""
+
+    refused
+        "partial 200"
+        """{"data":{"repository":{"issue":{"state":"OPEN","parent":null}}},"errors":[{"message":"Something went wrong"}]}"""

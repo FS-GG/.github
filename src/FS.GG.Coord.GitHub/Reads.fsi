@@ -359,6 +359,14 @@ module Reads =
     /// whose children could not be read must not roll up as "no children" or "all done".
     val subIssues: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<SubIssueSet>
 
+    /// One issue's own OPEN/CLOSED state and its native PARENT (.github#5100).
+    type IssueParent = { Open: bool; Parent: Ref option }
+
+    /// The PARENT read: an issue's exact state and native parent. FAILS CLOSED: a missing issue, an
+    /// unknown state, an absent `parent` key or an unnameable parent is an ERROR; only an explicit `null`
+    /// parent is the measured answer "no parent".
+    val issueParent: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<IssueParent>
+
     /// Does this ref name a PULL REQUEST rather than an issue? (`issues/{n}` carries `pull_request` iff so.)
     ///
     /// GitHub refuses to link a PR as a sub-issue, so a task-list line citing the PR that closed a checklist

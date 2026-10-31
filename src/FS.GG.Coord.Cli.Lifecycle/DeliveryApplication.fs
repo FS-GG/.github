@@ -654,7 +654,7 @@ module DeliveryApplication =
             MergeRefused "delivery claim generation changed after inspection; GitHub merge was not attempted"
         | Delivery.Next _ when not (Delivery.landingLinkageAuthorized currentAuthority) ->
             MergeRefused
-                "delivery closing linkage or two-phase receipt authority changed after inspection; GitHub merge was not attempted"
+                "delivery closing linkage, Delivery reference, or two-phase receipt authority changed after inspection; GitHub merge was not attempted"
         | Delivery.Next _ -> MergeAuthorized
 
     /// Invoke the merge adapter only after claim and head still match and the effective base either
@@ -765,6 +765,9 @@ module DeliveryApplication =
                     Freshness = freshness
                     ItemBranchCanonical = readBoolean "itemBranchCanonical" root
                     ClosingLinkageCanonical = readBoolean "closingLinkageCanonical" root
+                    // Added by .github#5100 after the snapshot contract shipped; older producers omit
+                    // it, and absence is the refusing value.
+                    DeliveryReferenceLinkage = readBooleanOrDefault "deliveryReferenceLinkage" false root
                     PathsVerified = readBoolean "pathsVerified" root
                     InReview = readBoolean "inReview" root
                     Review = review root
