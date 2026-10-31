@@ -102,14 +102,14 @@
     },
     {
       "path": ".github/workflows/skill-registry-autofix.yml",
-      "sha256": "15c0354feca76dd795843aef9102089b93601c43c58dbe1d88aa4ca59694e81d",
+      "sha256": "b3dbeabcbace3b179b00729c9c9ee848298d8bcd955f98a575044d5c05b0ed54",
       "status": "current-revision-retired",
       "gs2089": "resolved",
       "reason": "The scheduled route runs local registry validation only and has no App token, registry write, branch, pull-request, merge, comment, or close effect."
     },
     {
       "path": ".github/workflows/skillmirror-redrive.yml",
-      "sha256": "fb3a9fd68119ed697cc10e1b48ad2920bff4309e0ff3b8e53c192c33e8b48fdb",
+      "sha256": "44c4ea83188b0bb03c063ce50aa5fb0bc190d83c4f6a675eff02c5cfa7556fc7",
       "status": "current-revision-retired",
       "gs2089": "resolved",
       "reason": "The scheduled route retains its hermetic oracle only; re-pin, branch, pull-request, and close effects are absent."

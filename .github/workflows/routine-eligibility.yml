@@ -20,6 +20,14 @@ on:
 permissions:
   contents: read
 
+# PR-keyed concurrency (#4730 CI-load, after #4994): this workflow runs on `pull_request_target` only, where
+# `github.ref` is the default branch, so the group is the PR number alone and every event is a PR event.
+# A newer event for the same pull request cancels the superseded run; the moved-base fix (#4994) resolves
+# the base live on every run, so the run that replaces it never depends on the cancelled one's payload.
+concurrency:
+  group: routine-eligibility-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   routine-eligibility:
     name: routine-eligibility
