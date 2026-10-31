@@ -346,6 +346,20 @@ def synthetic(work: Path) -> None:
     check(rc == 0 and doc and doc["undeclaredLines"] == 25,
           "cross-hunk: 5 new lines in one hunk offset 5 of the 30 dropped in another hunk of the same file -> 25, passes", out)
 
+    check(doc is not None and doc["rawDroppedLines"] == 30 and doc["undeclaredLines"] == 25
+          and "30 landed line(s) dropped, offset by 5 new line(s) elsewhere in the file, 25 net" in out
+          and "::warning" in out and "30 landed line(s) dropped before new-line credit" in out,
+          "credit visibility: raw 30, offset 5, net 25 is printed, and 30 or more raw warns although the net passes", out)
+    branch(repo, "rewrite50b", c["c2"])
+    put(repo, "r.txt", lines("brandnew", 50))
+    head = commit(repo, "rewrite the landed block with new text, again")
+    rc, doc, out = gate(repo, main, head)
+    check(rc == 0 and doc and doc["rawDroppedLines"] == 50 and doc["undeclaredLines"] == 0 and "before new-line credit" in out,
+          "credit visibility: a 50-for-50 rewrite nets to 0, passes, and still warns that 50 were dropped before credit", out)
+    rc, doc, out = gate(repo, main, git(repo, "rev-parse", "five"))
+    check(rc == 0 and doc and doc["rawDroppedLines"] == 5 and "before new-line credit" not in out,
+          "credit visibility: under 30 raw there is no credit warning", out)
+
     marker_re = re.compile(r"<!-- fsgg:declared-revert/v1 reverts=(\S+) -->")
     rc, doc, out = gate(repo, main, scoped)
     printed = marker_re.search(out)
