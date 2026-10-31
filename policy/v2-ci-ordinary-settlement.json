@@ -71,8 +71,8 @@
         "event": "pull_request"
       },
       "claim-generation": {
-        "workflowId": 303535682,
-        "path": ".github/workflows/coherence.yml",
+        "workflowId": 402306546,
+        "path": ".github/workflows/claim-generation.yml",
         "event": "pull_request"
       },
       "Lint every shell file in the repo (pinned shellcheck)": {
