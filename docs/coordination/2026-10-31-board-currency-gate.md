@@ -1,0 +1,377 @@
+# BOARD-CURRENCY-01: make "the board is current and triaged" a merge-time gate
+
+Design, 2026-10-31. Owning repository `FS-GG/.github`; owning Outcome
+[#4730](https://github.com/FS-GG/.github/issues/4730) (COORD-EFF-02). Root (Programme/root) owns
+approval, integration, the guarded Status writes and every acceptance decision. Phase 1 (the rule
+evaluator and the shadow report) is PR #5035. Root's recorded decisions on this design
+([issuecomment-6540490608](https://github.com/FS-GG/.github/issues/4730#issuecomment-6540490608)) are
+folded in below and listed in §6.
+
+## Why
+
+The user asked for this directly:
+
+- "we need to make check board that everything is current and triaged mandatory and deterministic.
+  maybe automatic part of merge process?"
+- "why is the work of the last day not put down as deliveries on the coord board"
+- "more honestly reflect the amount of work still open … most outcomes have all their deliveries done
+  yet still are open, that is very uninformative."
+
+Today the board is current only if Root remembers each guarded Status write
+([lifecycle contract](../../.agents/skills/work-board/references/lifecycle-contract.md), same-turn
+rule). The hourly [board-drift observer](../../.github/workflows/board-drift-observer.yml) (#4973,
+issue #4985) detects some misses, but its rules are mostly heuristics. Nothing at merge time checks that
+the work being merged is on the board.
+
+### Baseline (ad hoc, point in time)
+
+These counts are one ad hoc observation, not a reproducible fixture: the board has changed since, and
+the snapshot holds private-repository text, so it is not published. The observation was made at
+2026-10-31T06:45Z (98 cards, 145 PRs: 20 open and 108 merged in the previous 24 hours carry the routine
+marker) with the phase-1 code at #5035 head `e6bed0b2`. Repeating the same commands later gives a new
+observation, not these numbers:
+
+```sh
+python3 scripts/board-currency-fetch.py --out "$SCRATCH/snapshot.json"
+python3 scripts/board-currency-rules.py check --snapshot "$SCRATCH/snapshot.json" --out "$SCRATCH/findings.json"
+# R1 by reason and PR state:
+python3 -c 'import json,sys,collections; r=json.load(open(sys.argv[1])); print(collections.Counter((f["reason"], f.get("prState")) for f in r["findings"] if f["rule"]=="R1"))' "$SCRATCH/findings.json"
+```
+
+| Rule | Findings | Breakdown |
+|---|---:|---|
+| R1 | 109 | 94 of the 108 merged routine PRs: 80 `no-delivery`, 12 `no-parent-outcome`, 2 `multiple-deliveries`. 15 of the 20 open routine PRs: 14 `no-delivery`, 1 `no-parent-outcome`. 94 + 15 = 109. Nearly every `no-delivery` PR says only `Refs #4730`, which is an Outcome. |
+| R3 | 9 | all `no-blocker` |
+| R5 | 9 | open Outcomes with every sub-issue closed |
+| R6 | 3 | open Outcomes with no open Delivery on the board |
+| R7 | 4 | missing fields |
+| R9 | 5 | all `orphan-delivery` |
+| R2, R4, R8, U | 0 | |
+
+Ten open Outcomes were In progress, and nine of them had every sub-issue closed: the "uninformative"
+board the user describes. Root's Delivery backfill
+([issuecomment-6540490595](https://github.com/FS-GG/.github/issues/4730#issuecomment-6540490595))
+has since created 98 Delivery issues as native sub-issues, which changes the R5 and R6 picture (§5).
+
+The cause is structural, not a lapse of attention: the merge path never asks which Delivery a PR
+delivers, and nothing turns "every child is closed" into a decision. This design fixes both
+deterministically and leaves judgement with Root.
+
+## 1. Rule set `fsgg:board-currency-rules/v1`
+
+Inputs are native state only:
+
+- issue and PR state and `stateReason`;
+- the PR body;
+- native parent, sub-issue and blocked-by links;
+- the Project 3 fields Status, Work level and Track;
+- Root-login marker comments, a closed grammar listed below.
+
+The evaluator's clock is the snapshot's own `fetchedAt`, so one snapshot always gives the same
+findings. A finding ID is `<rule>:<subject>:<reason>`. It never contains an age or a count, so an
+unchanged situation keeps its ID from one run to the next. The parameters are part of the version:
+changing any of them means a new rule-set version.
+
+| Parameter | v1 value | Why |
+|---|---|---|
+| `activityHours` | 48 | Twice a working day. The observer runs hourly, so a stall is visible within two days, not seven. |
+| `mergedWindowHours` | 24 | The window in which a merged routine PR is evaluated by R1 at all. From phase 2, unlinked and overridden merged PRs are also carried past it (R1, persistence). |
+| `effectiveFrom` | 2026-10-31T00:00Z | R2's acceptance-marker leg does not condemn Outcomes closed before the marker existed. |
+| `rootLogins` | `EHotwagner` | The only login trusted for markers. Every agent authenticates as this one account, so a marker proves "Root's account", not "Root's hands". |
+
+### The rules
+
+| ID | Applies to | Exact inputs | Fails when | Reasons (finding ID suffix) |
+|---|---|---|---|---|
+| R1 | Routine PR (body carries `fsgg:routine-development/v1`): open and non-draft; merged inside the window; or, from phase 2, carried (see persistence below) | PR body refs (`Refs` and closing keywords, ignoring code spans and fences); each ref's Project 3 item; that item's Work level, state, Status and native parent; the override marker and the PR's author and body editor | The PR references zero or more than one P3 Delivery. Or the Delivery has no parent that is a P3 Outcome. Or, while the PR is open, the Delivery is closed or Done. Or the PR carries a valid override. Referencing the parent Outcome as well is allowed. | `no-delivery`, `multiple-deliveries`, `no-parent-outcome`, `delivery-closed`, `delivery-done`, `overridden` (phase 2) |
+| R2 | Every issue card | state, `stateReason`, `closedAt`, Status, Work level, Root comments | A closed card is not Done. A Done card is open. An Outcome closed as COMPLETED on or after `effectiveFrom` lacks `fsgg:outcome-accepted/v1`. | `closed-not-done`, `done-open`, `outcome-unaccepted` |
+| R3 | Open card with Status Blocked | native `blockedBy` (with its total), newest Root `fsgg:blocked-on/v1` marker, those blockers' states; for an Outcome, its open child Deliveries | No open blocker is named. An Outcome passes if one of its open child Deliveries is Blocked. | `no-blocker`, `blockers-closed` |
+| R4 | Open card In progress or In review | Delivery: PRs referencing it, and the activity set below. Outcome: open children's Status. | A Delivery In progress has no open PR (a draft counts) and no activity within `activityHours`. A Delivery In review has no open non-draft PR and no such activity. An Outcome In progress has no open child In progress or In review. An Outcome In review has an open child that is not In review. The Outcome legs apply only when the Outcome has an open Delivery; otherwise R5 or R6 already names the cause. | `stale-active`, `outcome-no-active-child`, `outcome-review-open-child` |
+| R5 | Open Outcome | native sub-issues (complete list) | It has at least one sub-issue, and every one is closed. | `children-complete` |
+| R6 | Open Outcome that is not already R5 | native sub-issues, their P3 Work level | No open sub-issue is a P3 Delivery. | `no-open-delivery` |
+| R7 | Every card | Status, Work level, Track, content type | A field is missing. Or the card is a draft, which is not a native issue, so the other rules cannot reason about it. | `missing-<fields>`, `draft` |
+| R8 | Delivery | PRs referencing it | The Delivery is open with an open non-draft PR but is Backlog, Ready or Blocked. Or it is closed and an open non-draft PR still references it. | `open-pr-pre-action`, `pr-open-on-closed` |
+| R9 | Open issue card on Project 3 with Work level Delivery; issue card on Project 3 with Work level Outcome | native parent and its P3 Work level | A Delivery has no parent, its parent is off the board, or its parent is not an Outcome. Or an Outcome is a sub-issue of a Delivery. Closed cards, and sub-issues that have no Project 3 card, are out of scope: R9 cannot see them, and a missing Delivery card shows up as R6 on its Outcome. | `orphan-delivery`, `parent-off-board`, `parent-not-outcome`, `outcome-under-delivery` |
+| U | Any of the above | n/a | An input needed for a verdict could not be read: the card content; the comments (not read, or a Root comment truncated by the fetch with no marker in its visible part); a blocker's state; a truncated sub-issue or blocked-by list; or a parent card that R1 or R9 needs and that is unreadable. Unknown is never a pass ([.github#266](https://github.com/FS-GG/.github/issues/266)). | `unreadable`, `r1-reference-unreadable`, `r1-parent-unreadable`, `r2-comments-unread`, `r3-blockers-unread`, `r4-comments-unread`, `r6-children-unread`, `r9-parent-unreadable` |
+
+**R4 activity set, exactly.** A Delivery's last activity is the latest of: the issue's `updatedAt`;
+the Status field value's `updatedAt`; the `updatedAt` of every PR in the snapshot that references the
+issue (open, or merged inside the window); and the `createdAt` of every comment on the issue, by any
+author. Nothing else counts. In particular the project item's own `updatedAt` does not count: it moves
+on any field edit, including an edit that only moves the card. If the comments were not read, the
+verdict is `U r4-comments-unread`, never a guess from the remaining signals.
+
+**R1 persistence (phase 2).** A merged PR leaves the 24-hour window, but an unlinked or overridden
+one must not drop off the report. The observer therefore carries forward every R1 finding on a merged
+PR from its previous finding set (the tracking issue's marker). The fetch re-reads each carried PR
+(one batched GraphQL read) and adds it to the snapshot as `carried`. R1 evaluates carried PRs
+regardless of the window, and the finding clears only when the PR body references exactly one Delivery
+with a parent Outcome. The evaluator stays a pure function: the carried set is snapshot input. Carrying
+starts with phase 2; the pre-phase-2 backlog is addressed by the Delivery backfill, not carried.
+`overridden` and carrying change verdicts, so they ship as rule-set version 2 with phase 2. The other
+U reasons above that the phase-1 code does not yet emit (`r1-parent-unreadable`, `r4-comments-unread`,
+`r9-parent-unreadable`, truncated comments) bring the code into line with v1's own U row, and land in
+the phase-1 follow-up before phase 2.
+
+### Why each rule, and how it refines the brief
+
+- **R1 is the rule the merge gate enforces.** "Exactly one Delivery" makes each merge attributable,
+  and that is what puts "the work of the last day" on the board. Outcome refs stay allowed beside the
+  Delivery, because PRs legitimately cite context. A Delivery with no Outcome parent fails, because
+  otherwise the work exists but rolls up nowhere.
+- **R2 records acceptance differently per level.** A Delivery's acceptance is its native closure
+  (pnext-item: "close only its fulfilled promise with the correct native reason"), so no new Delivery
+  marker is needed. An Outcome's closure has repeatedly happened without the whole promise being
+  checked, so it needs an explicit Root marker. The marker leg is not retroactive.
+- **R3 uses native blocked-by first.** GitHub's issue dependencies are native, machine-readable and
+  writable (`addBlockedBy`). The marker is a transition aid for blockers outside GitHub, and even
+  then the blocker must be an issue. "Every blocker is closed" is the actionable signal: the card
+  should move.
+- **R4 is the deterministic form of drift rule (c),** with 48 hours instead of 7 days. A Delivery
+  whose PR merged and that waits for acceptance becomes `stale-active` 48 hours after the last
+  activity. **That is intended:** it is exactly the "deliveries done yet still open" case, and the
+  finding says acceptance is owed. It clears when Root closes the Delivery (acceptance) or anyone
+  records activity.
+- **R5 and R6 are disjoint,** so one cause gives one finding. R5 cannot decide between "propose
+  closure" and "remaining Deliveries are missing"; that decision is Root's. The finding names both
+  resolutions. A Root `fsgg:outcome-closure-proposed/v1` marker keeps the finding but tags it
+  `pending: closure-proposed`, which separates findings waiting on Root from findings nobody has
+  triaged.
+- **R7 adds drafts,** because a draft has no state, parent or links and cannot be held to any other
+  rule.
+- **R8 keeps only the deterministic parts of the brief's R8.** "All PRs merged means Done" is not
+  deterministic: a Delivery may need another PR, or a consumer effect after the merge. Closure decides
+  Done (R2). The merge-time transition in §2(b) writes the deterministic part.
+- **R9 is new.** Without hierarchy integrity, R5 and R6 undercount: a Delivery that is not linked to
+  its Outcome makes the Outcome look empty.
+
+### Marker grammar
+
+Markers are HTML comments and count only outside a code span or fence. Issue markers count only in
+a comment by a `rootLogins` author. PR-body markers count only under the authorship rule given for the
+override below.
+
+| Marker | Meaning |
+|---|---|
+| `<!-- fsgg:outcome-accepted/v1 -->` | Root accepts the Outcome's whole promise (R2). |
+| `<!-- fsgg:outcome-closure-proposed/v1 -->` | Root or a worker proposes closure; the finding stays, tagged pending (R5, R6). |
+| `<!-- fsgg:blocked-on/v1 OWNER/REPO#N … -->` | The blockers that are not native links. The newest marker wins, and an empty marker clears (R3). |
+| `<!-- fsgg:delivery-continues/v1 -->` | In a PR body: after this merge the Delivery stays In progress instead of In review (§2b). |
+| `<!-- fsgg:board-gate-override/v1 rule=R1 reason="…" -->` | In a PR body: a recorded override of the R1 gate. Exact grammar below. |
+
+**Override grammar, exactly.** The PR body, with code spans and fences removed, must match this
+regular expression (Python `re`, `MULTILINE`) **exactly once**:
+
+```text
+^<!-- fsgg:board-gate-override/v1 rule=R1 reason="(?P<reason>[^"\n]{1,200})" -->$
+```
+
+The reason must also contain at least one non-whitespace character. Two or more matches, a reason that
+is empty or only whitespace, any other `rule=` value, or any other spelling is not an override; the PR
+is then judged as if no marker were present. The marker counts only when the PR's `author.login` is in
+`rootLogins` and, if the body has ever been edited, the GraphQL `PullRequest.editor.login` (the last
+body editor) is also in `rootLogins`. Every agent shares the Root account, so this proves "Root's
+account", which is the repository's stated trust model: prevent mistakes and drift, not adversarial
+writers.
+
+## 2. Enforcement points
+
+### Which control binds
+
+**The binding control is the merge-time gate in `tools/routine-delivery.py` (b).** Every Root merge
+goes through it, and it already makes `routine-eligibility` binding the same way: `routine_contract`
+reads that check run from the API and refuses without it. Neither `routine-eligibility` nor the PR
+check (a) is a required status context on `main`. Main's protection, read 2026-10-31, requires eight
+contexts, all from app 15368 (GitHub Actions): `contract-coherence / coherence`, `projection`,
+`roster-closure`, `drift`, `claim-generation`, `Lint every shell file in the repo (pinned shellcheck)`,
+`claim-fence` and `architecture-map reconcile`. So a merge made outside `routine-delivery.py` is not
+stopped by (a) in any phase unless Root adds it to protection.
+
+**Required mode for (a) is a Root settings step,** not a code change. Root adds
+`{"context": "board-linkage", "app_id": 15368}` to `main`'s `required_status_checks.checks` and reads
+it back with `GET repos/FS-GG/.github/branches/main/protection/required_status_checks`, which must list
+it with that `app_id`. Pinning `app_id` stops another app from satisfying the context by name.
+`enforce_admins` is true, so once `board-linkage` is required a red `board-linkage` blocks every merge,
+admins included, through any route. That is why the override must make (a) itself pass. There is no
+bypass to fall back on.
+
+### Evaluation order (both (a) and (b))
+
+1. Read the PR: body, author, last body editor, head. This read is already part of both paths.
+2. **Override first.** If the body carries a valid override (grammar and authorship in §1), the verdict
+   is `overridden`. Project 3 is not read for the verdict, so an unreadable board cannot block an
+   override. (b) merges and records `boardGate: overridden`; (a) passes with a notice.
+3. Otherwise evaluate R1 from one GraphQL query that resolves each ref's P3 item, Work level, state,
+   Status and parent.
+4. If that read fails or is incomplete, the verdict is `unknown`. (b) returns `outcome: indeterminate`
+   with reason `board-linkage unknown` and makes no merge (fail-closed). (a) fails in required mode and
+   writes a notice in advisory mode.
+5. If R1 fails, (b) returns `outcome: refused` with reason `board-linkage R1 <reason>`, makes no merge
+   attempt and leaves `attempts` unchanged. (a) fails in required mode and writes a notice in advisory
+   mode.
+6. Otherwise the verdict is `linked`.
+
+### (a) PR check `board-linkage`
+
+This is the order above for one PR, in `FS-GG/.github` only. It is its own light job named
+`board-linkage` in `routine-eligibility.yml`, because only a job publishes a context that branch
+protection can require; a step inside the `routine-eligibility` job cannot. It shares that workflow's
+`pull_request_target` trigger, including `edited` (fixing the body re-runs it), and its PR-keyed
+concurrency group. It checks out nothing from the candidate. It reads Project 3 with a read-only App
+token: organization-projects, issues and pull-requests read, the same mint as `board-drift-read`.
+
+Product repositories do not get this check in this design, because the receiver workflow has no App
+secret. They are covered by (b), which every Root merge passes through.
+
+### (b) Merge-time gate in `tools/routine-delivery.py`
+
+`summarize()` already re-reads the live PR before it merges. The gate runs the order above before the
+merge effect, only when `--apply` is given and the PR carries the routine marker.
+
+After the existing merged-PR and merge-commit readback, make exactly one deterministic Delivery
+Status transition through the guarded-write semantics of the
+[Status lifecycle](../../.agents/skills/work-board/references/status-lifecycle.md):
+
+| After merge | Target Status |
+|---|---|
+| The Delivery is closed (for example by a closing keyword) | **No write.** Done has one writer: the built-in "Item closed → Done" project workflow (below). |
+| Open, Refs-only, no `delivery-continues` marker | In review (implementation merged; acceptance or consumer effects remain) |
+| Open, Refs-only, with `fsgg:delivery-continues/v1` | In progress |
+
+The merge-time write never sets Done. Root decided that closing the issue is the acceptance act and
+that the built-in workflow moves a closed item to Done
+([issuecomment-6540490608](https://github.com/FS-GG/.github/issues/4730#issuecomment-6540490608),
+decisions 2 and 4). One writer for Done means no race between the two.
+
+The write follows these steps:
+
+1. Take the preimage from a fresh snapshot.
+2. Treat an equal value as a no-op.
+3. Write only from a preimage of Backlog, Ready, In progress or In review. Refuse to write, and report
+   `boardTransition: refused-preimage`, when the preimage is Done, empty or unreadable, **or Blocked**.
+   Blocked records Root's judgement that a named prerequisite is missing; a merge does not prove that
+   prerequisite was met, so the gate does not overturn it. The merge stands, the merge result names
+   `refused-preimage` for Root to decide, and the observer reports the card under R3 if its blockers are
+   closed or unnamed.
+4. Record possible-send in the result, then send one `gh project item-edit`.
+5. Read back independently and verify with `require_preimage` and `verify_field_transition` from
+   `scripts/board_v2_native_results.py`.
+6. If the send or readback fails or is uncertain, report `boardTransition: uncertain`. Never resend.
+
+This makes the same-turn Status rule automatic for the one transition a merge determines. The parent
+Outcome is never rolled up automatically.
+
+### (c) The hourly observer
+
+It evaluates every rule over a full snapshot. It maintains one tracking issue holding the current
+finding set, and its run fails, red, when a finding ID appears that was not in the previous set. That
+is how it fails loudly on new findings without re-alarming on known ones. In phase 1 it only writes its
+job summary. See §4 for how it converges with board-drift.
+
+### Which writes are automatic
+
+| Write | Who | Automatic? |
+|---|---|---|
+| Delivery Status after merge (table above) | `routine-delivery.py` as the merging credential | Yes: deterministic, guarded, read back |
+| Status Done when an issue closes | GitHub's built-in project workflow "Item closed → Done", the **only** writer of Done | Yes, once enabled. Root decided to enable it (decision 2); it is an owner UI action, requested and pending at the time of writing |
+| Sub-issue added to the project | GitHub's built-in "Auto-add sub-issues to project" | **No.** Turned off by the owner and read back `enabled: false` on 2026-10-31 ([issuecomment-6540378933](https://github.com/FS-GG/.github/issues/4730#issuecomment-6540378933)); cards come from batched enrollment |
+| Accepting an Outcome (marker plus close) | Root | **No.** This is a Root decision |
+| Closing a Delivery | Root, or a closing keyword the PR author chose | No, except through the closing keyword |
+| Any other Status (Blocked, Ready, Backlog, Outcome Status) | Root | No. Findings tell Root; Root writes |
+| Creating the remaining Deliveries (R5, R6) | Root, through canonical intake and enrollment | No |
+| Tracking issue | Observer, using `GITHUB_TOKEN` with `issues: write` only | Yes (report only) |
+
+## 3. Authority and safety
+
+- **Project field writes.** Phase 3 uses the credential that already performs the merge: Root's PAT
+  through `gh`, which already makes Root's guarded Status writes. No new writer identity is introduced.
+  The App `fs-gg-cross-repo-dispatch` holds `organization_projects: write` (pinned in
+  `permission-coherence.yml`) but stays read-only for this design. Its board use here is read-only
+  mints for the PR check and the observer, so a CI job never writes a board field.
+- **Guarded writes.** Use the existing guard semantics (preimage, then send, then independent
+  readback), the existing cooperative single-writer window, and no automatic retry.
+- **Rate limits.**
+  - Merge gate: about 1 GraphQL point before the merge, plus 1 read, 1 mutation and 1 readback after
+    it. That is about 4 points of the PAT's 5,000 per hour per merge, or about 450 points a day at the
+    current rate of about 110 merges a day.
+  - Observer: runs on the App installation budget. Per hour it costs 2 to 3 item pages of about 2
+    points, 2 search calls, about 25 comment reads and at most one batched state read.
+  - PR check: about 1 point per `routine-eligibility` run.
+- **Failed reads.**
+  - Gate: an Unknown refuses the merge, which is fail-closed.
+  - Observer: a failed read is a red run that leaves the tracking issue untouched (the board-drift
+    precedent).
+  - PR check: an Unknown is a notice while advisory and a failure once required.
+- **Override.** `enforce_admins: true` means there is no admin bypass, so the override is data, not
+  privilege: the exact marker, non-empty reason and Root authorship defined in §1. Its effects:
+  - (a) and (b) evaluate it first, before any Project 3 read (§2, evaluation order).
+  - The gate records `boardGate: overridden`.
+  - The observer reports `R1:<pr>:overridden` and carries it past the merged window until the PR body
+    references exactly one Delivery with a parent Outcome (§1, R1 persistence).
+
+  An override is therefore never silent and never expires on its own.
+
+## 4. Rollout
+
+| Phase | What runs | Entry | Exit |
+|---|---|---|---|
+| 1, shadow (#5035) | Pure evaluator; `board-currency-shadow` runs after each `board-drift-observer` completion and writes only its job summary | Rule set v1 approved (decision 1) | Root reviews about 3 days of counts and false positives; batched enrollment lands |
+| 1a, follow-up | The phase-1 Unknown corrections (§1, U row) and their tests | #5035 merged | Before phase 2 |
+| 2, advisory | (a) as the `board-linkage` job, which only writes notices; (b) logs the would-refuse verdict without refusing; (c) moves to tracking issue #4985; R1 rule-set v2 (`overridden`, carrying) | Root approval on #4730 | Open-PR R1 near zero for 2 days; the override path exercised once in a test |
+| 3, required | (a) fails on R1 or Unknown, and Root adds `board-linkage` (app 15368) to `main` protection with readback; (b) refuses and performs the post-merge transition; (c) fails the run on new IDs | Root approval | n/a |
+
+Drift rules map onto these rules as follows:
+
+| board-drift rule | board-currency rule |
+|---|---|
+| a | R8 `open-pr-pre-action` |
+| b | R2 |
+| c | R4 |
+| d | R7 |
+| x | U |
+
+Rule e, the ruling heuristic, has no deterministic counterpart. In phase 2 both observers report to
+one tracking issue: #4985, renamed to the board-currency findings issue (decision 3). Drift rule s from
+#4990 (schedule watch; open at the time of writing, not merged) stays with the drift workflow.
+
+## 5. Interaction with existing pieces
+
+- **Auto-add (built-in, now off).** The owner turned it off on 2026-10-31 because unattended cards
+  broke `migration-prepare` and `inspect`. New sub-issues therefore have no card until batched
+  enrollment (the #4941 planner, after the coordination CLI release that lifts the row cap). Until then
+  the rules cannot see the 98 backfilled Delivery issues: an Outcome whose only open sub-issues lack
+  cards is R6 `no-open-delivery`, and an Outcome whose carded children are all closed is not R5 while
+  card-less open sub-issues exist. Expect R5 to fall and R6 to rise until enrollment lands. The rules
+  never add or remove membership.
+- **Board-drift observer.** It is unchanged in phase 1. The shadow workflow chains on its completion
+  through `workflow_run`. GitHub drops scheduled runs and fdev dispatches the observer hourly, so this
+  gets the same cadence with no second schedule or dispatcher.
+- **`routine-eligibility`.** Its workflow hosts (a) as a separate `board-linkage` job; the existing
+  `routine-eligibility` job and envelope are unchanged. Its refusals and this gate's refusals stay
+  independent.
+- **`routine-delivery.py`.** It hosts (b). The gate runs before the merge effect, and the transition
+  runs after the existing readback. Neither changes publication, telemetry or evidence behaviour.
+- **CI load.** Phase 1 adds one light job per observer run and one step in the existing
+  `board-drift-observer-selftest` fixture job. Phase 2 adds one light PR-triggered job, `board-linkage`
+  (no candidate checkout, one GraphQL read, PR-keyed concurrency). That is the gate's only PR-triggered
+  cost, and it has to be a job to be requirable.
+
+## 6. Root's recorded decisions
+
+From [issuecomment-6540490608](https://github.com/FS-GG/.github/issues/4730#issuecomment-6540490608),
+2026-10-31:
+
+1. Rule set `fsgg:board-currency-rules/v1` is approved as the phase-1 basis; phase 1 goes to
+   independent review before merge. The phase-2 R1 additions (`overridden`, carrying) are version 2
+   and need their own approval with phase 2.
+2. The built-in "Item closed → Done" project workflow will be turned on. It is an owner UI action and
+   has been requested. It is the only writer of Done (§2b).
+3. Tracking issue: reuse #4985, renamed to the board-currency findings issue.
+4. Post-merge Status: In review by default, or In progress when the PR body carries
+   `fsgg:delivery-continues/v1`. Done follows Root's acceptance, which is closing the issue.
+5. This work's own Delivery issue is created as a native sub-issue of #4730 and enrolled with the batch
+   after the coordination CLI 0.114.0 release lifts the row cap. Until then this work's PRs say
+   `Refs #4730` and are themselves R1 `no-delivery` findings.
+
+Still open for Root: required mode for (a), which is the settings step in §2 and is taken only at
+phase 3.
