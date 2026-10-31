@@ -60,15 +60,16 @@ not telemetry implementation or installed acceptance.
 
 ## Reuse and ownership
 
-Delivery4707's current source preparation packages the already accepted PR4685
-unassigned-usage projection into an independently versioned Host successor. See the
-[Host0.8 source and release boundary](../coordination/telemetry-host-release.md#prospective-host-08-source--delivery4707-2026-10-21).
-Its prospective coordinates do not assert org-feed availability: current authenticated
-reads return403, and authoritative absence remains required before candidate/publication.
-This source lane can proceed independently of Home. The existing owner retains4707
-through source review/delivery; Home retains cutover and credential custody,4705
-supplies the genuine durable receipt, and4707 remains open for the actual browser
-journey. No earlier publication or uncertain operation is replayed.
+Delivery [#4707](https://github.com/FS-GG/.github/issues/4707) is complete. It packaged the accepted
+[PR #4685](https://github.com/FS-GG/.github/pull/4685) unassigned-usage projection into an independently
+versioned Host successor (source: [PR #4782](https://github.com/FS-GG/.github/pull/4782); release and
+publication boundary: [Host 0.8](../coordination/telemetry-host-release.md#prospective-host-08-source--delivery4707-2026-10-21)),
+and its closing comment records the accepted facts-and-coverage provider-to-receiver/store-to-projection-to-browser
+journey, reusing the durable receipt accepted under [#4705](https://github.com/FS-GG/.github/issues/4705).
+Its acceptance is scoped to that journey; interruption/Unknown, recovery, correction and later assessment,
+adoption and rollback stay owed under [#4640](https://github.com/FS-GG/.github/issues/4640). Reconciliation
+of the .2/.4 checklist against this evidence is tracked in
+[#5049](https://github.com/FS-GG/.github/issues/5049). No earlier publication or uncertain operation is replayed.
 
 | Capability | State established by the design audit | Owner or dependency |
 |---|---|---|
@@ -121,9 +122,13 @@ calibration, savings, coherent publication and installed adoption remain open.
 - [ ] Owner: Coordination telemetry implementation maintainer.
 - [ ] Implement the admitted record extensions, stable object joins, revision selection and
   deterministic reducers. Preserve unsuccessful attempts and explicit allocation/coverage states.
-- [ ] Provide or qualify a supported cross-item supersession path with idempotence and audit history;
+- [x] Provide or qualify a supported cross-item supersession path with idempotence and audit history;
   coordinate with UTEL correctness if that path already exists. Preserve original invalid records
   as history without retaining their contribution in current totals.
+  Reconciled ([#5049](https://github.com/FS-GG/.github/issues/5049)): satisfied by reuse. The supported
+  cross-item CI correction is qualified at installed 0.98.0 (idempotent retry, original raw facts
+  and native outcomes conserved; see the [contract README](../../contracts/process-efficiency/README.md#canonical-joins-and-migration)
+  and the [dashboard roadmap](utel-telemetry-dashboard.md)); this milestone reuses it and does not reimplement it.
 - [ ] Export bounded facts for analysis/projection, including producer, ingestion and observation ages.
   Distinguish native item eligibility from known source delivery and provisional explanations.
 
@@ -133,6 +138,13 @@ activity, shared CI, unknown usage, cancellations and reopens. Cross-item correc
 attribution without changing delivered total or total cost. Unsupported legacy correction fails
 explicitly; no out-of-band database repair. Preserve historical records, audit history and correction conservation through migration;
 old readers and binaries need not remain compatible.
+
+Reconciliation ([#5049](https://github.com/FS-GG/.github/issues/5049)): the other .2 items stay unchecked as
+explicit Unknowns, not as known failures. No inspected delivery evidences the record-extension reducer
+fixtures (duplicates, late/out-of-order revisions, overlapping activity, cancellations, reopens) or the
+exported bounded facts with producer/ingestion/observation ages, against the installed schema-14 store.
+The `efficiency-export` endpoint qualification recorded under .4 is likewise still pending. They close on
+installed-store evidence, or by a recorded supersession, under [#4640](https://github.com/FS-GG/.github/issues/4640).
 
 ### V2-EFF-01.3 — Generate bounded assessments on completion
 
@@ -198,9 +210,14 @@ pending; this milestone stays unchecked.
 ### V2-EFF-01.4 — Publish useful dashboard explanations
 
 - [ ] Owner: `.github` dashboard maintainer.
-- [ ] Deliver the facts-and-coverage slice first: versioned sanitized projection, approved public
+- [x] Deliver the facts-and-coverage slice first: versioned sanitized projection, approved public
   summaries and matched current-only dashboard/feed migration. Keep private findings private unless
   the approved projection allows their content; defer uncalibrated explanations and savings claims.
+  Reconciled ([#5049](https://github.com/FS-GG/.github/issues/5049)): delivered for the facts-and-coverage
+  slice only. Evidence: the host-5 projection and its matched current-only feed publication recorded below,
+  [PR #4685](https://github.com/FS-GG/.github/pull/4685) (unassigned-usage projection) and the accepted
+  [#4707](https://github.com/FS-GG/.github/issues/4707) provider-to-browser journey. This does not cover
+  schema-14 efficiency content, which remains owed below.
 - [ ] Build the work-mix, retry, problem, item-summary/timeline, improvement and data-health views from
   the design. Include open/abandoned items and known deliveries with incomplete accounting.
 - [ ] Add accessible tables, keyboard interaction, coverage/denominator labels, stable filters,
@@ -394,6 +411,13 @@ delivery, with truthful summaries and reconcilable identities. No private identi
 unapproved URLs or executable markup escape. Feed errors and pending analysis cannot look like zero
 cost or no delivered work. The matched dashboard/feed migration is current-only; previous reader
 compatibility is not required.
+
+Reconciliation ([#5049](https://github.com/FS-GG/.github/issues/5049)): the views bullet and the
+accessible-tables bullet stay unchecked as explicit Unknowns. Their source and fixture-browser results
+above are historical and scoped; no inspected evidence shows schema-14 efficiency content on a live
+installed feed, so the vertical slice's native-completion plus incomplete-accounting acceptance is
+not claimed. They close on installed schema-14 feed evidence under
+[#4640](https://github.com/FS-GG/.github/issues/4640).
 
 ### V2-EFF-01.5 — Calibrate explanations; assess net value only when claimed
 
