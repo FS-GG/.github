@@ -131,6 +131,13 @@ intake, runtime/resource and reservation facts beside actual owner execution. A 
 the affected decision; recompute the remaining ordered proposals after each newly admitted operation.
 The read-only report itself acquires no reservation or authority and never dispatches.
 
+## Board size budget
+
+Coordination Project 3 and its readers hold at most 500 items. When Done exceeds 200, Done cards older than the
+newest 200 by close time are archived, never deleted. [#5119](https://github.com/FS-GG/.github/issues/5119) owns
+the rule. `scripts/coord-board-archive.py` applies it with a dry run first. Readers refuse a larger board. An
+archived enrolled card is an explicit archived membership, not a missing row.
+
 ## Planning and observation stay separate
 
 Status is owner-controlled current lifecycle state: Backlog, Ready, In progress, In review, Blocked or Done.
