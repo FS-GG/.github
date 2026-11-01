@@ -36,6 +36,9 @@ class FakeTime:
         self.w.fire()
 
 
+DROP = object()                                   # a field left out of a record
+
+
 class World:
     def __init__(self, tmp):
         self.tmp = tmp
@@ -149,9 +152,12 @@ class World:
         return self.vol
 
     # ------------------------------------------------------------ claim and sealed snapshot
-    def make_snapshot(self, sid='snap-1', files=None, src_modes=None, sm_ident=None, extra_entries=None):
+    def make_snapshot(self, sid='snap-1', files=None, src_modes=None, sm_ident=None, extra_entries=None, kind='real', sm_extra=None, claim_extra=None):
+        """kind='synthetic' writes the seal tool's synthetic records (synthetic-inputs/, synthetic-claims/, learn-input-*-synthetic/1, provenance synthetic)."""
         files = files or {'passive-a/spool/one.json': b'{"a":1}', 'passive-a/spool/two.json': b'{"b":22}', 'passive-b/spool/producer.lock': b''}
-        inputs = os.path.join(self.view, 'inputs')
+        inputs = os.path.join(self.view, 'synthetic-inputs' if kind == 'synthetic' else 'inputs')
+        os.makedirs(inputs, exist_ok=True)
+        os.chmod(inputs, 0o755)
         snap = os.path.join(inputs, sid)
         os.makedirs(snap, exist_ok=True)
         os.chmod(snap, 0o755)
@@ -169,15 +175,26 @@ class World:
         entries += extra_entries or []
         self.sid, self.entries = sid, entries
         sm = {'schema': 'learn-input-snapshot/1', 'snapshotId': sid, 'sourceIdentity': sm_ident or IDENT, 'files': entries}
+        if kind == 'synthetic':
+            sm.update(schema='learn-input-snapshot-synthetic/1', provenance='synthetic', realSpoolProvenance=False)
+        sm.update(sm_extra or {})
+        sm = {k: v for k, v in sm.items() if v is not DROP}
         smb = json.dumps(sm, sort_keys=True, separators=(',', ':')).encode()
         self.manifest_path = os.path.join(inputs, sid + '.manifest.json')
         open(self.manifest_path, 'wb').write(smb)
         os.chmod(self.manifest_path, 0o644)
-        self.write_claim(sid, hashlib.sha256(smb).hexdigest())
+        self.write_claim(sid, hashlib.sha256(smb).hexdigest(), kind=kind, extra=claim_extra)
 
-    def write_claim(self, sid, sealed_sha, op=OPID, ident=IDENT, schema='learn-input-claim/1'):
+    def write_claim(self, sid, sealed_sha, op=OPID, ident=IDENT, schema='learn-input-claim/1', kind='real', extra=None):
         c = {'schema': schema, 'generation': 1, 'sourceIdentity': ident, 'opId': op, 'snapshotId': sid, 'sealedManifestSha256': sealed_sha}
-        self.claim_path = os.path.join(self.view, 'claims', IDENT + '.claim')
+        claims = os.path.join(self.view, 'synthetic-claims' if kind == 'synthetic' else 'claims')
+        if kind == 'synthetic':
+            c.update(schema='learn-input-claim-synthetic/1', provenance='synthetic', realSpoolProvenance=False)
+        c.update(extra or {})
+        c = {k: v for k, v in c.items() if v is not DROP}
+        os.makedirs(claims, exist_ok=True)
+        os.chmod(claims, 0o755)
+        self.claim_path = os.path.join(claims, IDENT + '.claim')
         if os.path.exists(self.claim_path):
             os.unlink(self.claim_path)
         open(self.claim_path, 'wb').write(json.dumps(c, sort_keys=True).encode())

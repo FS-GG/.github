@@ -1,0 +1,37 @@
+name: fdev-lane-capacity-selftest
+
+# scripts/fdev-lane-capacity.py is the read-only admit/hold probe Root checks before each heavy fdev
+# launch (.github#5172). This fixture runs it against fake procfs trees, offline and credential-free,
+# and proves every threshold can flip the verdict and that an unreadable input holds.
+on:
+  pull_request:
+    paths:
+      - "scripts/fdev-lane-capacity.py"
+      - "tests/fdev-lane-capacity/**"
+      - ".github/workflows/fdev-lane-capacity-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/fdev-lane-capacity.py"
+      - "tests/fdev-lane-capacity/**"
+      - ".github/workflows/fdev-lane-capacity-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR-keyed concurrency (#4730 CI-load): a newer run for the same pull request cancels the superseded
+# one. Any other event keys on `github.run_id`, so two events at one ref or sha never drop a run.
+concurrency:
+  group: fdev-lane-capacity-selftest-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the capacity probe fixtures
+        run: bash tests/fdev-lane-capacity/run.sh

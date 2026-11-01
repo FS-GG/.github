@@ -13,6 +13,17 @@ name: routine-eligibility
 # merge-base(live base, head)..head diff recomputed against it. The event base must be an
 # ancestor of the live base and the head must not already be contained in it; the envelope
 # repeats and enforces both. A moved head is still refused, never followed.
+#
+# Push parent (.github#5189): a push cannot carry a marker naming a head that did not exist when the body
+# was written, so every push used to fail here once and then cost a body edit (about 8 more runs) to
+# clear. On `synchronize` only, GitHub's own `before` (the PR's previous head, never author-controlled)
+# is offered to the validator as a provisional binding, and only when the push merely added commits on
+# top of it (bounded deepening proves ancestry; a forced push or missing history offers nothing). The
+# validator then admits a marker that names exactly that parent, with a warning that a rebind is owed.
+# Every other check (operation, policy, changed paths) still runs against the new head. The exact
+# binding moves to the merge boundary, which already refuses it: tools/routine-delivery.py's
+# routine_contract reads the live body and requires `head=` to equal the merged head. An `edited`,
+# `opened` or `reopened` run has no trusted previous head and stays exact.
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, edited]
@@ -46,6 +57,8 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_BEFORE: ${{ github.event.before }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REPOSITORY: ${{ github.repository }}
@@ -108,6 +121,23 @@ jobs:
             done
             observed_base="$(git -C "$inspect" rev-parse refs/remotes/origin/routine-base)"
           fi
+          # Push parent (#5189): offer GitHub's `before` only on a fast-forward push of a routine branch.
+          previous_head=""
+          if test "${EVENT_ACTION:-}" = synchronize && [[ "$HEAD_REF" == routine/* ]] &&
+              [[ "${EVENT_BEFORE:-}" =~ ^[0-9a-f]{40}$ ]] && test "$EVENT_BEFORE" != "$HEAD_SHA"; then
+            for deepen in 0 8 64 256; do
+              if test "$deepen" -gt 0; then fetch_routine_refs --deepen="$deepen" || break; fi
+              if git -C "$inspect" merge-base --is-ancestor "$EVENT_BEFORE" refs/remotes/origin/routine-head 2>/dev/null; then
+                previous_head="$EVENT_BEFORE"
+                break
+              fi
+            done
+            if test -n "$previous_head"; then
+              echo "routine-eligibility: push added commits on top of previous head $previous_head"
+            else
+              echo "routine-eligibility: previous head $EVENT_BEFORE is not a proven ancestor of $HEAD_SHA (forced push or history beyond the bound); only an exact-head marker is accepted"
+            fi
+          fi
           unset fetch_basic
 
           observed_head="$(git -C "$inspect" rev-parse refs/remotes/origin/routine-head)"
@@ -145,6 +175,8 @@ jobs:
           git -C "$inspect" show "$observed_base:scripts/check-routine-eligibility-envelope.py" > "$trusted/check-routine-eligibility-envelope.py"
           printf '%s' "$PR_BODY" > "$trusted/pr-body.md"
 
+          previous_args=()
+          test -z "$previous_head" || previous_args=(--previous-head "$previous_head")
           python3 "$trusted/check-routine-eligibility-envelope.py" \
             --git-dir "$inspect" \
             --repository "$REPOSITORY" \
@@ -156,4 +188,5 @@ jobs:
             --head-revision refs/remotes/origin/routine-head \
             --head-sha "$HEAD_SHA" \
             --body "$trusted/pr-body.md" \
-            --validator "$trusted/check-claim-generation.py"
+            --validator "$trusted/check-claim-generation.py" \
+            "${previous_args[@]}"

@@ -14,8 +14,14 @@ constants, `drop`, `now`, `mark`, `run`, `open_nofollow`, `chain`, `show`, `arch
 ## Invocation and the names it expects
 
 ```text
-learn-finalizer-r5.py --id <op-id> --source-identity <64 hex>        Environment: FSGG_NONCE=<32 hex>, FSGG_PG_IMAGE=<64 hex image Id>
+learn-finalizer-r5.py --id <op-id> --source-identity <64 hex> [--input synthetic]    Environment: FSGG_NONCE=<32 hex>, FSGG_PG_IMAGE=<64 hex image Id>
 ```
+
+`--input synthetic` (#5184) declares a synthetic-input op: the pod harness's qualification and the install receipt op, which hold a synthetic claim
+(`pod-harness/README.md`). The claim and the sealed manifest are then read from `synthetic-claims/` and `synthetic-inputs/` with the seal tool's
+synthetic record types, both must say `provenance: synthetic` and `realSpoolProvenance: false`, and retirement re-hashes the synthetic snapshot. Every
+record carries `inputProvenance` (`real` or `synthetic`). Without the flag nothing changes. A synthetic op run without it, or a real op run with it,
+finds no claim of its kind and ends in a retirement failure, so neither can be retired as the other.
 
 Runs only as uid 30034, as the transient user unit `learn-fin-<id>.service`, started before the pod unit (which `BindsTo` it). The pod operator's start (a later PR) provides:
 

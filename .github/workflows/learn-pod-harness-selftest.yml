@@ -1,0 +1,53 @@
+# Gates for the LEARN fdev pod harness (deployment/learn-finite-profile/pod-harness), Refs #5184 and #4647: the admission plan it prints, the case
+# executors and their verdicts against a fake world of units, pods and containers in which operator r6's shipped bytes run for real (machine paths
+# substituted), the N5b spike against a fake podman, /proc and cgroup tree, the phase C verdicts on scripted pod operator RESULTs and finalizer records,
+# and the synthetic tree that the seal tool's synthetic mode accepts. stdlib only; no credential, no network, no container, no root, no systemd.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
+name: learn-pod-harness-selftest
+
+on:
+  pull_request:
+    paths:
+      - "deployment/learn-finite-profile/pod-harness/**"
+      - "deployment/learn-finite-profile/operator/**"
+      - "deployment/learn-finite-profile/pod-operator/**"
+      - "deployment/learn-finite-profile/seal/**"
+      - "deployment/learn-finite-profile/pod-image/**"
+      - "deployment/learn-finite-profile/baseline/etc/**"
+      - "tests/learn-pod-harness/**"
+      - ".github/workflows/learn-pod-harness-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deployment/learn-finite-profile/pod-harness/**"
+      - "deployment/learn-finite-profile/operator/**"
+      - "deployment/learn-finite-profile/pod-operator/**"
+      - "deployment/learn-finite-profile/seal/**"
+      - "deployment/learn-finite-profile/pod-image/**"
+      - "deployment/learn-finite-profile/baseline/etc/**"
+      - "tests/learn-pod-harness/**"
+      - ".github/workflows/learn-pod-harness-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR-keyed concurrency (#4730 CI-load): a newer run for the same pull request cancels the superseded
+# one, so a push or body edit no longer leaves the old head's run to finish and hold a runner. Any
+# other event keys on `github.run_id`, which is unique to the run: GitHub discards an older PENDING run
+# in a shared group even without cancel-in-progress, so a key that two events can share (the branch ref
+# for pushes, or the commit sha for dispatches and issue events at one commit) would drop a run.
+concurrency:
+  group: learn-pod-harness-selftest-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the pod harness gates
+        run: python3 tests/learn-pod-harness/run.py

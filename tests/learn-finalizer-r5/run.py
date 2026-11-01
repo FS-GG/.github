@@ -8,7 +8,7 @@
 # from finalizer r4 and from the pod operator are byte for byte the originals. stdlib only; no container, no root, no systemd, no network.
 #
 # The two `paths:` lists of the workflow are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
-import ast, hashlib, importlib.util, io, json, os, stat, sys, tarfile, tempfile, time
+import ast, hashlib, importlib.util, io, json, os, shutil, stat, sys, tarfile, tempfile, time
 from contextlib import redirect_stdout
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1253,4 +1253,127 @@ with tempfile.TemporaryDirectory() as tmp:
     check(F.VOLUME == f'{F.DEFAULTS["volume_root"]}/{W.OPID}.mnt' and F.CRED == f'/run/user/30034/learn-cred/{W.OPID}' and F.MARKER.endswith(f'/learn-input/{W.OPID}/input-read'), 'the volume, credential and marker paths are derived from the op id')
     check(F.CTRS == {x: f'learn-pod-{W.OPID}-{x}' for x in W.ROLES} and F.PGC == f'learn-pod-{W.OPID}-pg' and F.OPU == f'learn-pod-{W.OPID}.service' and F.FINU == f'learn-fin-{W.OPID}.service', 'unit and container names')
 
+
+# ============================================================ #5184: an explicitly declared SYNTHETIC-input op (the pod harness and the install receipt op)
+# Clock: the world's scenario clock (FakeTime). Source: temporary trees; the synthetic records are the seal tool's record types, written by the world.
+SYN = ['--id', W.OPID, '--source-identity', W.IDENT, '--input', 'synthetic']
+
+
+def syn_world(tmp, sm_extra=None, claim_extra=None, keep_real=False):
+    w = world(tmp)
+    if not keep_real:
+        os.unlink(w.claim_path)                                  # nothing real is claimed: the op holds only the synthetic claim
+        shutil.rmtree(os.path.join(w.view, 'inputs', 'snap-1'))
+        os.unlink(w.manifest_path)
+    w.make_snapshot(kind='synthetic', sm_extra=sm_extra, claim_extra=claim_extra)
+    return w
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    w = syn_world(tmp)
+    r = go(w, argv=SYN)
+    check(r.code == 0 and r.rec['schema'] == 'learn-op-pod-success/1' and r.rec['inputProvenance'] == 'synthetic', 'SYN: a declared synthetic op with a synthetic claim and seal retires as a success and says inputProvenance synthetic')
+    check(r.rec['retirement']['snapshot']['ok'] and r.rec['retirement']['snapshot']['filesChecked'] == 3 and r.rec['snapshotStart']['snapshotId'] == 'snap-1',
+          'SYN: the synthetic claim and sealed snapshot are read at the start and re-verified at retirement (every file)')
+    check(not os.path.exists(os.path.join(w.view, 'claims', W.IDENT + '.claim')), 'SYN control: no real claim exists in this world, so the success rests on the synthetic records alone')
+with tempfile.TemporaryDirectory() as tmp:
+    w = syn_world(tmp)
+    r = go(w)
+    check(r.rec['inputProvenance'] == 'real' and 'error' in r.rec['snapshotStart'] and r.rec['schema'] == 'learn-op-retirement-failure/1',
+          'SYN: the same synthetic op WITHOUT the declaration finds no real claim and is a retirement failure (a synthetic claim is never read implicitly)')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    r = go(w, argv=SYN)
+    check('error' in r.rec['snapshotStart'] and r.rec['schema'] == 'learn-op-retirement-failure/1', 'SYN: a REAL op declared synthetic finds no synthetic claim and is a retirement failure (a real claim is never read as synthetic)')
+    r2_ = go(world(os.path.join(tmp, 'b')))
+    check(r2_.rec['inputProvenance'] == 'real' and r2_.rec['schema'] == 'learn-op-pod-success/1', 'SYN control: the undeclared real op is unchanged and records inputProvenance real')
+for what, kw, needle in (('a synthetic claim without provenance', dict(claim_extra={'provenance': None}), 'does not say synthetic provenance'),
+                         ('a synthetic claim that claims real-spool provenance', dict(claim_extra={'realSpoolProvenance': True}), 'does not say synthetic provenance'),
+                         ('a synthetic seal that claims real-spool provenance', dict(sm_extra={'realSpoolProvenance': True}), 'does not say synthetic provenance'),
+                         ('a synthetic claim with no realSpoolProvenance field', dict(claim_extra={'realSpoolProvenance': W.DROP}), 'does not say synthetic provenance'),
+                         ('a synthetic seal with no realSpoolProvenance field', dict(sm_extra={'realSpoolProvenance': W.DROP}), 'does not say synthetic provenance'),
+                         ('a synthetic claim with no provenance field', dict(claim_extra={'provenance': W.DROP}), 'does not say synthetic provenance'),
+                         ('a real-schema claim placed in synthetic-claims/', dict(claim_extra={'schema': 'learn-input-claim/1'}), 'not this op\'s claim'),
+                         ('a real-schema seal placed in synthetic-inputs/', dict(sm_extra={'schema': 'learn-input-snapshot/1'}), 'names another snapshot or source')):
+    with tempfile.TemporaryDirectory() as tmp:
+        r = go(syn_world(tmp, **kw), argv=SYN)
+        check(needle in r.rec['snapshotStart'].get('error', '') and r.rec['schema'] == 'learn-op-retirement-failure/1', f'SYN: {what} is refused at the start and the op is a retirement failure')
+with tempfile.TemporaryDirectory() as tmp:
+    w = syn_world(tmp)
+    w.at(10, lambda: open(os.path.join(w.view, 'synthetic-inputs', 'snap-1', 'passive-a/spool/one.json'), 'wb').write(b'{"a":2}'))
+    r = go(w, argv=SYN)
+    check(r.rec['retirement']['snapshot']['changed'] == ['passive-a/spool/one.json'] and r.rec['schema'] == 'learn-op-retirement-failure/1',
+          'SYN: a synthetic sealed file changed during the run is found at retirement (the synthetic-inputs/ tree is the one re-hashed)')
+with tempfile.TemporaryDirectory() as tmp:
+    w = syn_world(tmp, keep_real=True)                          # a real claim for the same identity also exists: the declaration decides which is read
+    open(os.path.join(w.view, 'inputs', 'snap-1', 'passive-a/spool/one.json'), 'wb').write(b'{"a":9}')
+    r = go(w, argv=SYN)
+    check(r.rec['schema'] == 'learn-op-pod-success/1' and r.rec['retirement']['snapshot']['ok'], 'SYN: with both kinds present, a synthetic op reads only the synthetic records (a damaged real snapshot is not consulted)')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    for what, argv in (('--input real (only the synthetic declaration exists)', ['--id', W.OPID, '--source-identity', W.IDENT, '--input', 'real']),
+                       ('--input with another value', ['--id', W.OPID, '--source-identity', W.IDENT, '--input', 'Synthetic']),
+                       ('the declaration before the identity', ['--id', W.OPID, '--input', 'synthetic', '--source-identity', W.IDENT]),
+                       ('a dangling --input', ['--id', W.OPID, '--source-identity', W.IDENT, '--input'])):
+        r = go(w, argv=argv)
+        check(r.code is not None and 'usage' in str(r.code) and r.rec is None, f'SYN: configure refuses {what} and writes nothing')
+
+
+# ============================================================ pod operator r2 (the start and the recovery driver) against THIS finalizer
+P2PATH = os.path.join(ROOT, 'deployment', 'learn-finite-profile', 'pod-operator', 'learn-pod-operator-r2.py')
+spec2 = importlib.util.spec_from_file_location('pod2', P2PATH)
+P2 = importlib.util.module_from_spec(spec2)
+spec2.loader.exec_module(P2)
+check(P2.PROD['finalizer_sha'] == FIN_SHA, 'pod operator r2 pins this finalizer\'s sha256')
+# the finalizer unit r2 starts: its Environment= values and arguments are exactly what configure() accepts
+fa = P2.fin_unit_argv({'pg_image': W.PGIMG, 'python': '/usr/bin/python3', 'fin': FIN}, W.OPID, W.IDENT, W.NONCE)
+fenv = dict(x[len('Environment='):].split('=', 1) for x in fa if x.startswith('Environment='))
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    F.configure(fa[fa.index(FIN) + 1:], fenv, 30034, home=w.home, view=w.view, production=False)
+    check(F.OPID == W.OPID and F.IDENT == W.IDENT and F.NONCE == W.NONCE and F.PGIMG == W.PGIMG, 'r2\'s finalizer unit argv and environment pass configure() (op id, source identity, nonce, pg image)')
+    penv = {'python': '/usr/bin/python3', 'self': '/s', 'cred_root': F.DEFAULTS['cred_root'], 'volume_root': F.DEFAULTS['volume_root'], 'view': '/v', 'seccomp': F.SECCOMP,
+            'app_image': 'a1' * 32, 'pg_image': W.PGIMG, 'plan': P2.PLAN}
+    pu = P2.pod_unit_argv(penv, W.OPID, W.IDENT, W.NONCE)
+    names = {s_: (lambda a: a[a.index('--name') + 1])(P2.ctr_argv(penv, W.OPID, 'pg' if s_ == 'pg' else 'hold', s_)) for s_ in P2.SLOTS}
+    check(pu[3] + '.service' == F.OPU and f'BindsTo={F.FINU}' in pu and names == dict(F.CTRS, pg=F.PGC), 'r2 names the pod unit and the four containers as this finalizer expects')
+    check(F.CRED == f"{penv['cred_root']}/{W.OPID}" and any(x == f'ExecStopPost=-/usr/bin/podman unshare rm -rf --one-file-system {F.CRED}' for x in pu),
+          'r2\'s credential tmpfs is the path the finalizer checks is gone, and the pod unit removes it on stop')
+    vol = [x for x in P2.ctr_argv(penv, W.OPID, 'pg', 'pg') if x.endswith(':/pgdata:rw,nosuid,nodev,noexec')]
+    check(vol == [f'{F.VOLUME}/pgdata:/pgdata:rw,nosuid,nodev,noexec'], 'r2 mounts pgdata from the volume the finalizer samples and pg_controldata reads')
+    replay = P2.ctr_argv(penv, W.OPID, 'feed-replay', 'feed', 'snap-1')
+    check(P2.mounts_of(replay)[-1]['destination'] == '/in' and sum(1 for m in P2.mounts_of(replay) if m['destination'] == '/in') == 1,
+          'r2\'s replay container mounts the snapshot at /in, the destination the finalizer\'s containersStartedWithInput keys on')
+# r2's checkpoint request is served by this finalizer, and r2 accepts the real ack and reads the real custody back
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp, done_at=None)
+    ckd = os.path.join(w.home, '.local', 'state', 'learn-checkpoint', W.OPID)
+    for role in W.ROLES:
+        w.put(role, 'steps/01-init/stdout', b'{"init":1}\n')
+        w.put(role, 'steps/complete', b'')
+    w.at(6, lambda: P2.write_request(ckd, 1, 'pre-kill-host'))
+    w.at(12, lambda: [w.finish_role(x, 143 if x != 'feed' else 0, 'signalled' if x != 'feed' else 'ok') for x in W.ROLES])
+    r = go(w)
+    raw, body = open(os.path.join(ckd, 'ack-1'), 'rb').read(), open(os.path.join(ckd, 'req-1'), 'rb').read()
+    check(r.rec['schema'] == 'learn-op-pod-success/1' and r.rec['checkpoints'][0]['label'] == 'pre-kill-host', 'the real finalizer serves r2\'s request and the run still succeeds')
+    check(P2.ack_problems(raw, 1, body) == [], 'r2 accepts the real finalizer\'s ack-1 (n, request sha256, ok, every role accepted, chain head)')
+    check(P2.ack_problems(raw, 1, body + b' ') != [] and P2.ack_problems(raw, 2, body) != [], '... and refuses it for another request body or another n')
+    gen = {'steps': [('init', ['x'])], 'service': ['y']}
+    rb = {role: P2.readback_extract(os.path.join(r.cust, 'checkpoints', '1', f'extract-{role}'), role, gen) for role in W.ROLES}
+    check(all(v['phase'] == 'ready' and v['files'] >= 3 for v in rb.values()), 'r2 reads the real custody extract back: status, step evidence and file manifest per role')
+    os.unlink(os.path.join(r.cust, 'checkpoints', '1', 'extract-host', 'steps', 'complete'))
+    try:
+        P2.readback_extract(os.path.join(r.cust, 'checkpoints', '1', 'extract-host'), 'host', gen)
+        check(False, 'r2 refuses a custody extract without the step evidence')
+    except P2.Abort:
+        check(True, 'r2 refuses a custody extract without the step evidence')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.ackfix = None
+    w.at(6, lambda: (w.containers['learn-pod-op-pod-1-recv'].update(state='exited'), P2.write_request(os.path.join(w.home, '.local', 'state', 'learn-checkpoint', W.OPID), 1, 'x')))
+    r = go(w)
+    raw = open(os.path.join(r.ck, 'ack-1'), 'rb').read()
+    check(any('roles' in x for x in P2.ack_problems(raw, 1, open(os.path.join(r.ck, 'req-1'), 'rb').read())), 'r2 refuses the real ack when a role was not running (rejected:identity): why r2 checkpoints only with all three running')
+check(F.OK_REASONS == {'host': ('ok', 'signalled'), 'recv': ('ok', 'signalled'), 'feed': ('ok',)} and P2.PLAN['generations']['feed-replay']['service'] is None
+      and P2.PLAN['actions'][-2:] == [['stop', 'host'], ['stop', 'recv']], 'r2 ends host and recv with TERM (signalled) and feed by itself (ok): the reasons this finalizer accepts')
 print(f'learn-finalizer-r5: {n} assertions passed')

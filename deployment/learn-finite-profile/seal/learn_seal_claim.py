@@ -20,6 +20,12 @@ One self-contained file, because root tools run as `python3 -I <file>` and -I dr
                --image-id HEX [...]
     status     --source-identity HEX
 
+  Synthetic mode (explicit, `--mode synthetic`; never real-spool provenance): manifest --synthetic-base DIR --out FILE ;
+    seal --synthetic-base DIR --m1 FILE --snapshot-id ID ; claim (as above) ; status. Other commands are refused in synthetic mode.
+    Different record types (learn-input-*-synthetic/1), different directories (synthetic-inputs/, synthetic-claims/) and a
+    domain-separated identity: the real claim, supersede, void and the pod operator's verify_claim cannot accept it, and real input
+    (the real spool, the source area, a tree that does not declare itself synthetic, a hard link) is refused in synthetic mode.
+
 The source is FIXED here, not chosen by arguments: the base directory and exactly the two `spool/` subtrees below
 (Root decision, #4647). A different selection cannot produce an identity.
 
@@ -37,6 +43,12 @@ What this tool does and does not prove (stated plainly):
   * A void is attested by artifacts written by the operator account (fsgg-learn-qual) and read by Root: the operator RESULT,
     the finalizer record and the marker. That account can write them. Only Root's independent corroboration (recorded as a
     reference, never verified by this tool) strengthens a void. It proves "never mounted", not "never read".
+  * Synthetic mode (--mode synthetic) records "synthetic" explicitly and keeps that record from satisfying a check that needs real-spool
+    provenance. It refuses a base that overlaps the real spool, a symlink in any pinned subtree path, a file sharing (st_dev, st_ino)
+    with a real-spool file (stat only, never read) or with more than one link, and a tree that does not declare itself synthetic. It does
+    NOT prove a tree is synthetic: a copy of real data (new inodes, one link) carrying a forged declaration is not detectable here,
+    because this tool never reads the real spool. The declaration's generator and nonce are recorded in the sealed record as the
+    caller's claim, not as a measurement.
   * Decision and corroboration references are format-checked only (an issue or pull-request comment URL). Root verifies the
     comment; this tool does not.
   * The quiesce gap between M1 and M2 is self-reported by the manifest command; the real elapsed time since M1 is re-checked
@@ -69,6 +81,12 @@ MAX_FILES, MAX_BYTES, MAX_DEPTH, MIN_GAP_S, MAX_TTL_S = 64, 16 << 20, 4, 300, 60
 HEX64 = re.compile(r'^[0-9a-f]{64}$')
 OPID = re.compile(r'^[a-z0-9][a-z0-9-]{2,58}$')
 COMMENT_URL = re.compile(r'^https://github\.com/FS-GG/[A-Za-z0-9._-]+/(?:issues|pull)/[0-9]+#issuecomment-[0-9]+$')
+SYNTHETIC_MANIFEST_SCHEMA = 'learn-input-source-manifest-synthetic/1'
+SYNTHETIC_SNAPSHOT_SCHEMA = 'learn-input-snapshot-synthetic/1'
+SYNTHETIC_CLAIM_SCHEMA = 'learn-input-claim-synthetic/1'
+SYNTHETIC_DECLARATION_SCHEMA = 'learn-synthetic-source/1'
+SYNTHETIC_DECLARATION_FILE = 'SYNTHETIC-SOURCE.json'
+SYNTHETIC_IDENTITY_DOMAIN = 'learn-synthetic-source/1'
 ACTIVE_STATES = {'active', 'activating', 'reloading', 'deactivating', 'refreshing'}
 INACTIVE_STATES = {'inactive', 'failed'}
 
@@ -294,6 +312,8 @@ def safe_rel(path, subtrees):
 
 def validate_manifest(m, allowed=ALLOWED_SUBTREES):
     """Structural validation done BEFORE any copy: pinned subtrees, safe unique paths, bounded counts and sizes."""
+    if isinstance(m, dict) and m.get('schema') == SYNTHETIC_MANIFEST_SCHEMA:
+        refuse('a synthetic manifest cannot be used in real mode')
     if not isinstance(m, dict) or m.get('schema') != 'learn-input-source-manifest/1':
         refuse('not a source manifest')
     if sorted(m.get('subtrees', [])) != sorted(allowed):
@@ -609,7 +629,9 @@ def status(ident, source_root):
 
 
 # ---------------------------------------------------------------- claim
-def _precheck_ok(result, op_id):
+def _precheck_ok(result, op_id, kind='real'):
+    """kind: the claim's input kind. The pod operator records `inputProvenance` (#5184): a synthetic claim needs a precheck that says 'synthetic', a real claim
+    one that says 'real' (a RESULT without the field is from an operator that has only the real kind)."""
     if result.get('schema') != OPERATOR_RESULT_SCHEMA:
         refuse('precheck result has another schema')
     if result.get('opId') != op_id:
@@ -618,6 +640,8 @@ def _precheck_ok(result, op_id):
         refuse('the non-input prechecks did not pass')
     if (result.get('gates') or {}).get('inputMounted') is not False:
         refuse('the precheck result does not show the input untouched')
+    if result.get('inputProvenance', 'real' if kind == 'real' else None) != kind:
+        refuse(f'the precheck result is not for a {kind}-input op')
 
 
 def _check_seal(inputs_dir, snapshot_id, ident, sealed_sha):
@@ -630,6 +654,8 @@ def _check_seal(inputs_dir, snapshot_id, ident, sealed_sha):
     sm, msha = read_json(mp)
     if msha != sealed_sha:
         refuse('the sealed manifest on disk has another sha256')
+    if sm.get('schema') == SYNTHETIC_SNAPSHOT_SCHEMA:
+        refuse('a synthetic seal cannot back a real claim: real-spool provenance is required here')
     if sm.get('schema') != 'learn-input-snapshot/1' or sm.get('snapshotId') != snapshot_id:
         refuse('the sealed manifest names another snapshot')
     if sm.get('sourceIdentity') != ident:
@@ -825,6 +851,233 @@ def supersede(ident, old_op, new_op, snapshot_id, sealed_sha, precheck, precheck
     return {'consumed': consumed_path, 'resumed': resuming, **out}
 
 
+# ---------------------------------------------------------------- synthetic mode (never real-spool provenance)
+# A synthetic source is a caller-supplied tree that declares itself synthetic. It is sealed and claimed under DIFFERENT record
+# types (the three SYNTHETIC_*_SCHEMA constants) in DIFFERENT directories (inputs/ and claims/ are the real ones), and its source
+# identity is domain-separated from a real one. So the real claim, supersede and void paths, and the pod operator's verify_claim,
+# cannot see or accept it, and a real seal is refused here. Real mode above is not changed by anything in this section.
+SYNTHETIC_INPUTS, SYNTHETIC_CLAIMS = 'synthetic-inputs', 'synthetic-claims'
+NONCE = re.compile(r'^[A-Za-z0-9._-]{1,64}$')
+
+
+def _within(path, root):
+    return path == root or path.startswith(root.rstrip('/') + '/')
+
+
+def _real_roots(extra_real_roots=()):
+    """The roots real input can live under: the pinned three, then the caller's. `extra_real_roots` only ADDS."""
+    return (SPOOL_BASE, SOURCE_ROOT, VIEW_ROOT, *extra_real_roots)
+
+
+def synthetic_guard(base, extra_real_roots=()):
+    """Refuse real input in synthetic mode: a base that is a symlink, is not a directory, or overlaps (is, is inside, or contains) the
+    real spool, the persistent source area or the mounted view; and a pinned subtree path that has a symlink in ANY component below the
+    base (a symlinked `<base>/passive-home-canonical-v1` would otherwise lead into the real spool while only the leaf `spool` is a real
+    directory). The overlap test is run again on each subtree's resolved path. Returns the base's resolved path."""
+    if not isinstance(base, str) or not base or '\x00' in base:
+        refuse('the synthetic base is not a path')
+    if os.path.islink(base) or not os.path.isdir(base):
+        refuse('the synthetic base is not a real directory')
+    sb = os.path.realpath(base)
+    roots = [os.path.realpath(r) for r in _real_roots(extra_real_roots)]
+    for rr in roots:
+        if _within(sb, rr) or _within(rr, sb):
+            refuse('the synthetic base overlaps the real spool or the sealed-source area: real input is refused in synthetic mode')
+    for st in ALLOWED_SUBTREES:
+        cur = sb
+        for comp in st.split('/'):
+            cur = f'{cur}/{comp}'
+            if os.path.islink(cur):
+                refuse(f'a synthetic subtree path contains a symlink: {st}')
+        resolved = os.path.realpath(cur)
+        if resolved != cur:
+            refuse(f'a synthetic subtree path does not resolve to itself: {st}')
+        for rr in roots:
+            if _within(resolved, rr) or _within(rr, resolved):
+                refuse('a synthetic subtree overlaps the real spool or the sealed-source area: real input is refused in synthetic mode')
+    return sb
+
+
+MAX_REAL_SCAN = 100000
+
+
+def real_inodes(extra_real_roots=()):
+    """(st_dev, st_ino) of every file under the real spool roots (the pinned spool and the caller's extras). lstat only, never opened or
+    read, never followed. A root that is absent contributes nothing; a scan over MAX_REAL_SCAN entries refuses."""
+    seen, count = set(), 0
+    for r in (SPOOL_BASE, *extra_real_roots):
+        for d, ds, fs in os.walk(r, followlinks=False):
+            for name in fs:
+                count += 1
+                if count > MAX_REAL_SCAN:
+                    refuse('the real spool scan is over its bound')
+                try:
+                    st = os.lstat(f'{d}/{name}')
+                except OSError:
+                    continue
+                seen.add((st.st_dev, st.st_ino))
+    return seen
+
+
+def refuse_real_inodes(sb, files, extra_real_roots=()):
+    real = real_inodes(extra_real_roots)
+    for f in files:
+        st = os.lstat(f'{sb}/{f["path"]}')
+        if (st.st_dev, st.st_ino) in real:
+            refuse(f'a synthetic file shares an inode with a real-spool file (hard link or bind mount): {f["path"]}')
+
+
+def read_declaration(base):
+    """The synthetic source must declare itself in `<base>/SYNTHETIC-SOURCE.json` (outside the sealed subtrees). A tree without it is
+    not accepted as synthetic. Returns (declaration, sha256 of the file bytes)."""
+    try:
+        d, dsha = read_json(f'{base}/{SYNTHETIC_DECLARATION_FILE}', 65536)
+    except (OSError, ValueError):
+        refuse(f'no readable {SYNTHETIC_DECLARATION_FILE} in the synthetic base: a source that does not declare itself synthetic is refused')
+    if (not isinstance(d, dict) or sorted(d) != ['generator', 'nonce', 'schema', 'synthetic'] or d['schema'] != SYNTHETIC_DECLARATION_SCHEMA
+            or d['synthetic'] is not True or not isinstance(d['generator'], str) or not 1 <= len(d['generator']) <= 100
+            or not isinstance(d['nonce'], str) or not NONCE.match(d['nonce'])):
+        refuse('the synthetic declaration is malformed')
+    return d, dsha
+
+
+def take_synthetic_manifest(base, now=None, extra_real_roots=()):
+    sb = synthetic_guard(base, extra_real_roots)
+    _, dsha = read_declaration(sb)
+    m = take_manifest(sb, list(ALLOWED_SUBTREES), now)         # the same bounds and the same refusals as the real manifest
+    refuse_real_inodes(sb, m['files'], extra_real_roots)
+    for f in m['files']:
+        if os.lstat(f'{sb}/{f["path"]}').st_nlink != 1:
+            refuse(f'a synthetic file must not be hard-linked (it may alias real data): {f["path"]}')
+    m.update(schema=SYNTHETIC_MANIFEST_SCHEMA, provenance='synthetic', declarationSha256=dsha)
+    return m
+
+
+def validate_synthetic_manifest(m):
+    if isinstance(m, dict) and m.get('schema') == 'learn-input-source-manifest/1':
+        refuse('a real manifest cannot be used in synthetic mode')
+    if not isinstance(m, dict) or m.get('schema') != SYNTHETIC_MANIFEST_SCHEMA or m.get('provenance') != 'synthetic':
+        refuse('not a synthetic source manifest')
+    if not HEX64.match(str(m.get('declarationSha256', ''))):
+        refuse('the synthetic manifest carries no declaration hash')
+    validate_manifest({**m, 'schema': 'learn-input-source-manifest/1'})       # the same structural bounds as a real manifest
+
+
+def synthetic_identity(m):
+    """Domain-separated from source_identity(): it hashes a domain tag and the declaration, and not the base path, so the same declared
+    content gives the same identity wherever it is built, and no real identity can equal it."""
+    return sha(canon({'domain': SYNTHETIC_IDENTITY_DOMAIN, 'declarationSha256': m['declarationSha256'], 'subtrees': sorted(m['subtrees']),
+                      'files': [{'path': f['path'], 'size': f['size'], 'sha256': f['sha256'], 'mtime_ns': f['mtime_ns']} for f in m['files']]}))
+
+
+@pinned
+def seal_synthetic(base, m1, snapshot_id, source_root, view_root, services, owner_uid=0, copy=shutil.copyfile, now=None, proc='/proc',
+                   extra_real_roots=()):
+    if not OPID.match(snapshot_id):
+        refuse('bad snapshot id')
+    validate_synthetic_manifest(m1)                       # BEFORE anything is created
+    sb = synthetic_guard(base, (source_root, *extra_real_roots))
+    if m1.get('base') != sb:
+        refuse('the manifest was taken from another base directory')
+    decl, dsha = read_declaration(sb)
+    if dsha != m1['declarationSha256']:
+        refuse('the synthetic declaration changed since the manifest was taken')
+    refuse_real_inodes(sb, m1['files'], (source_root, *extra_real_roots))
+    now = now or datetime.now(timezone.utc)
+    pids = open_pids_under([f'{sb}/{s}' for s in m1['subtrees']], proc)
+    if pids:
+        refuse(f'at seal time files are open under the subtrees (pids {pids})')
+    inputs = sub(source_root, SYNTHETIC_INPUTS, owner_uid)
+    dest = f'{inputs}/{snapshot_id}'
+    if os.path.lexists(dest):
+        refuse('snapshot already exists')
+    os.mkdir(dest, 0o755)
+    try:
+        for f in m1['files']:
+            src, dst = f"{sb}/{f['path']}", f"{dest}/{f['path']}"
+            if os.path.commonpath([dest, os.path.abspath(dst)]) != dest:
+                refuse(f"destination escapes the snapshot: {f['path']}")
+            os.makedirs(os.path.dirname(dst), mode=0o755, exist_ok=True)
+            copy(src, dst)
+            os.chmod(dst, 0o644)
+            os.utime(dst, ns=(f['mtime_ns'], f['mtime_ns']))
+            if os.geteuid() == 0:
+                os.chown(dst, owner_uid, owner_uid)
+            if sha_file(dst) != f['sha256']:
+                refuse(f"copy of {f['path']} does not match its source hash")
+        for d, ds, _ in os.walk(dest):
+            os.chmod(d, 0o755)
+            if os.geteuid() == 0:
+                os.chown(d, owner_uid, owner_uid)
+        diff = manifest_diff(m1, take_manifest(sb, m1['subtrees']))
+        if diff:
+            refuse('the source changed during the copy: ' + '; '.join(diff))
+        if read_declaration(sb)[1] != m1['declarationSha256']:
+            refuse('the synthetic declaration changed during the copy')
+        synthetic_guard(sb, (source_root, *extra_real_roots))                     # the paths still resolve inside the base
+        sealed = {'schema': SYNTHETIC_SNAPSHOT_SCHEMA, 'provenance': 'synthetic', 'realSpoolProvenance': False, 'snapshotId': snapshot_id,
+                  'sourceIdentity': synthetic_identity(m1), 'declarationSha256': m1['declarationSha256'],
+                  'declaration': {'generator': decl['generator'], 'nonce': decl['nonce']},
+                  'quiesce': 'not applicable: a synthetic source is not the live drain spool', 'sealedUtc': utc(now),
+                  'files': [{k: f[k] for k in ('path', 'type', 'size', 'sha256', 'mtime_ns', 'mode')} for f in m1['files']]}
+        data = canon(sealed)
+        write_new(f'{inputs}/{snapshot_id}.manifest.json', data, owner_uid=owner_uid)
+    except BaseException:
+        shutil.rmtree(dest, ignore_errors=True)
+        if os.path.lexists(dest):
+            shutil.rmtree(dest, ignore_errors=False)
+        raise
+    return {'snapshotDir': dest, 'sealedManifestSha256': sha(data), 'sourceIdentity': sealed['sourceIdentity'], 'files': len(sealed['files']),
+            'provenance': 'synthetic'}
+
+
+def _check_synthetic_seal(inputs_dir, snapshot_id, ident, sealed_sha):
+    if not OPID.match(snapshot_id or ''):
+        refuse('bad snapshot id')
+    mp = f'{inputs_dir}/{snapshot_id}.manifest.json'
+    if not os.path.isfile(mp):
+        refuse('no synthetic sealed manifest for this snapshot id')
+    sm, msha = read_json(mp)
+    if msha != sealed_sha:
+        refuse('the sealed manifest on disk has another sha256')
+    if sm.get('schema') == 'learn-input-snapshot/1':
+        refuse('a real seal cannot back a synthetic claim')
+    if sm.get('schema') != SYNTHETIC_SNAPSHOT_SCHEMA or sm.get('provenance') != 'synthetic' or sm.get('snapshotId') != snapshot_id:
+        refuse('the sealed manifest is not the synthetic seal of this snapshot')
+    if sm.get('sourceIdentity') != ident:
+        refuse('the sealed manifest has another source identity')
+    for f in sm.get('files', []):
+        p = f'{inputs_dir}/{snapshot_id}/{f["path"]}'
+        if not os.path.isfile(p) or os.path.islink(p) or os.path.getsize(p) != f['size']:
+            refuse(f'the sealed snapshot is missing or resized: {f["path"]}')
+
+
+@pinned
+def claim_synthetic(ident, op_id, snapshot_id, sealed_sha, precheck, precheck_sha, source_root, view_root, services, owner_uid=0, now=None):
+    """A synthetic claim: its own record type in its own directory, one per identity (no void or supersede in synthetic mode: a new run
+    declares a new nonce, which is a new identity)."""
+    _check_ids(ident, op_id)
+    if not HEX64.match(sealed_sha):
+        refuse('sealed manifest sha256 must be 64 lowercase hex')
+    _precheck_ok(precheck, op_id, 'synthetic')
+    claims = sub(source_root, SYNTHETIC_CLAIMS, owner_uid)
+    if derive_state(claims, ident)['state'] != 'unclaimed':
+        refuse('this synthetic source identity already has a claim')
+    _check_synthetic_seal(f'{source_root}/{SYNTHETIC_INPUTS}', snapshot_id, ident, sealed_sha)
+    body = {'schema': SYNTHETIC_CLAIM_SCHEMA, 'provenance': 'synthetic', 'realSpoolProvenance': False, 'generation': 1, 'sourceIdentity': ident,
+            'opId': op_id, 'snapshotId': snapshot_id, 'sealedManifestSha256': sealed_sha, 'precheckResultSha256': precheck_sha,
+            'claimedUtc': utc(now), 'supersedes': None}
+    data = canon(body)
+    write_new(_claim_path(claims, ident), data, owner_uid=owner_uid)
+    return {'claim': _claim_path(claims, ident), 'claimSha256': sha(data), 'generation': 1, 'provenance': 'synthetic'}
+
+
+def status_synthetic(ident, source_root):
+    _check_ids(ident)
+    d = derive_state(f'{source_root}/{SYNTHETIC_CLAIMS}', ident)
+    return {'sourceIdentity': ident, 'state': d['state'], 'live': d['live'] is not None, 'history': d['history'], 'provenance': 'synthetic'}
+
+
 # ---------------------------------------------------------------- admission
 ADMIT_FIELDS = ('opId', 'argvJsonSha256', 'sourceIdentity', 'operatorSha256', 'finalizerSha256', 'imageIds')
 
@@ -917,6 +1170,29 @@ def _args(argv, multi=('--image-id',)):
 
 
 READ_ONLY = ('check-admission', 'status')
+SYNTHETIC_COMMANDS = ('manifest', 'seal', 'claim', 'status')
+
+
+def main_synthetic(cmd, a, R, sr, vr, sv):
+    """Explicit synthetic mode (`--mode synthetic`): manifest, seal, claim and status only. Every other command is refused, so a synthetic
+    source can never reach quiesce (the real drain timer), void, supersede or admit."""
+    if cmd not in SYNTHETIC_COMMANDS:
+        refuse('synthetic mode supports only: ' + ' | '.join(SYNTHETIC_COMMANDS))
+    R['mode'] = 'synthetic'
+    if cmd == 'manifest':
+        m = take_synthetic_manifest(a['--synthetic-base'])
+        data = canon(m)
+        write_new(a['--out'], data, mode=0o600)
+        R.update(manifestSha256=sha(data), sourceIdentity=synthetic_identity(m), files=len(m['files']))
+    elif cmd == 'seal':
+        m1, _ = read_json(a['--m1'])
+        R.update(seal_synthetic(a['--synthetic-base'], m1, a['--snapshot-id'], sr, vr, sv))
+    elif cmd == 'claim':
+        pr, psha = read_json(a['--precheck-result'])
+        R.update(claim_synthetic(a['--source-identity'], a['--op-id'], a['--snapshot-id'], a['--sealed-manifest-sha256'], pr, psha, sr, vr, sv))
+    else:
+        R.update(status_synthetic(a['--source-identity'], vr))
+    return 0
 
 
 def main(argv):
@@ -930,7 +1206,14 @@ def main(argv):
         a = _args(argv)
         sr, vr, sv = SOURCE_ROOT, VIEW_ROOT, SERVICES
         asserted = a.get('--timer-asserted-stopped') == 'yes'
-        if cmd == 'manifest':
+        mode = a.get('--mode', 'real')
+        if mode not in ('real', 'synthetic'):
+            refuse('--mode must be real or synthetic')
+        if mode == 'real' and '--synthetic-base' in a:
+            refuse('--synthetic-base needs --mode synthetic')
+        if mode == 'synthetic':
+            code = main_synthetic(cmd, a, R, sr, vr, sv)
+        elif cmd == 'manifest':
             m = take_manifest(SPOOL_BASE, list(ALLOWED_SUBTREES))
             data = canon(m)
             write_new(a['--out'], data, mode=0o600)

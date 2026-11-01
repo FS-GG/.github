@@ -22,8 +22,8 @@ let private context (board: Board) (root: string) (run: string) : V2TendWrite.Co
       Send = V2TendWrite.allowlisted projectId closable.Contains board.Mutate
       Custody = V2TendWrite.Custody(Path.Combine(root, "tend"), run, ignore)
       Gate = V2TendWrite.GateCustody(Path.Combine(root, "gate"), ignore)
-      Clock = TimeProvider.System
-      Pacer = V2TendWrite.Pacer(TimeProvider.System, ignore, TimeSpan.Zero)
+      Clock = board.Clock
+      Pacer = V2TendWrite.Pacer(board.Clock, ignore, TimeSpan.Zero)
       Closable = closable
       Settings = V2TendWrite.defaultSettings projectId (set [ "EHotwagner" ]) }
 
@@ -119,6 +119,27 @@ let ``an uncertain post is never repeated, and the next run finds it by its run 
         Assert.DoesNotContain("P-READY", second)
     finally Directory.Delete(root, true)
 
+/// The #5109 fixture rule: the answer must not depend on when the suite runs, only on the injected clock.
+[<Theory>]
+[<InlineData("2026-11-01T11:59:59+00:00")>]
+[<InlineData("2026-11-01T12:00:00+00:00")>]
+[<InlineData("2026-11-01T12:00:01+00:00")>]
+[<InlineData("2027-02-28T23:59:59.9+00:00")>]
+[<InlineData("2099-12-31T23:59:59+00:00")>]
+let ``an uncertain post is found by its run marker at any injected instant`` (start: string) =
+    let root = temporary ()
+    try
+        let board = Board(FakeClock(DateTimeOffset.Parse(start, Globalization.CultureInfo.InvariantCulture)))
+        let a = proposal "P-READY" "FS-GG/x#1" "blocked-on-nothing" (Some "Ready")
+        board.LoseProposalResponse <- true
+        Assert.Equal(("uncertain", "post-unconfirmed"), (let o = (run board root "run1" [ a ]).Head in o.Result, o.Detail))
+        board.LoseProposalResponse <- false
+        board.Clock.Advance(TimeSpan.FromSeconds 30.0)
+        Assert.Equal("verified", (run board root "run2" [ a ]).Head.Result)
+        Assert.True((ledgerOf root).Pending.IsNone)
+        Assert.Single(proposalPosts board) |> ignore
+    finally Directory.Delete(root, true)
+
 [<Fact>]
 let ``a pending post that cannot be found blocks new posts rather than risk a duplicate`` () =
     let root = temporary ()
@@ -132,7 +153,7 @@ let ``a pending post that cannot be found blocks new posts rather than risk a du
         Assert.Equal<string list>([ "pending-post-not-found"; "pending-post-unresolved" ], second |> List.map (fun o -> o.Detail))
         Assert.Single(proposalPosts board) |> ignore
         // A comment from someone else, or from before the custody time, never resolves it.
-        board.ProposalComments.Add(("IC_other", "<!-- fsgg:board-tend-proposals/v1 run=run1 -->", "2026-11-01T12:00:00Z", "someone-else"))
+        board.ProposalComments.Add(("IC_other", "<!-- fsgg:board-tend-proposals/v1 run=run1 -->", board.Clock.Stamp(), "someone-else"))
         Assert.Equal("pending-post-not-found", (run board root "run3" []).Head.Detail)
     finally Directory.Delete(root, true)
 

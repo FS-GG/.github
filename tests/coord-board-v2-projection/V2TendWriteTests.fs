@@ -31,8 +31,8 @@ let private harness (run: string) (root: string) (board: Board) =
           Send = V2TendWrite.allowlisted projectId closable.Contains board.Mutate
           Custody = V2TendWrite.Custody(Path.Combine(root, "tend"), run, ignore)
           Gate = V2TendWrite.GateCustody(Path.Combine(root, "gate"), ignore)
-          Clock = TimeProvider.System
-          Pacer = V2TendWrite.Pacer(TimeProvider.System, (fun span -> waits.Add span), TimeSpan.FromSeconds 1.0)
+          Clock = board.Clock
+          Pacer = V2TendWrite.Pacer(board.Clock, (fun span -> waits.Add span), TimeSpan.FromSeconds 1.0)
           Closable = closable
           Settings = V2TendWrite.defaultSettings projectId (set [ "EHotwagner" ]) } }
 
@@ -52,13 +52,13 @@ let private snapshotOf (board: Board) (prs: (string * V2Tend.LinkedPr list) list
                Roadmap = i.Values.TryFind "Roadmap"; Parent = i.Parent; SubIssues = []; SubIssuesComplete = true; Blockers = []; BlockersComplete = true
                MarkerBlockers = Some []; Prs = (prs |> List.tryPick (fun (id, p) -> if id = itemId then Some p else None) |> Option.defaultValue []); TimelineComplete = true
                Intended = None; BlockedOn = None; AcceptanceEvidence = None; Enrolled = false; EnrolledRoadmap = None; TendClosedBefore = false } : V2Tend.Card) ]
-    { ObservedAt = DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero); Cards = cards; Ledger = [] }
+    { ObservedAt = FakeClock.Anchor; Cards = cards; Ledger = [] }
 
 let private effect id itemId ref field preimage target rules depends : V2Tend.Effect =
     { Id = id; ItemId = itemId; Ref = ref; Field = field; Preimage = preimage; Target = target; Rules = rules; DependsOn = depends }
 
 let private plan (effects: V2Tend.Effect list) (closures: V2Tend.Closure list) : V2Tend.Plan =
-    { Ruleset = V2Tend.ruleset; ObservedAt = DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero); Apply = effects; WouldApply = []; Deferred = []
+    { Ruleset = V2Tend.ruleset; ObservedAt = FakeClock.Anchor; Apply = effects; WouldApply = []; Deferred = []
       Propose = []; Refuse = []; T1iComparison = { Pairs = 0; Disagreements = 0 }; Close = closures; WouldClose = [] }
 
 let private run (h: Harness) (input: V2Tend.Plan) (snapshot: V2Tend.Snapshot) =
@@ -215,7 +215,7 @@ let ``a deciding PR that changed since the snapshot refuses an S3 move`` () =
         let board = Board()
         board.AddItem("PVTI_a", item "FS-GG/x#10" "I_a" [ "Status", "In progress" ])
         board.AddPr("FS-GG/x#100", { State = "OPEN"; Draft = false; MergedAt = None; Body = "Refs #10"; MergeOid = ""; Comments = [] })
-        let linked : V2Tend.LinkedPr = { Id = "FS-GG/x#100"; State = V2Tend.PrOpen; Draft = false; Linkage = V2Tend.Strict; UpdatedAt = DateTimeOffset.UtcNow; MergedAt = None; Continues = false; Completes = false }
+        let linked : V2Tend.LinkedPr = { Id = "FS-GG/x#100"; State = V2Tend.PrOpen; Draft = false; Linkage = V2Tend.Strict; UpdatedAt = board.Clock.GetUtcNow(); MergedAt = None; Continues = false; Completes = false }
         let snapshot = snapshotOf board [ "PVTI_a", [ linked ] ]
         board.Prs.["FS-GG/x#100"].State <- "CLOSED"
         let h = harness "run1" root board
@@ -517,6 +517,37 @@ let ``the enable file refuses unknown keys and rules and drops gated rules until
         Assert.Empty(dropped)
         Assert.Equal(100, enable.MaxItemsPerRun)
     | Error e -> failwith e
+
+[<Fact>]
+let ``the contract marker is read from a line of its own outside code, and only the supported version amends`` () =
+    let marker = "<!-- fsgg:board-tend-contract/v1 -->"
+    Assert.Equal<string list>([ "v1" ], V2TendWrite.markerVersions ("# C\n\n" + marker + "\ntext\n"))
+    Assert.Equal<string list>([ "v1" ], V2TendWrite.markerVersions ("  <!--fsgg:board-tend-contract/v1-->  \r\n"))
+    Assert.Equal<string list>([ "v2" ], V2TendWrite.markerVersions "<!-- fsgg:board-tend-contract/v2 -->")
+    Assert.Equal<string list>([ "" ], V2TendWrite.markerVersions "<!-- fsgg:board-tend-contract/ -->")
+    // Quoted, inline, fenced or tilde-fenced mentions declare nothing.
+    Assert.Empty(V2TendWrite.markerVersions ("the marker `" + marker + "` is required"))
+    Assert.Empty(V2TendWrite.markerVersions ("see " + marker + " above"))
+    Assert.Empty(V2TendWrite.markerVersions ("```\n" + marker + "\n```"))
+    Assert.Empty(V2TendWrite.markerVersions ("~~~\n" + marker + "\n~~~"))
+    Assert.Equal<string list>([ "v1" ], V2TendWrite.markerVersions ("```\nx\n```\n" + marker))
+    let judge documents = V2TendWrite.contractAmendment documents
+    let isRefused = function V2TendWrite.NotAmended _ -> true | V2TendWrite.Amended -> false
+    // Missing, wrong version, present.
+    Assert.True(isRefused (judge []))
+    Assert.True(isRefused (judge [ "a", Ok "no marker" ]))
+    Assert.True(isRefused (judge [ "a", Ok "<!-- fsgg:board-tend-contract/v2 -->" ]))
+    Assert.True(isRefused (judge [ "a", Ok(marker + "\n<!-- fsgg:board-tend-contract/v2 -->") ]))
+    Assert.Equal(V2TendWrite.Amended, judge [ "a", Ok marker ])
+    // Every mirror that exists must agree: one stale, wrong or unreadable mirror refuses, with its name.
+    Assert.Equal(V2TendWrite.Amended, judge [ "a", Ok marker; "b", Ok marker ])
+    match judge [ "a", Ok marker; "b", Ok "stale" ] with
+    | V2TendWrite.NotAmended reason -> Assert.Contains("b carries no", reason)
+    | V2TendWrite.Amended -> failwith "a stale mirror must refuse"
+    match judge [ "a", Ok marker; "b", Ok "<!-- fsgg:board-tend-contract/v3 -->" ] with
+    | V2TendWrite.NotAmended reason -> Assert.Contains("v3", reason)
+    | V2TendWrite.Amended -> failwith "a wrong-version mirror must refuse"
+    Assert.True(isRefused (judge [ "a", Ok marker; "b", Error "denied" ]))
 
 [<Fact>]
 let ``the document parser reports every root field after aliases and spreads`` () =

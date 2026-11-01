@@ -119,7 +119,7 @@
       "source": "scripts/check-signature-doc-siting.py",
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/signature-doc-siting/run.sh",
-      "workflow": ".github/workflows/signature-doc-siting.yml"
+      "workflow": ".github/workflows/always-gates.yml"
     },
     {
       "source": "scripts/check-landed-reverts.py",

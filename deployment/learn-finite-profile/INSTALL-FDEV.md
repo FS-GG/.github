@@ -22,7 +22,7 @@ Home install journal `home-learn-install-journal/1` is therefore already live on
 - The user manager for uid 30034 delegates `cpuset cpu io memory pids` and lingers.
 - **The retirement acknowledgement is gone.** Neither `/etc/fsgg/learn/retirement-acks` nor the persistent `retirement-acks/`
   exists. The failure record of `a0-20261022t192443z-f1-pre` still hashes to the admitted `3db3a5f3…7210e`. Until step 2 below
-  runs, every operator run refuses with `retirement-failure-unacknowledged`.
+  runs, every operator run refuses with `retirement-failure-unacknowledged`. The harness uses that state once, for A27 (step H2).
 
 ### How each journal element maps to fdev
 
@@ -56,38 +56,43 @@ Home install journal `home-learn-install-journal/1` is therefore already live on
 
 ## Files to install
 
-All from `main` at `55cf44e651baa5dcc24f9749c9bbb38eee795b6a`. Re-hash each file before you copy it, and refuse a mismatch.
-The source path is `/srv/bulk/services/usr-local-libexec-fsgg-learn/`. The view path is `/usr/local/libexec/fsgg-learn/`.
+Pinned to `main` at `7cd6f84f82c7e3c6df5f860a90010783f733ef65` (the harness merge, #5204). Re-hash each file before you copy it, and refuse a
+mismatch. The source path is `/srv/bulk/services/usr-local-libexec-fsgg-learn/`. The view path is `/usr/local/libexec/fsgg-learn/`. The last
+commit that changed each file is given so a reviewer can find the reviewed bytes.
 
-| Repository file | Installed name (under the source and view paths) | Mode | sha256 |
-|---|---|---|---|
-| `ack/learn-retirement-ack-r2.py` | `learn-retirement-ack-r2.py` | 0755 | `4079753c66e1dcc1a6f713dd4be54330e2f2c6aeeb5e3b55f6814877ddd75cab` |
-| `operator/learn-operator-r6.py` | `learn-operator-r6.py` | 0755 | `16b6da1e576222353318a73dc63268533e655995dd9ad5afe0239237e58ce035` |
-| `seal/learn_seal_claim.py` | `learn_seal_claim.py` | 0755 | `dc09930149e0bcab194e8e5fea6766d0abd8fcdbbb81612dde19272cabaae1bf` |
-| `finalizer/learn-finalizer-r5.py` | `learn-finalizer-r5.py` (the path the pod operator pins) | 0755 | `94300e048bcf8f0abe76feb1420b2e55b3886af10402268459a68b413acbf440` |
-| `pod-image/learn-build-pod-app-r1.py` | `learn-build-pod-app-r1.py` | 0755 | `a0bbd9d941f7e351e154c6222a952457aeb948948f499b2d6a74890199916f90` |
-| `pod-image/Containerfile` | `pod-image-r1/Containerfile` | 0644 | `02c0c69cbde58c1bc5c8b4fa337e182d8f6616e4789119728144490584ac7fe1` |
-| `pod-image/role` | `pod-image-r1/role` | 0644 | `f2d9a062113032a94309dd030df768663bf7e1a9895e8c986e20a5575d3801d9` |
-| `pod-image/telemetry-host-tree.json` | `pod-image-r1/telemetry-host-tree.json` | 0644 | `cf91c97abee180ea08accbdf81a53205bd87595ec01c77b16014efaac955b4a6` |
-| `pod-image/coord-cli-tree.json` | `pod-image-r1/coord-cli-tree.json` | 0644 | `79267cd19b4fa78f9bad20416497ac7cda2d73ba17e8102307fe29410b255acb` |
+| Repository file | Installed name (under the source and view paths) | Mode | sha256 | Last changed in |
+|---|---|---|---|---|
+| `ack/learn-retirement-ack-r2.py` | `learn-retirement-ack-r2.py` | 0755 | `4079753c66e1dcc1a6f713dd4be54330e2f2c6aeeb5e3b55f6814877ddd75cab` | `4b26764b445571e22693bf8af4747fbc53cfd142` |
+| `operator/learn-operator-r6.py` | `learn-operator-r6.py` (the harness pins this sha256) | 0755 | `16b6da1e576222353318a73dc63268533e655995dd9ad5afe0239237e58ce035` | `e88df005d256c12b93c95a5fedbc6e8e9c67a849` |
+| `pod-harness/learn-pod-harness-r1.py` | `learn-pod-harness-r1.py` | 0755 | `b0f5700e20465cdf30a78925ddf29ceb735ba0e26d4e23558ee1cbcff7955489` | `7cd6f84f82c7e3c6df5f860a90010783f733ef65` |
+| `seal/learn_seal_claim.py` | `learn_seal_claim.py` | 0755 | `3db55d803007b33102e3028d01a12dab47f64925a5e9c74dcce58847941f40d0` | `7cd6f84f82c7e3c6df5f860a90010783f733ef65` |
+| `finalizer/learn-finalizer-r5.py` | `learn-finalizer-r5.py` (pod operator r2 pins this sha256) | 0755 | `c1de5c03598e6f1e315de7f5d55ce394f35b0880991c28467410420a042556d7` | `7cd6f84f82c7e3c6df5f860a90010783f733ef65` |
+| `pod-image/learn-build-pod-app-r1.py` | `learn-build-pod-app-r1.py` | 0755 | `a0bbd9d941f7e351e154c6222a952457aeb948948f499b2d6a74890199916f90` | `18d2fb7ab3e7d7d75ee63a8c6556bf52846226c2` |
+| `pod-image/Containerfile` | `pod-image-r1/Containerfile` | 0644 | `02c0c69cbde58c1bc5c8b4fa337e182d8f6616e4789119728144490584ac7fe1` | `18d2fb7ab3e7d7d75ee63a8c6556bf52846226c2` |
+| `pod-image/role` | `pod-image-r1/role` | 0644 | `f2d9a062113032a94309dd030df768663bf7e1a9895e8c986e20a5575d3801d9` | `18d2fb7ab3e7d7d75ee63a8c6556bf52846226c2` |
+| `pod-image/telemetry-host-tree.json` | `pod-image-r1/telemetry-host-tree.json` | 0644 | `cf91c97abee180ea08accbdf81a53205bd87595ec01c77b16014efaac955b4a6` | `18d2fb7ab3e7d7d75ee63a8c6556bf52846226c2` |
+| `pod-image/coord-cli-tree.json` | `pod-image-r1/coord-cli-tree.json` | 0644 | `79267cd19b4fa78f9bad20416497ac7cda2d73ba17e8102307fe29410b255acb` | `18d2fb7ab3e7d7d75ee63a8c6556bf52846226c2` |
+| `pod-operator/learn-pod-operator-r2.py` | **not installed as merged** (see below) | | `78633c4a4da83d30191d1522df441b5c48ae9759a68dac832d7801cc95b16106` | `7cd6f84f82c7e3c6df5f860a90010783f733ef65` |
 
 The context also needs these artifacts, which are not in this repository. The builder refuses any other bytes.
 
 | Context path under `pod-image-r1/` | sha256 | Where it comes from |
 |---|---|---|
 | `learn-probe` | `66f8254ec7abf6469a3dd354f3846dbc557fd19762ca8189c484bc03557fb303` | the installed `reader-image-r4/learn-probe` (same bytes) |
-| `host/fsgg-coord-orchestration-host` | `b3d6a6e664cf55ad25a110daa3bf1578a6f6210755e22857f5bddff139877c47` | Root's private custody copy of the matched pair |
+| `host/fsgg-coord-orchestration-host` | `b3d6a6e664cf55ad25a110daa3bf1578a6f6210755e22857f5bddff139877c47` | Root's private custody copy of the matched pair (Coordination `5d525ad2423e733a38ce75fb1f9cac6cf76f214e`) |
 | `runner/fsgg-coord-orchestration-runner` | `0e07e81306aed69f443d3abe9449a54ef38e05d436146c24a811c903be9f9768` | the same |
 | `manifest.json` | `6144181f413c7f9dfe971c9170de92e54a9bc54c21019efd452809d2100256cf` | the same |
 | `producer/FS.GG.Coord.Cli.0.113.0.nupkg` | `100f0879436d41df98aa0879aa8ea279dde3e39d3119733875744ac8e2f79789` | release `coherent-set/v0.113.0` of this repository |
 | `telemetry-host/FS.GG.Telemetry.Host.0.8.0.nupkg` | `44273495ed12083b0c9762818ca0ef5688418e6fbc46bde9f2565b400c5aba89` | release `telemetry-host/v0.8.0` of this repository |
 
-Not installed by this route:
+Two pins change after this document:
 
-- **The pod operator.** `learn-pod-operator-r1.py` (`d34f812d…`) pins no finalizer and no image, so every real run refuses.
-  It can start nothing. The pod operator's start is the next source revision (see "What is still owed").
-- **Finalizer r5 may change.** Follow-up #5175 changes the finalizer's bytes. Root can install `94300e04…` now and replace it
-  after #5175 merges, or wait and install once. Either way the admission names exactly one finalizer sha256.
+- **The pod operator.** Pod operator r2 as merged has `app_image` and `pg_image` empty, so every real run refuses. Its pin-only revision
+  fills those two values with the Ids Root admits in step 7. It is a separate reviewed source PR whose diff against `78633c4a…` is those
+  two values. Step 10 installs that revision at `learn-pod-operator-r2.py`, the path its `self` value and the harness name. The admission
+  names the revision's own sha256.
+- **Finalizer r5.** Follow-up #5175 also changes the finalizer. Whichever of #5175 and its rebase merges last re-pins `finalizer_sha` in the
+  pod operator. Install the finalizer whose sha256 the installed pod operator pins, and nothing else.
 
 ## The fdev install journal
 
@@ -100,7 +105,7 @@ holds one file per add set, `<seq>-<set>.json`, with `seq` as a four-digit count
 {
   "schema": "fdev-learn-install-journal/1",
   "seq": 1,
-  "set": "ack-r2",
+  "set": "operator-r6",
   "utc": "<UTC time of the write>",
   "prevSha256": "<sha256 of the previous entry; entry 0001 uses the install-manifest.json sha256 c0ff55ff…>",
   "admission": "<URL of Root's admission comment>",
@@ -110,16 +115,40 @@ holds one file per add set, `<seq>-<set>.json`, with `seq` as a four-digit count
      "sha256": "<hex>", "mode": "0o755", "uid": 0, "gid": 0, "priorExists": false, "priorSha256": null, "action": "created"}
   ],
   "dirs": [{"view": "<path>", "mode": "0o755", "created": true}],
+  "results": [{"what": "<command or case>", "exitCode": 0, "resultSha256": "<hex>"}],
   "readback": {"utc": "<time>", "viewSha256Equal": true, "modeEqual": true, "ownerRoot": true}
 }
 ```
 
 `action` is `created`, `replaced` or `removed`. A `replaced` or `removed` entry carries `priorSha256`. The readback block is
-filled in from the view, never from the source path.
+filled in from the view, never from the source path. `results` records the RESULT sha256 of each command or harness case that the set ran.
+
+## The ordered sequence
+
+Run the rows in this order. A failed readback or an unexpected verdict stops the sequence; nothing is retried. The step numbers are
+stable identifiers (the harness README cites steps 1, 2, 3 and 7), so the order is given here and not by the numbers.
+
+| # | Step | Who | Journal entry |
+|---|---|---|---|
+| 1 | Step 0: readbacks before install | unprivileged, then Root (read-only, as uid 30034) | none |
+| 2 | Step 3: the journal directory and operator r6 | **Root-executed** | `0001-operator-r6` |
+| 3 | Step 9: the pod harness | **Root-executed** | `0002-pod-harness` |
+| 4 | Step H1: harness `plan` | **Root-executed** (as uid 30034, no effect) | none; its RESULT sha256 goes in Root's admission |
+| 5 | Step H2: cases `census`, `a27-unacked` | **Root-executed** (as uid 30034) | `0003-harness-a` |
+| 6 | Step 1: ack writer r2 | **Root-executed** | `0004-ack-r2` |
+| 7 | Step 2: the f1-pre acknowledgement | **Root-executed** | `0005-ack` |
+| 8 | Step H3: cases `a0-summary`, `exclusion-reader`, `a29-cap`, `n5b-cgroups`, then `summary` | **Root-executed** (as uid 30034) | `0006-harness-ab` |
+| 9 | Step 4: seal and claim tool | **Root-executed** | `0007-seal` |
+| 10 | Step 5: finalizer r5 | **Root-executed** | `0008-finalizer-r5` |
+| 11 | Step 6: pod image context and builder | **Root-executed** | `0009-pod-image-context` |
+| 12 | Step 7: the Host build check, the pg pull and the image build | unprivileged check, then **Root-executed** (as uid 30034) | `0010-images` |
+| 13 | Step 10: the pin-only pod operator revision (after its source PR merges) | **Root-executed** | `0011-pod-operator` |
+| 14 | Step 8: the volume root, then the loop volume for the synthetic op | **Root-executed** | `0012-volume-root`; the per-op volume goes in `0013` |
+| 15 | Step H4: phase C, the synthetic receipt op | **Root-executed** (Root and uid 30034) | `0013-harness-c` |
+
+Every step that runs as uid 30034 goes through the host's administrative route and is Root-executed: it is an effect in another account.
 
 ## Install steps
-
-Run them in this order. A failed readback stops the sequence. Steps 1 to 7 are install steps. Step 8 is per operation.
 
 ### Step 0: readbacks before install
 
@@ -127,18 +156,43 @@ Run them in this order. A failed readback stops the sequence. Steps 1 to 7 are i
 2. *Unprivileged.* Run `python3 deployment/learn-finite-profile/verify_baseline.py --install-journal /usr/local/libexec/fsgg-learn/install-manifest.json --custody-dir <custody dir>`.
    Expect `installedVerified 20` and `errors []`.
 3. *Unprivileged.* Read the live slice (6442450944 / 1280 / `200000 100000`) and re-hash the slice drop-in and the seccomp file.
-4. **Root-executed** (read-only, but as uid 30034). Run `systemctl --user list-units --all 'learn-*'` and `podman ps -a`, and
-   expect neither to list anything. Run `podman image exists 20a6df20169ce6721ed91fddd0d24ae7fe8de655008b422df0c3299821b7d4b8`
-   and expect exit 0. List every `learn-evidence/*/record.json` with schema `learn-op-retirement-failure/1`, and expect exactly
-   one: `a0-20261022t192443z-f1-pre`. Any other unacknowledged failure needs its own admission before step 2.
+4. **Root-executed** (read-only, as uid 30034). Run `systemctl --user list-units --all 'learn-*'` and `podman ps -a`, and expect
+   neither to list anything. Run `podman image exists` for the base image `20a6df20169ce6721ed91fddd0d24ae7fe8de655008b422df0c3299821b7d4b8`
+   and for reader image r4 `6625dfb774feabc256d94d15d112cf3f554d3cd7d388e1d717d74ada97c1de06`, and expect exit 0 for both. List every
+   `learn-evidence/*/record.json` with schema `learn-op-retirement-failure/1`, and expect exactly one: `a0-20261022t192443z-f1-pre`. Any other
+   unacknowledged failure needs its own admission before the sequence continues.
    *Admission input:* none; this step changes nothing.
 
-### Step 1: ack writer r2, plus the journal directory
+### Step 3: operator r6, plus the journal directory
 
-**Root-executed.** Create `fdev-install-journal/` (root:root 0755) under the source path. Copy `learn-retirement-ack-r2.py` with
+**Root-executed.** Create `fdev-install-journal/` (root:root 0755) under the source path. Copy `learn-operator-r6.py` with
 `install -o root -g root -m 0755` to the source path. Read it back through the view (sha256, mode, owner). Write journal entry
-`0001-ack-r2`.
-*Admission inputs:* the file sha256 `4079753c…5cab`, this document's commit and sha256.
+`0001-operator-r6`. Operator r5 stays installed and is the rollback.
+It is installed **before** the acknowledgement, so the harness can run A27 against the real f1-pre record.
+*Admission inputs:* `16b6da1e…e035` and this document's commit and sha256.
+
+### Step 9: the pod harness
+
+**Root-executed.** Install `learn-pod-harness-r1.py` (root:root 0755) and read it back. Write journal entry `0002-pod-harness`. The harness
+runs only from that root-owned copy.
+*Admission inputs:* `b0f5700e…5489`.
+
+### Step H1: the admission request
+
+**Root-executed** (as uid 30034; no effect). Choose a run id (4 to 12 lowercase letters and digits) and run
+`learn-pod-harness-r1.py plan --run-id <id>`. Post the RESULT sha256 on #5066 as the admitted case list. Every later `case` names that
+comment with `--admission-ref`.
+
+### Step H2: phase A before the acknowledgement
+
+**Root-executed** (as uid 30034). Run `case --case census`, then `case --case a27-unacked`, each with `--run-id <id> --admission-ref <URL>`.
+Expected: `census` clean, both images present and operator r6 hashing to `16b6da1e…`; `a27-unacked` exits 5 with exactly
+`retirement-failure-unacknowledged: a0-20261022t192443z-f1-pre` and starts no precheck op. Record both RESULT sha256 values in `0003-harness-a`.
+
+### Step 1: ack writer r2
+
+**Root-executed.** Install `learn-retirement-ack-r2.py` (0755) and read it back. Write journal entry `0004-ack-r2`.
+*Admission inputs:* `4079753c…5cab`.
 
 ### Step 2: restore the acknowledgement (design section 11, gate 1)
 
@@ -149,57 +203,101 @@ Run them in this order. A failed readback stops the sequence. Steps 1 to 7 are i
   --record-sha256 3db3a5f38aec1a01d2d5fbbb471bb272c44fc88c633537523245a67620b7210e --record-file <that op's learn-evidence record.json>
 ```
 
-Then run `--check` with the same op id and digest. Expect exit 0, with the mounted view showing the same digest. Record the RESULT sha256 in journal
-entry `0002-ack`.
+Then run `--check` with the same op id and digest. Expect exit 0, with the mounted view showing the same digest. Record the RESULT sha256
+in journal entry `0005-ack`.
 *Admission inputs:* the digest admitted in [#4516 6360174387](https://github.com/FS-GG/.github/issues/4516#issuecomment-6360174387)
 and the writer sha256 from step 1.
 
-### Step 3: operator r6
+### Step H3: phase A after the acknowledgement, and phase B
 
-**Root-executed.** Install `learn-operator-r6.py` (0755) and read it back. Write journal entry `0003-operator-r6`. Operator r5
-stays installed and is the rollback.
-*Admission inputs:* `16b6da1e…e035`. Operator r6's re-qualification (A27/A27b, the A0 summary, A29 and an A0 r4 smoke) is a set
-of runs that needs its own admission. Home's harness r3b is not in custody; see "What is still owed".
+**Root-executed** (as uid 30034). Run these cases in order, one invocation each, then `summary --run-id <id>`:
+
+| Case | Expected |
+|---|---|
+| `a0-summary` | exit 0; `failures == acked == [f1-pre]`, `unacked == []`; every precheck assertion true; the precheck record `learn-op-success/1` bound to the nonce |
+| `exclusion-reader` | exit 5, `exclusion refused: a pod op is active: learn-pod-hq-<id>-x` |
+| `a29-cap` | exit 5, `concurrency refused: 2 ops already active (max 2)` |
+| `n5b-cgroups` | the spike removes its pod and reads it back gone; verdict `members-and-infra-under-unit`. `not-under-unit` or `split-refused` is a finding that blocks phase C until the pod start changes |
+
+The first failed case writes `STOP` and every later case refuses. Record each RESULT sha256 and the summary in `0006-harness-ab`. The case
+`a0-r4-smoke` stays held (see "What is still owed").
 
 ### Step 4: seal and claim tool
 
-**Root-executed.** Install `learn_seal_claim.py` (0755) and read it back. Write journal entry `0004-seal`. Nothing is sealed or
+**Root-executed.** Install `learn_seal_claim.py` (0755) and read it back. Write journal entry `0007-seal`. Nothing is sealed or
 claimed by this step.
-*Admission inputs:* `dc099301…e1bf`.
+*Admission inputs:* `3db55d80…40d0`.
 
 ### Step 5: finalizer r5
 
-**Root-executed.** Install `learn-finalizer-r5.py` (0755) and read it back. Write journal entry `0005-finalizer-r5`.
-*Admission inputs:* `94300e04…f440`, or the later sha256 after #5175, which Root chooses.
+**Root-executed.** Install `learn-finalizer-r5.py` (0755) and read it back. Write journal entry `0008-finalizer-r5`.
+*Admission inputs:* `c1de5c03…56d7`, the value pod operator r2 pins (or the re-pinned value after #5175).
 
 ### Step 6: pod image context and builder
 
 **Root-executed.** Create `pod-image-r1/` with the subdirectories `host/`, `runner/`, `producer/` and `telemetry-host/` (all
 root:root 0755). Copy the ten context files (root:root 0644), and only those ten. Install `learn-build-pod-app-r1.py` (0755).
-Read back every file through the view. Write journal entry `0006-pod-image-context`.
-*Admission inputs:* the eleven sha256 values in the two tables above. The two nupkgs are fetched unprivileged from this
+Read back every file through the view. Write journal entry `0009-pod-image-context`.
+*Admission inputs:* the eleven sha256 values of the builder and the context. The two nupkgs are fetched unprivileged from this
 repository's releases; the release API reports the same sha256 digests. The matched pair comes from Root's private custody.
 
-### Step 7: acquisitions and the build (effects as uid 30034)
+### Step 7: the Host build check, acquisitions and the build
 
-1. **Root-executed.** Pull the PostgreSQL image once as uid 30034, by digest:
+1. *Unprivileged, before the build.* Confirm that the Host payload `b3d6a6e6…` embeds the assembly metadata `FsggSourceRevision` equal to
+   `5d525ad2423e733a38ce75fb1f9cac6cf76f214e` (#5204 review N5). `verify-installed-adoption` compares it with the request's
+   `expectedSourceRevision`, so a mismatch fails phase C. A missing or different value stops the sequence here, before any image is built.
+2. **Root-executed** (as uid 30034). Pull the PostgreSQL image once, by digest:
    `podman pull docker.io/library/postgres@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280`. Record
    three identities: the index digest, the `linux/amd64` platform manifest digest (`7341002d…46d7` on 2026-10-30), and the local
    config Id from `podman image inspect`.
    *Admission inputs:* the index digest, plus Root's egress allowance for this one pull. Decision 1 (#5068) governs egress
    during runs, not this acquisition.
-2. **Root-executed.** Build the image by running `/usr/local/libexec/fsgg-learn/learn-build-pod-app-r1.py` as uid 30034.
+3. **Root-executed** (as uid 30034). Build the image by running `/usr/local/libexec/fsgg-learn/learn-build-pod-app-r1.py`.
    Expect exit 0 and a `home-learn-build-pod-app/1` RESULT with the image Id and two `RUNTIME` lines at 10.0.12. Record the
-   RESULT sha256 and the image Id in journal entry `0007-images`, together with the pg identities.
-   *Admission inputs:* the builder sha256 and the context readback from step 6. The image Id is new. Root admits it after the
-   build, for the pod operator's pin.
+   RESULT sha256, the image Id and the pg identities in journal entry `0010-images`.
+   *Admission inputs:* the builder sha256 and the context readback from step 6. Root then admits the two config Ids for the pod
+   operator's pin-only revision.
 
-### Step 8: the loop volume (per operation, not an install step)
+### Step 10: the pin-only pod operator revision
 
-**Root-executed** for every pod op. Create a fixed 1 GiB ext4 image on the custody disk. Loop-mount it with
-`nosuid,nodev,noexec` at the op's mount point. Create `pgdata/` (428678:428678, 0700) and `recv/` (428679:428679, 0700). After
-retirement, remount it read-only for the independent readback. Root unmounts it, and disposal is a separate admission. The mount
-point path is still to be confirmed by the pod operator's start (the finalizer r5 README names the expected form).
+**Root-executed**, after the pin-only source PR merges. Install its bytes at `learn-pod-operator-r2.py` (0755) and read them back. Expect the
+sha256 that PR reports, `finalizer_sha` equal to the installed finalizer and `app_image`/`pg_image` equal to step 7's Ids. Write journal
+entry `0011-pod-operator`.
+*Admission inputs:* the revision's sha256 and merge commit.
+
+### Step 8: the loop volume
+
+**Root-executed.** Once: create the volume root `/mnt/storage/containers/learn-qualification/learn-pod/` (root:root 0755) and journal it in
+`0012-volume-root`. Then for every pod op: create a fixed 1 GiB ext4 image on the custody disk (`mkfs.ext4`), loop-mount it with
+`rw,nosuid,nodev,noexec` at `<volume root>/<op id>.mnt`, and create `pgdata/` (428678:428678, 0700) and `recv/` (428679:428679, 0700) in a
+root-owned top directory closed to group and other writers. The pod operator's precheck refuses anything else: not exactly one ext4 mount from
+`/dev/loopN`, a missing option, a size outside 900 MiB to 1 GiB, more than 16 inodes or 64 MiB in use, other entries than `pgdata`, `recv`
+and `lost+found`, or the wrong owners. After retirement, remount it read-only for the independent readback. Root unmounts it, and disposal is
+a separate admission.
+
+### Step H4: phase C, the synthetic receipt op
+
+Phase C is the install receipt op and runs last. The synthetic op id is the harness's (`plan` prints it), and its argv-json is
+`["learn-pod-plan/1","<plan sha256>","input:synthetic"]` (`plan` prints the exact string).
+
+1. *Any uid.* `learn-pod-harness-r1.py synth-tree --out <new dir> --nonce <nonce>`: a synthetic spool with no real data.
+2. **Root-executed.** `learn_seal_claim.py manifest --mode synthetic --synthetic-base <dir> --out <M1>`, then
+   `learn_seal_claim.py seal --mode synthetic --synthetic-base <dir> --m1 <M1> --snapshot-id <id>`. Record the synthetic source identity and the
+   sealed record's sha256.
+3. **Root-executed.** `learn_seal_claim.py admit --op-id <syn op> --argv-json-sha256 <sha256 of the synthetic argv-json> --source-identity <syn identity>
+   --operator-sha256 <step 10> --finalizer-sha256 <step 5> --image-id <app> --image-id <pg> --ttl-seconds 600`. The argv hash binds the
+   synthetic kind. Mount the loop volume (step 8).
+4. **Root-executed** (as uid 30034). `case --case syn-precheck --argv-json <…> --source-identity <…>`. Expected: exit 0,
+   `inputProvenance synthetic`, `inputMounted false`.
+5. **Root-executed.** `learn_seal_claim.py claim --mode synthetic` (with the source identity, op id, snapshot id, sealed-record sha256 and that precheck RESULT). The subcommand comes first; `--mode` is an option.
+6. **Root-executed** (as uid 30034). `case --case syn-run`. Expected: exit 0; the finalizer record is `learn-op-pod-success/1` with
+   `inputProvenance synthetic`, `inputRead true`, the feed container the only one started with `/in`, five accepted checkpoints and the pod
+   unit `ExecMainStatus` 0; `drive.jsonl` ends complete; census after clean.
+7. **Root-executed** (as uid 30034). `case --case syn-reuse`. Expected: exit 5 with `op id already used`. Then `summary`.
+8. **Root-executed.** Remount the volume read-only, read it back, unmount. Record every RESULT sha256, the finalizer record sha256 and the
+   `drive.jsonl` chain head in `0013-harness-c`.
+
+A real admission cannot start a synthetic op and the reverse, so phase C consumes no real claim.
 
 ## Receipts and readback (design section 9)
 
@@ -210,11 +308,9 @@ The install receipt that Root posts on #5066 carries:
 - `verify_baseline.py --install-journal` still at `installedVerified 20` and `errors []`;
 - the slice, seccomp and ack re-verified after the install (`--check` exit 0);
 - the image config Ids, the builder RESULT sha256 and the runtime versions it printed;
-- the three PostgreSQL identities;
-- the matched-pair hashes (`b3d6a6e6…`, `0e07e813…`, `6144181f…`).
-
-The receipt op (a no-input op whose finalizer record shows in-sandbox Host and Runner usage) needs the pod operator's start, so
-it is held with it.
+- the three PostgreSQL identities and the `FsggSourceRevision` readback;
+- the matched-pair hashes (`b3d6a6e6…`, `0e07e813…`, `6144181f…`);
+- the harness case RESULT sha256 values and its `summary`, phases A, B and C.
 
 ## Rollback
 
@@ -222,42 +318,18 @@ Each step's rollback is a new journal entry with `action: removed`. Every rollba
 
 | Step | Rollback |
 |---|---|
-| 1, 3, 4, 5, 6 | Remove the installed file, or `pod-image-r1/`, through the source path, then read the view back as absent. Operator r5, finalizer r4 and ack writer r1 stay installed, so the reader profile keeps working |
+| 1, 3, 4, 5, 6, 9, 10 | Remove the installed file, or `pod-image-r1/`, through the source path, then read the view back as absent. Operator r5, finalizer r4 and ack writer r1 stay installed, so the reader profile keeps working |
 | 2 | `learn-retirement-ack-r2.py --remove --op-id a0-20261022t192443z-f1-pre`, only on its own admission. Afterwards every operator run refuses again |
 | 7 | As uid 30034, `podman rmi <image Id>` for the pod image and for the pg image |
 | 8 | Unmount, then dispose of the image on its own admission |
+| H1 to H4 | Nothing to remove: the harness writes only its own state directory and the evidence of the ops it ran. A consumed synthetic claim stays |
 
-Rollback never touches `install-manifest.json`, the evidence tree or a claim.
-
-## Pod-harness qualification on a synthetic snapshot
-
-**There is no command yet.** The harness, the pod operator's start and a synthetic-snapshot route are all owed source. The
-harness PR has to deliver these cases with the expected verdicts below (design sections 3, 6, 7, 8 and 10):
-
-| Case | Expected verdict |
-|---|---|
-| Pod precheck: only `lo`, external and link-local connects fail, listeners exactly 5432 plus the declared ports | pass |
-| Non-loopback interface, non-empty capability set, seccomp set that differs, `EPERM`/`ENOSYS` at start, host uid outside {428678, 428679}, image Id other than the pin | refuse |
-| Unacknowledged retirement failure, missing admission, concurrency or headroom over the limit, reader op active | refuse |
-| Loop volume not mounted, not fresh, not 1 GiB, missing `nosuid,nodev,noexec`, wrong owners | refuse |
-| Snapshot file changed, extra, missing, symlinked or unreadable; second claim; claim naming another op; op id reused | refuse |
-| Clean restart (`host`, `pg`, `recv`), each preceded by a checkpoint | fence, backup identity and clocks unchanged; no second launch |
-| SIGKILL of `host` while an invocation is non-terminal | restart reconciliation; no second provider call; unproven terminal stays unknown |
-| SIGKILL of `pg` during the invocation | Host refuses, then reconciles after `pg` restarts |
-| Receiver down while `host` emits | outbox retained, drained exactly once after restart, original timestamps |
-| Deadline passes, `/out` over its cap, volume full | `killed-retired`, `rejected:budget` or `enospc`; retirement clean |
-| Every op | finalizer record `learn-op-pod-*/1`; no new unacknowledged `learn-op-retirement-failure/1`; units and containers empty; slice back near its baseline |
-
-The first harness run also settles the spikes that the image and finalizer READMEs list: CLI 0.113.0 against Host 0.8.0, a
-Generic credential in `host-config/2`, pausing and archiving inside a pod, `pg_controldata` from a one-shot container, and
-seccomp applicability.
+Rollback never touches `install-manifest.json`, the evidence tree or a real claim.
 
 ## What is still owed
 
 | Item | Why it blocks | Owner |
 |---|---|---|
-| The pod operator's start (r2): finalizer and image pins, the loop-volume and container prechecks, the finalizer and pod units, the containers | No pod can start; the receipt op and the harness need it | source, #5066 |
-| The recovery driver and the credential generator | Section 6 cases and per-run TLS | source, #5066 |
-| How the Host's section 5 sequence runs inside the pod without `podman exec` (`init`, `verify-installed-adoption`, `serve`, `prepare-main-admission`, resume), and the receiver's `init --root` and `enroll-producer` before `serve` | Each container runs one `role` command, and the finalizer archives only `host`, `recv` and `feed`. The design does not say where the one-shot steps run or how their evidence reaches custody | Root decision on the design, then source |
-| A synthetic-snapshot route | `learn_seal_claim.py` pins the two real spool subtrees, so it cannot seal a synthetic source. The harness needs its own source identity that can never collide with the real claim | Root decision, then source |
-| A pod harness on fdev | Home's harness r3b source is not in custody (design Unknown 7) | source |
+| The pin-only pod operator revision | Every real pod run refuses until `app_image` and `pg_image` are pinned | source, after step 7 |
+| `a0-r4-smoke` | Home's A0 r4 harness (`12ec5ebf…`) is not in this repository. Re-pinning it to operator r6 needs that source, which is **Home-only** unless Root holds a copy | Home, or a Root decision to accept r6 without it |
+| #5175 | It changes finalizer r5; the pod operator re-pins it | source |

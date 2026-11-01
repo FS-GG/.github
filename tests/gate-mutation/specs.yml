@@ -266,10 +266,10 @@ mutations:
   # =============================================================================================
 
   # ---------------------------------------------------------------------------------------------
-  # 12. engine-flag-narrative.yml — 1092 runs, never red (the second-largest number in the repo)
+  # 12. engine-flag-narrative (always-gates.yml since .github#5182; was engine-flag-narrative.yml) — 1092 runs, never red (the second-largest number in the repo)
   # ---------------------------------------------------------------------------------------------
   - id: engine-flag-narrative/allowlist-widened-to-all-docs
-    gate: engine-flag-narrative.yml
+    gate: always-gates.yml
     command: ["bash", "tests/engine-flag-narrative/run.sh"]
     target: scripts/check-engine-flag-narrative.py
     # The bare token `docs/adr/` occurs three times; the indented ALLOWED_PREFIXES entry occurs once.
