@@ -12,8 +12,10 @@
 - **Inputs:** three analyst inventories on #5223
   ([coordination and formal](https://github.com/FS-GG/.github/issues/5223#issuecomment-6564262819),
   [games and netcode](https://github.com/FS-GG/.github/issues/5223#issuecomment-6564266523),
-  [engine and product](https://github.com/FS-GG/.github/issues/5223#issuecomment-6564286610)) and Root's
-  [private-repository ruling](https://github.com/FS-GG/.github/issues/5223#issuecomment-6564271532)
+  [engine and product](https://github.com/FS-GG/.github/issues/5223#issuecomment-6564286610)), Root's
+  [private-repository ruling](https://github.com/FS-GG/.github/issues/5223#issuecomment-6564271532) and
+  Root's [prior-art algorithm survey](https://github.com/FS-GG/.github/issues/5223#issuecomment-6564547547)
+  (taxonomy, ranked new items with oracles, verified reference licences)
 
 ## Context
 
@@ -125,6 +127,10 @@ it moves:
    Fable fixture corpus must be byte-identical.
 3. No second implementation survives the release that moves it.
 
+One dependency is decided now rather than on demand: the layer-0 heap (§3). Game.Core's A* `Set`
+frontier migrates onto `FS.GG.Algorithms.Collections`, so Game.Core becomes the library's first
+FS-GG consumer. That direction (Game → Algorithms) is the one §1 permits.
+
 ### §2 Packages and namespaces
 
 | Package | Content | Dependencies | Fable |
@@ -133,10 +139,11 @@ it moves:
 | `FS.GG.Algorithms.Skills` | Content-only skill package carrying `fs-gg-algorithms` and its pack | none | n/a |
 | `FS.GG.Algorithms.Solvers` | **Reserved.** Created only when the first admitted entry needs a native or .NET-only solver (for example LP or ILP bindings) | that solver, never an FS-GG component | not required; marked DotNetOnly |
 
-Namespaces follow the taxonomy (§11): `FS.GG.Algorithms.Graphs`, `.Pathfinding`, `.Decision`,
-`.Search`, `.Spatial`, `.Geometry`, `.Optimization`, `.Random`, `.Sequences`, `.Statistics`,
-`.Numerics` and `.Collections` (heaps and other support structures). Public surface is declared in
-`.fsi` signature files and baselined as a shipped surface (ADR-0025).
+Namespaces are `FS.GG.Algorithms.<Family>`, one per taxonomy family (§11): `.Collections`, `.Random`,
+`.Graph`, `.Search.Grid`, `.Search.Mesh`, `.Search.MultiAgent`, `.Steering`, `.Decision`, `.Adversarial`,
+`.Learning`, `.ProcGen`, `.Spatial`, `.Geometry`, `.Optimization`, `.Numerics`, `.Net` and `.Systems`.
+The namespace equals the pack's family tag. Public surface is declared in `.fsi` signature files and
+baselined as a shipped surface (ADR-0025).
 
 The library and the skills package version independently, as `FS.GG.Game` and `FS.GG.Game.Skills`
 do. Both are dual-published to nuget.org and GitHub Packages
@@ -153,9 +160,11 @@ They start at `0.x`. The licence is MIT, matching FS.GG.Game.
    - `LockstepExact`: byte-identical results on .NET and JavaScript, proven by a shared fixture
      corpus run under both runtimes.
    - `Portable`: compiles and runs under Fable, with no byte promise.
-   - `DotNetOnly`: allowed only in `FS.GG.Algorithms.Solvers`.
+   - `DotNetOnly`: allowed in `FS.GG.Algorithms.Solvers`, and for a Task- or IO-bound adapter in the
+     `Net` or `Systems` family that sits beside a portable core of the same algorithm.
 
-   Unclassified is not an admissible grade for a new surface.
+   Unclassified is not an admissible grade for a new surface. Pointer entries may report
+   Game.Core's existing Unclassified grade as it stands.
 3. Integer-keyed algorithms (searches, grids, graph kernels, RNG) target `LockstepExact`. Use `int`
    in hot paths, not `int64` (a BigInt in JavaScript) or `decimal`. Tie-break with a total order,
    never a hash or dictionary iteration order. Floating-point surfaces are at most `Portable` unless
@@ -165,6 +174,28 @@ They start at `0.x`. The licence is MIT, matching FS.GG.Game.
    `.Collections`. Randomness takes an explicit seeded state, as Game.Core's `Rng` does.
 5. Recursion that is unbounded in the input size is refused. Tarjan SCC, DFS and flood fills are
    written iteratively. JavaScript stacks are small, and the harvested `Blockers.cycles` is recursive.
+6. **Layering.** Two layer-0 foundations, `Collections.Heap` and `Numerics.Fixed`, may be used by
+   every family and use nothing else in the library. Only `Net` and `Systems` may touch Tasks or IO,
+   which keeps every other family compilable in the Fable view.
+
+**Layer-0 foundations (tranche 1, before anything that depends on them).**
+
+- **A Fable-portable binary heap and indexed heap** (decrease-key), with a total order and a
+  deterministic tie-break supplied by the caller. Every priority-queue search in the org migrates
+  onto it:
+  - Game.Core's A* `Set` frontier;
+  - FourD's re-sorted list frontier;
+  - RuneScape's BCL `PriorityQueue`.
+
+  The Game.Core migration must keep its `LockstepExact` fixture corpus byte-identical and must not
+  regress the bench that Game's Red Blob Games roadmap used to keep the `Set` frontier. FourD and
+  RuneScape are private products, and their migrations are their owners' work.
+- **Q16.16 fixed-point** (`Numerics.Fixed`): add, multiply, divide, square root, and LUT or CORDIC
+  trigonometry, bit-identical on .NET and JavaScript.
+  - Multiply and divide must not use `int64`, because it is a BigInt under Fable. The 32-bit
+    operands are split into 16-bit halves.
+  - Fixed-point is what lets steering, utility scoring and future physics reach `LockstepExact`.
+  - Q32.32 waits until the `int64` cost under Fable is measured (Consequences, open questions).
 
 ### §4 Admission bar
 
@@ -182,15 +213,23 @@ A library entry is admitted only with all of the following in the same PR:
    anything with a hot loop), on the micro-bench route below.
 4. **A pack entry** (§6) describing it.
 
-**The micro-bench route.** Rendering harnesses do not time kernels, so kernels are timed with
-**BenchmarkDotNet** in a `bench/` project in the repository that owns the kernel. For FS.GG.Algorithms
-kernels that is FS.GG.Algorithms. For Game.Core kernels indexed in place it is FS.GG.Game. A bench
-project never ships, so it adds no package dependency.
+**The micro-bench route (decided).** #761 and #792 time rendering frames, not kernels. Kernels are
+timed on two runtimes, in a `bench/` folder of the repository that owns the kernel. For
+FS.GG.Algorithms kernels that is FS.GG.Algorithms; for Game.Core pointer entries it is FS.GG.Game.
+A bench project never ships, so it adds no package dependency.
 
-- **Protocol.** Fixed seeded inputs at three declared sizes, a fixed BenchmarkDotNet job (declared
-  warm-up and iteration counts, the default toolchain, `MemoryDiagnoser`), and the work counts each
-  run performed (for example nodes expanded) beside the timings. Work counts are deterministic and
-  may be gated. Timings are evidence, not gates.
+- **.NET:** **BenchmarkDotNet**.
+- **JavaScript:** a minimal timed harness, `bench/fable/`, runs the Fable-compiled kernel under
+  Node with the same inputs. It is required for performance-relevant entries graded
+  `LockstepExact` or `Portable`, because a fable-game workspace runs them in the browser.
+
+- **Protocol.** Fixed seeded inputs at three declared sizes, and the work counts each run
+  performed (for example nodes expanded) beside the timings. Work counts are deterministic and may
+  be gated. Timings are evidence, not gates.
+  - On .NET: a fixed BenchmarkDotNet job (declared warm-up and iteration counts, the default
+    toolchain, `MemoryDiagnoser`).
+  - On JavaScript: a declared number of warm-up and measured iterations, reporting the median and
+    p95 by nearest rank (`Numerics` percentile, tranche 1).
 - **Quiet host.** Each bench invocation is admitted by
   `fdev-lane-capacity.py --max-load-per-core 0.25`, the #780 rule. A held probe waits; it is not
   overridden.
@@ -199,9 +238,9 @@ project never ships, so it adds no package dependency.
   reference. The pack entry cites the baseline file by immutable revision and digest, and summarises
   host, date, version, sizes, median and work counts. A summary never reports a number without its
   host and version.
-- **Browser timing** is optional. An entry that claims browser suitability may add JavaScript
-  timings through the published #792 runner once it exists. Until then it records "browser timing:
-  not measured".
+- **One schema, two runtimes.** Both runtimes write the same results schema, which carries a
+  `runtime` field. The #792 runner is not required. An entry may add in-page browser timings
+  through it once it is published.
 
 Entries indexed in place (§1) meet the same bar where they live. The owed items (the explicit A* vs
 BFS property, Fable grades for integer-only surfaces, timing benches) are Game-owned work under
@@ -233,6 +272,27 @@ Root's ruling on #5223 governs harvest from private repositories:
   FS-GG authorship is the basis. `Game.Core/Physics.fs` is not harvested until its author confirms
   it is not derived from Box2D-Lite or another source.
 
+**Porting rules for external reference code** (licences verified in the survey on 2026-11-01):
+
+- **Default: implement from the paper.** Every survey row marked "paper" is a clean
+  implementation from the published description, with the paper under **References**.
+- **Permissive, port only with the notice carried.** The licence notice goes in the library's
+  `THIRD-PARTY-NOTICES.md`, and the entry names the licence. Prefer implementing from the paper
+  even here.
+  - **MIT:** WFC (mxgmn), GGPO, FastNoiseLite, rbush, MiniSat.
+  - **CC0-1.0:** OpenSimplex2.
+  - **Zlib:** Recast and DotRecast.
+  - **Apache-2.0, with its NOTICE file:** RVO2.
+  - **BSD-3-Clause:** pycma, libccd.
+  - **ISC:** Delaunator, kdbush, flatbush.
+  - **Dual MIT/Apache-2.0:** GGRS.
+- **Never port:** Stockfish (GPL-3.0), and any GPL or LGPL source (for example OpenAL Soft).
+  - Search techniques Stockfish uses are implemented from their papers.
+  - OR-Tools (Apache-2.0) may serve as a **test oracle only**, in a test project, never as shipped
+    code.
+- **Copyrighted books** (for example *The Algorithmic Beauty of Plants*, AIMA, CLRS, RTCD, the
+  Game AI Pro chapters) are summarised and cited, never copied, including their pseudo-code.
+
 ### §6 Pack format: an Atlas archive inside the skill
 
 The pack is an **unmodified Atlas archive**, in exactly the `fsgg.atlas/1` format of
@@ -253,12 +313,12 @@ template/product-skills/fs-gg-algorithms/
 
 | Field | Rule |
 |---|---|
-| `id` | `algorithms/<family>/<technique>`, lowercase, stable, for example `algorithms/pathfinding/astar` |
+| `id` | `algorithms/<family>/<technique>`, where `<family>` is the lowercased §11 family (`search.grid`, `procgen`), stable, for example `algorithms/search.grid/astar` |
 | `repository` | `FS-GG/FS.GG.Algorithms` (the archive owner), whichever package holds the code |
-| `kind` | `contract` when a public FS-GG package implements it. `lesson` for a pattern or pitfall with no shipped kernel. `decision` for a selection guide ("which pathfinder"). `question` (with `status: question`) for a gap entry that names the missing knowledge |
+| `kind` | `contract` for status `pointer`, `harvested` or `new` (a public FS-GG package implements it). `lesson` for status `entry-only` (a pattern or pitfall with no shipped kernel). `decision` for a selection guide ("which pathfinder"). `question` (with `status: question`) for a gap entry that names the missing knowledge |
 | `title` | The technique's common name, at most 160 characters |
 | `summary` | The body. Fixed headings, in this order: **Idea**, **Complexity**, **Use when**, **Avoid when**, **Pitfalls**, **F# usage** (package id, module, signature, and an original snippet of at most 15 lines), **Tests** (property names, or "owed"), **Bench** (host, date, version, sizes, median, work counts, or "owed"), **Related** (entry ids and skill ids such as `fs-gg-grids`), **References** (bibliographic: author, title, year, venue, DOI or URL) |
-| `tags` | Family, technique and aliases (`astar`, `a-star`), `fable-exact`, `fable-portable` or `dotnet-only`, at most 20 |
+| `tags` | At most 20. The pack metadata is carried in three tags, so the record schema stays closed: audience (`audience-game`, `audience-framework` or `audience-both`), determinism grade (`grade-lockstep-exact`, `grade-portable`, `grade-unclassified` or `grade-dotnet-only`) and status (`status-pointer`, `status-harvested`, `status-new` or `status-entry-only`). The other tags are the family, the technique and its aliases (`astar`, `a-star`) |
 | `citations` | 1 to 16 immutable citations: the implementation of record (`.fsi`/`.fs`), its property tests, its bench baseline, and harvest provenance if any (§5) |
 | `status`, `recordedAt`, `supersedes`, `conflictsWith` | Atlas semantics. A changed entry is a new record that supersedes the old one, and history is never rewritten |
 
@@ -285,7 +345,7 @@ policy limits, checked by the producer gate:
 
 ```sh
 python3 .agents/skills/atlas/scripts/atlas.py --archive .agents/skills/fs-gg-algorithms/pack search 'grid pathfinding doors'
-python3 .agents/skills/atlas/scripts/atlas.py --archive .agents/skills/fs-gg-algorithms/pack get algorithms/pathfinding/astar
+python3 .agents/skills/atlas/scripts/atlas.py --archive .agents/skills/fs-gg-algorithms/pack get algorithms/search.grid/astar
 ```
 
 The helper is the `atlas` driver skill (`materializes-when: always`, delivered by FS.GG.Drivers). It
@@ -399,96 +459,154 @@ applications, such as the claim fence or the publication lock, stay framework At
 
 | Audience | Where it lives | Examples |
 |---|---|---|
-| **Product** (game-facing and general) | Library and pack, materialized into workspaces | Pathfinding, grids, spatial, geometry, decision making, search, optimization, procedural generation, random, statistics, graph kernels, sequences |
-| **Both** | A generic pack entry. The FS-GG instance stays a framework Atlas record | Tarjan SCC and union-find (library; Coordination may consume), the expected-version append-only event log (save, replay), bounded queues with backpressure, delta and snapshot delivery (indexed in FS.GG.Net), interval union, exact-rational apportionment, BM25 full-text ranking (the pack's own retrieval) |
-| **Framework only** | Framework Atlas, tagged `algorithm`. Never in the pack | Lowest-comment-id claim arbitration ([ADR-0075](0075-per-receiver-operation-lock-and-lease-free-election.md)), comment-order CAS ([ADR-0027](0027-worker-keyed-claim-lock-and-worker-channel.md)), the bakery publication lock (ADR-0097), conflict-free batch admission with rank aging, host capacity admission, content-addressing canonicalization, the release journal, Quint model use |
+| **Game** (`audience-game`) | Library and pack, materialized into workspaces | Search, steering, decision, adversarial, procgen, spatial, geometry |
+| **Both** (`audience-both`) | Library and pack. The FS-GG instance of the technique stays a framework Atlas record | Tarjan SCC, toposort and CPM, union-find, the Hungarian algorithm, local search, bandits, backoff with jitter, token buckets, the expected-version append-only event log, bounded queues with backpressure, delta and snapshot delivery (pointer to FS.GG.Net), interval union, exact-rational apportionment, BM25 ranking (the pack's own retrieval) |
+| **Framework library entry** (`audience-framework`) | Library and pack, tagged so workspaces can filter it out. These are generic algorithms with no game use yet | Consistent and jump hashing, reservoir sampling, Bloom filters, Hopcroft-Karp |
+| **Framework-only applications** | Framework Atlas, tagged `algorithm`. Never in the pack | Lowest-comment-id claim arbitration ([ADR-0075](0075-per-receiver-operation-lock-and-lease-free-election.md)), comment-order CAS ([ADR-0027](0027-worker-keyed-claim-lock-and-worker-channel.md)), the bakery publication lock (ADR-0097), conflict-free batch admission with rank aging, host capacity admission, content-addressing canonicalization, the release journal, Quint model use |
 
 A pack entry never cites or describes FS-GG coordination internals. The pack is public product
 guidance.
 
 ### §11 Taxonomy and the first-tranche seed list
 
-**Families** (the second segment of an entry id, and a library namespace):
+**Families.** This ADR adopts the survey's 17-family taxonomy. The family is the library namespace
+`FS.GG.Algorithms.<Family>`, and its lowercase form is the second segment of an entry id.
 
-| Family | Scope |
+| Family (id segment) | Scope |
 |---|---|
-| `pathfinding` | Grid and graph search, fields, hierarchy, incremental search |
-| `grids` | Square and hex coordinates, edges, line drawing, LOS, FOV, visibility |
-| `spatial` | Hashing, trees, nearest queries, influence maps |
-| `geometry` | Collision, ray casts, sweeps |
-| `decision` | FSMs, behaviour trees, utility AI, GOAP, HTN, arbitration |
-| `search` | Minimax, alpha-beta, MCTS, expectimax |
-| `optimization` | LP and ILP, local search, annealing, GA, constraint solving |
-| `procedural` | Noise, cellular automata, BSP, Poisson disk, mazes |
-| `random` | Splittable RNG, sampling, dice distributions |
-| `graphs` | SCC, toposort, critical path, union-find, articulation points |
-| `sequences` | LIS, diff, interval union |
-| `statistics` | Percentiles, experiment design |
-| `numerics` | Fixed point, exact rationals |
-| `netcode` | Delta and snapshot, resync, backpressure, backoff with jitter, token bucket |
-| `simulation` | Fixed-step, interpolation, replay. Index only; Game.Core-owned under ADR-0033 |
+| `Collections` (`collections`) | **Layer 0:** heaps and the indexed heap. Also LRU, Bloom filters, and the sequence utilities listed under placements |
+| `Random` (`random`) | SplitMix64, alias method, reservoir sampling, dice distributions |
+| `Graph` (`graph`) | Toposort and CPM, shortest paths, SCC, dominators, MST, flow, matching, articulation points, union-find |
+| `Search.Grid` (`search.grid`) | A*, BFS and Dijkstra, JPS, ALT, fields, Theta*, HPA*, D* Lite |
+| `Search.Mesh` (`search.mesh`) | Navmesh A* and the funnel algorithm |
+| `Search.MultiAgent` (`search.multiagent`) | WHCA*, CBS |
+| `Steering` (`steering`) | Reynolds behaviours, boids and formations, ORCA |
+| `Decision` (`decision`) | FSM and HFSM, behaviour trees, utility AI, GOAP, HTN, influence maps, arbitration |
+| `Adversarial` (`adversarial`) | Negamax α-β with transposition tables, expectimax, the MCTS family, CFR |
+| `Learning` (`learning`) | Bandits, Q-learning, ES, CMA-ES, GA |
+| `ProcGen` (`procgen`) | Noise, cellular automata, BSP, Poisson disk, WFC, L-systems, grammars |
+| `Spatial` (`spatial`) | Spatial hash, k-d tree, quadtree and octree, BVH, R-tree, sweep-and-prune |
+| `Geometry` (`geometry`) | SAT, GJK and EPA, Delaunay and Voronoi, exact predicates. LOS, FOV, visibility and grid coordinates are pointers |
+| `Optimization` (`optimization`) | LP, ILP, CSP, SAT, local search, assignment, flows, knapsack, scheduling |
+| `Numerics` (`numerics`) | **Layer 0:** fixed-point. Also integrators, splines and easing, springs, PID, percentiles |
+| `Net` (`net`) | Prediction and reconciliation, interpolation, rollback, delta encoding |
+| `Systems` (`systems`) | Rate limiting, backoff, hashing, full-text ranking |
 
-**First tranche** (21 entries), ranked by value to a game workspace, then readiness (tested code
-that already exists), then harvest effort. **Index** means the entry points at the existing
-implementation of record. **Harvest** means a clean re-implementation into `FS.GG.Algorithms`.
+The survey's taxonomy left some existing entries without a family. They are placed as follows, and
+this ADR keeps no family beyond the 17:
 
-| # | Entry id | Implementation of record | Action | Owed before the bar is met |
+- LIS with patience-diff anchors, and interval union → `Collections`, as sequence utilities.
+- Hex coordinates, thin-wall edges and grid parts → `Geometry`, as pointers. Their search
+  functions are `Search.Grid` pointers.
+- The fixed-step accumulator and interpolation → `Numerics`, as pointers.
+- Replay checkpoints → `Net`, as a pointer. The simulation primitives stay Game.Core-owned under
+  ADR-0033.
+- Influence maps → `Decision`, where the survey puts them.
+- BM25 ranking → `Systems`.
+
+**Pack metadata** follows the survey: audience, determinism grade and status (`pointer`,
+`harvested`, `new` or `entry-only`), carried as tags (§6).
+
+**Seed list.** It is ordered in three parts:
+
+1. **Layer-0 foundations**, because almost everything else uses them.
+2. **Harvest:** pointer entries over reviewed Game.Core code, then harvests of FS-GG code from the
+   coordination and game inventories.
+3. **The survey's ranked new items**, each with its property oracle in brackets.
+
+The Outcome's 15-entry floor is met by part 2 alone, from reviewed, property-tested code.
+
+**1. Layer-0 foundations (tranche 1)**
+
+| # | Entry id | Status | Grade target | Oracle and acceptance |
 |---|---|---|---|---|
-| 1 | `pathfinding/astar` (with `astarStraight`, `smooth`) | Game.Core `Pathfinding.astar` (LockstepExact, ~40 FsCheck; used by the fable-game template) | Index | Explicit A* vs BFS cost property; timing bench |
-| 2 | `pathfinding/bfs-dijkstra-reachability` (`bfs`, `reachable`, `reachableWithin`, budgets) | Game.Core `Pathfinding`; FourD's budgeted Dijkstra as provenance | Index | Bench; FourD's re-sorted list frontier recorded as a pitfall |
-| 3 | `pathfinding/jps` | Game.Core `Pathfinding.jps` | Index | Fable grade; bench |
-| 4 | `pathfinding/flow-field` (distance fields, flee fields) | Game.Core `distanceField`, `flowField` | Index | Fable grade; bench |
-| 5 | `pathfinding/alt-landmarks` (with the `Regions` early-out) | Game.Core `Landmarks`, `Regions` | Index | Bench |
-| 6 | `pathfinding/doors-and-thin-walls` | Game.Core `Edges` A*; RuneScape's door overlay and per-session re-close as a generic technique | Index + lesson | No flag data (§5); bench |
-| 7 | `grids/line-and-los` (Bresenham, supercover, symmetric LOS) | Game.Core `Los` (LockstepExact) | Index | Bench |
-| 8 | `grids/shadowcasting-fov` | Game.Core `Fov` | Index | Fable grade (integer-only); bench |
-| 9 | `grids/visibility-polygon` | Game.Core `Visibility` | Index | Records the Harness and Rendering-fragment copies as non-canonical |
-| 10 | `grids/hex-coordinates` | Game.Core `Hex` | Index | Fable grade |
-| 11 | `spatial/uniform-grid-hash` (radius and bounds queries, nearest) | Game.Core `SpatialGrid` (Portable) | Index | Bench; RuneScape's SQL full-scan nearest query as the baseline pitfall; relation to Rendering `SpatialWorkingSet` (culling, a different purpose) |
-| 12 | `geometry/sat-and-swept` | Game.Core `Geometry` (Portable, ~28 FsCheck) | Index | Bench |
-| 13 | `spatial/influence-maps` | Game.Core `Ai.influenceMap`, threat and flee fields | Index | Bench |
-| 14 | `random/splitmix64` (splittable streams) | Game.Core `Rng` | Index | Fable grade; modulo-bias pitfall |
-| 15 | `procedural/cellular-caves-and-bsp` | Game.Core `MapGen` | Index | none beyond seed byte-identity |
-| 16 | `procedural/poisson-disk` | Game.Core `MapGen.poissonScatter` (Bridson) | Index | Bench |
-| 17 | `graphs/articulation-points` (map analysis) | Game.Core `MapAnalysis` | Index | none |
-| 18 | `graphs/scc-toposort-critical-path` | Harvest of `.github` `Blockers.cycles` (Tarjan), rewritten iteratively; **new** Kahn toposort and critical path | Harvest + new | Property vs reachability closure; pitfalls: recursive Tarjan, SDD `WorkModel.cycleDiagnostics` with no visited set |
-| 19 | `graphs/union-find` | Harvest of `.github` `Lanes.partition`, generic over the conflict predicate | Harvest | Property vs BFS components |
-| 20 | `decision/priority-arbitration` (bands, pre-emption, suspend and resume, rate limit) | Clean re-implementation of RuneScape's arbiter | Harvest | **Waits for RuneScape PR #14 to merge**; port its 400-run invariant to FsCheck |
-| 21 | `statistics/nearest-rank-percentile` | Harvest of Governance `Performance.nearestRank` | Harvest | Needed by the bench summaries themselves |
+| F1 | `collections/binary-heap` (with the indexed heap and decrease-key) | new | LockstepExact | Sort equivalence. Then the migrations in §3: Game.Core's `Set` frontier, FourD's list re-sort, RuneScape's `PriorityQueue` |
+| F2 | `numerics/fixed-q16-16` | new | LockstepExact | Error bounds against exact rationals, and bit-identity between .NET and Fable. No `int64` |
 
-Entries 1 to 17 are indexed Game.Core techniques, which meets the Outcome's 15-entry floor from
-reviewed, property-tested code. #5224's two or more "classic additions" come from the gap list
-below.
+**2. Harvest (tranche 1)**
 
-**Next tranche: harvest or entry.**
+Pointer entries cite Game.Core as the implementation of record. Harvested entries are clean
+re-implementations into `FS.GG.Algorithms`.
 
-- `geometry/exact-slab-raycast` (FourD, exact rationals);
-- `sequences/lis-patience-diff` (`.github` `SemanticDiff`);
-- `sequences/interval-union`;
-- `simulation/fixed-timestep` (index);
-- `netcode/delta-snapshot-delivery` (index FS.GG.Net `Delivery`);
-- `netcode/baseline-delta-resync` (lesson);
-- `netcode/bounded-queue-backpressure` (lesson across BAR, Unity, Net and SC2);
-- `decision/observe-decide-execute` and `decision/effect-proof-reconciliation` (RuneScape lessons);
-- `random/dice-distributions`;
-- `search/bm25-fts`.
+| # | Entry id | Implementation of record | Status | Audience | Owed before the bar is met |
+|---|---|---|---|---|---|
+| 1 | `search.grid/astar` (with `astarStraight`, `smooth`) | Game.Core `Pathfinding.astar` (LockstepExact, ~40 FsCheck; used by the fable-game template) | pointer | game | A* vs BFS cost property; F1 migration; benches |
+| 2 | `search.grid/bfs-dijkstra-reachability` (`bfs`, `reachable`, `reachableWithin`, budgets) | Game.Core `Pathfinding`. FourD's budgeted Dijkstra is provenance | pointer | game | Benches. FourD's re-sorted list frontier is recorded as a pitfall |
+| 3 | `search.grid/jps` | Game.Core `Pathfinding.jps` | pointer | game | Fable grade; benches |
+| 4 | `search.grid/flow-field` (distance and flee fields) | Game.Core `distanceField`, `flowField` | pointer | game | Fable grade; benches |
+| 5 | `search.grid/alt-landmarks` (with the `Regions` early-out) | Game.Core `Landmarks`, `Regions` | pointer | game | Benches |
+| 6 | `search.grid/doors-and-thin-walls` | Game.Core `Edges` A*, with RuneScape's door overlay and per-session re-close as a generic technique | pointer (+ lesson) | game | No flag data (§5); benches |
+| 7 | `geometry/line-and-los` (Bresenham, supercover, symmetric LOS) | Game.Core `Los` (LockstepExact) | pointer | game | Benches |
+| 8 | `geometry/shadowcasting-fov` | Game.Core `Fov` | pointer | game | Fable grade (integer-only); benches |
+| 9 | `geometry/visibility-polygon` | Game.Core `Visibility` | pointer | game | Records the Harness and Rendering-fragment copies as non-canonical |
+| 10 | `geometry/hex-coordinates` | Game.Core `Hex` | pointer | game | Fable grade |
+| 11 | `spatial/uniform-grid-hash` (radius, bounds and nearest queries) | Game.Core `SpatialGrid` (Portable) | pointer | game | Benches. RuneScape's SQL full-scan nearest query is the baseline pitfall. Records its relation to Rendering's `SpatialWorkingSet` (culling, a different purpose) |
+| 12 | `geometry/sat-and-swept` | Game.Core `Geometry` (Portable, ~28 FsCheck) | pointer | game | Benches |
+| 13 | `decision/influence-maps` | Game.Core `Ai.influenceMap`, threat and flee fields | pointer | game | Benches |
+| 14 | `random/splitmix64` (splittable streams) | Game.Core `Rng` | pointer | both | Fable grade; the modulo-bias pitfall |
+| 15 | `procgen/cellular-caves-and-bsp` | Game.Core `MapGen` | pointer | game | None beyond seed byte-identity |
+| 16 | `procgen/poisson-disk` | Game.Core `MapGen.poissonScatter` (Bridson) | pointer | game | Benches |
+| 17 | `graph/articulation-points` (map analysis) | Game.Core `MapAnalysis` | pointer | both | None |
+| 18 | `graph/iterative-tarjan-scc` | Harvest of `.github` `Blockers.cycles`, rewritten iteratively | harvested | both | [Equals the recursive version; a 10⁵-node chain]. Pitfalls: recursive Tarjan, and SDD `WorkModel.cycleDiagnostics` with no visited set |
+| 19 | `graph/union-find` | Harvest of `.github` `Lanes.partition`, generic over the conflict predicate | harvested | both | [Equals BFS components] |
+| 20 | `numerics/nearest-rank-percentile` | Harvest of Governance `Performance.nearestRank` | harvested | both | Used by the JavaScript bench summaries themselves |
+| 21 | `decision/priority-arbitration` (bands, pre-emption, suspend and resume) | Clean re-implementation of RuneScape's arbiter | harvested | game | **Waits for RuneScape PR #14 to merge.** Port its 400-run invariant to FsCheck |
 
-**New entries, from the gap list:**
+**3. New, ranked (tranche 1)**
 
-- `pathfinding/hpa-star`, `pathfinding/d-star-lite`;
-- `decision/behaviour-tree`, `decision/goap`, `decision/htn`, `decision/utility-ai`;
-- `search/minimax-alpha-beta`, `search/mcts`;
-- `optimization/constraint-solving`, `optimization/simulated-annealing`, `optimization/genetic`,
-  `optimization/lp-ilp`;
-- `spatial/kd-tree`;
-- `netcode/backoff-jitter`, `netcode/token-bucket`;
-- `numerics/fixed-point`.
+These are the survey's §14 order, without the three items already placed above: the heap (F1),
+fixed-point (F2) and iterative Tarjan (harvest 18). Ids that build on Game.Core concepts stay
+generic. For example, `net/rollback` takes a caller-supplied step and checkpoint interface, so
+FS.GG.Algorithms never depends on Game.Core. Game.Core's `Replay` is one consumer of it.
 
-**Pitfall entries** (`lesson` kind):
+| # | Entry id | Oracle | Audience |
+|---|---|---|---|
+| N1 | `graph/topological-sort-cpm` (Kahn, critical path) | Edges are respected, and a cycle is reported exactly when iterative Tarjan finds an SCC larger than one node | both |
+| N2 | `decision/behaviour-tree` (with a blackboard) | Tick determinism | game |
+| N3 | `decision/utility-ai` (IAUS) | Scores bounded to 0–1; monotone curves (on F2) | game |
+| N4 | `decision/hfsm` | Entry and exit properly nested | both |
+| N5 | `adversarial/negamax-alpha-beta-tt` (iterative deepening, Zobrist keys as two `int32` halves) | Equals plain minimax on random trees | game |
+| N6 | `adversarial/mcts-uct` (with an ISMCTS mode) | Converges on small solved games | game |
+| N7 | `steering/reynolds` | Arrives within ε with no overshoot | game |
+| N8 | `net/prediction-reconciliation-interpolation` | Converges to the server under a lossy simulator | game |
+| N9 | `net/rollback` | Byte-identical to a zero-latency run (needs a `LockstepExact` step) | game |
+| N10 | `systems/backoff-jitter-token-bucket` | Delays stay within bounds; the long-run rate is at most r | both |
+| N11 | `search.mesh/navmesh-astar-funnel` | No longer than the portal-midpoint path; LOS-clear | game |
+| N12 | `search.grid/lazy-theta-star` | No longer than A* + `smooth`; LOS-valid | game |
+| N13 | `search.grid/hpa-star` | Suboptimality against A* stays within a bound | game |
+| N14 | `spatial/kd-tree` | Equals a brute-force scan | game |
+| N15 | `optimization/csp-ac3` (MRV, LCV) | Agrees with brute force on small instances | both |
+| N16 | `optimization/local-search` (hill climbing, simulated annealing, tabu) | Never worse than the start; seed-deterministic | both |
+| N17 | `optimization/hungarian` | Equals the brute-force minimum for n ≤ 7 | both |
+| N18 | `procgen/wfc-simple-tiled` | All adjacencies legal; seed byte-identity | game |
+| N19 | `procgen/opensimplex2-worley` | Range bounds; seed byte-identity | game |
+| N20 | `learning/bandits-ucb1-thompson` | Sublinear regret on synthetic arms | both |
+| N21 | `decision/goap` | Plan cost equals BFS over the state space | game |
 
+#5224's "at least two classic additions" are taken from this list in order.
+
+**Pitfall entries (tranche 1, `entry-only`):**
+
+- `numerics/deterministic-float-pitfalls` (FMA, x87, transcendentals, fast-math; a survey P1);
 - the glob matcher's backtracking (worst case exponential);
-- the three visibility implementations and the two spatial indexes;
-- recursive Tarjan, and DFS with no visited set (also attached to entry 18).
+- three visibility implementations and two spatial indexes;
+- recursive Tarjan, and DFS with no visited set (also attached to harvest 18).
+
+**Next tranche.**
+
+- **Harvest and entry-only:**
+  - `geometry/exact-slab-raycast` (FourD, exact rationals);
+  - `collections/lis-patience-diff` (`.github` `SemanticDiff`);
+  - `collections/interval-union`;
+  - `numerics/fixed-timestep` (pointer);
+  - `net/delta-snapshot-delivery` (pointer to FS.GG.Net `Delivery`);
+  - `net/baseline-delta-resync`;
+  - `net/bounded-queue-backpressure` (across BAR, Unity, Net and SC2);
+  - `decision/observe-decide-execute` and `decision/effect-proof-reconciliation` (RuneScape);
+  - `random/dice-distributions` (pointer);
+  - `systems/bm25-fts`.
+- **New, in the survey's next-in-line order:** D* Lite, ORCA, Delaunay and Voronoi, simplex LP,
+  flows, WHCA*, GJK/EPA, CMA-ES, LRU. The survey's P2 and P3 rows follow after these.
 
 ## Consequences
 
@@ -505,6 +623,8 @@ below.
     property for indexed entries (§4).
   - Game.Core's published surface is unchanged. Delegation happens only under §1's move-on-demand
     rule.
+  - The one exception is the layer-0 heap (§3): Game.Core takes a package dependency on
+    `FS.GG.Algorithms`, and its Fable view resolves the library's packed sources.
 - **FS.GG.Rendering.** Rendering retires its four duplicate skill copies and their adaptable
   fragments, subject to its owner's confirmation (§8).
 - **FS.GG.SDD.**
@@ -535,6 +655,16 @@ below.
   6. *Rendering's confirmation of the retirement in §8.* **Default:** until Rendering confirms, the
      registry still reconciles to owner Game (it reflects delivered bytes), and Rendering's copies
      are marked non-canonical.
+  7. *Fable support for the BCL `PriorityQueue`.* Unverified. **Default:** treat it as
+     unsupported. The library ships its own heap (§3), and #5224's tranche measures support.
+  8. *The cost of `int64` as a BigInt under Fable.* Unmeasured. **Default:** no `int64` in hot
+     paths.
+     - Q16.16 splits multiplies into 16-bit halves.
+     - Zobrist keys use two `int32` halves.
+     - Q32.32 and jump hashing wait for #5224's measurement.
+  9. *Acceptance for the Game.Core heap migration.* **Default:** the `LockstepExact` fixture corpus
+     stays byte-identical, and the bench shows no regression against the `Set` frontier on both
+     runtimes. If the bench regresses, Game.Core keeps its `Set` frontier and records why.
 
 ## Alternatives considered
 
@@ -568,5 +698,14 @@ below.
   - Rejected: `SKILL.md` itself cannot update, superseded versions accumulate in every workspace,
     and the multi-file planner refuses extra files in a skill directory.
   - It remains the fallback if SDD declines §7's pristine-replacement rule.
+- **The BCL `PriorityQueue` as the shared frontier.** Rejected for three reasons:
+  - its support under Fable is unverified;
+  - it has no decrease-key;
+  - it does not define an order among equal priorities, which would leak non-determinism into
+    lockstep searches.
+- **This ADR's first-draft families** (`pathfinding`, `grids`, `sequences`, `statistics`,
+  `simulation`) instead of the survey's 17. Rejected: the survey also covers steering, adversarial,
+  learning, net and systems. One vocabulary shared by the survey, the library namespaces and the
+  pack tags needs no mapping. §11 records where the first draft's extra families now live.
 - **Rendering's #761/#792 harness as the admission bench.** Rejected: it times frames, not kernels.
   It is kept only for optional browser timing (§4).
