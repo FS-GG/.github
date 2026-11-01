@@ -141,9 +141,10 @@ new-sdd-workspace ./Greeter "Greeter" --template go-cli --ref fs-gg-templates/v0
   for the tools to probe and the archive to admit (SDD#928). The Wizard reads its time budgets and checks that it
   admits the provider's template source, but never authors or widens it. Author it in SDD's fixed probe
   environment (`PATH=/usr/bin:/bin`), for example with `eng/polyglot-qualification/make-policy.py` in FS.GG.Templates.
-- **Host.** The first SDD catalog profile is Linux x64 with the qualified glibc, .NET 10.0.12 runtime and
-  SDK 10.0.401 transport; SDD refuses any other host before it writes. The Wizard additionally refuses a provider
-  that does not list the host platform. The target must not exist and its parent must.
+- **Host.** The SDD catalog profile is Linux x64 with the qualified glibc and one exact SDK and runtime pair:
+  SDK 10.0.401 with .NET 10.0.12, or SDK 10.0.403 with .NET 10.0.14 (SDD 2.5.4 or newer). SDD refuses any other
+  host before it writes. The Wizard additionally refuses a provider that does not list the host platform. The
+  target must not exist and its parent must.
 - **No target mutation before SDD commits.** Everything is acquired into a private scratch directory that is removed
   afterwards; `fsgg-sdd catalog inspect` (read-only) and then `fsgg-sdd scaffold --catalog` compose the workspace in
   staging and commit it atomically. `--dry-run` stops after SDD's own preparation.
