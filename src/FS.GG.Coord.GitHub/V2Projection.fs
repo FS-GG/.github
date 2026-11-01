@@ -184,8 +184,10 @@ module V2Projection =
     // sends, which the 207-row cohort-90 inspection exhausted (2,502 reads, all rows Unknown). The transport is shared by
     // `inspect` and `refresh`, but this scaling is derived from INSPECT measurements only. With blockers and Work level
     // folded into the per-row reads and 25 reads per batch, the fixture inspection costs well under one send per row; 2 per
-    // row plus a fixed 64 keeps headroom for real pagination and PR joins, and the old 500 stays the floor. `refresh` is
-    // not batched (about 6 sends per row) and does not fit this ceiling above about 80 rows (#5131). Above
+    // row plus a fixed 64 keeps headroom for real pagination and PR joins, and the old 500 stays the floor. A programme
+    // `refresh` is batched the same way (#5131): 42 fixture sends for 207 already-Verified rows, including the fresh
+    // no-op confirmation phase, plus one unbatched one-shot run of about 9 reads, the send and the readback for each row
+    // it actually writes. Above
     // maximumProgrammeRows the binding is refused before any send, so the ceiling never needs the value beyond that cap.
     let refreshRequestCeiling (selectedRows: int) = max 500 (64 + 2 * min (max selectedRows 0) maximumProgrammeRows)
 
@@ -193,7 +195,7 @@ module V2Projection =
     // It was a flat 270 seconds. The live 207-row cohort-90 inspection took 120 to 126 seconds once the reads per row were
     // cut, which projects to about 305 seconds at 500 rows. 60 seconds plus 0.7 per selected row, never below 270, is 410
     // seconds at the 500-row cap, which leaves the existing 30-second transport timeout inside the refresh job's 8-minute
-    // limit. It does not make an unbatched refresh fit (#5131).
+    // limit. A batched programme refresh fits it the same way; each row it writes adds its own one-shot run (#5131).
     let refreshDeadlineSeconds (selectedRows: int) = max 270.0 (60.0 + 0.7 * float (min (max selectedRows 0) maximumProgrammeRows))
 
     let private payloadRows (binding: Binding) (bytes: byte array) : IoResult<(string * string * string) list> =

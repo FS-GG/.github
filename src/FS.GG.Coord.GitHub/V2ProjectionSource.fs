@@ -581,7 +581,15 @@ module V2ProjectionSource =
             match readProtectedBlob transport binding binding.PopulationRevision populationPath |> Result.bind (fun (text, current, blob) -> selectedPopulation binding text |> Result.map (fun selected -> selected, current, blob)) with
             | Error error -> failed error
             | Ok(selected, protectedRevision, populationBlob) ->
-                let items = selected |> List.map (fun row ->
+                let historicalOf (row: Selected) =
+                    previous |> Option.bind (fun batch ->
+                        if batch.ProjectId <> binding.ProjectId then None
+                        else batch.Items |> List.tryFind (fun item -> item.Issue = row.Issue) |> Option.bind (fun item -> item.LastVerified))
+                // `deferSecond` (batched phase 1 only): the writer's second source check returns the first check's result
+                // instead of re-reading, and the first revision is returned so the caller can confirm a Verified no-op
+                // with a fresh, separately acquired read. A row that reaches a write is rerun unbatched, so its second
+                // check is always a real fresh read before the send.
+                let refreshRowWith (transport: IGitHubTransport) (deferSecond: bool) (row: Selected) : ItemReport * string option =
                     let mutable native = None
                     let mutable dependencies = []
                     let mutable dependenciesComplete = false
@@ -594,7 +602,15 @@ module V2ProjectionSource =
                             member _.SendMutation intent = mutations <- mutations + 1; transport.SendMutation intent
                             member _.RetryMutation effectId = mutations <- mutations + 1; transport.RetryMutation effectId }
                     let mutable sourceChecks = 0
-                    let verifier: SourceVerifier = fun _ ->
+                    let mutable first: IoResult<SourceVerification> option = None
+                    let mutable deferred = None
+                    let verifier: SourceVerifier = fun issue ->
+                      match first with
+                      | Some value when deferSecond ->
+                        sourceChecks <- sourceChecks + 1
+                        deferred <- (match value with Ok(Current revision) -> Some revision | _ -> None)
+                        value
+                      | _ ->
                         let populationCurrent =
                             if sourceChecks = 0 then Ok()
                             else readProtectedBlob counted binding binding.PopulationRevision populationPath |> Result.bind (fun (_, _, blob) ->
@@ -608,12 +624,11 @@ module V2ProjectionSource =
                             dependencies <- collection.Dependencies
                             dependenciesComplete <- collection.DependenciesComplete
                             plan <- collection.Plan
+                            if first.IsNone then first <- Some collection.Verification
                             collection.Verification
                     let result = runOneShot verifier counted binding { Issue = row.Issue; ExpectedNodeId = row.NodeId }
                     let projection = match result with Ok report -> Some report | _ -> None
-                    let historical = previous |> Option.bind (fun batch ->
-                        if batch.ProjectId <> binding.ProjectId then None
-                        else batch.Items |> List.tryFind (fun item -> item.Issue = row.Issue) |> Option.bind (fun item -> item.LastVerified))
+                    let historical = historicalOf row
                     { Issue = row.Issue; Native = native; DependencyObservations = dependencies; DependencyReadComplete = dependenciesComplete; PlanObservation = plan
                       Delivery = "Unknown: no source-delivery acceptance reader selected"
                       Publication = "Unknown: no publication acceptance reader selected"
@@ -627,7 +642,60 @@ module V2ProjectionSource =
                       Reads = reads; MutationAttempts = mutations
                       MembershipPages = projection |> Option.map (fun report -> report.ProjectReads - (if report.Mutations = 0 then 3 else 4))
                       Projection = projection; Gap = match result with Error error -> Some error | _ -> None
-                      LastVerified = projection |> Option.orElse historical })
+                      LastVerified = projection |> Option.orElse historical },
+                    (match result with Ok report when report.Mutations = 0 -> deferred | _ -> None)
+                let refreshRow transport row = refreshRowWith transport false row |> fst
+                // A programme refresh reads in batches, like inspect (#5131). Phase 1 evaluates every row's one-shot
+                // writer over V2InspectionAcquisition with writes unavailable: a row that is already Verified, Stale,
+                // archived or unreadable is decided there from reads alone, 25 aliased reads per send. A row whose
+                // evaluation reached the write is not written in phase 1; phase 2 reruns the one-shot writer for that
+                // row alone on the real transport, so every write keeps its own fresh preimage reads, its one send
+                // and its independent readback. A Verified no-op row's second source check is not served from phase 1's
+                // shared responses: a separate batched confirmation phase re-reads the population and the row's source
+                // freshly and refuses the no-op (409, retaining the project value) if the revision changed. Legacy
+                // bindings keep the unbatched per-row path.
+                let items =
+                    if not (isProgrammeBinding binding) then selected |> List.map (refreshRow transport)
+                    else
+                        let deferred = Collections.Generic.HashSet<string>()
+                        let evaluated: (ItemReport * string option) list =
+                            V2InspectionAcquisition.run transport (fun phase ->
+                                deferred.Clear()
+                                selected |> List.map (fun row ->
+                                    let readOnly =
+                                        { new IGitHubTransport with
+                                            member _.Send request = phase.Send request
+                                            member _.SendMutation _ =
+                                                deferred.Add row.NodeId |> ignore
+                                                Error(Malformed("batched refresh", "write deferred to the per-row one-shot writer"))
+                                            member _.RetryMutation effectId = Error(Malformed(effectId, "batched refresh cannot replay")) }
+                                    refreshRowWith readOnly true row))
+                        // Confirm every Verified no-op with a fresh second source check, batched in its own phase.
+                        let pending = List.zip selected evaluated |> List.choose (fun (row, (_, revision)) -> if deferred.Contains row.NodeId then None else revision |> Option.map (fun value -> row.NodeId, value)) |> Map.ofList
+                        let confirmations =
+                            if pending.IsEmpty then Map.empty
+                            else
+                                V2InspectionAcquisition.run transport (fun phase ->
+                                    selected |> List.choose (fun row ->
+                                        pending |> Map.tryFind row.NodeId |> Option.map (fun revision ->
+                                            let check =
+                                                readProtectedBlob phase binding binding.PopulationRevision populationPath
+                                                |> Result.bind (fun (_, _, blob) -> if blob = populationBlob then Ok() else Error(Malformed("reviewed population", "population changed before Verified no-op")))
+                                                |> Result.bind (fun () ->
+                                                    match (collectSource phase binding row).Verification with
+                                                    | Ok(Current fresh) when fresh = revision -> Ok()
+                                                    | Error error -> Error error
+                                                    | Ok _ -> Error(Http(409, "source changed before Verified no-op; retaining current project value")))
+                                            row.NodeId, check))
+                                    |> Map.ofList)
+                        List.map2 (fun (row: Selected) (item: ItemReport, _) ->
+                            if deferred.Contains row.NodeId then refreshRow transport row
+                            else
+                                match Map.tryFind row.NodeId confirmations with
+                                | Some(Error error) ->
+                                    { item with Health = (match error with Http(409, _) -> "Stale" | _ -> "Unknown"); Projection = None; MembershipPages = None
+                                                Gap = Some error; LastVerified = historicalOf row }
+                                | _ -> item) selected evaluated
                 { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision; ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256; NativeDispatch = []; ProtectedInputs = protectedEnrollmentInputs binding protectedRevision populationBlob; Selected = Some selected.Length
                   Attempted = items.Length; Verified = items |> List.filter (fun item -> item.Health = "Verified") |> List.length
                   Items = items; PopulationGap = None; Cleanup = "No resources, claims or background work created" }
