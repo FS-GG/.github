@@ -6,6 +6,10 @@
   `.github` (`registry/repos.yml`, `registry/skills.yml`, `registry/skills.delivery-channels.yml`,
   `registry/dependencies.yml`, the Atlas skill, the pnext-item and work-board closure rules); every
   product workspace whose scaffold satisfies the predicate in §7
+- **Amends:** [ADR-0022](0022-extract-fs-gg-game-as-an-sdd-driven-component.md) §Decision 1 — `FS.GG.Game.Core` "reaches up to **nothing**" now admits exactly one
+  FS-GG dependency, the leaf `FS.GG.Algorithms`, at an exact pinned version (§1).
+- **Amends:** [ADR-0069](0069-fable-lockstep-is-a-profiled-game-core-package-contract.md) §Version and rollout rule — Game.Core's recorded compatibility identity also
+  carries the exact `FS.GG.Algorithms` version it pins (§1).
 - **Decision owner:** Root/fdev. The merge of this record's PR is its acceptance.
 - **Outcome / Delivery:** [.github#5222](https://github.com/FS-GG/.github/issues/5222) (ALGO-01) /
   [.github#5223](https://github.com/FS-GG/.github/issues/5223) (ALGO-01.1)
@@ -62,12 +66,20 @@ Templates `858b624`, `.github` `79359691`):
    `materializes-when` against `effectiveParameters` plus `template`, which is derived from the
    template id. An unset key reads as the empty string. The Rendering and Audio route
    (`RenderingSkills.planFilesFrom`) carries a whole skill directory with per-file schema-v2 digests
-   and verifies it as one unit. The Game route stages and embeds `SKILL.md` only. The `atlas` driver
-   already ships 513 files, including a ~2 MB record archive, so multi-file skills are proven.
+   and verifies it as one unit. The Game route stages and embeds `SKILL.md` only. In `.github`
+   source, the `atlas` driver lists 513 files, including a ~2 MB record archive, so the multi-file
+   transport is proven. **`atlas.py` does not yet reach a workspace**, though:
+   - FS.GG.SDD pins `FS.GG.Drivers` 0.98.0, which carries no atlas skill.
+   - The first published Drivers version that carries it, with `--archive`, is **0.104.0** (package
+     contents checked on nuget.org, 2026-11-01).
 6. **The four algorithm skills are duplicated, and three of them miss fable-game workspaces.**
    `fs-gg-grids`, `fs-gg-collision`, `fs-gg-line-drawing` and `fs-gg-visibility` ship from both
    Rendering and Game with different bytes. `registry/skills.yml` names Rendering as the owner, with
-   Rendering's digests. SDD actually delivers Game's bodies: `HandlersScaffold.fs`
+   Rendering's digests. Which body lands depends on the route:
+   - A Rendering-template scaffold with profile `game` or `sample-pack` gets Rendering's copies and
+     its four source fragments, because FS.GG.UI.Template 0.32.4 writes them and SDD's Game channel
+     skips paths that are already occupied.
+   - Anywhere else, SDD delivers Game's bodies: `HandlersScaffold.fs`
    `plannedRenderingSkillOutcome` yields any path Game already kept, and
    `acceptedGameRenderingSharedIds` lists the four ids. The `fable-game` provider declares no
    `profile`, so `profile in [game, sample-pack]` is false there. Only `fs-gg-collision`, whose Game
@@ -105,14 +117,22 @@ which Root creates. It is a bottom-layer component like Audio and Net
 any FS-GG repository may depend on it.
 
 - **Dependency direction.** Coordination code (Tarjan SCC, union-find, patience diff) must not depend
-  on a game package. Rendering already sits below Game, because `Game.Render` depends on it, so a
-  Rendering consumer of an algorithm in a Game package would create a repository cycle. Only a leaf
-  repository can be consumed by Game, Rendering, the games, Coordination and `.github` alike.
+  on a game package. Rendering is the weaker argument. `Game.Render` depends on Rendering's Scene, so
+  a Rendering consumer of a Game algorithm would make the two repositories wait on each other's
+  releases. No such Rendering consumer exists today. A leaf repository can be consumed by Game,
+  Rendering, the games, Coordination and `.github` alike.
 - **Release cadence.** Algorithm additions are small and frequent. Game releases ride a coherent set
-  with WASM, Fable and browser qualification, and a release of either should not gate the other.
+  with WASM, Fable and browser qualification.
+  - FS.GG.Algorithms releases without waiting for Game.
+  - Game adopts a new Algorithms version only by moving its exact pin (below) in a Game release that
+    re-qualifies its lockstep corpus.
+  - So an Algorithms release never forces a Game release. A Game change that needs a new Algorithms
+    kernel does wait for that Algorithms release.
 - **The pack has one owner.** Each entry cites the implementation, its property tests and its bench
   record. The capture rule (§9) is simplest when the entry lands in the repository that owns the
   pack.
+  - **Accepted cost:** a pointer entry describes Game.Core code, so a Game change that alters such an
+    algorithm needs a second PR, in FS.GG.Algorithms, to update the entry.
 
 **Game.Core stays the implementation of record for what it already ships.** This ADR does **not**
 extract Game.Core's grid, collision, procedural or simulation algorithms. They are typed over
@@ -127,9 +147,24 @@ it moves:
    Fable fixture corpus must be byte-identical.
 3. No second implementation survives the release that moves it.
 
-One dependency is decided now rather than on demand: the layer-0 heap (§3). Game.Core's A* `Set`
-frontier migrates onto `FS.GG.Algorithms.Collections`, so Game.Core becomes the library's first
-FS-GG consumer. That direction (Game → Algorithms) is the one §1 permits.
+**One dependency is decided now rather than on demand: the F1 heap (§3).** Game.Core's A* `Set`
+frontier migrates onto `FS.GG.Algorithms.Collections`, so Game.Core becomes the library's first FS-GG
+consumer. That direction (Game → Algorithms) is the one this section permits.
+
+This amends [ADR-0022](0022-extract-fs-gg-game-as-an-sdd-driven-component.md) §Decision 1, where Game.Core "reaches up to nothing". Game.Core still
+references no render or upper-layer component. Because Game.Core is the lockstep bottom layer
+([ADR-0069](0069-fable-lockstep-is-a-profiled-game-core-package-contract.md)), the dependency is bounded:
+
+1. **Exact pin.** Game.Core references one exact `FS.GG.Algorithms` version: no range and no floating
+   version. Moving the pin is a Game release.
+2. **A frozen ordering contract.** The heap's ordering contract is a `LockstepExact` surface of
+   FS.GG.Algorithms: its comparison, the caller's tie-break, and the pop order for equal input.
+   Changing the pop order for any input is a breaking change with a new compatibility identity, never
+   a patch.
+3. **Recorded identity.** Game.Core's `compatibility-profile.v1.json` records the pinned
+   `FS.GG.Algorithms` version beside its own package version, which amends ADR-0069's
+   version-and-rollout rule.
+4. **Re-qualified on every move.** Any pin move re-runs Game.Core's full Fable fixture corpus.
 
 ### §2 Packages and namespaces
 
@@ -172,30 +207,78 @@ They start at `0.x`. The licence is MIT, matching FS.GG.Game.
 4. Avoid APIs Fable does not support: reflection, `System.Threading`, `System.Random`, mutable static
    state, and `System.Collections.Generic.PriorityQueue`. The library ships its own heap in
    `.Collections`. Randomness takes an explicit seeded state, as Game.Core's `Rng` does.
-5. Recursion that is unbounded in the input size is refused. Tarjan SCC, DFS and flood fills are
-   written iteratively. JavaScript stacks are small, and the harvested `Blockers.cycles` is recursive.
-6. **Layering.** Two layer-0 foundations, `Collections.Heap` and `Numerics.Fixed`, may be used by
-   every family and use nothing else in the library. Only `Net` and `Systems` may touch Tasks or IO,
-   which keeps every other family compilable in the Fable view.
+5. Recursion that is unbounded in the input size is refused (rule 7 tests it). Tarjan SCC, DFS and
+   flood fills are written iteratively. JavaScript stacks are small, and the harvested
+   `Blockers.cycles` is recursive.
+6. **Layering.**
+   - **Layer 0** is `Collections.Heap`, `Numerics.Fixed` and `Random`'s 32-bit generator. These use
+     nothing else in the library, and every family may use them.
+   - **Layer 1** is the general best-first search in `Graph`, built on the heap. Every
+     priority-queue search in the library builds on it.
+   - Only `Net` and `Systems` may touch Tasks or IO, which keeps every other family compilable in the
+     Fable view.
+7. **Recursion test.** Every recursive or graph-walking surface has a required test over a 10⁵-node
+   chain, run in the Fable test project under Node's default stack.
+   - Non-tail recursion whose depth grows with the input is refused outright.
+   - Tail recursion is accepted only if that test passes, because Fable does not guarantee to turn
+     every tail call into a loop.
 
-**Layer-0 foundations (tranche 1, before anything that depends on them).**
+**Foundations (tranche 1, before anything that depends on them).**
 
-- **A Fable-portable binary heap and indexed heap** (decrease-key), with a total order and a
-  deterministic tie-break supplied by the caller. Every priority-queue search in the org migrates
+- **F1. A Fable-portable binary heap and indexed heap** (`Collections.Heap`, with decrease-key). It
+  orders by a total order plus a deterministic tie-break supplied by the caller. Its ordering
+  contract is a frozen `LockstepExact` surface (§1). Every priority-queue search in the org migrates
   onto it:
   - Game.Core's A* `Set` frontier;
   - FourD's re-sorted list frontier;
   - RuneScape's BCL `PriorityQueue`.
 
-  The Game.Core migration must keep its `LockstepExact` fixture corpus byte-identical and must not
+  The Game.Core migration must keep its `LockstepExact` fixture corpus byte-identical. It must not
   regress the bench that Game's Red Blob Games roadmap used to keep the `Set` frontier. FourD and
   RuneScape are private products, and their migrations are their owners' work.
-- **Q16.16 fixed-point** (`Numerics.Fixed`): add, multiply, divide, square root, and LUT or CORDIC
-  trigonometry, bit-identical on .NET and JavaScript.
-  - Multiply and divide must not use `int64`, because it is a BigInt under Fable. The 32-bit
-    operands are split into 16-bit halves.
-  - Fixed-point is what lets steering, utility scoring and future physics reach `LockstepExact`.
-  - Q32.32 waits until the `int64` cost under Fable is measured (Consequences, open questions).
+- **F2. Q16.16 fixed-point** (`Numerics.Fixed`), bit-identical on .NET and JavaScript, with these
+  semantics:
+  - **Representation.** A two's-complement `int32` with 16 fractional bits, giving a range of
+    −32768 to 32767.99998.
+  - **No `int64`, which is a BigInt under Fable.** Multiply and divide split each operand into a
+    signed high half and an **unsigned** low 16-bit half.
+  - **Overflow saturates** to `MaxValue` or `MinValue` for add, subtract, multiply and divide. It
+    never wraps.
+  - **Multiply rounds to nearest**, ties upward: it adds `0x8000` before the final shift.
+  - **Divide rounds toward zero**, by long division over the 48-bit dividend `a << 16`.
+  - **Defined edge cases**, identical on both runtimes:
+    - `x / 0` saturates to `MaxValue` when `x > 0` and to `MinValue` when `x < 0`; `0 / 0` is `0`.
+    - `MinValue / −1.0` saturates to `MaxValue`.
+    - The square root of a negative value is `0`.
+  - **Square root** is bitwise (digit by digit) and exact to the floor.
+  - **Trigonometry** uses a LUT or CORDIC.
+  - **Conversions.** Integer and ratio conversions are exact and `LockstepExact`. Conversion to or
+    from floating point is `Portable` at most.
+  - **Range warning.** A squared distance overflows above about 181.02 units (√32768). The entry
+    says so, and offers squared comparison in two words, or scaled units, for larger worlds.
+  - **Test vectors.** The fixture corpus includes:
+    - `0`, `±1.0`, the smallest step (raw `±1`), `MaxValue` and `MinValue`;
+    - rounding ties at the `0x8000` boundary;
+    - `x / 0` for positive, negative and zero `x`, and `MinValue / −1.0`;
+    - square roots of 0, raw 1 and `MaxValue`;
+    - products and quotients that cross saturation.
+
+  Q32.32 waits until the `int64` cost under Fable is measured (Consequences, open questions).
+  Fixed-point is what lets steering, utility scoring and future physics reach `LockstepExact`.
+- **F3. General best-first search** (`Graph.BestFirst`, layer 1). It runs Dijkstra and A* over a
+  caller-supplied neighbour function, edge cost, heuristic and tie-break, on the F1 heap.
+  - Every new library search (HPA*, Theta*, GOAP, navmesh A*) builds on it.
+  - Its oracles are BFS on unit costs and an exhaustive shortest path on small synthetic graphs.
+  - Game.Core's grid A* may later delegate to it, under §1's move-on-demand rule, with its fixtures
+    unchanged.
+- **F4. A 32-bit seeded generator** (`Random`), **xoshiro128\*\***, seeded through a 32-bit
+  SplitMix-style expander, with Fable-exact maths:
+  - only 32-bit shifts, rotations and xors;
+  - multiplies by small constants, done exactly with `Math.imul` semantics.
+
+  Game.Core's SplitMix64 needs 64-bit state, which is a BigInt under Fable, so the library takes a
+  32-bit generator rather than pointing at it. Its oracles are published reference output vectors,
+  identical on .NET and Fable, plus `split` independence checks.
 
 ### §4 Admission bar
 
@@ -206,11 +289,26 @@ A library entry is admitted only with all of the following in the same PR:
    value equals minimax value; a k-d tree's nearest result equals brute force; SCC components match
    a reachability closure; an optimizer's result satisfies every constraint and matches exhaustive
    search on small instances. Determinism under a fixed seed is a property for every randomized
-   entry. Example-only tests do not admit.
-2. **A Fable proof** for each surface graded `LockstepExact` or `Portable`: the fixture corpus runs
-   under a Fable test project.
+   entry.
+   - An **exhaustive check over a fully enumerated small domain** counts as property evidence (for
+     example `LosTests`' exhaustive small-grid symmetry). Otherwise FsCheck is required, and a pointer
+     entry without it records FsCheck as owed.
+   - **Oracles stay inside the library.** In FS.GG.Algorithms, oracles use only FS.GG.Algorithms code
+     plus synthetic adapters in the test project (for example a small grid adapter). They never take
+     a Game.Core dependency, even at test time.
+   - Example-only tests do not admit.
+2. **A Fable proof**, aligned with ADR-0069.
+   - **`LockstepExact`:** producer-owned fixtures decode the same canonical input bytes on .NET and
+     on Fable/Node and compare canonical binary output, including boundary, ordering, degenerate and
+     restore cases. They run under the pinned compiler, FSharp.Core and Node profile recorded in the
+     compatibility profile.
+   - **`Portable`:** a documented semantic or tolerance contract, checked under Node.
 3. **Bench numbers** for every performance-relevant entry (searches, spatial structures, optimizers,
    anything with a hot loop), on the micro-bench route below.
+   - The quiet-host probe runs only on fdev. When fdev is unavailable, an entry may be admitted with
+     its bench marked **owed**.
+   - An owed bench needs a bounded follow-up: a named issue, closed by the library's next release.
+   - The pack-lint gate lists every owed bench, so the debt is visible.
 4. **A pack entry** (§6) describing it.
 
 **The micro-bench route (decided).** #761 and #792 time rendering frames, not kernels. Kernels are
@@ -235,9 +333,11 @@ A bench project never ships, so it adds no package dependency.
   overridden.
 - **Storage.** Results are committed as `bench/baselines/<host>-<yyyy-mm-dd>-<package-version>.json`
   against `bench/results.schema.v1.json`, which FS.GG.Algorithms owns and FS.GG.Game reuses by
-  reference. The pack entry cites the baseline file by immutable revision and digest, and summarises
-  host, date, version, sizes, median and work counts. A summary never reports a number without its
-  host and version.
+  reference. The numbers stay in the baseline file; the summary only cites it.
+  - The pack entry cites the baseline file by immutable revision and digest.
+  - Its **Bench** section states the host, date and version, plus at most one headline median per
+    runtime.
+  - Volatile tables never enter a pack record, which keeps the pack small (§6).
 - **One schema, two runtimes.** Both runtimes write the same results schema, which carries a
   `runtime` field. The #792 runner is not required. An entry may add in-page browser timings
   through it once it is published.
@@ -263,6 +363,9 @@ Root's ruling on #5223 governs harvest from private repositories:
     carried. rs-sdk and LostCity code is MIT and allowed only with its notice; prefer a clean
     re-implementation. RecoilEngine and HighBarV3 are excluded. OpenAL Soft (LGPL, via
     `FS.GG.Audio.Host`) never enters the library.
+  - The RuneScape door and collision-flag bit layout comes from the rsmod pathfinder (ISC) and rs-sdk
+    (MIT). The door entry describes the technique generically and cites rsmod only as a reference.
+    It carries no flag constants.
 - **Tests and benches use synthetic inputs only.** A harvested entry's tests never use the source
   game's data.
 - **Citations.** Every pack entry carries at least one public citation (its implementation of
@@ -276,20 +379,26 @@ Root's ruling on #5223 governs harvest from private repositories:
 
 - **Default: implement from the paper.** Every survey row marked "paper" is a clean
   implementation from the published description, with the paper under **References**.
+- **Allowlist.** Code may be ported only under these SPDX ids: `MIT`, `ISC`, `BSD-2-Clause`,
+  `BSD-3-Clause`, `Apache-2.0`, `Zlib`, `CC0-1.0`.
+  - Any other licence needs a recorded Root decision before porting, for example `MPL-2.0`,
+    `CC-BY-SA-*` or `AGPL-3.0`.
+  - GPL-3.0 code such as Stockfish is never ported (below).
 - **Permissive, port only with the notice carried.** The licence notice goes in the library's
   `THIRD-PARTY-NOTICES.md`, and the entry names the licence. Prefer implementing from the paper
   even here.
-  - **MIT:** WFC (mxgmn), GGPO, FastNoiseLite, rbush, MiniSat.
+  - **MIT:** WFC (mxgmn: the code only, never its sample tilesets, whose licences vary), GGPO,
+    FastNoiseLite, rbush, MiniSat.
   - **CC0-1.0:** OpenSimplex2.
   - **Zlib:** Recast and DotRecast.
-  - **Apache-2.0, with its NOTICE file:** RVO2.
+  - **Apache-2.0, carrying any NOTICE file it has:** RVO2.
   - **BSD-3-Clause:** pycma, libccd.
   - **ISC:** Delaunator, kdbush, flatbush.
   - **Dual MIT/Apache-2.0:** GGRS.
 - **Never port:** Stockfish (GPL-3.0), and any GPL or LGPL source (for example OpenAL Soft).
   - Search techniques Stockfish uses are implemented from their papers.
-  - OR-Tools (Apache-2.0) may serve as a **test oracle only**, in a test project, never as shipped
-    code.
+  - OR-Tools (Apache-2.0) may serve as a **test oracle only**, in a .NET test project. It is never
+    shipped, because it brings a native dependency that the Fable-portable library cannot carry.
 - **Copyrighted books** (for example *The Algorithmic Beauty of Plants*, AIMA, CLRS, RTCD, the
   Game AI Pro chapters) are summarised and cited, never copied, including their pseudo-code.
 
@@ -341,6 +450,17 @@ policy limits, checked by the producer gate:
 - `SKILL.md` refuses above 16 KiB, because the knowledge belongs in the pack;
 - at most one active record per id.
 
+**Compaction.** If the shipped pack reaches 3 MiB, the producer compacts it.
+- The repository keeps full history.
+- The skills package ships only active records, re-captured without `supersedes` links, because
+  `atlas.py` refuses a supersession whose predecessor is absent.
+
+**Exact bytes.** `atlas.py` hashes exact record bytes.
+- The skill root carries a `.gitattributes` with `pack/** -text`, so no line-ending conversion
+  alters a record.
+- It sits at the skill root, not inside `pack/`, because `atlas.py` refuses any file in an archive
+  other than `catalog.json`, `README.md` and `records/`.
+
 **Retrieval in a workspace.** `SKILL.md` instructs:
 
 ```sh
@@ -349,6 +469,7 @@ python3 .agents/skills/atlas/scripts/atlas.py --archive .agents/skills/fs-gg-alg
 ```
 
 The helper is the `atlas` driver skill (`materializes-when: always`, delivered by FS.GG.Drivers). It
+reaches workspaces only after the §7 prerequisite: SDD moving its Drivers pin to 0.104.0 or later. It
 is **resolved, not copied** (ADR-0067), so the pack carries no second `atlas.py`. A workspace that
 keeps its own Atlas archive can pass `--archive` twice to search both. If the helper is absent,
 `SKILL.md` falls back to `grep` over `pack/records/*.json` and reports the missing helper as a gap.
@@ -356,7 +477,17 @@ keeps its own Atlas archive can pass `--archive` twice to search both. If the he
 ### §7 Distribution
 
 `fs-gg-algorithms` rides the **existing owner-package route** (ADR-0063), using the multi-file
-Rendering and Audio transport:
+Rendering and Audio transport.
+
+**Named prerequisite.** FS.GG.SDD updates its `FS.GG.Drivers` pin from 0.98.0 to **0.104.0 or
+later**, the first published Drivers version that carries the `atlas` skill with `--archive`. Root
+files that SDD Delivery.
+- It is a prerequisite of this section and of ALGO-01.3
+  ([.github#5225](https://github.com/FS-GG/.github/issues/5225)).
+- Until it lands, step 5's `atlas.py` search cannot pass in a fresh workspace, and the `grep`
+  fallback (§6) is the only retrieval.
+
+The route has five steps:
 
 1. **Producer manifest.** `FS.GG.Algorithms/template/skill-manifest/skill-manifest.json`, schema v2,
    lists every file of the skill with its own digest, including each pack record. It is generated
@@ -393,9 +524,21 @@ Rendering and Audio transport:
 
 - A **new skill id** reaches an existing workspace through `fsgg-sdd upgrade` once the installed CLI
   embeds the package, because missing paths are written.
-- **Pack updates** need one receiver change, which this ADR decides: an owner-sourced skill file
-  whose current bytes equal the digest recorded for it at materialization is owner-managed. Upgrade
-  **replaces such pristine files as one skill-directory unit**.
+- **Pack updates** need one receiver change, which this ADR decides and
+  [FS.GG.SDD#1155](https://github.com/FS-GG/FS.GG.SDD/issues/1155) implements. An owner-sourced
+  skill file whose current bytes equal the digest recorded for it at materialization is
+  owner-managed. Upgrade **replaces such pristine files as one skill-directory unit**, under these
+  conditions:
+  - **Never downgrade.** Replace only when the CLI's embedded owner package is newer than the
+    version recorded for that skill. Provenance must therefore record the owner package version per
+    skill.
+  - **Removed files.** A file in the recorded set but absent from the new owner set is deleted only
+    if it is pristine. An edited one is kept and reported.
+  - **Both roots as one unit.** The `.claude/skills` and `.agents/skills` copies are replaced
+    together or not at all.
+  - **No digest means edited.** A file with no recorded digest counts as edited.
+  - **Record the result.** After replacement, the new digests and package version are recorded.
+  - **Driver skills too.** Driver skills such as `atlas` follow the same rule.
 - A skill with any locally edited file keeps today's refusal and drift advisory, so author edits are
   never overwritten.
 - The rule applies to every owner-sourced product skill, not only this one. Without it, every owner
@@ -405,15 +548,24 @@ SDD owns the implementation. ALGO-01's upgrade acceptance cannot be met before i
 
 ### §8 The four existing algorithm skills: index them, with one owner
 
-- **Owner.** `fs-gg-grids`, `fs-gg-collision`, `fs-gg-line-drawing` and `fs-gg-visibility` have one
-  owner, **FS.GG.Game**. Game holds the code, its bodies are the newer ones, and they are what SDD
-  already delivers. Rendering's copies are retired on the
-  [.github#1862](https://github.com/FS-GG/.github/issues/1862) /
-  [Rendering#1147](https://github.com/FS-GG/FS.GG.Rendering/issues/1147) (P6) precedent, and
-  `registry/skills.yml` is reconciled to owner `fs-gg-game` with Game's digests and predicates.
-  **The Rendering owner must confirm the retirement.** Rendering's `template/fragments/` adaptable
-  sources, such as the frozen `Visibility.fs`, go with it or are explicitly marked non-canonical.
-  Until then, the pack names Game.Core as the implementation of record.
+- **Owner.** `fs-gg-grids`, `fs-gg-collision`, `fs-gg-line-drawing` and `fs-gg-visibility` get one
+  target owner, **FS.GG.Game**. Game holds the code and its bodies are the newer ones. The pack names
+  Game.Core as the implementation of record now.
+- **Registry rows stay Rendering's until Rendering removes its template entries** (Root's ruling;
+  [Rendering#965](https://github.com/FS-GG/FS.GG.Rendering/issues/965) is the precedent).
+  - FS.GG.UI.Template 0.32.4 still writes Rendering's four skill copies **and** four source
+    fragments for profiles `game` and `sample-pack`:
+    - `template/fragments/collision/src/Product/Collision.fs`
+    - `template/fragments/grids/src/Product/Grids.fs`
+    - `template/fragments/line-drawing/src/Product/LineDrawing.fs`
+    - `template/fragments/visibility/src/Product/Visibility.fs`
+  - SDD's Game channel skips paths that are already occupied, so in those scaffolds Rendering's
+    bytes are what land, and the registry describes what lands.
+  - Retirement follows the [.github#1862](https://github.com/FS-GG/.github/issues/1862) /
+    [Rendering#1147](https://github.com/FS-GG/FS.GG.Rendering/issues/1147) P6 shape. **The Rendering
+    owner confirms it** and removes the skill copies and the four fragments from the template. Only
+    then is `registry/skills.yml` reconciled to owner `fs-gg-game` with Game's digests and
+    predicates.
 - **Predicate fix.** Game's manifest rows for grids, line-drawing and visibility gain
   `or template == fable-game`, as collision already has. This closes the gap in Context item 6.
   [.github#5225](https://github.com/FS-GG/.github/issues/5225) implements it with the skill, and
@@ -509,19 +661,21 @@ this ADR keeps no family beyond the 17:
 
 **Seed list.** It is ordered in three parts:
 
-1. **Layer-0 foundations**, because almost everything else uses them.
+1. **Foundations F1 to F4**, because almost everything else uses them.
 2. **Harvest:** pointer entries over reviewed Game.Core code, then harvests of FS-GG code from the
    coordination and game inventories.
 3. **The survey's ranked new items**, each with its property oracle in brackets.
 
 The Outcome's 15-entry floor is met by part 2 alone, from reviewed, property-tested code.
 
-**1. Layer-0 foundations (tranche 1)**
+**1. Foundations (tranche 1)**
 
 | # | Entry id | Status | Grade target | Oracle and acceptance |
 |---|---|---|---|---|
 | F1 | `collections/binary-heap` (with the indexed heap and decrease-key) | new | LockstepExact | Sort equivalence. Then the migrations in §3: Game.Core's `Set` frontier, FourD's list re-sort, RuneScape's `PriorityQueue` |
-| F2 | `numerics/fixed-q16-16` | new | LockstepExact | Error bounds against exact rationals, and bit-identity between .NET and Fable. No `int64` |
+| F2 | `numerics/fixed-q16-16` | new | LockstepExact | Error bounds against exact rationals, bit-identity between .NET and Fable, and the §3 edge-case vectors. No `int64` |
+| F3 | `graph/best-first-search` (Dijkstra and A* over caller-supplied neighbours, cost, heuristic and tie-break) | new | LockstepExact | BFS on unit costs and an exhaustive shortest path on small synthetic graphs. Built on F1 |
+| F4 | `random/xoshiro128` (32-bit seeded, with `split`) | new | LockstepExact | Reference output vectors on .NET and Fable; `split` independence |
 
 **2. Harvest (tranche 1)**
 
@@ -536,7 +690,7 @@ re-implementations into `FS.GG.Algorithms`.
 | 4 | `search.grid/flow-field` (distance and flee fields) | Game.Core `distanceField`, `flowField` | pointer | game | Fable grade; benches |
 | 5 | `search.grid/alt-landmarks` (with the `Regions` early-out) | Game.Core `Landmarks`, `Regions` | pointer | game | Benches |
 | 6 | `search.grid/doors-and-thin-walls` | Game.Core `Edges` A*, with RuneScape's door overlay and per-session re-close as a generic technique | pointer (+ lesson) | game | No flag data (§5); benches |
-| 7 | `geometry/line-and-los` (Bresenham, supercover, symmetric LOS) | Game.Core `Los` (LockstepExact) | pointer | game | Benches |
+| 7 | `geometry/line-and-los` (Bresenham, supercover, symmetric LOS) | Game.Core `Los` (LockstepExact) | pointer | game | Benches. The exhaustive small-grid symmetry test counts as property evidence (§4) |
 | 8 | `geometry/shadowcasting-fov` | Game.Core `Fov` | pointer | game | Fable grade (integer-only); benches |
 | 9 | `geometry/visibility-polygon` | Game.Core `Visibility` | pointer | game | Records the Harness and Rendering-fragment copies as non-canonical |
 | 10 | `geometry/hex-coordinates` | Game.Core `Hex` | pointer | game | Fable grade |
@@ -550,12 +704,16 @@ re-implementations into `FS.GG.Algorithms`.
 | 18 | `graph/iterative-tarjan-scc` | Harvest of `.github` `Blockers.cycles`, rewritten iteratively | harvested | both | [Equals the recursive version; a 10⁵-node chain]. Pitfalls: recursive Tarjan, and SDD `WorkModel.cycleDiagnostics` with no visited set |
 | 19 | `graph/union-find` | Harvest of `.github` `Lanes.partition`, generic over the conflict predicate | harvested | both | [Equals BFS components] |
 | 20 | `numerics/nearest-rank-percentile` | Harvest of Governance `Performance.nearestRank` | harvested | both | Used by the JavaScript bench summaries themselves |
-| 21 | `decision/priority-arbitration` (bands, pre-emption, suspend and resume) | Clean re-implementation of RuneScape's arbiter | harvested | game | **Waits for RuneScape PR #14 to merge.** Port its 400-run invariant to FsCheck |
+| 21 | `decision/priority-arbitration` (bands, pre-emption, suspend and resume) | Clean re-implementation of RuneScape's arbiter. RuneScape PR #14 merged on 2026-11-01 as `1a0c532b` (private; provenance only, §5) | harvested | game | Port its 400-run invariant to FsCheck |
 
 **3. New, ranked (tranche 1)**
 
 These are the survey's §14 order, without the three items already placed above: the heap (F1),
-fixed-point (F2) and iterative Tarjan (harvest 18). Ids that build on Game.Core concepts stay
+fixed-point (F2) and iterative Tarjan (harvest 18). Every new search here builds on F3, and every
+randomized item draws from F4.
+
+Behaviour trees (N2) and utility AI (N3) in FS.GG.Algorithms do not conflict with Game's AI design
+(`docs/reports/2026-07-10-ai-decision-layer-design.md` §6). That exclusion covers Game.Core only. Ids that build on Game.Core concepts stay
 generic. For example, `net/rollback` takes a caller-supplied step and checkpoint interface, so
 FS.GG.Algorithms never depends on Game.Core. Game.Core's `Replay` is one consumer of it.
 
@@ -589,7 +747,13 @@ FS.GG.Algorithms never depends on Game.Core. Game.Core's `Replay` is one consume
 
 - `numerics/deterministic-float-pitfalls` (FMA, x87, transcendentals, fast-math; a survey P1);
 - the glob matcher's backtracking (worst case exponential);
-- three visibility implementations and two spatial indexes;
+- duplicate implementations and copies:
+  - three visibility implementations: Game.Core `Visibility`, `Game.Harness` `VisibilityPolygon`,
+    and Rendering's `template/fragments/visibility/src/Product/Visibility.fs`;
+  - Rendering's other template fragments, `template/fragments/collision/src/Product/Collision.fs`,
+    `template/fragments/grids/src/Product/Grids.fs` and
+    `template/fragments/line-drawing/src/Product/LineDrawing.fs`, which duplicate Game.Core;
+  - two spatial indexes: Game.Core `SpatialGrid` and Rendering `SpatialWorkingSet`;
 - recursive Tarjan, and DFS with no visited set (also attached to harvest 18).
 
 **Next tranche.**
@@ -623,18 +787,25 @@ FS.GG.Algorithms never depends on Game.Core. Game.Core's `Replay` is one consume
     property for indexed entries (§4).
   - Game.Core's published surface is unchanged. Delegation happens only under §1's move-on-demand
     rule.
-  - The one exception is the layer-0 heap (§3): Game.Core takes a package dependency on
-    `FS.GG.Algorithms`, and its Fable view resolves the library's packed sources.
-- **FS.GG.Rendering.** Rendering retires its four duplicate skill copies and their adaptable
-  fragments, subject to its owner's confirmation (§8).
+  - The one exception is the F1 heap (§1, §3). Game.Core takes an **exact-pinned** package
+    dependency on `FS.GG.Algorithms`, and its Fable view resolves the library's packed sources.
+    Its compatibility profile records the pinned version.
+  - Game.Core's grid A* may later delegate to the F3 best-first search, under move-on-demand.
+- **FS.GG.Rendering.** Subject to its owner's confirmation, Rendering removes its four skill copies
+  and the four `template/fragments/*/src/Product/*.fs` sources from FS.GG.UI.Template (§8). Until
+  then, the registry rows stay Rendering's.
 - **FS.GG.SDD.**
+  - **Prerequisite:** SDD moves its `FS.GG.Drivers` pin from 0.98.0 to 0.104.0 or later (§7).
   - SDD embeds `FS.GG.Algorithms.Skills` through the multi-file planner.
-  - It adds the pristine owner-file replacement rule to upgrade (§7), which also cures stale owner
-    skill bodies everywhere.
+  - It adds the pristine owner-file replacement rule to upgrade (§7, FS.GG.SDD#1155), with all of
+    its conditions. That also cures stale owner skill bodies everywhere.
 - **FS.GG.Templates.** The `fableGameSelections` oracle expects grids, line-drawing, visibility and
   algorithms. No template payload changes; the skill rides the owner route.
 - **`.github`.**
-  - The registry rows of §7 are added. The four skill rows are reconciled to owner Game.
+  - The registry rows of §7 are added. The four skill rows are reconciled to owner Game only after
+    Rendering removes its template entries (§8).
+  - ADR-0022 and ADR-0069 carry this record's amendments; `docs/architecture.md`'s Game.Core lines
+    reflect the exact-pinned dependency.
   - The capture rule enters the pnext-item and work-board closure contracts (#5226).
   - `docs/architecture.md` records FS.GG.Algorithms as a decided, not-yet-created bottom layer. Its full row is reconciled after the roster row lands.
   - This record's Atlas pointer is `platform/algorithms-capability`.
@@ -648,13 +819,17 @@ FS.GG.Algorithms never depends on Game.Core. Game.Core's `Replay` is one consume
   2. *Pack update cadence.* **Default:** SDD takes `FS.GG.Algorithms.Skills` bumps through its
      existing dependency-update route, like the other owner skills packages. No out-of-band pack
      channel.
+     - Staleness target: a published skills package is adopted by SDD within 7 days.
+     - For content-only `FS.GG.*.Skills` packages, SDD's dependency updater auto-merges once SDD's
+       gates pass.
   3. *Predicate breadth.* **Default:** `profile in [game, sample-pack] or template == fable-game`.
      Widen to app profiles only on a recorded request.
   4. *Pristine-replacement scope.* **Default:** all owner-sourced product skills, not only this one.
   5. *Bench gating.* **Default:** work counts may gate regressions; timings never gate.
-  6. *Rendering's confirmation of the retirement in §8.* **Default:** until Rendering confirms, the
-     registry still reconciles to owner Game (it reflects delivered bytes), and Rendering's copies
-     are marked non-canonical.
+  6. *Rendering's confirmation of the retirement in §8.* **Decided by Root, overturning the first
+     default:** the registry rows stay Rendering's until Rendering removes its template skill copies
+     and source fragments, following Rendering#965. The pack still names Game.Core as the
+     implementation of record.
   7. *Fable support for the BCL `PriorityQueue`.* Unverified. **Default:** treat it as
      unsupported. The library ships its own heap (§3), and #5224's tranche measures support.
   8. *The cost of `int64` as a BigInt under Fable.* Unmeasured. **Default:** no `int64` in hot
@@ -662,18 +837,22 @@ FS.GG.Algorithms never depends on Game.Core. Game.Core's `Replay` is one consume
      - Q16.16 splits multiplies into 16-bit halves.
      - Zobrist keys use two `int32` halves.
      - Q32.32 and jump hashing wait for #5224's measurement.
-  9. *Acceptance for the Game.Core heap migration.* **Default:** the `LockstepExact` fixture corpus
-     stays byte-identical, and the bench shows no regression against the `Set` frontier on both
-     runtimes. If the bench regresses, Game.Core keeps its `Set` frontier and records why.
+  9. *Acceptance for the Game.Core heap migration.* **Default:**
+     - Game.Core pins one exact `FS.GG.Algorithms` version, and its compatibility profile records
+       it (§1).
+     - The `LockstepExact` fixture corpus stays byte-identical.
+     - The bench shows no regression against the `Set` frontier on both runtimes.
+     - If the bench regresses, Game.Core keeps its `Set` frontier and records why.
 
 ## Alternatives considered
 
 - **FS.GG.Game as the producer**, with a new `FS.GG.Game.Algorithms` package or Game.Core itself.
   - For: no new repository; Game.Core already holds most of the code; `FS.GG.Game.Skills` already
     reaches workspaces.
-  - Rejected on dependency direction: Coordination and `.github` would depend on a game package, and
-    Rendering would cycle with Game. Also rejected on cadence: algorithm releases would ride Game's
-    coherent set.
+  - Rejected on dependency direction: Coordination and `.github` would depend on a game package.
+    (A Rendering consumer would also make Rendering and Game wait on each other's releases, but none
+    exists today.)
+  - Also rejected on cadence: algorithm releases would ride Game's coherent set.
   - It would also need the Game skill channel extended past `SKILL.md`-only, which is the same work
     as embedding a new owner package.
 - **Extract all of Game.Core's algorithms into FS.GG.Algorithms now.**
@@ -685,8 +864,8 @@ FS.GG.Algorithms never depends on Game.Core. Game.Core's `Replay` is one consume
 - **Fold the four skills into the umbrella.** Rejected: it forces new digests, an owner migration and
   re-seeds for no knowledge gain. Indexing preserves each skill's usage text as the one copy (§8).
 - **A new pack record format.** Rejected: it would need its own validator and search tooling. The
-  closed Atlas format already carries every field, and `atlas.py` already reaches workspaces as a
-  driver.
+  closed Atlas format already carries every field, and `atlas.py` becomes a delivered driver once SDD
+  pins Drivers 0.104.0 or later (§7).
 - **A copy of `atlas.py` inside the skill.** Rejected under ADR-0067: two copies drift. The driver is
   resolved instead, with a `grep` fallback.
 - **Pack only in the framework Atlas.** Rejected by the Outcome: it must be usable in product
@@ -707,5 +886,7 @@ FS.GG.Algorithms never depends on Game.Core. Game.Core's `Replay` is one consume
   `simulation`) instead of the survey's 17. Rejected: the survey also covers steering, adversarial,
   learning, net and systems. One vocabulary shared by the survey, the library namespaces and the
   pack tags needs no mapping. §11 records where the first draft's extra families now live.
+- **PCG32 as the F4 generator.** Rejected: its state and multiply are 64-bit, so it would run on
+  BigInt under Fable. xoshiro128\*\* needs only 32-bit operations.
 - **Rendering's #761/#792 harness as the admission bench.** Rejected: it times frames, not kernels.
   It is kept only for optional browser timing (§4).

@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-28
+- **Amended by:** [ADR-0098](0098-shared-algorithms-library-and-product-knowledge-pack.md) — §Version and rollout rule: Game.Core's recorded compatibility identity also carries the exact `FS.GG.Algorithms` version it pins. The heap ordering contract that Game.Core's `LockstepExact` pathfinding relies on is itself a frozen `LockstepExact` surface of FS.GG.Algorithms.
 - **Affects:** FS.GG.Game (producer), EHotwagner/S.I.R (consumer), FS-GG/.github
   (contract registry and Coordination board)
 
@@ -71,6 +72,10 @@ The package version, compatibility-profile identity, fixture-schema version,
 compiler/FSharp.Core/Node profile, and source commit are recorded together.
 Changing the output of a `LockstepExact` function changes the compatibility
 identity even when its .NET signature is unchanged.
+
+*(Amended 2026-11-01 by [ADR-0098](0098-shared-algorithms-library-and-product-knowledge-pack.md) §1: the recorded identity also includes the exact
+`FS.GG.Algorithms` version Game.Core pins. Moving that pin re-runs the full Fable fixture
+corpus.)*
 
 Producer publication precedes registry activation and consumer adoption:
 
