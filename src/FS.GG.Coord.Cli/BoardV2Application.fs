@@ -936,8 +936,8 @@ module BoardV2Application =
         elif not (OperatingSystem.IsWindows()) && File.GetUnixFileMode path &&& privateModeBits <> enum<UnixFileMode> 0 then
             Error "the enable file must be mode 0600"
         else
-            // The contract amendment (fsgg:board-tend-contract/v1) lands in PR 6, which also wires its marker
-            // read; until then every contract-gated rule is dropped from the enable file.
+            // The contract amendment (fsgg:board-tend-contract/v1) is in lifecycle-contract.md (#5136 PR 6); the
+            // engine's read of that marker is #5174. Until it lands every contract-gated rule is dropped.
             V2TendWrite.parseEnable (File.ReadAllText path) false
 
     // Read-only: reads Project 3 and native facts, derives the plan, writes it privately. With --apply and a

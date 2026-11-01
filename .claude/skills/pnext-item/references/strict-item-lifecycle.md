@@ -315,7 +315,8 @@ both records through distinct phase identities; absence of another agent is not 
 ## 6. Merge and obligations
 
 As on the routine path, a PR `Refs` its Delivery issue (see the work-board dispatch rules) and never closes
-it; Root's acceptance closes the Delivery. `landingLinkageAuthorized` in `src/FS.GG.Coord.Core/Delivery.fs`
+it; Root's acceptance closes the Delivery. A strict PR carries no `fsgg:delivery-continues/v1` or
+`fsgg:delivery-completes/v1` declaration, so board tend's C1 never closes a Delivery after a strict merge. `landingLinkageAuthorized` in `src/FS.GG.Coord.Core/Delivery.fs`
 accepts that linkage (.github#5100) when the PR closes no issue and `Refs` exactly one open Delivery
 that live sub-issue and parent reads prove is a native sub-issue of the claimed item; the merge fence
 re-proves it, and any failed read refuses. Such a Refs-only landing ends at merge: the engine's terminal

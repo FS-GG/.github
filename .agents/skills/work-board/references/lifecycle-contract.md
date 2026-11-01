@@ -23,7 +23,8 @@ independent work whose actual scope is known may continue.
   reconciliation and the ordered selected/deferred fold, including unenrolled in-flight conflicts.
   Recheck determining facts beside execution. Status, Track and Roadmap remain owner-controlled;
   the authorized root integrator maintains Status through the mandatory [Status lifecycle](status-lifecycle.md),
-  including verified guarded writes at coordination boundaries. Inspection never chooses or writes Status;
+  including verified guarded writes at coordination boundaries, beside the bounded automatic writes of
+  [board tend](#board-tend-automatic-writes). Inspection never chooses or writes Status;
   Observation Verified is read health, never readiness or outcome acceptance.
 - **Product:** read [workspace scope](workspace-scope.md), `.fsgg/scaffold-provenance.json`,
   `.fsgg/board-v2-binding.json`, exact local tool pin and selected workspace configuration. Require
@@ -73,12 +74,17 @@ owner/PR/slice/attempt without another assignment, capacity demand or reservatio
 
 Reconcile closure against the actual scoped promise and evidence. Read-only inspection exposes raw Done
 when, Blocked on, Acceptance evidence and native state reason/date; it does not interpret arbitrary prose
-as accepted work. A merged source PR cannot establish installed acceptance. Native completed differs from
+as accepted work. A merged source PR cannot establish installed acceptance, and C1 (rule 3 below) does not
+change that. `fsgg:delivery-completes/v1` means nothing in the Delivery's Done when remains after that
+merge; every merge after which any release, install or readback remains declares
+`fsgg:delivery-continues/v1`, so C1 never closes a Delivery on source alone, and Root closes it under rule 3
+once that effect is read back. Native completed differs from
 not planned, and stale Done/closed disagreement remains a discrepancy to resolve. The accountable owner
 records accepted scope/date/evidence; the exact native issue is closed with the correct reason (a
-Delivery per rule 3 below, by Root's acceptance) and Status updated only through the authorized native route, then reconciles parent remaining assertions. Preserve
+Delivery per rule 3 below, by Root's acceptance or by C1) and Status updated only through the authorized native route, then reconciles parent remaining assertions. Preserve
 partial effects and original identity after interruption; resume only the remaining independently read-back
-effect. Never use legacy Done.rollUpParents or automatically climb/close parents. All children closed,
+effect. Never use legacy Done.rollUpParents or automatically close parents, or climb them beyond the
+bounded Outcome Status roll-up O1 of [board tend](#board-tend-automatic-writes). All children closed,
 healthy inspection, deferred work or successful Observation refresh cannot satisfy missing parent scope.
 Read-only refresh writes no closure, Work level, Status, Track, Roadmap or intent.
 
@@ -100,7 +106,8 @@ it current; they add no ledger, packet or actor, and they do not enroll, schedul
 1. **No dispatch without a Delivery issue.** Admit a dispatch only once its native Delivery issue
    exists; an existing Delivery issue already linked under its Outcome satisfies this. The issue is a
    native sub-issue of its Outcome, and its body gives only the owner, Done when, the intended Work
-   level (Delivery), Track and Status, and `Refs` links. The PR `Refs` that Delivery, never the
+   level (Delivery), Track and Status, and `Refs` links. The intended values go on the
+   [intended-fields line](#board-tend-automatic-writes). The PR `Refs` that Delivery, never the
    Outcome, and never uses a closing keyword. Urgent or Outcome-less work files its Delivery first
    under the standing Outcome #5097 [OPS-MAINT], with a one-line body (owner, Done when, `Refs`).
    There is no bypass.
@@ -109,8 +116,19 @@ it current; they add no ledger, packet or actor, and they do not enroll, schedul
    stands in for "Outcome done": Outcome Done requires Root acceptance, which is closing the Outcome.
 3. **Closing a Delivery.** Root, or a Root-delegated acceptance, closes an accepted Delivery with a
    comment citing its merge commits and recorded verdicts, or "Unknown: no recorded independent
-   verdict" where none exists. With the project workflow "Item closed" to Done on, closing is the Done
-   transition; with it off, the closer also writes Done through the guarded Status helper. Read the
+   verdict" where none exists. Board tend rule **C1** (programme decision 9) also closes a Delivery, as
+   COMPLETED after such a comment carrying `<!-- fsgg:tend-closed/v1 -->`, when all of these hold: the
+   issue is open with a populated Work level of Delivery and Status In review; at least one [strictly
+   linked](#board-tend-automatic-writes) PR is merged, and no linked PR, strict or loose, is open or draft, on a complete timeline;
+   the most recent strictly linked merge is at least 48 hours old and its PR body declares
+   `fsgg:delivery-completes/v1` and not `fsgg:delivery-continues/v1`; and the issue was never reopened
+   after a `fsgg:tend-closed/v1` comment or a C1 custody record (such an issue is only proposed). C1
+   never closes an Outcome or a Blocked card. Until C1 is enabled, Root applies the same conditions by
+   sweep, judging PRs merged before the completion marker existed case by case. With the project
+   workflow "Item closed" to Done on, closing is the Done transition; with it off, the closer also
+   writes Done through the guarded Status helper. Board tend rule **S1** is the Done backstop (D2): it
+   writes Done to a closed card whose Status is not Done 15 minutes after closure, including a Blocked
+   one, so it is a second writer of the same value and serves as that helper. Read the
    state first: `gh api graphql -f query='{organization(login:"FS-GG"){projectV2(number:3){workflows(first:20){nodes{number name enabled}}}}}'`.
 4. **Enrollment.** Each clearing pass enrolls its new Delivery issues in batches through the #4941
    planner once the 250-row cap is installed. Until then they remain native sub-issues, visible and
@@ -121,7 +139,54 @@ it current; they add no ledger, packet or actor, and they do not enroll, schedul
    Status the batch will use.
 5. **Auto-add stays off.** Keep the project workflow "Auto-add sub-issues to project" disabled and read
    it back before and after any bulk sub-issue linking. Unattended cards break `migration-prepare`
-   and `inspect`, and enrollment is not a child link.
+   and `inspect`, and enrollment is not a child link. Board tend rule **E1** is the one attended
+   membership add: it adds an open enrollment candidate (an issue in a binding repository with a
+   derivable Work level and an admissible Roadmap, and no archived Project 3 item) and fills its
+   Status, Work level and Track in the same run, so no card is left bare. Membership is not enrollment;
+   Roadmap and binding rows still follow rule 4.
+
+## Board tend automatic writes
+
+<!-- fsgg:board-tend-contract/v1 -->
+This section is the contract amendment that the contract-gated rules of the Project 3 reconciler
+`board-v2 tend` need: S1, S3, S3b, S4, S9, S9r, O1, E1, C1, W1d and T1d
+([design](https://github.com/FS-GG/.github/blob/main/docs/coordination/2026-10-31-board-reconciler-design.md),
+§8; its other rules need none). A rule writes only while Root's enable file lists it, through tend's
+item-scoped guard under the shared writer lock: adjacent re-read, possible-send custody, one send and
+independent readback, never a resend. Every other Status, closure and planning effect stays Root's.
+
+- **Intended-fields line.** The first non-blank line of an issue body may declare intended values as
+  `Work level: <v> · Track: <v> · Intended Status: <v>`, with `*` emphasis and backticks ignored. Each
+  part names one of these three fields at most once, and each value is an option name of its field; an
+  omitted part declares nothing. A line with any other part or value declares nothing. Tend reads the
+  `## Blocked on`, `## Done when` and `## Acceptance evidence` sections only under those headings,
+  matched ignoring case.
+- **Fills (S9, S9r, W1d, T1d).** Fills only move an empty field to a value, never a populated one. S9
+  fills an open card's empty Status with Backlog when the line declares Backlog or no Status. S9r fills
+  Ready only when the line declares Ready and is Root-authored: the issue's author and, if the body was
+  ever edited, its last editor are in the board-currency `rootLogins`. Any other declared Status (In
+  progress, In review, Blocked, Done, or Ready without verified Root authorship) is proposed, and S9 still
+  fills Backlog. W1d and T1d fill an empty Work level or Track from the line; a declared Work level that
+  conflicts with the native sub-issue hierarchy is refused.
+- **Delivery Status moves (S3, S3b, S4).** A PR is strictly linked when its board-linkage verdict has no
+  failures and names exactly this Delivery. S3 moves Backlog, Ready or In progress to In review while a
+  strictly linked PR is open and not draft. S3b moves Backlog or Ready to In progress while only a draft
+  one is open. S4 moves In review to In progress when no open, draft or merged PR is linked, strictly or
+  loosely, after 48 hours In review, on a complete timeline. A looser link is only proposed. Each
+  deciding PR's state, draft flag and merge are re-read before the send.
+- **Done backstop (S1)** and **Delivery closure (C1)**: rule 3 above. **Membership (E1)**: rule 5 above.
+- **Outcome roll-up (O1).** Only over a complete native child list in which every open child is a
+  Project 3 card with a Status and none is Done; otherwise the roll-up is Unknown and nothing is written.
+  From its open children, an Outcome derives In progress when any is In progress or In review, else Ready
+  when any is Ready, else Backlog when any is Backlog. O1 writes only between Backlog, Ready and In
+  progress, preimage and target alike. It fills an empty Outcome Status with that value, or with Backlog
+  when every open child is Blocked. It never writes Blocked, In review or Done to an Outcome
+  and never moves one off Blocked. An Outcome whose children are all In review (whether it is itself in
+  review) and an all-Blocked derivation are proposed. For an Outcome with no open child (all children
+  closed, or none at all) O1 only proposes and writes nothing, even to an empty Status.
+
+No rule writes or overwrites Blocked, and only S1 moves a card off it. Tend never closes an issue except
+by C1.
 
 ## Recover ownership and unavailable history
 
