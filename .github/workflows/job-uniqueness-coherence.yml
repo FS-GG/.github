@@ -30,13 +30,13 @@
 # THE LIST BELOW IS A MANUALLY-MAINTAINED MIRROR OF LIVE BRANCH PROTECTION, NOT A LIVE FACT THIS GATE
 # VERIFIES — and it cannot be more than that, for the exact reason `.github#2447` was filed: a required-
 # status-check promotion (`gh api -X PUT repos/FS-GG/.github/branches/main/protection/`
-# `required_status_checks/contexts …` — see `coherence.yml`'s `claim-generation` job for the exact form
+# `required_status_checks/contexts …` — see `claim-generation.yml`'s job comment for the exact form
 # that command takes) is an ADMIN ACTION, not a reviewed workflow-YAML change, so there is no PR for an
 # instruction to attach itself to. Whoever promotes a context to required is responsible for a FOLLOW-UP
 # edit adding it to the list below; nothing here enforces that responsibility or detects a missed edit,
 # so a promoted name that is not also added here stays silently undetected — exactly `.github#2447`'s
-# own root cause, one layer down. What IS caught: any of the four names below drifting into ambiguity
-# via a workflow-YAML edit this repo DOES review. `contract-coherence / coherence` (the fifth
+# own root cause, one layer down. What IS caught: any of the five names below drifting into ambiguity
+# via a workflow-YAML edit this repo DOES review. `contract-coherence / coherence` (also a
 # live-required context, verified via `gh api repos/FS-GG/.github/branches/main/protection --jq
 # '.required_status_checks.contexts'`) is deliberately NOT listed below: it is a nested
 # `<caller> / <callee>` name produced by a job WITH `uses:`, which this gate's whole model excludes
@@ -112,7 +112,8 @@ jobs:
                    --required-context projection \
                    --required-context roster-closure \
                    --required-context drift \
-                   --required-context reconcile 2>&1)" || rc=$?
+                   --required-context reconcile \
+                   --required-context claim-generation 2>&1)" || rc=$?
           [ -z "$out" ] || printf '%s\n' "$out"
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
 

@@ -107,7 +107,7 @@
       "source": "scripts/check-claim-generation.py",
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/claim-generation/run.sh",
-      "workflow": ".github/workflows/coherence.yml"
+      "workflow": ".github/workflows/claim-generation.yml"
     },
     {
       "source": "scripts/check-claim-fence.py",
