@@ -6,11 +6,6 @@ executables and policy. `--base-sha` is the pull_request_target event's base, ke
 floor: when the base has moved, the event base must be an ancestor of the live base, the head must not
 already be contained in it, and the PR's change is re-derived as `merge-base(live base, head)..head`
 against that live base (never trusted from the event). An unmoved base keeps the exact two-dot diff.
-
-`--previous-head` (.github#5189) is the `synchronize` event's `before`, supplied by the trusted workflow
-only after it proved the push merely added commits on top of it. The envelope re-proves that ancestry
-(a value that is not a strict ancestor of the head refuses) and forwards it to the validator, which may
-then admit a marker naming exactly that parent provisionally. Omitting it keeps the exact-head rule.
 """
 
 from __future__ import annotations
@@ -91,7 +86,6 @@ def main() -> int:
     parser.add_argument("--head-sha", required=True)
     parser.add_argument("--body", type=Path, required=True)
     parser.add_argument("--validator", type=Path, required=True)
-    parser.add_argument("--previous-head", default=None)
     args = parser.parse_args()
 
     if args.base_ref != args.default_branch:
@@ -110,14 +104,6 @@ def main() -> int:
     if not args.validator.is_file() or not args.body.is_file():
         fail("trusted validator or PR body is absent")
 
-    previous: list[str] = []
-    if args.previous_head is not None:
-        if not SHA.fullmatch(args.previous_head) or args.previous_head == args.head_sha:
-            fail("previous head is not an exact lowercase 40-hex commit distinct from the head")
-        if not is_ancestor(args.git_dir, args.previous_head, args.head_sha):
-            fail(f"previous head {args.previous_head} is not an ancestor of head {args.head_sha}")
-        previous = ["--routine-previous-head", args.previous_head]
-
     measured_from = diff_base(args.git_dir, args.base_sha, live_base, args.head_sha)
 
     completed = subprocess.run(
@@ -130,7 +116,6 @@ def main() -> int:
             "--base-sha", measured_from,
             "--routine-policy-ref", live_base,
             "--body", str(args.body),
-            *previous,
         ],
         cwd=args.git_dir,
         check=False,
