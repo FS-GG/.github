@@ -249,7 +249,7 @@ write_clean_pair "$GREEN"
 must_exit "green: an implementation with a sibling .fsi and no doc comment" 0 "OK: every subject file matches" "$GREEN"
 
 # AND THE `--root` DEFAULT ITSELF, WHICH EVERY OTHER LEG IN THIS FILE ROUTES AROUND. `run_gate`
-# always passes `--root`, and so does production (`signature-doc-siting.yml:132` passes `--root .`),
+# always passes `--root`, and so does production (the signature-doc-siting step of `always-gates.yml` passes `--root .`),
 # so `argparse`'s default was a constant no leg could reach: mutating it survived the whole mutation
 # sweep. It is not dead code, though — a contributor debugging this gate runs it with no arguments
 # from the repository root, and that is the path exercised here.
