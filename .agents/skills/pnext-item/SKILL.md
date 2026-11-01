@@ -60,7 +60,10 @@ For an admitted routine item, the board is an asynchronous view rather than merg
    locally or on the PR, and state the results; where the change adds or edits fixtures or release controls, name each one's clock, source or sandbox in the PR body per the [lifecycle-contract fixture rule](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#qualify-the-actual-path-and-deliver-exact-source); do not request review on a head with known-red required
    gates, except failures inherited from main, which must be named. Put exactly one
    `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
-   the PR body. A PR `Refs` its Delivery with no closing keyword; Root's acceptance closes the Delivery. For any other
+   the PR body, and exactly one of `<!-- fsgg:delivery-continues/v1 -->` (work, or an owed release, install or
+   readback, remains after this merge) and `<!-- fsgg:delivery-completes/v1 -->` (this merge completes the Delivery's
+   PR work). A PR `Refs` its Delivery with no closing keyword; Root's acceptance closes the Delivery, or board tend's
+   C1 after a last merge that declares completion ([rule 3](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#file-the-delivery-issue-at-dispatch)). For any other
    issue, use a native closing link only when that merge fulfills its entire declared promise;
    otherwise link it without closing it and retain its remaining assertions. Waits, scratch files and body files follow the
    [hosted-wait rule](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#qualify-the-actual-path-and-deliver-exact-source). A moved head must be reviewed and rebound. A routine refusal blocks the affected delivery until repaired; it does not select heavyweight

@@ -167,8 +167,8 @@ override below.
 | `<!-- fsgg:outcome-accepted/v1 -->` | Root accepts the Outcome's whole promise (R2). |
 | `<!-- fsgg:outcome-closure-proposed/v1 -->` | Root or a worker proposes closure; the finding stays, tagged pending (R5, R6). |
 | `<!-- fsgg:blocked-on/v1 OWNER/REPO#N … -->` | The blockers that are not native links. The newest marker wins, and an empty marker clears (R3). |
-| `<!-- fsgg:delivery-continues/v1 -->` | In a PR body: after this merge the Delivery stays In progress instead of In review (§2b). |
-| `<!-- fsgg:delivery-completes/v1 -->` | In a PR body: this merge completes the Delivery's PR work, so rule C1 of the board reconciler may close it ([Root's ruling](https://github.com/FS-GG/.github/pull/5150#issuecomment-6552391470)). Every routine PR declares exactly one of the two markers; the merge gate records the declaration in `deliveryMarker` (advisory, then required with `--delivery-marker required`). |
+| `<!-- fsgg:delivery-continues/v1 -->` | In a PR body: after this merge the Delivery stays In progress instead of In review (§2b), and rule C1 never closes it on this merge. A Delivery whose `## Done when` owes a release, install or readback declares it on its source merges. |
+| `<!-- fsgg:delivery-completes/v1 -->` | In a PR body: this merge completes the Delivery's PR work, so rule C1 of the board reconciler may close it ([Root's ruling](https://github.com/FS-GG/.github/pull/5150#issuecomment-6552391470)). Every routine PR declares exactly one of the two markers, and C1 closes a Delivery only after a last merge that declares completion ([lifecycle contract, rule 3](../../.agents/skills/work-board/references/lifecycle-contract.md#file-the-delivery-issue-at-dispatch)); the merge gate records the declaration in `deliveryMarker` (advisory, then required with `--delivery-marker required`). |
 | `<!-- fsgg:board-gate-override/v1 rule=R1 reason="…" -->` | In a PR body: a recorded override of the R1 gate. Exact grammar below. |
 
 **Override grammar, exactly.** The PR body, with CRLF and lone CR line endings first normalised to LF
@@ -269,14 +269,16 @@ Status transition through the guarded-write semantics of the
 
 | After merge | Target Status |
 |---|---|
-| The Delivery is closed (for example by a closing keyword) | **No write.** Done has one writer: the built-in "Item closed → Done" project workflow (below). |
+| The Delivery is closed (for example by a closing keyword) | **No write.** Done is written by the built-in "Item closed → Done" project workflow (below), with the board reconciler's rule S1 as its backstop. |
 | Open, Refs-only, no `delivery-continues` marker | In review (implementation merged; acceptance or consumer effects remain) |
 | Open, Refs-only, with `fsgg:delivery-continues/v1` | In progress |
 
 The merge-time write never sets Done. Root decided that closing the issue is the acceptance act and
 that the built-in workflow moves a closed item to Done
 ([issuecomment-6540490608](https://github.com/FS-GG/.github/issues/4730#issuecomment-6540490608),
-decisions 2 and 4). One writer for Done means no race between the two.
+decisions 2 and 4). The reconciler's S1 backstop (its design's D2) writes Done only 15 minutes after a
+closure the workflow left unwritten, and it writes the same value, so a race between the two ends in the
+same state.
 
 The write follows these steps:
 
@@ -294,7 +296,8 @@ The write follows these steps:
 6. If the send or readback fails or is uncertain, report `boardTransition: uncertain`. Never resend.
 
 This makes the same-turn Status rule automatic for the one transition a merge determines. The parent
-Outcome is never rolled up automatically.
+Outcome is never rolled up by the merge gate; only the board reconciler's bounded roll-up O1 moves an
+Outcome's Status automatically.
 
 **As implemented** (`--board-gate`, #5094). The mode is `advisory` by default and `enforce` from phase
 3; advisory computes the same verdict and preimage decision but never refuses and never writes. The
@@ -374,11 +377,11 @@ fewer per hour. Failing the run on new finding IDs is phase 3.
 | Write | Who | Automatic? |
 |---|---|---|
 | Delivery Status after merge (table above) | `routine-delivery.py` as the merging credential | Yes: deterministic, guarded, read back |
-| Status Done when an issue closes | GitHub's built-in project workflow "Item closed → Done", the **only** writer of Done | Yes. Enabled by the owner (decision 2); read back `enabled: true` on 2026-10-31 |
+| Status Done when an issue closes | GitHub's built-in project workflow "Item closed → Done"; `board-v2 tend` rule S1 is the backstop for a closed card it left without Done (reconciler design D2) | Yes. Enabled by the owner (decision 2); read back `enabled: true` on 2026-10-31. S1 only once enabled |
 | Sub-issue added to the project | GitHub's built-in "Auto-add sub-issues to project" | **No.** Turned off by the owner and read back `enabled: false` on 2026-10-31 ([issuecomment-6540378933](https://github.com/FS-GG/.github/issues/4730#issuecomment-6540378933)); cards come from batched enrollment |
 | Accepting an Outcome (marker plus close) | Root | **No.** This is a Root decision |
-| Closing a Delivery | Root, or a closing keyword the PR author chose | No, except through the closing keyword |
-| Any other Status (Blocked, Ready, Backlog, Outcome Status) | Root | No. Findings tell Root; Root writes |
+| Closing a Delivery | Root, a closing keyword the PR author chose, or `board-v2 tend` rule C1 (programme decision 9) | Only through the closing keyword, or C1 once enabled under [lifecycle rule 3](../../.agents/skills/work-board/references/lifecycle-contract.md#file-the-delivery-issue-at-dispatch) |
+| Any other Status (Blocked, Ready, Backlog, Outcome Status) | Root; `board-v2 tend` rules S3, S3b, S4, S9, S9r and the Outcome roll-up O1 within their [contract bounds](../../.agents/skills/work-board/references/lifecycle-contract.md#board-tend-automatic-writes) | No, except those tend rules once enabled. Findings tell Root; Root writes |
 | Creating the remaining Deliveries (R5, R6) | Root, through canonical intake and enrollment | No |
 | Tracking issue | Observer, using `GITHUB_TOKEN` with `issues: write` only | Yes (report only) |
 
@@ -490,7 +493,8 @@ From [issuecomment-6540490608](https://github.com/FS-GG/.github/issues/4730#issu
    independent review before merge. The phase-2 R1 additions (`overridden`, carrying, identity-less Unknown) are version 2
    and need their own approval with phase 2.
 2. The built-in "Item closed → Done" project workflow is turned on (owner UI action; read back
-   `enabled: true` on 2026-10-31). It is the only writer of Done (§2b).
+   `enabled: true` on 2026-10-31). It is the only writer of Done (§2b). Amended by the board reconciler
+   design's D2: `board-v2 tend` rule S1 is a backstop Done writer.
 3. Tracking issue: reuse #4985, renamed to the board-currency findings issue.
 4. Post-merge Status: In review by default, or In progress when the PR body carries
    `fsgg:delivery-continues/v1`. Done follows Root's acceptance, which is closing the issue.

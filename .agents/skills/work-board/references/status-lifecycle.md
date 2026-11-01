@@ -1,7 +1,9 @@
 # Maintain current board Status
 
 The root integrator owns Status decisions and their guarded native updates. Workers supply evidence;
-inspection reads facts without deciding or writing Status. Status describes the current scoped promise,
+inspection reads facts without deciding or writing Status. The one exception is the bounded automatic
+Status writes of `board-v2 tend` (S1, S3, S3b, S4, S9, S9r and O1), admitted by the
+[lifecycle contract](lifecycle-contract.md#board-tend-automatic-writes) while Root's enable file lists them. Status describes the current scoped promise,
 not read health, PR existence, capacity allocation or permission to act.
 
 ## Reconcile at lifecycle boundaries
@@ -30,7 +32,8 @@ needed for judgment are unavailable, retain the uncertainty and its owner rather
 
 Outcomes describe their whole remaining promise. Active child work can make an Outcome In progress
 despite blocked portions. One child PR cannot make the whole Outcome In review; completed children
-cannot automatically establish Done. Accepted children remain accepted without narrowing the parent.
+cannot automatically establish Done. The tend roll-up O1 keeps to these limits: it moves an Outcome only
+among Backlog, Ready and In progress, over a complete child list; it never writes Blocked, In review or Done to an Outcome. Accepted children remain accepted without narrowing the parent.
 
 ## Guard the native effect
 
@@ -56,6 +59,7 @@ claim/status automation or add Status writes to inspection.
    independently authorized work with reconciled Status can continue.
 
 Status reconciliation does not dispatch work, release reservations, retry uncertain effects, weaken
-acceptance or close issues. Native issue closure remains a separately authorized effect; closing an accepted Delivery follows
-[rule 3](lifecycle-contract.md#file-the-delivery-issue-at-dispatch). A discrepancy
-between closure, Done and full acceptance requires reconciliation, not automatic closure or parent rollup.
+acceptance or close issues. Native issue closure remains a separately authorized effect; closing an accepted Delivery,
+including by tend rule C1, and the S1 Done backstop follow [rule 3](lifecycle-contract.md#file-the-delivery-issue-at-dispatch). A discrepancy
+between closure, Done and full acceptance requires reconciliation, not automatic closure or parent rollup
+beyond C1 and O1.
