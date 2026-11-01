@@ -1047,12 +1047,12 @@ module V2TendWrite =
 
     // ---- the contract amendment (design §8, §12 PR 6; #5174) ----
 
-    /// Whether the installed lifecycle contract carries the board-tend amendment.
+    // Whether the installed lifecycle contract carries the board-tend amendment.
     type ContractAmendment =
         | Amended
         | NotAmended of reason: string
 
-    /// The version this engine understands. A different version is a different contract, not a newer yes.
+    // The version this engine understands. A different version is a different contract, not a newer yes.
     let contractMarkerVersion = "v1"
 
     let private markerLine = Regex(@"^\s*<!--\s*fsgg:board-tend-contract/(\S*?)\s*-->\s*$")
@@ -1068,9 +1068,9 @@ module V2TendWrite =
                 let m = markerLine.Match line
                 if m.Success then yield m.Groups.[1].Value ]
 
-    /// Judge the installed contract documents (the runtime mirrors that exist, each with its read result).
-    /// Amended only when at least one exists, every one reads, and every one declares the marker with exactly
-    /// the supported version; anything else is NotAmended with the reason, so a gated rule stays refused.
+    // Judge the installed contract documents (the runtime mirrors that exist, each with its read result).
+    // Amended only when at least one exists, every one reads, and every one declares the marker with exactly
+    // the supported version; anything else is NotAmended with the reason, so a gated rule stays refused.
     let contractAmendment (documents: (string * Result<string, string>) list) : ContractAmendment =
         if documents.IsEmpty then NotAmended "no installed lifecycle-contract.md was found"
         else
