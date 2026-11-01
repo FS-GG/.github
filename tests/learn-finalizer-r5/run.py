@@ -633,6 +633,8 @@ retire_case(lambda w: w.fail.update({'unit_failed', 'reset_stuck'}), 'unitsClean
 retire_case(lambda w: w.extra_units.append(f'learn-pod-{W.OPID}-x.service loaded failed failed X'), 'unitsClean', 'another failed unit of this op is cleared by the reset', expect=True, schema='learn-op-pod-success/1')
 retire_case(lambda w: (w.extra_units.append(f'learn-pod-{W.OPID}-x.service loaded failed failed X'), w.fail.add('reset_stuck')), 'unitsClean', 'another failed unit that the reset does not clear', expect=False)
 retire_case(lambda w: w.fail.add('units'), 'unitsClean', 'a failing unit census', expect=False)
+retire_case(lambda w: w.fail.add('units_before_reset'), 'unitsClean', 'a unit census that fails only BEFORE the reset', expect=False)
+retire_case(lambda w: w.fail.add('units_after_reset'), 'unitsClean', 'a unit census that fails only AFTER the reset (the state to trust)', expect=False)
 retire_case(lambda w: w.extra_units.append(f'learn-pod-{W.OPID}-x.service loaded activating start X'), 'unitsClean', 'another unit of this op still activating', expect=False)
 retire_case(lambda w: w.extra_units.append(f'learn-fin-{W.OPID}-y.service loaded deactivating stop Y'), 'unitsClean', 'a finalizer-side unit of this op still deactivating', expect=False)
 retire_case(lambda w: w.extra_units.append('learn-pod-other.service loaded active running X'), 'unitsClean', 'another op\'s active unit is not this op\'s concern', expect=True, schema='learn-op-pod-success/1')
@@ -876,6 +878,15 @@ with tempfile.TemporaryDirectory() as tmp:
     w.fail.add('unpause')
     r = go(w)
     check(r.rec['checkpoints'][0]['roles']['host']['unpauseRc'] == 1 and r.rec['schema'] == 'learn-op-pod-killed-retired/1', 'a checkpoint that left a role paused is recorded and the run cannot succeed')
+# a role left paused by a CHECKPOINT only (the final archives unpause fine): recorded, and never a success
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.at(6, request(w, 1))
+    w.at(6, lambda: w.fail.add('unpause'))
+    w.at(12, lambda: w.fail.discard('unpause'))
+    r = go(w)
+    check(r.rec['checkpoints'][0]['roles']['host']['unpauseRc'] == 1 and all(v.get('unpauseRc', 0) == 0 for v in r.rec['roles'].values()) and r.rec['schema'] == 'learn-op-pod-killed-retired/1',
+          'a role left paused by a checkpoint alone (the final unpause succeeds) is still never a success')
 # a crash before any archive: the handler itself unpauses everything and removes the pod, and the record still carries the input evidence
 with tempfile.TemporaryDirectory() as tmp:
     w = world(tmp)
@@ -893,6 +904,17 @@ with tempfile.TemporaryDirectory() as tmp:
           'the exception path computes the input evidence too (before the pod is removed): every record carries the fields the claim tooling reads')
     ps_i, rm_i = idx(w.calls, ['podman', 'ps']), idx(w.calls, ['podman', 'pod', 'rm'])
     check(0 < ps_i < rm_i, 'the container census for the input evidence ran before the pod was removed')
+# a crash AFTER the input evidence was taken does not take it a second time (the census is asked once before the pod is removed)
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+
+    def boom_archive(*a_, **k_):
+        raise RuntimeError('archive exploded')
+    r = go(w, patch={'archive': boom_archive})
+    rm_i = idx(w.calls, ['podman', 'pod', 'rm'])
+    census_before_rm = [c for c in w.calls[:rm_i] if c[:3] == ['podman', 'ps', '-a'] and c[-1] == '{{.Names}}']
+    check(r.rec['schema'] == 'learn-op-retirement-failure/1' and 'archive exploded' in r.rec['error'] and len(census_before_rm) == 1,
+          f'a crash after the input evidence was taken: one container census before the pod is removed (got {len(census_before_rm)})')
 # the evidence function itself failing never loses the contract fields, on any path
 for what, kw, mk in (('the final path', dict(done_at=20), None), ('the early path', dict(activate_at=None, done_at=None), None)):
     with tempfile.TemporaryDirectory() as tmp:
@@ -1020,7 +1042,7 @@ for what, mut in (('no admission file', lambda w: os.unlink(w.admission_path)), 
                   ('an admission whose file names another op', lambda w: (w.write_admission(FIN_SHA, op=W.OPID, raw=json.dumps({'schema': 'learn-pod-admission/1', 'opId': 'op-other', 'sourceIdentity': W.IDENT, 'finalizerSha256': FIN_SHA, 'imageIds': [W.PGIMG]})))),
                   ('another source identity', lambda w: w.write_admission(FIN_SHA, ident='12' * 32)), ('another finalizer', lambda w: w.write_admission('34' * 32)),
                   ('a pg image that was not admitted', lambda w: w.write_admission(FIN_SHA, image_ids=['56' * 32])), ('an empty image list', lambda w: w.write_admission(FIN_SHA, image_ids=[])),
-                  ('a malformed image Id', lambda w: w.write_admission(FIN_SHA, image_ids=[W.PGIMG, 'xyz'])), ('another schema', lambda w: w.write_admission(FIN_SHA, schema='x/1')),
+                  ('a malformed image Id', lambda w: w.write_admission(FIN_SHA, image_ids=[W.PGIMG, 'xyz'])), ('a non-string image Id (the check never raises)', lambda w: w.write_admission(FIN_SHA, image_ids=[W.PGIMG, 5])), ('another schema', lambda w: w.write_admission(FIN_SHA, schema='x/1')),
                   ('invalid JSON', lambda w: w.write_admission(FIN_SHA, raw='{"x"')), ('a list', lambda w: w.write_admission(FIN_SHA, raw='[1]')),
                   ('a group-writable file', lambda w: w.write_admission(FIN_SHA, mode=0o664)),
                   ('a symlink', lambda w: (os.rename(w.admission_path, w.admission_path + '.real'), os.symlink(w.admission_path + '.real', w.admission_path)))):

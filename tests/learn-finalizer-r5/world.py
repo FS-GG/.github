@@ -85,7 +85,7 @@ class World:
         if os.path.lexists(p):
             os.unlink(p)
         body = raw if raw is not None else json.dumps({'schema': schema, 'opId': op, 'argvJsonSha256': 'a1' * 32, 'sourceIdentity': ident, 'operatorSha256': 'b2' * 32, 'finalizerSha256': fin_sha,
-                                                          'imageIds': sorted(image_ids if image_ids is not None else [PGIMG, 'ff' * 32]), 'issuedUtc': '2026-10-31T08:00:00+00:00', 'expiresUtc': '2026-10-31T08:05:00+00:00'}, sort_keys=True)
+                                                          'imageIds': (list(image_ids) if image_ids is not None else sorted([PGIMG, 'ff' * 32])), 'issuedUtc': '2026-10-31T08:00:00+00:00', 'expiresUtc': '2026-10-31T08:05:00+00:00'}, sort_keys=True)
         open(p, 'w').write(body)
         os.chmod(p, mode)
         self.admission_path = p
@@ -236,11 +236,13 @@ class World:
                      'Result': self.unit_result, 'ExecMainStatus': '0'}
             return 0, ''.join(f'{p[2:]}={props.get(p[2:], "")}\n' for p in a[4:]), ''
         if a[:3] == ['systemctl', '--user', 'list-units']:
-            if 'units' in self.fail:
+            self.unit_census = getattr(self, 'unit_census', 0) + 1
+            if 'units' in self.fail or ('units_before_reset' in self.fail and not getattr(self, 'reset_seen', False)) or ('units_after_reset' in self.fail and getattr(self, 'reset_seen', False)):
                 return 1, '', 'boom'
             rows = [f'{OPU} loaded {self.unit_state} running Learn pod'] + self.extra_units
             return 0, '\n'.join(rows) + '\n', ''
         if a[:3] == ['systemctl', '--user', 'reset-failed']:
+            self.reset_seen = True
             if 'reset_stuck' not in self.fail:
                 if a[3] == OPU and self.unit_state == 'failed':
                     self.unit_state = 'inactive'
