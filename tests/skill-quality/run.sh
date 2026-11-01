@@ -720,7 +720,7 @@ expect_projection_stale "removing a package producer changes inventory membershi
 
 seed
 python3 - "$WORK/tree/registry/dependencies.yml" <<'PY'
-import sys
+import re, sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
@@ -728,10 +728,11 @@ text = path.read_text()
 start = text.find("  - id: game-scene-adapter\n")
 if start < 0:
     raise SystemExit("fixture coherent-set producer missing")
-package = text.find('    package-version: "0.17.0"', start)
-if package < 0:
+# Whatever version the row carries today: the mutation splits the set, so it must not pin a release number.
+package = re.compile(r'^    package-version: "[^"]+"', re.M).search(text, start)
+if package is None or package.group(0).endswith('"9.9.9"'):
     raise SystemExit("fixture coherent-set package version missing")
-path.write_text(text[:package] + text[package:].replace('    package-version: "0.17.0"', '    package-version: "9.9.9"', 1))
+path.write_text(text[:package.start()] + '    package-version: "9.9.9"' + text[package.end():])
 PY
 expect_projection_stale "splitting one producer's package versions splits its coherent set" "game:9.9.9"
 

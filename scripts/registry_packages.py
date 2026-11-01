@@ -48,6 +48,8 @@ CONTRACT_PACKAGES: dict[str, list[str]] = {
     "game-sim-core": ["FS.GG.Game.Core"],
     "game-scene-adapter": ["FS.GG.Game.Render"],
     "game-physics-box2d": ["FS.GG.Game.Physics.Box2D"],
+    # The Fable browser host, first published in the coherent Game 0.18.0 set (FS.GG.Game#745).
+    "game-render-browser": ["FS.GG.Game.Render.Browser"],
     # Independent WASM axis: both members must be available on both feeds.
     "wasm-shared-runtime": ["FS.GG.Wasm.Contracts", "FS.GG.Wasm.Browser"],
     # All five ship as one coherent set at one version; a partial publish is a real defect and
