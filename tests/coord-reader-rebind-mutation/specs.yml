@@ -1,0 +1,185 @@
+# Mutation legs for the `rebind-reader` stage and the RuntimeBindingIntegrity acceptance of its output
+# (FS-GG/.github#5120). Each leg reverts ONE guard and requires the leg's checks to fail: tests/coord-board-v2-projection,
+# the BoardV2Import end-to-end test and the engine end-to-end test in tests/board-v2-import/run.py (see leg.sh).
+#
+#     scripts/gate-mutate.py --specs tests/coord-reader-rebind-mutation/specs.yml
+#
+# Each leg rebuilds FS.GG.Coord.GitHub, BoardV2Import and the engine (about three minutes), so this is an on-demand sweep,
+# run when the rebind stage or RuntimeBindingIntegrity change. tests/coord-reader-rebind-mutation/run.sh checks on every
+# PR that each `find` still matches. RR12 guards against over-correction. Not legged, because a correct splice backstops
+# them and no input can reach them alone: the equality-after-strip check in rebindFields and the top-level-old check;
+# and the CLI-revision equality, which needs an engine and adapter of different revisions.
+mutations:
+- id: RR1/identity-shape-unchecked
+  gate: a replacement must be a 40- or 64-hex identity
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: '|| not (Regex.IsMatch(value, @"\A[0-9a-f]{40}([0-9a-f]{24})?\z"))'
+  replace: '|| false'
+  breaks: a replacement of any length or text is spliced in, so a truncated or foreign identity can be bound
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR2/uniqueness-unchecked
+  gate: 'the `"name": "old"` occurrence must be unique'
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: if matches.Count <> 1 then Error V2Enrollment.MalformedInput
+  replace: if matches.Count < 1 then Error V2Enrollment.MalformedInput
+  breaks: with a nested copy of the same value the splice picks the first occurrence and may change the wrong field
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR3/verified-table-skipped
+  gate: the executing reader must be listed in the verified-reader table
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: if installed <> adapter || not (known.Contains adapter) then refuse V2Enrollment.ReaderNotVerified
+  replace: if installed <> adapter then refuse V2Enrollment.ReaderNotVerified
+  breaks: any build that happens to be executing can rebind a binding, with no verified-release check
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR4/installed-equality-skipped
+  gate: the executing reader must be the named installed artifact
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: if installed <> adapter || not (known.Contains adapter) then refuse V2Enrollment.ReaderNotVerified
+  replace: if not (known.Contains adapter) then refuse V2Enrollment.ReaderNotVerified
+  breaks: a stage run from another build binds identities without proving it is the installed release
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR5/authentication-skipped
+  gate: the rebound runtime binding must authenticate against the blob at its population revision
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: '                                  && (V2Projection.authenticateProgrammeEnrollment after publicJson |> Result.isOk) -> ()'
+  replace: '                                  -> ()'
+  breaks: a runtime binding bound to another commitment is rebound and handed to the reader as if it were delivered
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR6/scope-without-host
+  gate: only the engine host can rebind a migration scope
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: |2-
+                          | None -> refuse V2Enrollment.ReaderNotVerified
+                      if cliRevision
+  replace: |2-
+                          | None -> (revision, adapter)
+                      if cliRevision
+  breaks: the BoardV2Import tool binds a scope's cliArtifactSha256 to something that is not the engine CLI
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR7/scope-key-set-unchecked
+  gate: a scope must have exactly the migration-scope key set
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: if Set.remove "workLevel" keys <> Set.ofList scopeKeys then refuse V2Enrollment.MalformedInput
+  replace: if false then refuse V2Enrollment.MalformedInput
+  breaks: any JSON document with the three identity keys is rebound as a migration scope
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR8/already-bound-written
+  gate: a run with nothing to rebind refuses and writes nothing
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: if rebound |> List.forall (fun (_, _, _, json, text, _) -> json = text) then refuse V2Enrollment.ReaderAlreadyBound
+  replace: if false then refuse V2Enrollment.ReaderAlreadyBound
+  breaks: an already-bound binding is copied and recorded as a rebind that changed nothing
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR9/record-diff-dropped
+  gate: the record names every changed field with its old and new value
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: if old <> value then diff.[name] <- JsonArray(JsonValue.Create old, JsonValue.Create value)
+  replace: if false then diff.[name] <- JsonArray(JsonValue.Create old, JsonValue.Create value)
+  breaks: the record no longer says what changed, so the rebind is not auditable
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR10/runtime-revision-not-executing
+  gate: recipeRevision is bound to the executing reader's embedded revision
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
+  find: '"recipeRevision", binding.RecipeRevision, revision ]'
+  replace: '"recipeRevision", binding.RecipeRevision, binding.RecipeRevision ]'
+  breaks: the runtime binding keeps the old reader's revision after the rebind
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR11/preflight-unverified-rebind-admitted
+  gate: a runtime binding rebound to an unlisted reader is never support
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2Preflight.fs
+  find: elif rebound && not (ctx.Inputs.KnownInstalledReaders.Contains runtime.ArtifactSha256) then Choice2Of3()
+  replace: elif false then Choice2Of3()
+  breaks: RuntimeBindingIntegrity accepts any reader identity in the runtime binding, so the integrity check no longer binds the reader
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR12/preflight-rebind-refused
+  gate: a runtime binding rebound to a verified reader is accepted (the over-correction leg)
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.GitHub/V2Preflight.fs
+  find: let ignored = if rebound then [ "populationRevision"; "artifactSha256"; "recipeRevision" ] else [ "populationRevision" ]
+  replace: let ignored = if rebound then [ "populationRevision" ] else [ "populationRevision" ]
+  breaks: the next cohort's preflight refuses the rebound runtime binding, so every cohort after an upgrade needs a hand assertion again
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR13/verb-unregistered
+  gate: the engine registers `enrollment rebind-reader`
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.Cli/EnrollmentApplication.fs
+  find: |2
+              "rebind-reader", "rebind-reader"
+  replace: ''
+  breaks: the designed stage is unreachable from the installed engine, so the hand edit is the only route again
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh
+- id: RR14/host-not-passed
+  gate: the engine runs the enrollment commands as the host whose CLI identity a scope names
+  command:
+  - bash
+  - tests/coord-reader-rebind-mutation/leg.sh
+  target: src/FS.GG.Coord.Cli/EnrollmentApplication.fs
+  find: Some(V2EnrollmentCommands.runHosted (System.Reflection.Assembly.GetExecutingAssembly()) command
+  replace: Some(V2EnrollmentCommands.run command
+  breaks: the engine cannot rebind a migration scope, so the status scope still needs a hand edit
+  anchor:
+    pattern: 'reader-rebind leg: \d+ passed, \d+ failed'
+    produced_by: tests/coord-reader-rebind-mutation/leg.sh

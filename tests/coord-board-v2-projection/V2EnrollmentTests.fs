@@ -186,8 +186,8 @@ module V2EnrollmentTests =
     let ``refusal codes are the closed printable case names and carry no input`` () =
         let all = [ DuplicateIssue; AlreadyEnrolled; IsPullRequest; NodeIdMismatch; NotProjectMember; RepositoryOutsideBinding; PredecessorCommitmentMismatch
                     PrefixNotPreserved; PlanNotAdmitted; PlanBlobAbsentOnMain; RowCapExceeded; ConflictingHumanValue; PartialVisibility; OutputExists; MalformedInput
-                    InputUnreadable; CustodyUnavailable; GitReadFailed; NativeReadFailed; SuccessorNotRederived ]
-        Assert.Equal(20, (all |> List.map refusalCode |> Set.ofList).Count)
+                    InputUnreadable; CustodyUnavailable; GitReadFailed; NativeReadFailed; SuccessorNotRederived; ReaderNotVerified; ReaderAlreadyBound ]
+        Assert.Equal(22, (all |> List.map refusalCode |> Set.ofList).Count)
         for refusal in all do Assert.Equal(string refusal, refusalCode refusal)
 
     [<Fact>]

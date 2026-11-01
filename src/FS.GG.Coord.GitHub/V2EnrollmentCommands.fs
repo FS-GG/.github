@@ -172,8 +172,8 @@ module V2EnrollmentCommands =
         | Ok request -> request
         | Error refusal -> refuse refusal
 
-    let constructorIdentity () =
-        let assembly = Reflection.Assembly.GetExecutingAssembly()
+    // The source revision embedded in an assembly's informational version and the sha256 of its file.
+    let private assemblyIdentity (assembly: Reflection.Assembly) =
         let artifact = File.ReadAllBytes assembly.Location |> sha256Hex
         let informational = assembly.GetCustomAttributes(typeof<Reflection.AssemblyInformationalVersionAttribute>, false)
                             |> Seq.cast<Reflection.AssemblyInformationalVersionAttribute> |> Seq.tryExactlyOne
@@ -183,6 +183,8 @@ module V2EnrollmentCommands =
             | _ -> ""
         if not (Regex.IsMatch(revision, @"\A[0-9a-f]{40}\z")) then refuse V2Enrollment.CustodyUnavailable
         revision, artifact
+
+    let constructorIdentity () = assemblyIdentity (Reflection.Assembly.GetExecutingAssembly())
 
     let plan (args: string array) =
         let a = named args [ "--request"; "--native-facts"; "--repository"; "--template-output"; "--payload-output" ]
@@ -813,12 +815,151 @@ module V2EnrollmentCommands =
             printfn "%s" (V2Preflight.toJson report)
             V2Preflight.exitCode report.Overall
 
-    let run (command: string) (args: string array) =
+    // ---- reader identity rebind after a coherent upgrade (#5120) ----
+
+    let rebindFields (json: string) (fields: (string * string * string) list) : Result<string, V2Enrollment.Refusal> =
+        try
+            let root = JsonNode.Parse json
+            if isNull root || root.GetValueKind() <> JsonValueKind.Object then Error V2Enrollment.MalformedInput
+            else
+                let topLevel (node: JsonNode) (name: string) =
+                    let mutable value: JsonNode = null
+                    if node.AsObject().TryGetPropertyValue(name, &value) && not (isNull value) && value.GetValueKind() = JsonValueKind.String then
+                        Some(value.GetValue<string>())
+                    else None
+                // Each old value must be the top-level value, and its `"name": "old"` occurrence must be unique in the text,
+                // so the splice cannot touch a nested or embedded copy.
+                let spliced =
+                    fields
+                    |> List.fold (fun (state: Result<string, V2Enrollment.Refusal>) (name, old, value) ->
+                        state
+                        |> Result.bind (fun text ->
+                            if topLevel root name <> Some old || not (Regex.IsMatch(value, @"\A[0-9a-f]{40}([0-9a-f]{24})?\z")) then Error V2Enrollment.MalformedInput
+                            else
+                                let matches = Regex.Matches(text, "\"" + Regex.Escape name + "\"(\\s*:\\s*\")" + Regex.Escape old + "\"")
+                                if matches.Count <> 1 then Error V2Enrollment.MalformedInput
+                                else
+                                    let m = matches.[0]
+                                    Ok(text.Substring(0, m.Index) + "\"" + name + "\"" + m.Groups.[1].Value + value + "\"" + text.Substring(m.Index + m.Length))))
+                        (Ok json)
+                spliced
+                |> Result.bind (fun text ->
+                    // The whole guard: with the named fields removed the documents are equal, and each named field now
+                    // holds its new value. Nothing else can have changed.
+                    let strip (source: string) =
+                        let node = JsonNode.Parse source
+                        for name, _, _ in fields do node.AsObject().Remove name |> ignore
+                        node
+                    let rebound = JsonNode.Parse text
+                    if JsonNode.DeepEquals(strip json, strip text) && fields |> List.forall (fun (name, _, value) -> topLevel rebound name = Some value) then Ok text
+                    else Error V2Enrollment.MalformedInput)
+        with _ -> Error V2Enrollment.MalformedInput
+
+    let private scopeKeys =
+        [ "sourceRevision"; "artifactSha256"; "cliArtifactSha256"; "principalId"; "principalLogin"; "selectedIssues"; "statusFieldId"
+          "roadmapFieldId"; "trackFieldId"; "observationFieldId"; "inReviewColor"; "inReviewDescription"; "views"; "initialPlanning" ]
+
+    // `rebind-reader`: rebind a runtime binding's (`artifactSha256`, `recipeRevision`) and/or a migration scope's
+    // (`sourceRevision`, `artifactSha256`, `cliArtifactSha256`) to the executing reader, after verifying that the executing
+    // adapter is the named installed artifact and is listed in the verified-reader table. Writes new owner-only files and a
+    // record of the change; never edits an input.
+    let private rebindReader (host: Reflection.Assembly option) (args: string array) =
+        if not (programmeDirectorySupported()) then refuse V2Enrollment.CustodyUnavailable
+        let values, _ =
+            namedOptional args [ "--installed-reader"; "--known-readers"; "--record-output" ]
+                [ "--runtime-binding"; "--runtime-output"; "--repository"; "--scope"; "--scope-output" ] []
+        let pairOf (input: string) (output: string) =
+            match values.TryGetValue input, values.TryGetValue output with
+            | (true, source), (true, target) -> Some(source, target)
+            | (false, _), (false, _) -> None
+            | _ -> refuse V2Enrollment.MalformedInput
+        let runtime = pairOf "--runtime-binding" "--runtime-output"
+        let scope = pairOf "--scope" "--scope-output"
+        if runtime.IsNone && scope.IsNone then refuse V2Enrollment.MalformedInput
+        if runtime.IsSome <> values.ContainsKey "--repository" then refuse V2Enrollment.MalformedInput
+        let sources = [ values.["--installed-reader"]; values.["--known-readers"] ] @ ([ runtime; scope ] |> List.choose id |> List.map fst)
+        let targets = values.["--record-output"] :: ([ runtime; scope ] |> List.choose id |> List.map snd)
+        distinctPaths sources targets
+        outputsAbsent targets
+        // The executing reader and the installed release it must be.
+        let revision, adapter = constructorIdentity ()
+        let installed = sha256Hex (read 268435456 values.["--installed-reader"])
+        let known =
+            (readText 65536 values.["--known-readers"]).Split([| '\n' |], StringSplitOptions.RemoveEmptyEntries)
+            |> Array.map _.Trim()
+            |> Array.filter (fun line -> Regex.IsMatch(line, @"\A[0-9a-f]{64}\z"))
+            |> Set.ofArray
+        if installed <> adapter || not (known.Contains adapter) then refuse V2Enrollment.ReaderNotVerified
+        let rebound =
+            [ match runtime with
+              | None -> ()
+              | Some(source, target) ->
+                  let json = readText programmeInputLimit source
+                  let binding =
+                      match V2Projection.decodeBinding json with
+                      | Ok binding when V2Projection.isProgrammeBinding binding -> binding
+                      | _ -> refuse V2Enrollment.MalformedInput
+                  // A runtime binding is bound to a protected delivery: the rebound binding must still authenticate against the
+                  // public blob at its own population revision.
+                  let publicJson = protectedPublicBlob values.["--repository"] binding.PopulationRevision
+                  let fields = [ "artifactSha256", binding.ArtifactSha256, adapter; "recipeRevision", binding.RecipeRevision, revision ]
+                  let text = match rebindFields json fields with Ok text -> text | Error refusal -> refuse refusal
+                  match V2Projection.decodeBinding text with
+                  | Ok after when after.ArtifactSha256 = adapter && after.RecipeRevision = revision && after.PopulationRevision = binding.PopulationRevision
+                                  && (V2Projection.authenticateProgrammeEnrollment after publicJson |> Result.isOk) -> ()
+                  | _ -> refuse V2Enrollment.PredecessorCommitmentMismatch
+                  yield "runtimeBinding", source, target, json, text, fields
+              match scope with
+              | None -> ()
+              | Some(source, target) ->
+                  // A migration scope also names the engine CLI, so only the engine host can rebind one, and only when it is
+                  // the same coherent revision as the adapter.
+                  let cliRevision, cli =
+                      match host with
+                      | Some assembly -> (try assemblyIdentity assembly with _ -> refuse V2Enrollment.ReaderNotVerified)
+                      | None -> refuse V2Enrollment.ReaderNotVerified
+                  if cliRevision <> revision then refuse V2Enrollment.ReaderNotVerified
+                  let json = readText 262144 source
+                  let node = try JsonNode.Parse json with _ -> refuse V2Enrollment.MalformedInput
+                  let keys = try node.AsObject() |> Seq.map _.Key |> Set.ofSeq with _ -> refuse V2Enrollment.MalformedInput
+                  if Set.remove "workLevel" keys <> Set.ofList scopeKeys then refuse V2Enrollment.MalformedInput
+                  let field (name: string) = try node.[name].GetValue<string>() with _ -> refuse V2Enrollment.MalformedInput
+                  let fields =
+                      [ "sourceRevision", field "sourceRevision", revision; "artifactSha256", field "artifactSha256", adapter
+                        "cliArtifactSha256", field "cliArtifactSha256", cli ]
+                  let text = match rebindFields json fields with Ok text -> text | Error refusal -> refuse refusal
+                  yield "scope", source, target, json, text, fields ]
+        if rebound |> List.forall (fun (_, _, _, json, text, _) -> json = text) then refuse V2Enrollment.ReaderAlreadyBound
+        let record = JsonObject()
+        record.["schema"] <- JsonValue.Create "fsgg.board-v2-reader-rebind/1"
+        record.["stage"] <- JsonValue.Create "rebind-reader"
+        record.["at"] <- JsonValue.Create(DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", Globalization.CultureInfo.InvariantCulture))
+        let reader = JsonObject()
+        reader.["revision"] <- JsonValue.Create revision
+        reader.["artifactSha256"] <- JsonValue.Create adapter
+        reader.["installedSha256"] <- JsonValue.Create installed
+        reader.["inVerifiedTable"] <- JsonValue.Create true
+        record.["reader"] <- reader
+        for kind, _, target, json, text, fields in rebound do
+            let entry = JsonObject()
+            entry.["sourceSha256"] <- JsonValue.Create(sha256Hex (strictUtf8.GetBytes json))
+            entry.["outputSha256"] <- JsonValue.Create(sha256Hex (strictUtf8.GetBytes text))
+            let diff = JsonObject()
+            for name, old, value in fields do
+                if old <> value then diff.[name] <- JsonArray(JsonValue.Create old, JsonValue.Create value)
+            entry.["fieldDiff"] <- diff
+            record.[kind] <- entry
+            write target (strictUtf8.GetBytes text)
+        write values.["--record-output"] (strictUtf8.GetBytes(record.ToJsonString()))
+        printfn "reader identity rebound; targets=%d; offline only" rebound.Length
+
+    let private runWith (host: Reflection.Assembly option) (command: string) (args: string array) =
         try
             match command with
             | "plan-successor" -> plan args; 0
             | "prepare-successor" -> prepare args; 0
             | "bind-runtime" -> bindRuntime args; 0
+            | "rebind-reader" -> rebindReader host args; 0
             | "resolve-issues" -> resolveIssues args; 0
             | "preflight" -> preflight args
             | _ -> renderCarrier args; 0
@@ -831,4 +972,8 @@ module V2EnrollmentCommands =
             2
 
 
-    let commands = [ "plan-successor"; "prepare-successor"; "bind-runtime"; "render-carrier"; "resolve-issues"; "preflight" ]
+    let run (command: string) (args: string array) = runWith None command args
+
+    let runHosted (host: Reflection.Assembly) (command: string) (args: string array) = runWith (Some host) command args
+
+    let commands = [ "plan-successor"; "prepare-successor"; "bind-runtime"; "rebind-reader"; "render-carrier"; "resolve-issues"; "preflight" ]

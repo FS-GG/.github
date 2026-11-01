@@ -1468,6 +1468,72 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         row = self.verdicts(not_it)[1]['SuccessorIntegrity']
         self.assertEqual(('Unsupported', 'SuccessorCommitmentMismatch'), (row['verdict'], row['reason']))
 
+    def test_rebind_reader_rebinds_only_the_reader_identity_to_the_executing_verified_reader(self):
+        # #5120: after a coherent upgrade the runtime binding still names the old reader (plan copies it, bind-runtime may
+        # change only populationRevision). rebind-reader is the designed stage that replaces the hand edit.
+        if not SOURCE_REVISION:
+            self.skipTest('needs the build revision')
+        fixture = self.fixture
+        out = self.dir / 'rebind'
+        out.mkdir()
+        bound = self.run_cli('bind-runtime', '--private-binding', fixture['private'], '--repository', fixture['repository'],
+                             '--merge-sha', fixture['merge'], '--runtime-output', out / 'runtime.json')
+        self.assertEqual(0, bound.returncode, bound.stderr)
+        adapter = DLL.parent / 'FS.GG.Coord.GitHub.dll'
+        adapter_sha = hashlib.sha256(adapter.read_bytes()).hexdigest()
+        table = out / 'verified.txt'
+        table.write_text(adapter_sha + '\n')
+        def rebind(name, *extra, runtime=out / 'runtime.json', installed=adapter, known=table):
+            return self.run_cli('rebind-reader', '--installed-reader', installed, '--known-readers', known, '--record-output', out / (name + '-record.json'),
+                                '--runtime-binding', runtime, '--repository', fixture['repository'], '--runtime-output', out / (name + '.json'), *extra)
+        # Causal refusals first: none of them writes anything.
+        other = out / 'other.txt'
+        other.write_text('f' * 64 + '\n')
+        self.refused(rebind('unlisted', known=other), 'ReaderNotVerified')
+        self.refused(rebind('elsewhere', installed=DLL), 'ReaderNotVerified')
+        shutil.copyfile(out / 'runtime.json', out / 'scope-input.json')
+        self.refused(rebind('scope-without-host', '--scope', out / 'scope-input.json', '--scope-output', out / 'never-scope.json'), 'ReaderNotVerified')
+        self.refused(rebind('unbound', runtime=fixture['private']), 'GitReadFailed')
+        # A binding whose population revision holds another commitment does not authenticate, so it is not rebound.
+        other_public = self.make_predecessor('rebind-other', 3)['public'].read_bytes()
+        elsewhere_merge = self.commit_manifest(fixture['repository'], other_public)
+        runtime_text = (out / 'runtime.json').read_text()
+        self.assertEqual(1, runtime_text.count(fixture['merge']))
+        (out / 'misbound-input.json').write_text(runtime_text.replace(f'"populationRevision":"{fixture["merge"]}"', f'"populationRevision":"{elsewhere_merge}"'))
+        self.refused(rebind('misbound', runtime=out / 'misbound-input.json'), 'PredecessorCommitmentMismatch')
+        for name in ('unlisted', 'elsewhere', 'scope-without-host', 'unbound', 'misbound'):
+            self.assertFalse((out / (name + '.json')).exists())
+            self.assertFalse((out / (name + '-record.json')).exists())
+        # The stage: only artifactSha256 and recipeRevision change, to the executing adapter's sha and embedded revision.
+        done = rebind('rebound')
+        self.assertEqual(0, done.returncode, done.stderr)
+        self.assertEqual('reader identity rebound; targets=1; offline only\n', done.stdout)
+        before = (out / 'runtime.json').read_text()
+        after = (out / 'rebound.json').read_text()
+        old = json.loads(before)
+        self.assertEqual(before.replace(old['artifactSha256'], adapter_sha).replace(old['recipeRevision'], SOURCE_REVISION), after)
+        self.assertEqual(0o600, (out / 'rebound.json').stat().st_mode & 0o777)
+        record = json.loads((out / 'rebound-record.json').read_text())
+        self.assertEqual(('fsgg.board-v2-reader-rebind/1', 'rebind-reader', SOURCE_REVISION, adapter_sha),
+                         (record['schema'], record['stage'], record['reader']['revision'], record['reader']['artifactSha256']))
+        self.assertEqual({'artifactSha256': [old['artifactSha256'], adapter_sha], 'recipeRevision': [old['recipeRevision'], SOURCE_REVISION]},
+                         record['runtimeBinding']['fieldDiff'])
+        self.assertEqual(hashlib.sha256(after.encode()).hexdigest(), record['runtimeBinding']['outputSha256'])
+        self.assertNotIn('nonceHex', json.dumps(record))
+        # Rebinding the rebound binding has nothing to do.
+        self.refused(rebind('again', runtime=out / 'rebound.json'), 'ReaderAlreadyBound')
+        # An output that exists is never overwritten.
+        self.refused(rebind('rebound'), 'OutputExists')
+        # The next cohort's preflight accepts the rebound runtime binding beside the old private pair, but only for a
+        # verified reader.
+        env, _ = self.fake_gh()
+        accepted, _ = self.preflight(env, online=False, extra=['--runtime-binding', out / 'rebound.json', '--known-readers', table])
+        row = self.verdicts(accepted)[1]['RuntimeBindingIntegrity']
+        self.assertEqual('SupportedForNextStage', row['verdict'], row)
+        self.assertIn('rebound to a verified installed reader', row['evidence'])
+        unverified, _ = self.preflight(env, online=False, extra=['--runtime-binding', out / 'rebound.json', '--known-readers', other])
+        self.assertEqual('RuntimeBinding/NotInKnownTable', self.verdicts(unverified)[1]['RuntimeBindingIntegrity']['gap'])
+
     def routine_repository(self, branch='routine/synthetic', message='feat: synthetic change\n\nRefs #4941', lax_base_gate=False):
         """A real checkout carrying the routine policy: a base commit on main, then one routine commit on `branch`."""
         repository = self.dir / ('routine-' + str(len(list(self.dir.iterdir()))))
@@ -1915,6 +1981,36 @@ class EngineShimTests(unittest.TestCase):
                                 '--template-output', '/tmp/never-template.json', '--payload-output', '/tmp/never-payload.json')
         self.assertEqual((2, 'board-v2 successor refused: InputUnreadable\n'), (missing.returncode, missing.stderr))
         self.assertFalse(pathlib.Path('/tmp/never-template.json').exists())
+
+    def test_rebind_reader_rebinds_a_migration_scope_to_the_engine_host(self):
+        # #5120: a migration scope also names the engine CLI, so only the engine (the host) can rebind it.
+        engine = pathlib.Path(self.engine)
+        adapter = engine.parent / 'FS.GG.Coord.GitHub.dll'
+        cli = engine.parent / 'fsgg-coord-engine.dll'
+        adapter_sha = hashlib.sha256(adapter.read_bytes()).hexdigest()
+        cli_sha = hashlib.sha256(cli.read_bytes()).hexdigest()
+        out = pathlib.Path(tempfile.mkdtemp(prefix='rebind-scope-'))
+        self.addCleanup(shutil.rmtree, out, True)
+        scope = {'sourceRevision': '7' * 40, 'artifactSha256': '4' * 64, 'cliArtifactSha256': '5' * 64, 'principalId': 'U_synthetic',
+                 'principalLogin': 'synthetic', 'selectedIssues': [], 'statusFieldId': 's', 'roadmapFieldId': 'r', 'trackFieldId': 't',
+                 'observationFieldId': 'o', 'inReviewColor': 'YELLOW', 'inReviewDescription': '', 'views': [], 'initialPlanning': []}
+        (out / 'scope.json').write_text(json.dumps(scope, indent=1))
+        (out / 'verified.txt').write_text(adapter_sha + '\n')
+        done = self.run_shim('enrollment', 'rebind-reader', '--installed-reader', adapter, '--known-readers', out / 'verified.txt',
+                             '--record-output', out / 'record.json', '--scope', out / 'scope.json', '--scope-output', out / 'rebound.json')
+        self.assertEqual(0, done.returncode, done.stderr)
+        record = json.loads((out / 'record.json').read_text())
+        revision = record['reader']['revision']
+        self.assertRegex(revision, r'\A[0-9a-f]{40}\Z')
+        before = (out / 'scope.json').read_text()
+        self.assertEqual(before.replace('7' * 40, revision).replace('4' * 64, adapter_sha).replace('5' * 64, cli_sha), (out / 'rebound.json').read_text())
+        self.assertEqual({'sourceRevision': ['7' * 40, revision], 'artifactSha256': ['4' * 64, adapter_sha], 'cliArtifactSha256': ['5' * 64, cli_sha]},
+                         record['scope']['fieldDiff'])
+        # A scope with any other key set is not a migration scope.
+        (out / 'odd.json').write_text(json.dumps(dict(scope, extra=1)))
+        odd = self.run_shim('enrollment', 'rebind-reader', '--installed-reader', adapter, '--known-readers', out / 'verified.txt',
+                            '--record-output', out / 'odd-record.json', '--scope', out / 'odd.json', '--scope-output', out / 'odd-out.json')
+        self.assertEqual((2, 'board-v2 successor refused: MalformedInput\n'), (odd.returncode, odd.stderr))
 
     def test_the_existing_skill_preflight_root_is_not_shadowed(self):
         skill = self.run_shim('preflight', 'assess')

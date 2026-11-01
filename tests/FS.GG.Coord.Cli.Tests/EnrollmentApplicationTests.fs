@@ -35,9 +35,10 @@ let private programSource () =
 [<Fact>]
 let ``the engine answers exactly two new roots and the verbs map onto the shared library commands`` () =
     Assert.Equal<string list>([ "enrollment"; "route-preflight" ], EnrollmentApplication.roots)
-    Assert.Equal(5, EnrollmentApplication.enrollmentVerbs.Length)
+    Assert.Equal(6, EnrollmentApplication.enrollmentVerbs.Length)
     for _, command in EnrollmentApplication.enrollmentVerbs do Assert.Contains(command, V2EnrollmentCommands.commands)
-    // All six library commands are reachable: five through `enrollment`, `preflight` through `route-preflight`.
+    // All seven library commands are reachable: six through `enrollment` (rebind-reader, #5120, among them), `preflight`
+    // through `route-preflight`.
     Assert.Equal<string list>(V2EnrollmentCommands.commands |> List.sort, ("preflight" :: (EnrollmentApplication.enrollmentVerbs |> List.map snd)) |> List.sort)
     // No other root is answered, including the existing skill `preflight` root and the other out-of-catalogue roots.
     for other in [ "preflight"; "context-view"; "observe-operation"; "board-v2"; "scan"; "plan-successor"; "" ] do
@@ -46,7 +47,7 @@ let ``the engine answers exactly two new roots and the verbs map onto the shared
 
 [<Fact>]
 let ``help documents every verb, every route and the exit codes`` () =
-    for word in [ "plan"; "prepare"; "bind-runtime"; "render-carrier"; "resolve-issues"; "route-preflight"
+    for word in [ "plan"; "prepare"; "bind-runtime"; "rebind-reader"; "render-carrier"; "resolve-issues"; "route-preflight"
                   "ProgrammeEnrollmentSuccessor"; "RoutineDelivery"; "PublicationWriterRegistration"; "BindRuntime"; "RunWriter"; "10 unsupported"; "11 unknown" ] do
         Assert.Contains(word, EnrollmentApplication.usage)
     for root in EnrollmentApplication.roots do
