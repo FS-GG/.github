@@ -149,7 +149,7 @@ Run them in this order. A failed readback stops the sequence. Steps 1 to 7 are i
   --record-sha256 3db3a5f38aec1a01d2d5fbbb471bb272c44fc88c633537523245a67620b7210e --record-file <that op's learn-evidence record.json>
 ```
 
-Then run `--check` with the same op id and digest. Expect exit 0 and the readback to equal. Record the RESULT sha256 in journal
+Then run `--check` with the same op id and digest. Expect exit 0, with the mounted view showing the same digest. Record the RESULT sha256 in journal
 entry `0002-ack`.
 *Admission inputs:* the digest admitted in [#4516 6360174387](https://github.com/FS-GG/.github/issues/4516#issuecomment-6360174387)
 and the writer sha256 from step 1.
