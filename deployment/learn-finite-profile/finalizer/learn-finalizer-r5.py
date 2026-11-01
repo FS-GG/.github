@@ -4,7 +4,11 @@ Refs FS-GG/.github#4647). Finalizer r4 (baseline/libexec/learn-finalizer-r4.py, 
 applies it to a pod. THIS FILE IS SOURCE: nothing is installed, admitted or run here.
 
 Runs ONLY as uid 30034, as the transient user unit learn-fin-<id>.service that the pod operator starts BEFORE the pod unit (which BindsTo it):
-    learn-finalizer-r5.py --id <op-id> --source-identity <64 hex>        Environment: FSGG_NONCE=<128-bit hex>, FSGG_PG_IMAGE=<64 hex image Id of the pg image>
+    learn-finalizer-r5.py --id <op-id> --source-identity <64 hex> [--input synthetic]   Environment: FSGG_NONCE=<128-bit hex>, FSGG_PG_IMAGE=<64 hex image Id of the pg image>
+`--input synthetic` (Refs FS-GG/.github#5184) is the explicit declaration of a SYNTHETIC-input op (the pod harness and the install receipt op): the claim and the
+sealed manifest are read from synthetic-claims/ and synthetic-inputs/ with the synthetic record types (learn-input-claim-synthetic/1, provenance synthetic,
+realSpoolProvenance false), and every record says `inputProvenance`. Without it nothing changes: a synthetic claim is never read, and a synthetic op whose
+finalizer lacks the flag finds no real claim and ends in a retirement failure (and the reverse), so neither kind can be retired as the other.
 It is the ONLY custody actor. Names it expects from the pod operator (a later PR provides them): pod and pod unit learn-pod-<id>(.service), containers
 learn-pod-<id>-{host,recv,feed,pg}, the loop volume mounted at <volume_root>/<id>.mnt, the per-run credential tmpfs at /run/user/30034/learn-cred/<id>.
 
@@ -309,6 +313,9 @@ OK_REASONS = {'host': ('ok', 'signalled'), 'recv': ('ok', 'signalled'), 'feed': 
 STATUS_REASONS = ('ok', 'error', 'gate-refused', 'enospc', 'signalled')
 OPID_RE = re.compile(r'^[a-z0-9][a-z0-9-]{2,58}$')
 HEX64 = re.compile(r'^[0-9a-f]{64}$')
+# where each input kind's claim and sealed snapshot live, and their record types (learn_seal_claim.py's constants; #5184). 'real' is r5's original reading.
+INPUT_KINDS = {'real': {'claims': 'claims', 'claim': 'learn-input-claim/1', 'inputs': 'inputs', 'sealed': 'learn-input-snapshot/1'},
+               'synthetic': {'claims': 'synthetic-claims', 'claim': 'learn-input-claim-synthetic/1', 'inputs': 'synthetic-inputs', 'sealed': 'learn-input-snapshot-synthetic/1'}}
 VOLUME_ROOT = '/mnt/storage/containers/learn-qualification/learn-pod'
 VOLUME_CAP, VOLUME_BUDGET, VOLUME_SAMPLE_S, VOLUME_LOW = 1 << 30, 0.90, 5, 1 << 20
 MAX_CHECKPOINTS = 8
@@ -328,7 +335,7 @@ VOLUME_STATE = {'samples': 0, 'maxUsed': 0.0, 'last': None, 'errors': 0, 'lastAt
 
 def configure(argv, environ, euid=None, **over):
     """Validate the invocation and set the module state the r4 blocks below read (OPID, NONCE, CUST, EVID, OPU, FINU, REC, CHAIN, T0, ...)."""
-    global OPID, IDENT, NONCE, PGIMG, POD, PGC, CTRS, OPU, FINU, HOME, VIEW, CUST, EVID, CKDIR, VOLUME, CRED, MARKER, REC, CHAIN, T0, SELF_SHA, CFG
+    global OPID, IDENT, INPUT, NONCE, PGIMG, POD, PGC, CTRS, OPU, FINU, HOME, VIEW, CUST, EVID, CKDIR, VOLUME, CRED, MARKER, REC, CHAIN, T0, SELF_SHA, CFG
     CFG = dict(DEFAULTS, **over)
     if (os.geteuid() if euid is None else euid) != 30034:
         sys.exit('refuse: run as uid 30034')
@@ -337,9 +344,11 @@ def configure(argv, environ, euid=None, **over):
         os.umask(0o077)
         os.chdir('/')
     SELF_SHA = hashlib.sha256(open(os.path.abspath(__file__), 'rb').read()).hexdigest()
-    if len(argv) != 4 or argv[0] != '--id' or argv[2] != '--source-identity' or not OPID_RE.fullmatch(argv[1]) or not HEX64.fullmatch(argv[3]):
-        sys.exit('usage: --id <op-id> --source-identity <64 hex>')
+    if (len(argv) not in (4, 6) or argv[0] != '--id' or argv[2] != '--source-identity' or not OPID_RE.fullmatch(argv[1]) or not HEX64.fullmatch(argv[3])
+            or (len(argv) == 6 and argv[4:] != ['--input', 'synthetic'])):
+        sys.exit('usage: --id <op-id> --source-identity <64 hex> [--input synthetic]')
     OPID, IDENT = argv[1], argv[3]
+    INPUT = 'synthetic' if len(argv) == 6 else 'real'
     NONCE = environ.get('FSGG_NONCE', '')
     if not re.fullmatch(r'[0-9a-f]{32}', NONCE):
         sys.exit('refuse: FSGG_NONCE missing')
@@ -356,7 +365,7 @@ def configure(argv, environ, euid=None, **over):
     T0 = time.monotonic()
     CHAIN = {'head': '0' * 64, 'lines': 0, 'lastAnchor': time.monotonic()}
     REC = {'schema': None, 'opId': OPID, 'finalizerSha256': SELF_SHA, 'runNonceSha256': hashlib.sha256(NONCE.encode()).hexdigest(),
-           'startUtc': datetime.now(timezone.utc).isoformat(), 'events': []}
+           'inputProvenance': INPUT, 'startUtc': datetime.now(timezone.utc).isoformat(), 'events': []}
     BUDGET.update(members=MAX_MEMBERS, content=CONTENT_CAP)
     VOLUME_STATE.update(samples=0, maxUsed=0.0, last=None, errors=0, lastAt=None)
     SLICE0.clear()
@@ -408,19 +417,24 @@ def sha_bytes(b):
 def snapshot_read():
     """The claim names this op and this source identity, and the sealed manifest it records exists with that sha256. Only metadata is read here.
     Returns the state the end-of-run check compares against; raises Refuse."""
-    raw = read_pinned(f'{VIEW}/claims/{IDENT}.claim', CFG['chain_start'], CFG['owner_uid'], 65536)
+    k = INPUT_KINDS[INPUT]
+    raw = read_pinned(f"{VIEW}/{k['claims']}/{IDENT}.claim", CFG['chain_start'], CFG['owner_uid'], 65536)
     claim = json.loads(raw)
-    if claim.get('schema') != 'learn-input-claim/1' or claim.get('opId') != OPID or claim.get('sourceIdentity') != IDENT:
+    if claim.get('schema') != k['claim'] or claim.get('opId') != OPID or claim.get('sourceIdentity') != IDENT:
         refuse('the live claim is not this op\'s claim for this source identity')
+    if INPUT == 'synthetic' and (claim.get('provenance') != 'synthetic' or claim.get('realSpoolProvenance') is not False):
+        refuse('the synthetic claim does not say synthetic provenance')
     sid = claim.get('snapshotId')
     if not isinstance(sid, str) or not OPID_RE.fullmatch(sid):
         refuse('the claim has no valid snapshot id')
-    smraw = read_pinned(f'{VIEW}/inputs/{sid}.manifest.json', CFG['chain_start'], CFG['owner_uid'], 1 << 20)
+    smraw = read_pinned(f"{VIEW}/{k['inputs']}/{sid}.manifest.json", CFG['chain_start'], CFG['owner_uid'], 1 << 20)
     if sha_bytes(smraw) != claim.get('sealedManifestSha256'):
         refuse('the sealed manifest does not have the sha256 the claim records')
     sm = json.loads(smraw)
-    if sm.get('schema') != 'learn-input-snapshot/1' or sm.get('snapshotId') != sid or sm.get('sourceIdentity') != IDENT or not isinstance(sm.get('files'), list):
+    if sm.get('schema') != k['sealed'] or sm.get('snapshotId') != sid or sm.get('sourceIdentity') != IDENT or not isinstance(sm.get('files'), list):
         refuse('the sealed manifest names another snapshot or source')
+    if INPUT == 'synthetic' and (sm.get('provenance') != 'synthetic' or sm.get('realSpoolProvenance') is not False):
+        refuse('the synthetic sealed manifest does not say synthetic provenance')
     return {'claimSha256': sha_bytes(raw), 'sealedManifestSha256': sha_bytes(smraw), 'snapshotId': sid, 'files': sm['files']}
 
 
@@ -450,7 +464,7 @@ def snapshot_verify(start):
         now_ = snapshot_read()
         out['claimUnchanged'] = now_['claimSha256'] == start['claimSha256']
         out['manifestUnchanged'] = now_['sealedManifestSha256'] == start['sealedManifestSha256']
-        snap = f"{VIEW}/inputs/{start['snapshotId']}"
+        snap = f"{VIEW}/{INPUT_KINDS[INPUT]['inputs']}/{start['snapshotId']}"
         want = {}
         for f in start['files']:
             p = f.get('path')

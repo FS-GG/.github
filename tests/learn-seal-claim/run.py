@@ -1243,6 +1243,82 @@ with tempfile.TemporaryDirectory() as tmp:
     refused(lambda: L.seal_synthetic(sb4, L.take_synthetic_manifest(sb4, now=clock, extra_real_roots=EX), 'syn-bad', now=clock, extra_real_roots=EX, copy=bad_copy, **e.kw()), 'does not match its source hash', 'a corrupt copy is refused')
     check(not os.path.lexists(os.path.join(e.root, L.SYNTHETIC_INPUTS, 'syn-bad')), 'a corrupt synthetic copy is removed')
 
+    # ---- S3b (#5192 review observation 1): a swap AFTER the last file is copied and before the sealed record is written. The copy loop has
+    # finished, so only the post-copy re-checks (manifest M3, the declaration, the subtree path guard) stand between the swap and a seal. Each
+    # swap fires inside the injected copy function, right after the LAST file's bytes land. Clock: the suite's injected `clock`. Source: trees
+    # built here. Nothing outside the temp tree is read or written.
+    def copy_then(sbx, swap):
+        mx = L.take_synthetic_manifest(sbx, now=clock, extra_real_roots=EX)
+        done = []
+
+        def cp(src, dst):
+            shutil.copyfile(src, dst)
+            done.append(dst)
+            if len(done) == len(mx['files']):
+                swap(sbx)
+        return mx, cp
+
+    def gone(snap):
+        return (not os.path.lexists(os.path.join(e.root, L.SYNTHETIC_INPUTS, snap)) and not os.path.lexists(os.path.join(e.root, L.SYNTHETIC_INPUTS, snap + '.manifest.json'))
+                and not os.path.lexists(os.path.join(e.root, L.SYNTHETIC_CLAIMS)))
+
+    def same_inode_dir_swap(sbx):
+        # the subtree parent is renamed and a symlink takes its name: every file keeps its inode, size, sha256, mtime and ctime, so M3 equals M1
+        os.rename(os.path.join(sbx, parent), os.path.join(sbx, parent + '.moved'))
+        os.symlink(parent + '.moved', os.path.join(sbx, parent))
+
+    sb8 = synth_base(tmp, 'syn-post-1', nonce='n8')
+    m8, cp8 = copy_then(sb8, same_inode_dir_swap)
+    refused(lambda: L.seal_synthetic(sb8, m8, 'syn-post-1', now=clock, extra_real_roots=EX, copy=cp8, **e.kw()), 'contains a symlink',
+            'S3b: a subtree parent swapped for a symlink (same inodes) after the last copy refuses the seal')
+    check(gone('syn-post-1'), 'S3b: the post-copy symlink swap leaves no snapshot directory, sealed manifest or claim directory')
+    check(L.manifest_diff(m8, L.take_manifest(sb8, m8['subtrees'])) == [], 'S3b control: the same-inode swap is invisible to M3, so only the post-copy path guard can refuse it')
+    # causal control: with the post-copy guard disabled (the first call, before the copy, still runs) the same swap is SEALED, so the refusal above
+    # is caused by the post-copy re-check and nothing else
+    real_guard = L.synthetic_guard
+    calls = []
+
+    def first_call_only(base, extra=()):
+        calls.append(base)
+        return real_guard(base, extra) if len(calls) == 1 else os.path.realpath(base)
+    sb9 = synth_base(tmp, 'syn-post-2', nonce='n9')
+    m9, cp9 = copy_then(sb9, same_inode_dir_swap)
+    try:
+        L.synthetic_guard = first_call_only
+        r9 = L.seal_synthetic(sb9, m9, 'syn-post-2', now=clock, extra_real_roots=EX, copy=cp9, **e.kw())
+    finally:
+        L.synthetic_guard = real_guard
+    check(len(calls) == 2 and r9['files'] == len(m9['files']), 'S3b MUTANT-control: without the post-copy guard the swapped source is sealed (the guard runs twice and only the second sees the swap)')
+
+    def relink_to_real(sbx):
+        f = os.path.join(sbx, SUBS[1], 'one.ready')
+        os.remove(f)
+        os.link(os.path.join(e.base, SUBS[1], 'one.ready'), f)
+    sb10 = synth_base(tmp, 'syn-post-3', nonce='n10')
+    m10, cp10 = copy_then(sb10, relink_to_real)
+    refused(lambda: L.seal_synthetic(sb10, m10, 'syn-post-3', now=clock, extra_real_roots=EX, copy=cp10, **e.kw()), 'source changed during the copy',
+            'S3b: a synthetic file relinked to a real-spool file after the last copy refuses the seal (M3 sees the inode and the bytes)')
+    check(gone('syn-post-3'), 'S3b: the post-copy relink leaves nothing behind')
+
+    def parent_to_real(sbx):
+        shutil.rmtree(os.path.join(sbx, parent))
+        os.symlink(os.path.join(e.base, parent), os.path.join(sbx, parent))
+    sb11 = synth_base(tmp, 'syn-post-4', nonce='n11')
+    m11, cp11 = copy_then(sb11, parent_to_real)
+    refused(lambda: L.seal_synthetic(sb11, m11, 'syn-post-4', now=clock, extra_real_roots=EX, copy=cp11, **e.kw()), 'source changed during the copy',
+            'S3b: a subtree parent swapped for a symlink into the real spool after the last copy refuses the seal')
+    check(gone('syn-post-4'), 'S3b: the post-copy swap into the real spool leaves nothing behind')
+
+    def swap_copied_bytes(sbx):
+        # the swap targets the COPY, not the source: the copy loop's own hash check runs right after copy() returns, so it must refuse
+        last = sorted(os.path.join(dp, fn) for dp, _, fs in os.walk(os.path.join(e.root, L.SYNTHETIC_INPUTS, 'syn-post-5')) for fn in fs)
+        open(last[-1], 'ab').write(b'!')
+    sb12 = synth_base(tmp, 'syn-post-5', nonce='n12')
+    m12, cp12 = copy_then(sb12, swap_copied_bytes)
+    refused(lambda: L.seal_synthetic(sb12, m12, 'syn-post-5', now=clock, extra_real_roots=EX, copy=cp12, **e.kw()), 'does not match its source hash',
+            'S3b: a copied file altered right after the last copy refuses the seal')
+    check(gone('syn-post-5'), 'S3b: the altered copy is removed')
+
 # ---- S4: real mode is unchanged
 with tempfile.TemporaryDirectory() as tmp:
     e = Env(tmp)

@@ -292,7 +292,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
 
 # 7. Pod operator r2 and its README are published source: scan them with the same classes and person list, and explain every match.
-R2_FILES = ('pod-operator/learn-pod-operator-r2.py', 'pod-operator/README.md')
+R2_FILES = ('pod-operator/learn-pod-operator-r2.py', 'pod-operator/README.md', 'pod-harness/learn-pod-harness-r1.py', 'pod-harness/README.md')     # #5184: the harness too
 R2_EXPLAINED = {
     ('ipv4', '127.0.0.1'): 'the pod-internal loopback address PostgreSQL listens on',
     ('ipv6', '0::'): 'the cgroup v2 line prefix read from /proc/<pid>/cgroup',
@@ -302,6 +302,11 @@ R2_EXPLAINED = {
     ('person-context', 'operator described'): 'the role word "operator" before a common word (r1 text)',
     ('person-context', 'operator r6.'): 'the role word "operator" before a revision',
     ('person-context', 'operator: gate'): 'the role word "operator" in the README title',
+    ('url', 'http://127.0.0.1:{HOST_PORT}/'): '#5184: the Host serve prefix, loopback inside the pod',
+    ('uuid', 'f73401b4-b65d-4688-a960-a5de59b8f830'): '#5184: project A of the public O3-04 installed-adoption request template (a fixture id)',
+    ('uuid', '1e2807c3-8669-4bf3-baf2-c184532b3ea4'): '#5184: project B of the public O3-04 installed-adoption request template (a fixture id)',
+    ('uuid', 'c5d6f4a8-3e1b-4f0a-9b2c-7d8e9f0a1b2c'): '#5184: the fixed fixture permit id the pod Host serves with (not a secret)',
+    ('url', 'https://github\\.com/FS-GG/[A-Za-z0-9._-'): '#5184: the harness\'s pattern for an admission reference (a public FS-GG comment URL)',
 }
 m7 = manifest(PROFILE)
 for rel in R2_FILES:

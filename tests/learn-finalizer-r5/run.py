@@ -8,7 +8,7 @@
 # from finalizer r4 and from the pod operator are byte for byte the originals. stdlib only; no container, no root, no systemd, no network.
 #
 # The two `paths:` lists of the workflow are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
-import ast, hashlib, importlib.util, io, json, os, stat, sys, tarfile, tempfile, time
+import ast, hashlib, importlib.util, io, json, os, shutil, stat, sys, tarfile, tempfile, time
 from contextlib import redirect_stdout
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1252,6 +1252,68 @@ with tempfile.TemporaryDirectory() as tmp:
     check(F.VOLUME_STATE['samples'] == 0 and F.BUDGET == {'members': 4096, 'content': 256 << 20} and F.SLICE0 == {}, 'configure resets the volume state, the shared budget and the slice baseline')
     check(F.VOLUME == f'{F.DEFAULTS["volume_root"]}/{W.OPID}.mnt' and F.CRED == f'/run/user/30034/learn-cred/{W.OPID}' and F.MARKER.endswith(f'/learn-input/{W.OPID}/input-read'), 'the volume, credential and marker paths are derived from the op id')
     check(F.CTRS == {x: f'learn-pod-{W.OPID}-{x}' for x in W.ROLES} and F.PGC == f'learn-pod-{W.OPID}-pg' and F.OPU == f'learn-pod-{W.OPID}.service' and F.FINU == f'learn-fin-{W.OPID}.service', 'unit and container names')
+
+
+# ============================================================ #5184: an explicitly declared SYNTHETIC-input op (the pod harness and the install receipt op)
+# Clock: the world's scenario clock (FakeTime). Source: temporary trees; the synthetic records are the seal tool's record types, written by the world.
+SYN = ['--id', W.OPID, '--source-identity', W.IDENT, '--input', 'synthetic']
+
+
+def syn_world(tmp, sm_extra=None, claim_extra=None, keep_real=False):
+    w = world(tmp)
+    if not keep_real:
+        os.unlink(w.claim_path)                                  # nothing real is claimed: the op holds only the synthetic claim
+        shutil.rmtree(os.path.join(w.view, 'inputs', 'snap-1'))
+        os.unlink(w.manifest_path)
+    w.make_snapshot(kind='synthetic', sm_extra=sm_extra, claim_extra=claim_extra)
+    return w
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    w = syn_world(tmp)
+    r = go(w, argv=SYN)
+    check(r.code == 0 and r.rec['schema'] == 'learn-op-pod-success/1' and r.rec['inputProvenance'] == 'synthetic', 'SYN: a declared synthetic op with a synthetic claim and seal retires as a success and says inputProvenance synthetic')
+    check(r.rec['retirement']['snapshot']['ok'] and r.rec['retirement']['snapshot']['filesChecked'] == 3 and r.rec['snapshotStart']['snapshotId'] == 'snap-1',
+          'SYN: the synthetic claim and sealed snapshot are read at the start and re-verified at retirement (every file)')
+    check(not os.path.exists(os.path.join(w.view, 'claims', W.IDENT + '.claim')), 'SYN control: no real claim exists in this world, so the success rests on the synthetic records alone')
+with tempfile.TemporaryDirectory() as tmp:
+    w = syn_world(tmp)
+    r = go(w)
+    check(r.rec['inputProvenance'] == 'real' and 'error' in r.rec['snapshotStart'] and r.rec['schema'] == 'learn-op-retirement-failure/1',
+          'SYN: the same synthetic op WITHOUT the declaration finds no real claim and is a retirement failure (a synthetic claim is never read implicitly)')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    r = go(w, argv=SYN)
+    check('error' in r.rec['snapshotStart'] and r.rec['schema'] == 'learn-op-retirement-failure/1', 'SYN: a REAL op declared synthetic finds no synthetic claim and is a retirement failure (a real claim is never read as synthetic)')
+    r2_ = go(world(os.path.join(tmp, 'b')))
+    check(r2_.rec['inputProvenance'] == 'real' and r2_.rec['schema'] == 'learn-op-pod-success/1', 'SYN control: the undeclared real op is unchanged and records inputProvenance real')
+for what, kw, needle in (('a synthetic claim without provenance', dict(claim_extra={'provenance': None}), 'does not say synthetic provenance'),
+                         ('a synthetic claim that claims real-spool provenance', dict(claim_extra={'realSpoolProvenance': True}), 'does not say synthetic provenance'),
+                         ('a synthetic seal that claims real-spool provenance', dict(sm_extra={'realSpoolProvenance': True}), 'does not say synthetic provenance'),
+                         ('a real-schema claim placed in synthetic-claims/', dict(claim_extra={'schema': 'learn-input-claim/1'}), 'not this op\'s claim'),
+                         ('a real-schema seal placed in synthetic-inputs/', dict(sm_extra={'schema': 'learn-input-snapshot/1'}), 'names another snapshot or source')):
+    with tempfile.TemporaryDirectory() as tmp:
+        r = go(syn_world(tmp, **kw), argv=SYN)
+        check(needle in r.rec['snapshotStart'].get('error', '') and r.rec['schema'] == 'learn-op-retirement-failure/1', f'SYN: {what} is refused at the start and the op is a retirement failure')
+with tempfile.TemporaryDirectory() as tmp:
+    w = syn_world(tmp)
+    w.at(10, lambda: open(os.path.join(w.view, 'synthetic-inputs', 'snap-1', 'passive-a/spool/one.json'), 'wb').write(b'{"a":2}'))
+    r = go(w, argv=SYN)
+    check(r.rec['retirement']['snapshot']['changed'] == ['passive-a/spool/one.json'] and r.rec['schema'] == 'learn-op-retirement-failure/1',
+          'SYN: a synthetic sealed file changed during the run is found at retirement (the synthetic-inputs/ tree is the one re-hashed)')
+with tempfile.TemporaryDirectory() as tmp:
+    w = syn_world(tmp, keep_real=True)                          # a real claim for the same identity also exists: the declaration decides which is read
+    open(os.path.join(w.view, 'inputs', 'snap-1', 'passive-a/spool/one.json'), 'wb').write(b'{"a":9}')
+    r = go(w, argv=SYN)
+    check(r.rec['schema'] == 'learn-op-pod-success/1' and r.rec['retirement']['snapshot']['ok'], 'SYN: with both kinds present, a synthetic op reads only the synthetic records (a damaged real snapshot is not consulted)')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    for what, argv in (('--input real (only the synthetic declaration exists)', ['--id', W.OPID, '--source-identity', W.IDENT, '--input', 'real']),
+                       ('--input with another value', ['--id', W.OPID, '--source-identity', W.IDENT, '--input', 'Synthetic']),
+                       ('the declaration before the identity', ['--id', W.OPID, '--input', 'synthetic', '--source-identity', W.IDENT]),
+                       ('a dangling --input', ['--id', W.OPID, '--source-identity', W.IDENT, '--input'])):
+        r = go(w, argv=argv)
+        check(r.code is not None and 'usage' in str(r.code) and r.rec is None, f'SYN: configure refuses {what} and writes nothing')
 
 
 # ============================================================ pod operator r2 (the start and the recovery driver) against THIS finalizer
