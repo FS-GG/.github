@@ -99,5 +99,8 @@ module BoardV2Application =
     /// permit readback only. Owner/reference text is accountability, not authentication or a JSON grant.
     val runMigrationWithConnection:
         lockDirectory: string -> connection: V2MigrationTransport.IConnection -> arguments: string list -> int
+    /// `board-v2 tend --plan-file NEW [--rules R1,R2,...]` against an injected transport and
+    /// clock: plan-only and read-only (#5136 phase 2 PR 3). The default rules are the starting set W1h,T1f.
+    val runTendWithTransport: transport: Transport.IGitHubTransport -> clock: System.TimeProvider -> arguments: string list -> int
     /// Recognize board-v2 after validation; refresh composes the qualified writer, inspect only canonical reads.
     val tryRun: arguments: string list -> int option

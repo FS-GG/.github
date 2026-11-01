@@ -23,6 +23,7 @@
     <Compile Include="V2NativeResolveTests.fs" />
     <Compile Include="V2RoutesTests.fs" />
     <Compile Include="V2TendTests.fs" />
+    <Compile Include="V2TendReadsTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

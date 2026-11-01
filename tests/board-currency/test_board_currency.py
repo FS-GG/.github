@@ -916,5 +916,35 @@ class LinkageFunction(unittest.TestCase):
         board = {f"FS-GG/.github#{i['number']}": i for i in snap["items"]}
         failures, _ = R.linkage_of(snap["pullRequests"][0], board.get)
         self.assertEqual(failures, [("R1", "delivery-done"), ("R1", "no-parent-outcome")])
+class TendLinkageConformance(unittest.TestCase):
+    """The shared corpus V2TendReadsTests runs against the F# linkage: both must give the same verdict."""
+
+    def test_corpus_agrees_with_linkage_of(self):
+        corpus = json.loads((ROOT / "tests/coord-board-v2-projection/tend-linkage-corpus.json").read_text(encoding="utf-8"))
+        self.assertGreaterEqual(len(corpus["cases"]), 8)
+        for case in corpus["cases"]:
+            with self.subTest(case=case["name"]):
+                cards = {}
+                for ref, card in case["cards"].items():
+                    repo, number = ref.split("#")
+                    entry = {"workLevel": card["workLevel"], "state": card["state"], "status": card.get("status")}
+                    if card.get("parent"):
+                        parent_repo, parent_number = card["parent"].split("#")
+                        entry["parent"] = {"repo": parent_repo, "number": int(parent_number)}
+                    cards[ref] = entry
+                pr = dict(case["pr"])
+                failures, delivery = R.linkage_of(pr, cards.get)
+                got = failures[0][1] if failures else R.ref_key(delivery_repo(delivery, cards), delivery_number(delivery, cards))
+                self.assertEqual(got, case["expect"])
+
+
+def delivery_repo(delivery, cards):
+    return next(ref for ref, card in cards.items() if card is delivery).split("#")[0]
+
+
+def delivery_number(delivery, cards):
+    return int(next(ref for ref, card in cards.items() if card is delivery).split("#")[1])
+
+
 if __name__ == "__main__":
     unittest.main()

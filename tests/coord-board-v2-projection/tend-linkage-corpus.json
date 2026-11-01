@@ -1,0 +1,22 @@
+{"schema":"fsgg.board-tend-linkage-corpus/1",
+ "note":"Shared by V2TendReadsTests (F#) and tests/board-currency (scripts/board-currency-rules.py linkage_of). expect is the Delivery reference or the failure reason.",
+ "cases":[
+  {"name":"strict","cards":{"FS-GG/x#1":{"workLevel":"Delivery","state":"OPEN","status":"In progress","parent":"FS-GG/x#10"},"FS-GG/x#10":{"workLevel":"Outcome","state":"OPEN","status":"In progress"}},
+   "pr":{"repo":"FS-GG/x","number":100,"state":"OPEN","body":"Refs #1, #10"},"expect":"FS-GG/x#1"},
+  {"name":"outcome only","cards":{"FS-GG/x#10":{"workLevel":"Outcome","state":"OPEN","status":"In progress"}},
+   "pr":{"repo":"FS-GG/x","number":100,"state":"OPEN","body":"Refs #10"},"expect":"no-delivery"},
+  {"name":"two deliveries","cards":{"FS-GG/x#1":{"workLevel":"Delivery","state":"OPEN","status":"In progress","parent":"FS-GG/x#10"},"FS-GG/x#2":{"workLevel":"Delivery","state":"OPEN","status":"In progress","parent":"FS-GG/x#10"},"FS-GG/x#10":{"workLevel":"Outcome","state":"OPEN","status":"In progress"}},
+   "pr":{"repo":"FS-GG/x","number":100,"state":"OPEN","body":"Refs #1\nRefs #2"},"expect":"multiple-deliveries"},
+  {"name":"no parent outcome","cards":{"FS-GG/x#1":{"workLevel":"Delivery","state":"OPEN","status":"In progress"}},
+   "pr":{"repo":"FS-GG/x","number":100,"state":"OPEN","body":"Refs #1"},"expect":"no-parent-outcome"},
+  {"name":"closed delivery, open PR","cards":{"FS-GG/x#1":{"workLevel":"Delivery","state":"CLOSED","status":"Done","parent":"FS-GG/x#10"},"FS-GG/x#10":{"workLevel":"Outcome","state":"OPEN","status":"In progress"}},
+   "pr":{"repo":"FS-GG/x","number":100,"state":"OPEN","body":"Refs #1"},"expect":"delivery-closed"},
+  {"name":"done delivery, open PR","cards":{"FS-GG/x#1":{"workLevel":"Delivery","state":"OPEN","status":"Done","parent":"FS-GG/x#10"},"FS-GG/x#10":{"workLevel":"Outcome","state":"OPEN","status":"In progress"}},
+   "pr":{"repo":"FS-GG/x","number":100,"state":"OPEN","body":"Refs #1"},"expect":"delivery-done"},
+  {"name":"merged PR to closed delivery","cards":{"FS-GG/x#1":{"workLevel":"Delivery","state":"CLOSED","status":"Done","parent":"FS-GG/x#10"},"FS-GG/x#10":{"workLevel":"Outcome","state":"OPEN","status":"In progress"}},
+   "pr":{"repo":"FS-GG/x","number":100,"state":"MERGED","body":"Closes #1"},"expect":"FS-GG/x#1"},
+  {"name":"reference in code","cards":{"FS-GG/x#1":{"workLevel":"Delivery","state":"OPEN","status":"In progress","parent":"FS-GG/x#10"},"FS-GG/x#10":{"workLevel":"Outcome","state":"OPEN","status":"In progress"}},
+   "pr":{"repo":"FS-GG/x","number":100,"state":"OPEN","body":"`Refs #1`\n```\nRefs #1\n```"},"expect":"no-delivery"},
+  {"name":"cross-repository delivery","cards":{"FS-GG/y#5":{"workLevel":"Delivery","state":"OPEN","status":"In progress","parent":"FS-GG/x#10"},"FS-GG/x#10":{"workLevel":"Outcome","state":"OPEN","status":"In progress"}},
+   "pr":{"repo":"FS-GG/x","number":100,"state":"OPEN","body":"Refs FS-GG/y#5"},"expect":"FS-GG/y#5"}
+ ]}

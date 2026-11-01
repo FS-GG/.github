@@ -1,5 +1,6 @@
 # Mutation legs for the board-tend pure derivation (FS-GG/.github#5136 phase 2 PR 2; design §3, §10).
-# Each leg reverts ONE guard in src/FS.GG.Coord.GitHub/V2Tend.fs and requires the V2Tend tests to fail.
+# Each leg reverts ONE guard in src/FS.GG.Coord.GitHub/V2Tend.fs or V2TendReads.fs and requires the V2Tend tests
+# (V2TendTests and V2TendReadsTests) to fail.
 #
 #     TMPDIR=<private> scripts/gate-mutate.py --specs tests/coord-board-tend-mutation/specs.yml
 #
@@ -327,6 +328,160 @@ mutations:
                               elif hoursBetween now c.CreatedAt < parameters.LeafSettleHours then Defer("W1h", SettleWindow)
     breaks: >-
       a young leaf under an off-board parent starts its expiry clock inside its own settle window
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T24/c1-structural-delivery
+    gate: "C1 needs a populated Work level of Delivery"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      if c.Kind <> Issue || not c.Open || onBoard.WorkLevel <> Some Delivery || onBoard.Status <> Some InReview || not c.TimelineComplete then None
+    replace: |-
+      if c.Kind <> Issue || not c.Open || onBoard.Status <> Some InReview || not c.TimelineComplete then None
+    breaks: >-
+      a structural-only Delivery (no Work level yet) is closed
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T25/c1-not-in-review
+    gate: "C1 needs Status In review"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      if c.Kind <> Issue || not c.Open || onBoard.WorkLevel <> Some Delivery || onBoard.Status <> Some InReview || not c.TimelineComplete then None
+    replace: |-
+      if c.Kind <> Issue || not c.Open || onBoard.WorkLevel <> Some Delivery || not c.TimelineComplete then None
+    breaks: >-
+      a Delivery moved back to In progress, whose work continues, is closed
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T26/c1-settle-window
+    gate: "C1 waits 48 hours after the last merge"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | Some mergedAt when not last.Continues && hoursBetween now mergedAt >= parameters.CloseSettleHours ->
+    replace: |-
+      | Some mergedAt when not last.Continues ->
+    breaks: >-
+      a Delivery is closed minutes after its first merge, before a follow-up PR can open
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T27/c1-continues-ignored
+    gate: "C1 respects fsgg:delivery-continues/v1 on the last merge"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | Some mergedAt when not last.Continues && hoursBetween now mergedAt >= parameters.CloseSettleHours ->
+    replace: |-
+      | Some mergedAt when hoursBetween now mergedAt >= parameters.CloseSettleHours ->
+    breaks: >-
+      a Delivery whose last merge says the work continues is closed
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T28/c1-reopen-guard
+    gate: "C1 never closes an issue reopened after a tend close"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      let c1Applies (c: Card) = if c.TendClosedBefore then None else c1Candidate c
+    replace: |-
+      let c1Applies (c: Card) = c1Candidate c
+    breaks: >-
+      an issue Root reopened is closed again on the next run
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T29/c1-open-pr
+    gate: "C1 never closes with a linked PR open"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | _ when anyOpen -> None
+    replace: |-
+      | _ when false -> None
+    breaks: >-
+      a Delivery with an open or draft PR is closed
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T30/c1-loose-linkage
+    gate: "C1 counts only strictly linked merges"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      let strict = c.Prs |> List.filter (fun pr -> pr.Linkage = Strict)
+    replace: |-
+      let strict = c.Prs
+    breaks: >-
+      a Delivery is closed on a merge that names several Deliveries or none properly
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: R1/read-only-query-guard
+    gate: "the tend transport sends only GraphQL queries"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendReads.fs
+    find: |-
+      | "POST", "graphql", Query(document, _) when document.TrimStart().StartsWith("query", StringComparison.Ordinal) ->
+    replace: |-
+      | "POST", "graphql", Query(document, _) ->
+    breaks: >-
+      a mutation document passes the read-only transport
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: R2/linkage-closed-delivery
+    gate: "an open PR to a closed Delivery is not a strict link"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendReads.fs
+    find: |-
+      if prOpen && not isOpen then Error "delivery-closed"
+    replace: |-
+      if false then Error "delivery-closed"
+    breaks: >-
+      the F# linkage disagrees with linkage_of on an open PR to a closed Delivery
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: R3/truncated-sub-issues
+    gate: "a truncated connection is incomplete, never empty"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendReads.fs
+    find: |-
+      nodes, c.GetProperty("totalCount").GetInt32() = nodes.Length
+    replace: |-
+      nodes, true
+    breaks: >-
+      an Outcome with more than 50 children is rolled up from a partial list
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: R4/board-item-limit
+    gate: "a board over 500 items is refused"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendReads.fs
+    find: |-
+      if count > maximumItems then failwithf "board holds %d items, over the %d-item limit" count maximumItems
+    replace: |-
+      if false then failwithf "board holds %d items, over the %d-item limit" count maximumItems
+    breaks: >-
+      the reader pages past the 500-item limit (#5119)
     anchor:
       pattern: 'board-tend leg: \d+ passed, \d+ failed'
       produced_by: tests/coord-board-tend-mutation/leg.sh

@@ -12,7 +12,7 @@ export TMPDIR="$PRIVATE_TMP"
 trap 'rm -rf "$PRIVATE_TMP"' EXIT
 
 LOG="$PRIVATE_TMP/test.log"
-dotnet test "$ROOT/tests/coord-board-v2-projection/coord-board-v2-projection.fsproj" -c Release --nologo --filter "FullyQualifiedName~V2TendTests" >"$LOG" 2>&1
+dotnet test "$ROOT/tests/coord-board-v2-projection/coord-board-v2-projection.fsproj" -c Release --nologo --filter "FullyQualifiedName~V2Tend" >"$LOG" 2>&1
 SUMMARY="$(grep -Eo 'Failed: +[0-9]+, Passed: +[0-9]+' "$LOG" | tail -1)"
 if [ -z "$SUMMARY" ]; then
   echo "board-tend leg: NOT MEASURED — no test summary (build failure or host death)"
