@@ -1,5 +1,33 @@
 # Registry changelog
 
+## 2026-11-01 — reconcile published FS.GG.Game 0.19.0 (FS-GG/FS.GG.Game#753)
+
+Flip `game-sim-core`, `game-scene-adapter`, `game-physics-box2d` and `game-render-browser` `version` and `package-version` to **0.19.0**. Root accepted the release. The tag `v0.19.0` points at FS.GG.Game main `9848c8d4a398669977bfc5f7d116f86d7424eb3d`, which carries #778 (Babylon orthographic 2D, the conformance kit's `pixels` section, CSS-scaled canvas picks), #781 (release route: listing wait, readback evidence kept first) and #782 (version, `CHANGELOG.md`, `PackageReleaseNotes`).
+
+- **Admission:** dry run [41347737212](https://github.com/FS-GG/FS.GG.Game/actions/runs/41347737212) passed. The Core 0.18.0 org-feed sentinel returned 200, all five ids returned 404 at 0.19.0 on both feeds, and verify-key answered 400 for all five (recorded as unverifiable).
+- **Publication:** [41347937908](https://github.com/FS-GG/FS.GG.Game/actions/runs/41347937908).
+  - It retained custody, then pushed the org feed (20:42:46–50Z), then nuget.org (20:42:53–59Z), `FS.GG.Game.Render.Browser` first on each feed.
+  - Both-feed readback passed (20:42:59–20:47:06Z). The readback evidence `game-release-readback-0.19.0-41347937908` was retained: org archives are byte-identical to custody, and every nuget.org payload equals custody once `.signature.p7s` is excluded.
+  - The nuget.org listing wait passed on attempt 1 of 60, in about 1 s. The public Box2D consumer passed.
+  - The run concluded **failure** at its last step: the public browser-host consumer got `NU1102` (nearest 0.18.0) at 20:47:12Z, four seconds after the wait saw 0.19.0 listed. The restore read a version list NuGet's HTTP cache had stored during the candidate consumer, before publication. The fix is FS.GG.Game#785, under the reopened #764.
+- **Custody, which is also the org-feed SHA-256:**
+  - Core `6f2a59e9…`
+  - Harness `f37674ab…`
+  - Physics.Box2D `1abd41d7…`
+  - Render `5b0eb6a3…`
+  - Render.Browser `07cea699…`
+- **nuget.org (signed):**
+  - Core `19efc751…`
+  - Harness `8b1ac624…`
+  - Physics.Box2D `a6eb5c45…`
+  - Render `e253d869…`
+  - Render.Browser `33fb361d…`
+  
+  An independent re-read matches all five.
+- **Consumer:** an independent clean-cache `test-render-browser-package-consumer.sh --public` run at `v0.19.0` restored Render `e253d869…` and Render.Browser `33fb361d…` from nuget.org alone. It built the generated three-adapter module with .NET and compiled it with Fable.
+
+Edges: `game-scene-adapter` and `game-render-browser` now name 0.19.0 against `FS.GG.UI.Scene`/`SvgBrowser` 0.31.0. Consumers are unchanged; FourD#55 and the SC2/BAR Babylon tolerances adopt separately. Architecture-map shape is unaffected.
+
 ## 2026-11-01 — reconcile published FS.GG.Game 0.18.0 and register FS.GG.Game.Render.Browser (FS-GG/FS.GG.Game#745)
 
 Flip `game-sim-core`, `game-scene-adapter` and `game-physics-box2d` `version` and `package-version` to **0.18.0**, and register the new contract **`game-render-browser`** (`FS.GG.Game.Render.Browser` 0.18.0). The tag `v0.18.0` points at FS.GG.Game main `71b3210b3c0c4e6f1127e90ee0a6be85bf6c1b65`, which carries the packaging change (Game#760), the release-path change (Game#763) and the renderer work of Game#750, #751 and #752 (#755, #757, #758).
@@ -261,6 +289,8 @@ review M4). The typed validator (`fsgg-sdd registry validate`) never saw that co
 no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
+
+- **2026-11-01** — - **2026-11-01** — GAME 0.19.0 PUBLICATION RECONCILED (game; FS-GG/FS.GG.Game#753, FS-GG/.github#5179): flip game-sim-core, game-scene-adapter, game-physics-box2d and game-render-browser version/package-version 0.18.0 -> 0.19.0. Tag v0.19.0 -> 9848c8d4; admission 41347737212; publisher 41347937908 pushed both feeds, passed hosted both-feed readback with retained evidence (org byte-identical to custody) and the listing wait, then failed only its last step (public browser consumer NU1102 from a cached version list; fix FS.GG.Game#785); nuget.org independently re-read and the public browser consumer passed on an independent clean-cache run. See the dated section above.
 
 - **2026-11-01** — - **2026-11-01** — GAME 0.18.0 PUBLICATION RECONCILED (game; FS-GG/FS.GG.Game#745, FS-GG/.github#5179): flip game-sim-core, game-scene-adapter and game-physics-box2d version/package-version 0.17.0 -> 0.18.0 and register game-render-browser (FS.GG.Game.Render.Browser 0.18.0, consumers []). Tag v0.18.0 -> 71b3210b; admission 41323784032; publisher 41324010304 pushed both feeds new-identity-first and passed hosted both-feed readback, then failed only its last step (public browser consumer NU1102 against nuget.org's lagging listing); nuget.org independently re-read (payloads equal custody) and the public browser consumer passed on independent re-run. Edges: game-scene-adapter -> UI.Scene 0.18.0/0.31.0, new game-render-browser -> UI.Scene + SvgBrowser 0.31.0. See the dated section above.
 
