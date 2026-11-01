@@ -1,0 +1,160 @@
+# Reusable closing-keyword lint for a repository that does NOT take the coordination kit (.github#5195).
+#
+# GitHub binds `close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved` followed by an issue
+# reference and ignores every word around it, "not" included. On 2026-11-01 the merges of FS.GG.FourD#56 and
+# FS.GG.SC2.Client#52 auto-closed their open Deliveries (FourD#54, SC2.Client#50) through negated phrasing,
+# because neither repository ran the lint: it reached only the coordination-kit receivers, through the
+# `closing-keywords` job of kit-materialize.yml (.github#4730), and a repository that is not a kit receiver
+# calls neither that file nor any hub workflow at all.
+#
+# THIS FILE IS THE SAME JOB, CALLABLE ON ITS OWN. kit-materialize.yml cannot be called for it: it is the
+# receiver materializer and demands the dispatch App secrets, a kit pin and a receiver project that a
+# non-kit repository does not have. The two steps below are byte-identical to the kit job's steps, and
+# tests/closing-keywords/product-lint.sh fails if they ever differ, so there is one tested lint and two
+# doors to it. The rule is still the hub's, not a copy: it is fetched from the commit of THIS workflow
+# (`github.job_workflow_sha`), so a caller that names `@main` reads the rule that the hub's own required
+# checks have passed (docs/coordination/reusable-workflow-contract.md, "Reusable-workflow calls are NOT
+# pinned"), and no receiver carries a copy that can go stale (ADR-0067 section 5).
+#
+# CALLER (one file, no secret, nothing else to maintain):
+#
+#   name: closing-keywords
+#   on:
+#     pull_request:
+#       types: [opened, synchronize, reopened, edited]   # `edited` re-checks a retitle or a body edit
+#   permissions:
+#     contents: read
+#     pull-requests: read                                # the live title and body of a private repository
+#   concurrency:                                         # head-keyed, as the hub's (see the contract)
+#     group: closing-keywords-${{ contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) && github.event.pull_request.number || github.run_id }}
+#     cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+#   jobs:
+#     closing-keywords:
+#       uses: FS-GG/.github/.github/workflows/closing-keywords-receiver.yml@main
+#
+# THE CONTEXT IS `closing-keywords / title-and-body` (caller job id, then this job's name), the same shape
+# as `contract-coherence / coherence`. It is required in ZERO repositories by this change. Arming it is a
+# separate decision made after it has been seen to REPORT on a real pull request, and a private repository
+# on a plan without branch protection cannot arm it at all (the check is then advisory).
+#
+# A repository whose Actions policy requires full-SHA pins (sha_pinning_required) cannot call `@main`; it
+# pins the commit of this file and rebinds the pin when the rule changes.
+#
+# `permissions: pull-requests: read` is declared here because a private repository's pull request is not
+# readable with `contents: read` alone, and without the live read a re-run after an edit would replay the
+# stale event payload (the reason the live read exists). The kit job runs in public repositories, where
+# the read needs no scope. A caller grants at least these two scopes or the workflow is refused at load.
+#
+# IT READS NO SECRET, CHECKS OUT NO RECEIVER TREE AND RUNS NO PR-HEAD CODE; the body and title reach the
+# shell only through `env:`.
+name: closing-keywords-receiver
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  closing-keywords:
+    # NOT `closing-keywords`: the kit job already publishes that check-run name, and check-job-uniqueness.py
+    # refuses two top-level jobs that resolve to one name (.github#2354). The caller's job id supplies the prefix.
+    name: title-and-body
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch the hub's closing-keyword rule at this workflow's own commit
+        uses: actions/checkout@v7
+        with:
+          repository: FS-GG/.github
+          ref: ${{ github.job_workflow_sha }}
+          path: fsgg-hub
+          persist-credentials: false
+          sparse-checkout: |
+            /scripts/
+          sparse-checkout-cone-mode: false
+
+      - name: Lint the pull request title and body for closing keywords next to issue references
+        env:
+          EVENT_BODY: ${{ github.event.pull_request.body }}
+          EVENT_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          body="$RUNNER_TEMP/pr-body.md"
+          title="$RUNNER_TEMP/pr-title.txt"
+          subjects="$RUNNER_TEMP/commit-subjects.txt"
+          source_of_text=live
+          case "$PR_NUMBER" in ''|*[!0-9]*) echo "::error title=closing-keywords: no verdict::the event carries no pull request number"; exit 1 ;; esac
+          # One live read yields both texts. Any failure to read OR to split it falls back, as a pair,
+          # to the event payload: never one text from each source.
+          if gh api "repos/$REPO/pulls/$PR_NUMBER" > "$RUNNER_TEMP/pr.json" 2>"$RUNNER_TEMP/live.err" \
+             && python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); open(sys.argv[2],"w").write(d["body"] or ""); open(sys.argv[3],"w").write(d["title"])' \
+                  "$RUNNER_TEMP/pr.json" "$body" "$title" 2>>"$RUNNER_TEMP/live.err"; then
+            :
+          else
+            source_of_text=event
+            printf '%s' "$EVENT_BODY" > "$body"
+            printf '%s' "$EVENT_TITLE" > "$title"
+            echo "::warning title=closing-keywords: live title and body unreadable::falling back to the title and body in the event payload"
+          fi
+          echo "closing-keywords: linting the pull request title and body (source: $source_of_text, $(wc -c < "$body") body bytes)"
+          lint_rc=0
+          out="$(python3 -I fsgg-hub/scripts/check-closing-keywords.py --body "$body" --title="$(cat "$title")" 2>&1)" || lint_rc=$?
+          # Indented so that no line of attacker-controlled body text can open a workflow command.
+          # A lone CR (also in a title) is a line start to the runner, so it is turned into a space before
+          # the prefix is added; detection above ran on the original text.
+          [ -z "$out" ] || printf '%s\n' "$out" | tr '\r' ' ' | sed 's/^/| /'
+          # COMMIT SUBJECTS: WARNING ONLY. A single-commit pull request squashes to its commit subject, and
+          # a branch cannot be repaired by editing a field, so this never fails the job (the hub's own
+          # check reads whole commit messages and does fail). Best effort: a failed read says nothing.
+          if gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/commits" --jq '.[].commit.message | split("\n")[0]' > "$subjects" 2>/dev/null \
+             && [ -s "$subjects" ]; then
+            sub_rc=0
+            sub_out="$(python3 -I fsgg-hub/scripts/check-closing-keywords.py --commits "$subjects" 2>&1)" || sub_rc=$?
+            if [ "$sub_rc" = 1 ]; then
+              sub_phrases="$(printf '%s\n' "$sub_out" | grep -E '^  - line [0-9]+:' | sed -E 's/^  - //' | head -n 3 | paste -sd'|' - | sed -e 's/%/%25/g' -e 's/|/ ; /g')"
+              echo "::warning title=closing-keywords: a commit subject has a closing keyword next to an issue reference::${sub_phrases} -- the subject becomes the squash commit subject on a single-commit merge. Reword the commit (this warning does not fail the check)."
+            fi
+          fi
+          case "$lint_rc" in
+            0)
+              echo "closing-keywords: OK" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            1)
+              # Only the lines the rule itself generates from regex-constrained tokens (keyword, ref,
+              # negator) go into the annotation; the quoted excerpt stays in the log.
+              phrases="$(printf '%s\n' "$out" | grep -E '^  - (line [0-9]+|title):' | sed -E 's/^  - //' | head -n 3 | paste -sd'|' - | sed -e 's/%/%25/g' -e 's/|/ ; /g')"
+              {
+                echo "### closing-keywords: a closing keyword sits next to an issue reference"
+                echo
+                echo 'GitHub closes the referenced issue when the PR merges and does **not** read the words'
+                echo 'around the keyword: "does not close" closes it, as do "won'"'"'t fix", a past tense,'
+                echo 'a quotation and a code span. The same goes for the **PR title**, which becomes the'
+                echo 'squash commit subject. Offending phrase(s):'
+                echo
+                printf '%s\n' "$out" | grep -E '^  - (line [0-9]+|title):' | sed -E 's/^  - /    /'
+                echo
+                echo 'Fix the text, not the check: write `Refs #N` to link without closing, reword the verb'
+                echo '("addresses", "supersedes"), or, in the BODY only, declare an intended close on a line'
+                echo 'of its own, nothing else on it, e.g. `Closes #N.` A title has no opt-in: write'
+                echo '`(Refs #N)` there. Issue numbers in the explanation above that you do not recognise'
+                echo 'are FS-GG/.github issues (the rule is the hub'"'"'s).'
+                echo 'After editing, re-run this job: it re-reads the live title and body.'
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::error title=closing-keywords: closing keyword next to an issue reference::${phrases} -- GitHub ignores 'not'. Write 'Refs #N' to link without closing, or declare a close on its own line in the body: 'Closes #N.'"
+              exit 1
+              ;;
+            3)
+              echo "::error title=closing-keywords: no verdict (permanent)::the rule could not read the pull request title or body"
+              exit 1
+              ;;
+            *)
+              echo "::error title=closing-keywords: inconclusive::check-closing-keywords.py exited $lint_rc, which this job does not classify; treating as a failure"
+              exit 1
+              ;;
+          esac

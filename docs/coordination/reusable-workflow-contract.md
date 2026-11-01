@@ -770,8 +770,8 @@ arms any context (dry run, watch it report, then `repos.sh require-context`), ne
 
 1. **Move the Templates pin** past a commit that carries the job. Until then the context never reports on
    Templates, and requiring it holds every Templates pull request at "Expected" (#1508).
-2. **Merge the four `edited` adoption PRs** (Governance, Game, Audio, Net), or accept that a body edit or
-   retitle there is only re-checked by the next push or a manual re-run.
+2. ~~Merge the four `edited` adoption PRs~~ Done: measured 2026-11-01, the `kit-materialize.yml` callers of
+   SDD, Rendering, Governance, Game, Audio and Net all list `edited`.
 3. **Resolve the Renovate pattern.** Some Renovate bodies close an issue in prose, for example
    "Coordinated migration: Closes #254; parent ..." (FS.GG.Audio#251, FS.GG.Net#69). The rule flags it,
    correctly, because it will close the issue. Either the coordinated-migration template declares the close
@@ -781,3 +781,21 @@ arms any context (dry run, watch it report, then `repos.sh require-context`), ne
 
 Not covered, by design: whole commit messages beyond their subject line (the hub's own check reads them;
 a receiver check would need a full-depth checkout on every pull request).
+
+### The same lint for a repository that is not a kit receiver (.github#5195)
+
+On 2026-11-01 the merges of FS.GG.FourD#56 and FS.GG.SC2.Client#52 auto-closed their open Deliveries through
+negated phrasing. Neither repository takes the kit, so the job above never reached them, and
+`kit-materialize.yml` cannot be called to reach them: it demands the dispatch App secrets, a kit pin and a
+receiver project. The same job is therefore callable on its own:
+[`closing-keywords-receiver.yml`](../../.github/workflows/closing-keywords-receiver.yml), a `workflow_call`
+with no input and no secret, whose single job is the kit job step for step (`product-lint.sh` leg C1 fails if
+the two differ). A caller is one thin file that names it at `@main`, as every other hub reusable call does.
+
+| | |
+| --- | --- |
+| Context | `closing-keywords / title-and-body` (caller job id `closing-keywords`, job name `title-and-body`; the bare name `closing-keywords` is the kit job's, and `check-job-uniqueness.py` refuses two jobs with one name) |
+| Permissions | the caller grants `contents: read` and `pull-requests: read`. The second is what lets a private repository read its live title and body; without it the job falls back to the event payload and a re-run after an edit replays the stale text |
+| Reach | one caller per repository; `edited` in its `pull_request` types re-checks a retitle or body edit |
+| Pin | `@main`, except where the repository's Actions policy requires full-SHA pins (`sha_pinning_required`), where the caller pins a commit of the receiver workflow and rebinds it when the rule changes |
+| Arming | not armed anywhere by the change that adds a caller. A private repository on a plan without branch protection (GitHub answers 403 "Upgrade to GitHub Pro or make this repository public") cannot arm it; there the check is advisory |
