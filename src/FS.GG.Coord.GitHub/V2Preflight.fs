@@ -188,6 +188,7 @@ module V2Preflight =
 
     type Reason =
         | ConstructorDiffersFromMain
+        | ConstructorNotAncestorOfMain
         | PredecessorCommitmentMismatch
         | PredecessorNotSpliceable
         | RuntimeBindingDiffers
@@ -225,6 +226,7 @@ module V2Preflight =
     let reasonCode reason =
         match reason with
         | ConstructorDiffersFromMain -> "ConstructorDiffersFromMain"
+        | ConstructorNotAncestorOfMain -> "ConstructorNotAncestorOfMain"
         | PredecessorCommitmentMismatch -> "PredecessorCommitmentMismatch"
         | PredecessorNotSpliceable -> "PredecessorNotSpliceable"
         | RuntimeBindingDiffers -> "RuntimeBindingDiffers"
@@ -261,7 +263,7 @@ module V2Preflight =
 
     let private supplierOf reason =
         match reason with
-        | ConstructorDiffersFromMain -> ConstructorBuild
+        | ConstructorDiffersFromMain | ConstructorNotAncestorOfMain -> ConstructorBuild
         | PredecessorCommitmentMismatch | PredecessorNotSpliceable | RuntimeBindingDiffers -> PredecessorCustody
         | DuplicateRequestIssue | IssueIsPullRequest | NodeIdentityMismatch | RepositoryOutsideBinding | AlreadyEnrolled -> RequestAuthor
         | NotProjectMember | ConflictingHumanRoadmap -> Root
@@ -278,6 +280,7 @@ module V2Preflight =
     type Input =
         | SourceRevision
         | ProtectedMain
+        | ConstructorClosure
         | PredecessorPrivate
         | PredecessorPublic
         | RuntimeBinding
@@ -326,6 +329,7 @@ module V2Preflight =
         match input with
         | SourceRevision -> "SourceRevision"
         | ProtectedMain -> "ProtectedMain"
+        | ConstructorClosure -> "ConstructorClosure"
         | PredecessorPrivate -> "PredecessorPrivate"
         | PredecessorPublic -> "PredecessorPublic"
         | RuntimeBinding -> "RuntimeBinding"
@@ -417,12 +421,21 @@ module V2Preflight =
         | AssertedMain
         | LocalTrackingRef
 
+    type ConstructorContent =
+        { Built: string
+          Main: string
+          BuiltIsAncestor: bool
+          ClosureEntries: int
+          ChangedOutsideClosure: int
+          ChangedInsideClosure: int }
+
     type EnrollmentInputs =
         { Request: V2Enrollment.Request
           Facts: Observed<V2Enrollment.NativeFacts * FactsFreshness>
           ConstructorRevision: Observed<string>
           ProtectedMain: Observed<string>
           ProtectedMainFreshness: MainFreshness
+          ConstructorContent: Observed<ConstructorContent>
           PredecessorPrivate: Observed<string>
           PredecessorPublic: Observed<string>
           RuntimeBinding: Observed<string>
@@ -572,7 +585,24 @@ module V2Preflight =
             | LocalTrackingRef -> unknown ConstructorIdentity ProtectedMain NotLive []
             | LiveMain | AssertedMain ->
                 if built = main then supported ConstructorIdentity ("constructor source revision equals the intended protected main (" + source + ")")
-                else unsupported ConstructorIdentity ConstructorDiffersFromMain []
+                else
+                    // A later main is admitted only by content (#5113): it must descend from the constructor's source
+                    // revision and leave every path of the constructor closure unchanged. Evidence for any other pair of
+                    // revisions, or none at all, decides nothing. (if/elif, not guarded match arms: a guarded match
+                    // compiles a MatchFailureException that embeds this file's absolute path, which breaks the
+                    // path-independent package payload.)
+                    match ctx.Inputs.ConstructorContent with
+                    | NotObserved kind -> unknown ConstructorIdentity ConstructorClosure kind []
+                    | Known content ->
+                        if content.Built <> built || content.Main <> main then unknown ConstructorIdentity ConstructorClosure NotEvaluated []
+                        elif not content.BuiltIsAncestor then unsupported ConstructorIdentity ConstructorNotAncestorOfMain []
+                        elif content.ChangedInsideClosure <> 0 then
+                            unsupported ConstructorIdentity ConstructorDiffersFromMain [ string content.ChangedInsideClosure ]
+                        elif content.ClosureEntries <= 0 then unknown ConstructorIdentity ConstructorClosure Incomplete []
+                        else
+                            supported ConstructorIdentity
+                                ("constructor closure of " + string content.ClosureEntries + " entries is unchanged from the constructor source revision to its descendant, the intended protected main ("
+                                 + source + "); " + string content.ChangedOutsideClosure + " changed paths lie outside it")
 
     let private predecessorIntegrity (ctx: Context) =
         match predecessorGap ctx, ctx.Analysis with

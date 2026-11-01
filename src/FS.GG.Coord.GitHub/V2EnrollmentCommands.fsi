@@ -13,5 +13,11 @@ module V2EnrollmentCommands =
     /// The command vocabulary, in the order documented.
     val commands: string list
 
+    /// The `ConstructorIdentity` content evidence for one exact pair of revisions, read from the checkout's own objects
+    /// (#5113): whether `main` descends from `built`, and how many changed paths between them are inside or outside the
+    /// constructor closure derived at `built`. A failed read, an underivable closure or an unparseable change listing
+    /// is `NotObserved`, never evidence.
+    val observeConstructorContent: repository: string -> built: string -> main: string -> V2Preflight.Observed<V2Preflight.ConstructorContent>
+
     /// Run one command. `args.[0]` is the command name; the rest are its named arguments. Never throws.
     val run: command: string -> args: string array -> int

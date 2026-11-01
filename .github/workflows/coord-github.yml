@@ -35,6 +35,7 @@ on:
       - "tests/FS.GG.Coord.GitHub.Tests/**"
       - "tests/coord-board-v2-projection/**"
       - "tests/coord-board-tend-mutation/**"
+      - "tests/coord-constructor-identity-mutation/**"
       - "tests/coord-board-v2-cli-join/**"
       - ".github/workflows/coord-board-v2-refresh.yml"
       - "tests/producer-fence-attacks/**"
@@ -89,6 +90,7 @@ on:
       - "tests/FS.GG.Coord.GitHub.Tests/**"
       - "tests/coord-board-v2-projection/**"
       - "tests/coord-board-tend-mutation/**"
+      - "tests/coord-constructor-identity-mutation/**"
       - "tests/coord-board-v2-cli-join/**"
       - ".github/workflows/coord-board-v2-refresh.yml"
       - "tests/producer-fence-attacks/**"
@@ -176,6 +178,12 @@ jobs:
       # matches V2Tend.fs. Runs no mutation; the sweep itself is on demand.
       - name: The board-tend mutation matrix is still runnable
         run: bash tests/coord-board-tend-mutation/run.sh
+
+      # The #5113 constructor-identity mutation legs mutate V2ConstructorClosure.fs, V2Preflight.fs and
+      # V2EnrollmentCommands.fs by exact source text. This checks, in seconds, that every leg still matches; it runs no
+      # mutation. The sweep itself is on demand: scripts/gate-mutate.py --specs tests/coord-constructor-identity-mutation/specs.yml
+      - name: Constructor-identity mutation matrix is runnable
+        run: bash tests/coord-constructor-identity-mutation/run.sh
 
       - name: Verify GS2-08.6 producer attack oracle
         run: |

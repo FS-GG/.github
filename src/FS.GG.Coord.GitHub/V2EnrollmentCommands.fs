@@ -134,7 +134,9 @@ module V2EnrollmentCommands =
             programmeRetained full bytes
         with _ -> refuse V2Enrollment.CustodyUnavailable
 
-    let private gitRun (repository: string) (arguments: string list) (limit: int) : string =
+    // `allowEmpty` admits a command whose correct answer can be empty (a diff with no changes); everywhere else an
+    // empty answer is a failed read.
+    let private gitCapture (allowEmpty: bool) (repository: string) (arguments: string list) (limit: int) : string =
         let info = Diagnostics.ProcessStartInfo("git")
         for argument in [ "-C"; (try programmePath repository with _ -> refuse V2Enrollment.InputUnreadable) ] @ arguments do info.ArgumentList.Add argument
         info.RedirectStandardOutput <- true
@@ -154,11 +156,52 @@ module V2EnrollmentCommands =
                 (try proc.Kill() with _ -> ())
                 refuse V2Enrollment.GitReadFailed
             errors.Wait()
-            if proc.ExitCode <> 0 || buffer.Length = 0L || buffer.Length > int64 limit then refuse V2Enrollment.GitReadFailed
+            if proc.ExitCode <> 0 || (buffer.Length = 0L && not allowEmpty) || buffer.Length > int64 limit then refuse V2Enrollment.GitReadFailed
             strictUtf8.GetString(buffer.ToArray())
         with
         | Refused refusal -> refuse refusal
         | _ -> refuse V2Enrollment.GitReadFailed
+
+    let private gitRun (repository: string) (arguments: string list) (limit: int) : string = gitCapture false repository arguments limit
+
+    // The constructor-closure evidence for one exact pair of revisions (#5113), read from the checkout's own objects:
+    // ancestry by `git merge-base`, the closure derived from the tree at `built`, and the change listing between the
+    // two. Any failed or over-bound read, an underivable closure or an unparseable listing is an unobserved input,
+    // which `ConstructorIdentity` reports as Unknown: nothing here can produce support by failing.
+    let observeConstructorContent (repository: string) (built: string) (main: string) : V2Preflight.Observed<V2Preflight.ConstructorContent> =
+        let sha = Regex(@"\A[0-9a-f]{40}\z")
+        if not (sha.IsMatch built && sha.IsMatch main) then V2Preflight.NotObserved V2Preflight.Unreadable
+        else
+            try
+                let mergeBase = (gitRun repository [ "merge-base"; built; main ] 128).Trim()
+                if not (sha.IsMatch mergeBase) then V2Preflight.NotObserved V2Preflight.ReadFailed
+                elif mergeBase <> built then
+                    V2Preflight.Known
+                        { Built = built; Main = main; BuiltIsAncestor = false; ClosureEntries = 0; ChangedOutsideClosure = 0; ChangedInsideClosure = 0 }
+                else
+                    let listing = gitRun repository [ "ls-tree"; "-r"; "-z"; "--full-tree"; "--name-only"; built ] 16777216
+                    if not (listing.EndsWith("\000", StringComparison.Ordinal)) then V2Preflight.NotObserved V2Preflight.Incomplete
+                    else
+                        let files = listing.Substring(0, listing.Length - 1).Split('\000') |> Set.ofArray
+                        let read (path: string) =
+                            if files.Contains path then Some(gitRun repository [ "cat-file"; "blob"; built + ":" + path ] 4194304) else None
+                        match V2ConstructorClosure.derive files read with
+                        | Error _ -> V2Preflight.NotObserved V2Preflight.Incomplete
+                        | Ok closure ->
+                            let diff =
+                                gitCapture true repository
+                                    [ "-c"; "diff.renames=false"; "diff"; "--no-renames"; "--no-ext-diff"; "--no-textconv"; "--name-status"; "-z"; built; main; "--" ]
+                                    16777216
+                            match V2ConstructorClosure.parseNameStatus diff with
+                            | Error _ -> V2Preflight.NotObserved V2Preflight.Incomplete
+                            | Ok changes ->
+                                let inside = V2ConstructorClosure.changesInside closure changes
+                                V2Preflight.Known
+                                    { Built = built; Main = main; BuiltIsAncestor = true
+                                      ClosureEntries = closure.Paths.Count + closure.Prefixes.Count
+                                      ChangedOutsideClosure = changes.Length - inside.Length
+                                      ChangedInsideClosure = inside.Length }
+            with _ -> V2Preflight.NotObserved V2Preflight.ReadFailed
 
     // The protected public blob is read from the supplied checkout at the exact merge commit.
     // A fixed argument vector, no shell, bounded output, stderr discarded. A failed read is
@@ -553,6 +596,11 @@ module V2EnrollmentCommands =
               ConstructorRevision = revision
               ProtectedMain = mainRevision
               ProtectedMainFreshness = freshness
+              ConstructorContent =
+                (match revision, mainRevision, freshness with
+                 | V2Preflight.Known built, V2Preflight.Known main, (V2Preflight.LiveMain | V2Preflight.AssertedMain) when built <> main ->
+                     observeConstructorContent repository built main
+                 | _ -> V2Preflight.NotObserved V2Preflight.NotEvaluated)
               PredecessorPrivate = privateJson
               PredecessorPublic = publicJson
               RuntimeBinding =

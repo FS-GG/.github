@@ -1388,10 +1388,13 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         report, rows = self.verdicts(result)
         self.assertEqual(('Unsupported', 'RowCapExceeded', 'ProtocolRelease', ['499+2>500']), tuple(rows['RowCap'][k] for k in ['verdict', 'reason', 'supplier', 'subjects']))
         self.assertEqual(10, result.returncode)
-        # A constructor that is not the intended protected main is unsupported, supplied by a rebuild.
+        # A main the checkout cannot show to descend from the constructor with its closure unchanged is never supported
+        # (#5113): an object the checkout does not hold is an unread closure, so Unknown.
         wrong, _ = self.preflight(env, online=False, main='0' * 40)
-        self.assertEqual(('Unsupported', 'ConstructorDiffersFromMain', 'ConstructorBuild'),
-                         tuple(self.verdicts(wrong)[1]['ConstructorIdentity'][k] for k in ['verdict', 'reason', 'supplier']))
+        row = self.verdicts(wrong)[1]['ConstructorIdentity']
+        self.assertNotEqual('SupportedForNextStage', row['verdict'])
+        if SOURCE_REVISION:
+            self.assertEqual(('Unknown', 'ConstructorClosure/ReadFailed'), (row['verdict'], row['gap']))
         # Usage errors are refusals (exit 2), not verdicts, and print only a code.
         for bad in (['preflight'], ['preflight', '--route', 'Nope', '--stage', 'PlanSuccessor', '--request', 'x', '--repository', 'y', '--online']):
             done = self.run_cli_env(env, *bad)
@@ -1411,11 +1414,11 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         self.assertIn('/repos/FS-GG/.github/git/ref/heads/main', calls)
         for argv in self.argv_log(log):
             self.assertEqual(['api', '--method', 'GET'], argv[:3])
-        # Causal: only the live head differs, and the verdict flips to Unsupported.
+        # Causal: only the live head differs, to a commit the checkout cannot relate to the constructor, and support is lost.
         other, _ = self.fake_gh(main='0' * 40, name='main-other')
         result, out = self.preflight(other, live_main=True)
         row = self.verdicts(result)[1]['ConstructorIdentity']
-        self.assertEqual(('Unsupported', 'ConstructorDiffersFromMain'), (row['verdict'], row['reason']))
+        self.assertEqual(('Unknown', 'ConstructorClosure/ReadFailed'), (row['verdict'], row['gap']))
         # A failed head read is Unknown, not a verdict.
         broken, _ = self.fake_gh(overrides=[['/repos/FS-GG/.github/git/ref/heads/main', 'FAIL']], name='main-fail')
         result, out = self.preflight(broken, live_main=True)
@@ -1425,10 +1428,10 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         if not SOURCE_REVISION:
             self.skipTest('needs the build revision')
         env, log = self.fake_gh()
-        # Flag asserted by the operator: a difference is Unsupported.
+        # Flag asserted by the operator: a difference is decided by the closure, and an unreadable one is never support.
         result, out = self.preflight(env, online=False, main='0' * 40)
         row = self.verdicts(result)[1]['ConstructorIdentity']
-        self.assertEqual(('Unsupported', 'ConstructorDiffersFromMain'), (row['verdict'], row['reason']))
+        self.assertEqual(('Unknown', 'ConstructorClosure/ReadFailed'), (row['verdict'], row['gap']))
         # No flag: the checkout's local tracking ref. A fixture repository carries one; a different value is only Unknown.
         repository = self.fixture['repository']
         self.git(repository, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
@@ -1436,6 +1439,53 @@ sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
         row = self.verdicts(result)[1]['ConstructorIdentity']
         self.assertEqual(('Unknown', 'ProtectedMain/NotLive'), (row['verdict'], row['gap']))
         self.assertEqual([], self.argv_log(log))  # offline: no read of the live head
+
+    def descendant_repository(self, name):
+        """A repository that holds the build revision's objects (by alternates) and returns a function committing a child of
+        a given commit with one path set; used to put the fixture's manifest on a descendant of the constructor."""
+        repository = self.dir / name
+        repository.mkdir()
+        self.git(repository, 'init', '-q')
+        objects = self.git(ROOT, 'rev-parse', '--path-format=absolute', '--git-path', 'objects')
+        (repository / '.git' / 'objects' / 'info' / 'alternates').write_text(objects + '\n')
+        shallow = pathlib.Path(self.git(ROOT, 'rev-parse', '--path-format=absolute', '--git-path', 'shallow'))
+        if shallow.exists():
+            shutil.copyfile(shallow, repository / '.git' / 'shallow')
+        def child(parent, path, data):
+            source = self.dir / (name + '-blob')
+            source.write_bytes(data)
+            blob = self.git(repository, 'hash-object', '-w', str(source))
+            self.git(repository, 'read-tree', parent)
+            self.git(repository, 'update-index', '--add', '--cacheinfo', f'100644,{blob},{path}')
+            tree = self.git(repository, 'write-tree')
+            return self.git(repository, 'commit-tree', tree, '-p', parent, '-m', 'synthetic ' + path)
+        return repository, child
+
+    def test_constructor_identity_admits_a_later_main_only_by_its_unchanged_closure(self):
+        # #5113: the installed release is the build revision; main moves past it. Commit-id equality is not the test.
+        if not SOURCE_REVISION:
+            self.skipTest('needs the build revision')
+        env, _ = self.fake_gh()
+        repository, child = self.descendant_repository('descendant')
+        merge = child(SOURCE_REVISION, self.MANIFEST, self.fixture['public'].read_bytes())
+        fixture = dict(self.fixture, repository=repository, merge=merge)
+        # Main is a descendant whose only change, the manifest, is outside the constructor closure: supported.
+        result, _ = self.preflight(env, online=False, fixture=fixture, main=merge)
+        row = self.verdicts(result)[1]['ConstructorIdentity']
+        self.assertEqual('SupportedForNextStage', row['verdict'], row)
+        self.assertIn('unchanged', row['evidence'])
+        self.assertIn('1 changed paths lie outside it', row['evidence'])
+        # Causal: one more commit changing one planner source file, and the same request is refused.
+        changed = child(merge, 'src/FS.GG.Coord.GitHub/V2Enrollment.fs', b'// changed planner source\n')
+        result, _ = self.preflight(env, online=False, fixture=fixture, main=changed)
+        row = self.verdicts(result)[1]['ConstructorIdentity']
+        self.assertEqual(('Unsupported', 'ConstructorDiffersFromMain', 'ConstructorBuild', ['1']),
+                         tuple(row[k] for k in ['verdict', 'reason', 'supplier', 'subjects']))
+        self.assertEqual(10, result.returncode)
+        # A file added beside the closure's root build configuration shadows it, so it is a closure change too.
+        shadow = child(merge, 'Directory.Build.rsp', b'-p:Synthetic=true\n')
+        result, _ = self.preflight(env, online=False, fixture=fixture, main=shadow)
+        self.assertEqual('ConstructorDiffersFromMain', self.verdicts(result)[1]['ConstructorIdentity']['reason'])
 
     def test_bind_runtime_observes_the_successor_inputs(self):
         if not SOURCE_REVISION:

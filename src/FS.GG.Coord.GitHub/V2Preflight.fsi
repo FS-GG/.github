@@ -111,6 +111,7 @@ module V2Preflight =
 
     type Reason =
         | ConstructorDiffersFromMain
+        | ConstructorNotAncestorOfMain
         | PredecessorCommitmentMismatch
         | PredecessorNotSpliceable
         | RuntimeBindingDiffers
@@ -151,6 +152,7 @@ module V2Preflight =
     type Input =
         | SourceRevision
         | ProtectedMain
+        | ConstructorClosure
         | PredecessorPrivate
         | PredecessorPublic
         | RuntimeBinding
@@ -258,6 +260,19 @@ module V2Preflight =
         /// The checkout's local tracking ref; it may be stale.
         | LocalTrackingRef
 
+    /// What the checkout says about the constructor's source revision and the intended protected main (#5113),
+    /// observed by `git` for exactly the pair named. It is evidence only for that pair.
+    type ConstructorContent =
+        { Built: string
+          Main: string
+          /// `Built` is an ancestor of `Main` (`git merge-base` of the two is `Built`).
+          BuiltIsAncestor: bool
+          /// Exact paths plus prefixes of the constructor closure derived at `Built` (`V2ConstructorClosure`).
+          ClosureEntries: int
+          ChangedOutsideClosure: int
+          /// Changed paths between the two commits that are inside the closure, including added paths that shadow it.
+          ChangedInsideClosure: int }
+
     type EnrollmentInputs =
         { Request: V2Enrollment.Request
           Facts: Observed<V2Enrollment.NativeFacts * FactsFreshness>
@@ -267,6 +282,10 @@ module V2Preflight =
           ProtectedMain: Observed<string>
           /// How `ProtectedMain` was obtained. A differing revision from a local tracking ref is only `Unknown`.
           ProtectedMainFreshness: MainFreshness
+          /// When the revisions differ, the content evidence for that exact pair. `ConstructorIdentity` is supported
+          /// for a differing live or asserted main only when `Main` descends from `Built` and no closure path changed;
+          /// a missing, unreadable or mismatched observation is `Unknown`, never support.
+          ConstructorContent: Observed<ConstructorContent>
           PredecessorPrivate: Observed<string>
           /// The public blob at the request's recorded predecessor merge.
           PredecessorPublic: Observed<string>

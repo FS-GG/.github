@@ -109,6 +109,8 @@
     <Compile Include="V2Custody.fs" />
     <Compile Include="V2NativeResolve.fsi" />
     <Compile Include="V2NativeResolve.fs" />
+    <Compile Include="V2ConstructorClosure.fsi" />
+    <Compile Include="V2ConstructorClosure.fs" />
     <Compile Include="V2Preflight.fsi" />
     <Compile Include="V2Preflight.fs" />
     <Compile Include="V2EnrollmentCommands.fsi" />
