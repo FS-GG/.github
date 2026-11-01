@@ -313,6 +313,12 @@ the outcome or the attempts; `--delivery-marker required`, which Root turns on a
 a PR declaring neither or both before any merge attempt, with reason `delivery-marker none|both`. Readers ignore
 fields they do not use, and a result without the field is minor 0. These points refine the steps above:
 
+- **Post-merge `board-v2 tend` trigger** (board-reconciler design §8, #5136 PR 8). In enforce mode only, after the merged-PR
+  and merge-commit readback, the gate writes `$XDG_STATE_HOME/fsgg/board-tend/pending-post-merge` and runs
+  `systemctl --user start --no-block fsgg-board-tend.service`. It is best effort, announced on stderr
+  (`fsgg routine board tend trigger: started|start-failed|marker-failed...`), never in the result, and cannot change
+  the outcome. The unit's wrapper never swallows a post-merge run (`board-tend-fdev-units.md`).
+
 - `scripts/board-currency-rules.py` is not distributed to receiver workspaces. Where it is absent the
   gate reports `unavailable`: advisory records it, and enforce returns `indeterminate` (fail-closed).
 - A Delivery that the PR names with a closing keyword is treated as closed: GitHub closes it

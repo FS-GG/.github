@@ -1,0 +1,12 @@
+# Rendered by deployment/fdev-board-tend/install.py from fsgg-board-tend.timer.in (Refs FS-GG/.github#5136, §12 PR 8).
+[Unit]
+Description=Hourly FS-GG board-v2 tend (minute 07, away from the observer's :23 cron, the :53 dispatch and the 04:43 archive)
+
+[Timer]
+OnCalendar=*-*-* *:07:00
+Persistent=true
+RandomizedDelaySec=120
+Unit=fsgg-board-tend.service
+
+[Install]
+WantedBy=timers.target

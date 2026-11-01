@@ -1,0 +1,39 @@
+name: fdev-board-tend-selftest
+
+# deployment/fdev-board-tend holds the fdev user units, the wrapper and the installer for `board-v2 tend`
+# (board-reconciler design section 8, .github#5136 PR 8). This fixture renders the units into a fake $HOME and runs
+# the wrapper against a fake engine, offline and credential-free. It proves the environment pin (FSGG_KIT_ROOT, the
+# fixed WorkingDirectory), plan-only by default, private outputs and the post-merge marker rules. It never touches
+# systemd and never installs anything.
+on:
+  pull_request:
+    paths:
+      - "deployment/fdev-board-tend/**"
+      - "tests/fdev-board-tend/**"
+      - ".github/workflows/fdev-board-tend-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deployment/fdev-board-tend/**"
+      - "tests/fdev-board-tend/**"
+      - ".github/workflows/fdev-board-tend-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR-keyed concurrency (#4730 CI-load): a newer run for the same pull request cancels the superseded
+# one. Any other event keys on `github.run_id`, so two events at one ref or sha never drop a run.
+concurrency:
+  group: fdev-board-tend-selftest-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the unit, wrapper and installer fixtures
+        run: bash tests/fdev-board-tend/run.sh

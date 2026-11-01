@@ -147,12 +147,24 @@ MUTANTS = [
      '    try:\n        custody.write(repo, pr, dict(record, state="verified"'),
     ("sweep reads the current PR's own record", "                    current is not None and (record[\"repo\"].lower(), record[\"pr\"]) == (current[0].lower(), current[1])):",
      "                    False):"),
+    # ---- the post-merge board-tend trigger (board-reconciler design section 8, #5136 PR 8) ----
+    ("tend start blocks on the unit", '"start", "--no-block", BOARD_TEND_UNIT', '"start", BOARD_TEND_UNIT'),
+    ("tend start has no timeout", "                   timeout=BOARD_TEND_START_TIMEOUT_SECONDS, check=False)", "                   check=False)"),
+    ("tend start failure reported as started", '    return "start-failed" if outcome == "started" else "marker-failed+start-failed"', "    return outcome"),
+    ("tend marker state directory not private", "root.mkdir(mode=0o700, parents=True, exist_ok=True)\n        fd, tmp = tempfile.mkstemp(dir=root, prefix=f\".{BOARD_TEND_MARKER}.\")",
+     "root.mkdir(mode=0o755, parents=True, exist_ok=True)\n        fd, tmp = tempfile.mkstemp(dir=root, prefix=f\".{BOARD_TEND_MARKER}.\")"),
+    ("tend marker rewritten in place", "            os.replace(tmp, root / BOARD_TEND_MARKER)  # a new inode each time: the unit tells markers apart by identity",
+     "            (root / BOARD_TEND_MARKER).write_text('x', encoding='utf-8')"),
+    ("tend trigger error escapes the merge", '            except Exception:\n                print("fsgg routine board tend trigger: start-failed", file=sys.stderr)',
+     '            except KeyboardInterrupt:\n                print("fsgg routine board tend trigger: start-failed", file=sys.stderr)'),
+    ("tend trigger wired in every mode", 'board_tend_trigger=(board_tend_post_merge if args.board_gate == "enforce" else None)', "board_tend_trigger=board_tend_post_merge"),
+    ("tend trigger skipped after a merge", "        if board_tend_trigger is not None:\n            try:\n                print(", "        if False:\n            try:\n                print("),
 ]
 
 
 def run(source: Path) -> bool:
     env = dict(os.environ, ROUTINE_DELIVERY_UNDER_TEST=str(source), PYTHONDONTWRITEBYTECODE="1")
-    done = subprocess.run([sys.executable, str(HERE / "routine-delivery.py"), "BoardGateTests", "BoardWriterLockReplayTests"],
+    done = subprocess.run([sys.executable, str(HERE / "routine-delivery.py"), "BoardGateTests", "BoardWriterLockReplayTests", "BoardTendTriggerTests"],
                           env=env, capture_output=True, text=True, timeout=300, check=False)
     return done.returncode == 0
 
