@@ -2,7 +2,7 @@
 #
 # Drives the library functions the root CLI calls against temporary trees: manifest identity, quiesce proof, seal and
 # copy verification, write-path guards, the O_EXCL claim, void corroboration, supersede of a consumed claim and the
-# admission pins. stdlib only; no credential, no network, no container, no root.
+# admission pins, and the synthetic mode (#5184), which also drives the pod operator's verify_claim. stdlib only; no credential, no network, no container, no root.
 #
 # The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
 name: learn-seal-claim-selftest
@@ -11,12 +11,14 @@ on:
   pull_request:
     paths:
       - "deployment/learn-finite-profile/seal/**"
+      - "deployment/learn-finite-profile/pod-operator/learn-pod-operator-r1.py"
       - "tests/learn-seal-claim/**"
       - ".github/workflows/learn-seal-claim-selftest.yml"
   push:
     branches: [main]
     paths:
       - "deployment/learn-finite-profile/seal/**"
+      - "deployment/learn-finite-profile/pod-operator/learn-pod-operator-r1.py"
       - "tests/learn-seal-claim/**"
       - ".github/workflows/learn-seal-claim-selftest.yml"
   workflow_dispatch:

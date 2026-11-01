@@ -646,8 +646,12 @@
        pnext-item requires the delivery-continues/completes declaration and work-board carries the board-tend
        contract amendment (#5136 PR 6). SOURCE preparation only; published 0.114.1 is unchanged and the
        release is a separate step (#5136 PR 7). -->
+  <!-- 0.114.2 -> 0.114.3 (#5171): coherent PATCH. Passive capture attributes Claude Code subagent transcripts to a
+       deterministic dispatch, invocation and Delivery from the brief's first-line `fsgg-dispatch:` marker, reusing the
+       existing dispatch, lineage and admission facts; packaged pnext-item and the work-board driver state the marker.
+       SOURCE preparation only; published 0.114.2 is unchanged and the release is a separate step. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.114.2</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.114.3</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
