@@ -304,14 +304,12 @@ ORDER BY d.expected_at, d.dispatch_id;"""
             Assert.Equal("0", Store.scalar store "SELECT count(*) FROM expected_dispatches;")
             Assert.Equal("1", Store.scalar store "SELECT count(*) FROM health_diagnostics WHERE code='dispatch-identity-unavailable' AND item_id IS NULL;")
 
-    let private unattributedCase (text: string) (reason: string) =
+    let private unattributedRecords (first: string) (reason: string) =
         let cleanup, root = temp ()
         use cleanup = cleanup
         let fixture = layout root
         writeAttributed fixture
-        File.WriteAllText(
-            fixture.Transcript agent,
-            opening agent promptA text "2026-11-01T09:00:01.250Z" + response agent "msg_01a" 3L 4000L 300L 50L "2026-11-01T09:00:05.000Z")
+        File.WriteAllText(fixture.Transcript agent, first + response agent "msg_01a" 3L 4000L 300L 50L "2026-11-01T09:00:05.000Z")
         let batches = ResizeArray<byte array>()
         capture fixture batches [ fixture.Transcript agent ] |> ignore
         let batch = facts (Assert.Single batches)
@@ -319,13 +317,16 @@ ORDER BY d.expected_at, d.dispatch_id;"""
         Assert.Empty(ofKind "invocation-lineage" batch)
         Assert.Empty(ofKind "runtime-admission" batch)
         let gap = Assert.Single(ofKind "diagnostic" batch)
-        Assert.Equal($"claude-subagent-item-unattributed-{dispatchOf toolUse}-{threadOf agent}", gap.Identity)
+        Assert.Equal($"claude-subagent-item-unattributed-{dispatchOf toolUse}-{threadOf agent}-{reason}", gap.Identity)
         Assert.Equal(Some("item-unattributed:" + reason), field gap "code")
         Assert.Equal(None, gap.ItemId)
         let store = Store.create root
         Assert.Contains("\"rejected\":0", Store.submit store "unattributed" batches[0])
         Assert.Empty(Store.rows store JoinSql)
         Assert.Equal("1", Store.scalar store $"SELECT count(*) FROM health_diagnostics WHERE code='item-unattributed:{reason}' AND item_id IS NULL;")
+
+    let private unattributedCase (text: string) (reason: string) =
+        unattributedRecords (opening agent promptA text "2026-11-01T09:00:01.250Z") reason
 
     [<Fact>]
     let ``a missing marker is an item-unattributed gap even when the item appears later in prose`` () =
@@ -337,6 +338,50 @@ ORDER BY d.expected_at, d.dispatch_id;"""
         if supported () then
             unattributedCase "fsgg-dispatch: item=FS-GG/.github#5171 role=boss" "malformed-marker"
             unattributedCase "fsgg-dispatch: item=FS-GG/.github role=worker" "malformed-marker"
+
+    [<Fact>]
+    let ``an unreadable opening record is an item-unattributed prompt-unavailable gap`` () =
+        if supported () then
+            // The first record is not the user prompt, so no marker can be read; the prompt that follows still
+            // attributes the usage turn, but never the item.
+            let system =
+                $"""{{"type":"system","subtype":"synthetic","isSidechain":true,"agentId":"{agent}","uuid":"{Guid.NewGuid()}","timestamp":"2026-11-01T09:00:01.000Z","sessionId":"{session}"}}""" + "\n"
+            unattributedRecords (system + opening agent promptA (marker + "\nsynthetic") "2026-11-01T09:00:01.250Z") "prompt-unavailable"
+
+    [<Fact>]
+    let ``a reset producer state that reads a different unattributed reason adds a fact and keeps its usage`` () =
+        if supported () then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let fixture = layout root
+            writeAttributed fixture
+            File.WriteAllText(
+                fixture.Transcript agent,
+                opening agent promptA "fsgg-dispatch: item=FS-GG/.github#5171 role=boss" "2026-11-01T09:00:01.250Z"
+                + response agent "msg_01a" 3L 4000L 300L 50L "2026-11-01T09:00:05.000Z")
+            let batches = ResizeArray<byte array>()
+            capture fixture batches [ fixture.Transcript agent ] |> ignore
+            let store = Store.create root
+            Assert.Contains("\"rejected\":0", Store.submit store "malformed" batches[0])
+            // The producer state is lost and the transcript's first line now reads differently. Its new response is a
+            // new observation; the gap for the same dispatch and invocation now has another reason.
+            File.WriteAllText(
+                fixture.Transcript agent,
+                opening agent promptA "Synthetic brief without a marker." "2026-11-01T09:00:01.250Z"
+                + response agent "msg_01z" 2L 900L 30L 11L "2026-11-01T09:00:07.000Z")
+            let resetRoot = Path.Combine(root, "reset")
+            Directory.CreateDirectory resetRoot |> ignore
+            File.SetUnixFileMode(resetRoot, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+            let reset = ResizeArray<byte array>()
+            let result =
+                SkillTelemetryAdapter.capturePassiveFrom resetRoot "owner" "passive-stream" (SkillTelemetryReaders.ClaudeHome fixture.Home)
+                    [ fixture.Transcript agent ] (fun bytes -> reset.Add(Array.copy bytes); Ok "locally-retained")
+            Assert.Equal(0, result.ExitCode)
+            let second = facts (Assert.Single reset)
+            Assert.Equal(Some "item-unattributed:missing-marker", field (Assert.Single(ofKind "diagnostic" second)) "code")
+            Assert.Contains("\"rejected\":0", Store.submit store "missing" reset[0])
+            Assert.Equal("2", Store.scalar store "SELECT count(*) FROM health_diagnostics WHERE code LIKE 'item-unattributed:%' AND item_id IS NULL;")
+            Assert.Equal("2", Store.scalar store "SELECT count(*) FROM current_ingest_facts WHERE kind='provider-usage-observation/1';")
 
     [<Fact>]
     let ``a missing launch result waits, then joins later or becomes a gap when the transcript retires`` () =

@@ -1291,7 +1291,9 @@ module SkillTelemetryAdapter =
                 let unattributed reason =
                     if status.IsSome then [], (if retiring then Some "complete" else status), []
                     else
-                        [ event "diagnostic" ($"claude-subagent-item-unattributed-{dispatch}-{invocation}") None
+                        // The reason is part of the identity: after a producer-state reset, a re-read that finds a
+                        // different reason is a new fact, never an identity conflict that would quarantine the batch.
+                        [ event "diagnostic" ($"claude-subagent-item-unattributed-{dispatch}-{invocation}-{reason}") None
                               [ "code", node ("item-unattributed:" + reason); "severity", node "warning" ] ],
                         Some "complete", [ "claude-dispatch-item-unattributed" ]
                 match NativeUsage.readClaudeSubagentOpening claudeHome path with

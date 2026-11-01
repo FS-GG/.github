@@ -134,8 +134,10 @@ receiver needs no change and the store needs no migration:
   `attemptId` is the dispatch id, `producerStream` is `claude-code-subagent:<role>`.
 
 The item comes only from the brief's first line, `fsgg-dispatch: item=OWNER/REPO#N role=worker|critic|analyst|report`.
+Trailing spaces, tabs and a carriage return on that line are trimmed; everything else must match exactly.
 A missing or malformed marker, or an unreadable first record, writes no dispatch rows: an item-less
-`diagnostic` with code `item-unattributed:<reason>` names the dispatch and invocation. Missing metadata writes
+`diagnostic` with code `item-unattributed:<reason>` names the dispatch, invocation and reason in its identity, so a
+re-read after a producer-state reset that finds another reason adds a fact instead of conflicting. Missing metadata writes
 `dispatch-identity-unavailable`. A launch result not yet written leaves the admission pending; if the
 transcript retires without one, a `runtime-gap` records `claude-launch-result-unavailable`. Identities and
 contents are deterministic, so a re-read replays identical facts and a resumed agent (SendMessage) adds
