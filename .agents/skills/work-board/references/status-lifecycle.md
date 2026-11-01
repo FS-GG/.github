@@ -1,8 +1,10 @@
 # Maintain current board Status
 
 The root integrator owns Status decisions and their guarded native updates. Workers supply evidence;
-inspection reads facts without deciding or writing Status. The one exception is the bounded automatic
-Status writes of `board-v2 tend` (S1, S3, S3b, S4, S9, S9r and O1), admitted by the
+inspection reads facts without deciding or writing Status. The exceptions are automatic writers: the merge
+gate's one post-merge Delivery transition (In review, or In progress with `fsgg:delivery-continues/v1`),
+the project workflow "Item closed → Done", and the bounded automatic Status writes of `board-v2 tend`
+(S1, S3, S3b, S4, S9, S9r and O1), admitted by the
 [lifecycle contract](lifecycle-contract.md#board-tend-automatic-writes) while Root's enable file lists them. Status describes the current scoped promise,
 not read health, PR existence, capacity allocation or permission to act.
 
@@ -21,13 +23,15 @@ Preserve existing ownership, attempts, worktrees, reservations and full acceptan
 | Backlog | No concrete next action is admitted. |
 | Ready | A concrete next action is executable. Waiting for capacity also belongs here. |
 | In progress | An accountable owner is actively executing, including a bounded wait on a named running operation. |
-| In review | Implementation and required validation are complete; review or acceptance remains. |
+| In review | Implementation and required validation are complete; review or acceptance remains. Under tend's S3 a strictly linked non-draft PR shows its Delivery In review. |
 | Blocked | No meaningful next action can proceed without a named prerequisite or decision. |
 | Done | Complete scoped acceptance is established. |
 
 Read the whole remaining promise and determining live evidence, not just the latest worker message or
 PR label. A stopped or completed operation is no longer an active wait. A known in-scope repair can
-leave executable work Ready; unfinished required validation cannot establish In review. If the facts
+leave executable work Ready; unfinished required validation cannot establish In review, so a PR whose
+required validation is unfinished stays draft, which tend's S3b shows as In progress, and is marked ready
+for review only on a head without known-red required gates. If the facts
 needed for judgment are unavailable, retain the uncertainty and its owner rather than inventing progress.
 
 Outcomes describe their whole remaining promise. Active child work can make an Outcome In progress
