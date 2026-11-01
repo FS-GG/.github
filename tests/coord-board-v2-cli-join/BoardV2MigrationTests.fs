@@ -293,12 +293,13 @@ module BoardV2MigrationTests =
                 let mutable corrupted = false
                 fixture.Native.Transform <- fun (request: Transport.Request) (response: Transport.Response) ->
                     match request.Body with
-                    | Transport.Query(document, _) when document.Contains("items(first:") && fixture.Native.Mutations.Length = step ->
+                    | Transport.Query(document, _) when (document.Contains("items(first:") || document.Contains("isArchived content{")) && fixture.Native.Mutations.Length = step ->
                         let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
                         let data = root.["data"]
-                        let project = (data.["organization"]).["projectV2"]
-                        let items = (project.["items"]).["nodes"].AsArray()
-                        let item = items.[0]
+                        // A complete read carries the items under the project; an item-scoped read (#5123) is the node.
+                        let item =
+                            if document.Contains("items(first:") then ((data.["organization"]).["projectV2"].["items"]).["nodes"].AsArray().[0]
+                            else data.["node"]
                         let values = (item.["fieldValues"]).["nodes"].AsArray()
                         let selected = values |> Seq.find (fun (value: System.Text.Json.Nodes.JsonNode) -> (value.["field"]).["id"].GetValue<string>() = target)
                         corrupted <- true
@@ -434,7 +435,15 @@ module BoardV2MigrationTests =
         printfn "full77 oneReadLag=%b outcome=%d mutations=%d totalRequestsIncludingPrepare=%d virtualWait=%O; excludes HTTP/custody latency" oneReadLag outcome fixture.Native.Mutations.Length (fixture.Native.Requests.Length + fixture.Native.Mutations.Length) (clock.GetUtcNow() - started)
         Assert.True((outcome = 0), sprintf "outcome=%d; mutations=%d; requests=%d; virtualElapsed=%O; excludes HTTP/custody latency" outcome fixture.Native.Mutations.Length (fixture.Native.Requests.Length + fixture.Native.Mutations.Length) (clock.GetUtcNow() - started))
         Assert.Equal<TimeSpan>(TimeSpan.FromSeconds(if oneReadLag then 77.0 else 0.0), clock.GetUtcNow() - started)
-        Assert.Equal((if oneReadLag then 472 else 395), fixture.Native.Requests.Length + fixture.Native.Mutations.Length)
+        // #5123: planning-value initializations re-read and read back only their item; complete reads happen once per
+        // group of up to 25 and around the other effects, not before and after every effect (was 472 and 395).
+        Assert.Equal((if oneReadLag then 376 else 299), fixture.Native.Requests.Length + fixture.Native.Mutations.Length)
+        let documents = fixture.Native.Requests |> List.choose (fun (request: Transport.Request) -> match request.Body with Transport.Query(document, _) -> Some document | _ -> None)
+        let itemReads = documents |> List.filter (fun document -> document.Contains "isArchived content{" && not (document.Contains "items(first:"))
+        let planningEffects = fixture.Native.Mutations |> List.filter (fun (request: Transport.Request) -> match request.Body with Transport.Json json -> json.Contains "updateProjectV2ItemFieldValue(" | _ -> false)
+        Assert.NotEmpty(planningEffects)
+        // One item precondition and one readback per planning effect, plus one more per visibility lag.
+        Assert.Equal(planningEffects.Length * (if oneReadLag then 3 else 2), itemReads.Length)
         Assert.Equal(77, fixture.Native.Mutations.Length)
         Assert.Equal(22, fixture.Native.Snapshot.Items.Length)
         Assert.Equal(8, fixture.Native.Snapshot.Views.Length)
@@ -1249,3 +1258,111 @@ module BoardV2MigrationTests =
         Assert.Contains("fs.gg.board-v2.migration-readback/2", File.ReadAllText readback)
         use terminal = JsonDocument.Parse(File.ReadAllText(Path.Combine(path + ".invocation", "terminal.json")))
         Assert.Equal("Unknown", terminal.RootElement.GetProperty("state").GetString())
+
+    // ---- #5123: item-scoped planning initialization ----
+
+    let private singlePlanning (name: string) =
+        let fixture = new Fixture()
+        fixture.Native.Snapshot <- planningSchema fixture.Native.Snapshot
+        fixture.Scope <- { fixture.Scope with InitialPlanning = [ declaration "synthetic-issue" "Blocked" ] }
+        let code, path = fixture.Prepare name
+        Assert.Equal(0, code)
+        fixture, path
+
+    let private isItemRead (request: Transport.Request) =
+        match request.Body with
+        | Transport.Query(document, _) -> document.Contains "isArchived content{" && not (document.Contains "items(first:")
+        | _ -> false
+
+    let private isCompleteRead (request: Transport.Request) =
+        match request.Body with
+        | Transport.Query(document, _) -> document.Contains "viewer{id login}" && document.Contains "fields(first:"
+        | _ -> false
+
+    [<Fact>]
+    let ``planning initializations re-read and read back only their item, with one complete read per group`` () =
+        let fixture, path = singlePlanning "item-scoped-group"
+        use _ = fixture
+        let before = fixture.Native.Requests.Length
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        // The In review option and the membership (complete-read effects), then Track, Roadmap and Status as one group.
+        Assert.Equal(5, fixture.Native.Mutations.Length)
+        let applyReads = fixture.Native.Requests |> List.skip before
+        Assert.Equal(6, applyReads |> List.filter isItemRead |> List.length)
+        let directory = path + ".invocation"
+        for sequence in [ 3; 4; 5 ] do
+            let prefix = Path.Combine(directory, sequence.ToString "D3")
+            for suffix in [ "-precondition.json"; "-item-precondition.json"; "-intent.json"; "-intent-metadata.json"; "-response.json"; "-receipt.json"; "-native-readback.json" ] do
+                Assert.True(File.Exists(prefix + suffix), prefix + suffix)
+            Assert.Contains("\"itemScoped\":true", File.ReadAllText(prefix + "-intent-metadata.json"))
+        Assert.True(File.Exists(Path.Combine(directory, "005-group-native-readback.json")))
+        Assert.True(File.Exists(Path.Combine(directory, "005-group-readback.json")))
+        Assert.False(File.Exists(Path.Combine(directory, "002-item-precondition.json")))
+        Assert.True(File.Exists(Path.Combine(directory, "completed.json")))
+        // Inside the group only item-scoped reads happen; the group ends with one complete read.
+        Assert.True(applyReads |> List.exists isCompleteRead)
+
+    [<Fact>]
+    let ``max-effects stops the invocation after its effect budget, before any further send`` () =
+        let fixture, path = singlePlanning "effect-budget"
+        use _ = fixture
+        Assert.Equal(3, fixture.Run(fixture.ApplyArguments path @ [ "--max-effects"; "3" ]))
+        Assert.Equal(3, fixture.Native.Mutations.Length)
+        Assert.False(File.Exists(Path.Combine(path + ".invocation", "004-intent.json")))
+        Assert.False(File.Exists(Path.Combine(path + ".invocation", "completed.json")))
+        // The group was cut to the remaining budget of one and still ended with its complete-read check.
+        Assert.True(File.Exists(Path.Combine(path + ".invocation", "003-group-readback.json")))
+        use budget = JsonDocument.Parse(File.ReadAllText(Path.Combine(path + ".invocation", "effect-budget.json")))
+        Assert.Equal((3, 3, 2), (budget.RootElement.GetProperty("sent").GetInt32(), budget.RootElement.GetProperty("maxEffects").GetInt32(), budget.RootElement.GetProperty("remaining").GetInt32()))
+        for invalid in [ "0"; "501"; "two"; "-1" ] do
+            Assert.True(BoardV2Application.validateInvocation ([ "board-v2" ] @ fixture.ApplyArguments path @ [ "--max-effects"; invalid ]) |> Option.exists Result.isError, invalid)
+        Assert.Equal(Some(Ok()), BoardV2Application.validateInvocation ([ "board-v2" ] @ fixture.ApplyArguments path @ [ "--max-effects"; "25" ]))
+
+    [<Fact>]
+    let ``an item that changed before a later group effect refuses that effect before its send`` () =
+        let fixture, path = singlePlanning "item-drift"
+        use _ = fixture
+        let mutable itemReadsAfterThird = 0
+        fixture.Native.BeforeRead <- fun (request: Transport.Request) ->
+            if fixture.Native.Mutations.Length = 3 && isItemRead request then
+                itemReadsAfterThird <- itemReadsAfterThird + 1
+                // The second item read after the third send is the fourth effect's precondition.
+                if itemReadsAfterThird = 2 then
+                    let item = fixture.Native.Snapshot.Items.Head
+                    fixture.Native.Snapshot <- { fixture.Native.Snapshot with Items = [ { item with UpdatedAt = "2026-10-17T14:00:00Z" } ] }
+        Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(3, fixture.Native.Mutations.Length)
+        Assert.False(File.Exists(Path.Combine(path + ".invocation", "004-intent.json")))
+
+    [<Fact>]
+    let ``an item readback showing anything beyond the one effect is Unknown and stops later sends`` () =
+        let fixture, path = singlePlanning "item-readback-differs"
+        use _ = fixture
+        fixture.Native.BeforeDispatch <- fun (_: Transport.Request) ->
+            if fixture.Native.Mutations.Length = 3 then
+                let item = fixture.Native.Snapshot.Items.Head
+                let extra = observedScalar "synthetic-extra-field" (PlanningText "concurrent")
+                fixture.Native.Snapshot <- { fixture.Native.Snapshot with Items = [ { item with Values = item.Values @ [ extra ] } ] }
+        Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(3, fixture.Native.Mutations.Length)
+        Assert.True(File.Exists(Path.Combine(path + ".invocation", "003-native-readback.json")))
+        use terminal = JsonDocument.Parse(File.ReadAllText(Path.Combine(path + ".invocation", "terminal.json")))
+        Assert.Equal("Unknown", terminal.RootElement.GetProperty("state").GetString())
+
+    [<Fact>]
+    let ``a complete group readback that differs beyond the group's effects is Unknown`` () =
+        let fixture, path = singlePlanning "group-readback-differs"
+        use _ = fixture
+        let mutable changed = false
+        fixture.Native.BeforeRead <- fun (request: Transport.Request) ->
+            if not changed && fixture.Native.Mutations.Length = 5 && isCompleteRead request then
+                changed <- true
+                // A determining fact outside the group's effects: the selected issue was edited meanwhile.
+                let issues = fixture.Native.Snapshot.Issues |> List.map (fun (issue: NativeIssue) -> { issue with UpdatedAt = "2026-10-17T15:00:00Z" })
+                fixture.Native.Snapshot <- { fixture.Native.Snapshot with Issues = issues }
+        Assert.Equal(3, fixture.Run(fixture.ApplyArguments path))
+        Assert.True changed
+        Assert.Equal(5, fixture.Native.Mutations.Length)
+        Assert.True(File.Exists(Path.Combine(path + ".invocation", "005-group-native-readback.json")))
+        Assert.False(File.Exists(Path.Combine(path + ".invocation", "005-group-readback.json")))
+        Assert.False(File.Exists(Path.Combine(path + ".invocation", "completed.json")))

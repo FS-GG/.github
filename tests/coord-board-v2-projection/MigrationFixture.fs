@@ -197,6 +197,20 @@ module MigrationFixture =
                                                                         "projectV2", project ] ] @ issues))
                 elif document.Contains "fields(first:" then parent "fields" (snapshot.Fields |> List.map fieldNode)
                 elif document.Contains "items(first:" then parent "items" (snapshot.Items |> List.map itemNode)
+                elif document.Contains "isArchived content{" && not (document.Contains "items(first:") then
+                    // An item-scoped read (#5123): a pending visibility serves the pre-effect item.
+                    let source =
+                        match pendingVisibility with
+                        | Some(before, remaining) when remaining > 0 ->
+                            pendingVisibility <- Some(before, remaining - 1)
+                            before
+                        | Some _ ->
+                            pendingVisibility <- None
+                            snapshot
+                        | None -> snapshot
+                    match source.Items |> List.tryFind (fun (item: Item) -> item.Id = id) with
+                    | Some item -> response (objectNode [ "node", itemNode item ])
+                    | None -> response (objectNode [ "node", null ])
                 elif document.Contains "fieldValues(first:" then
                     let item = snapshot.Items |> List.find (fun (item: Item) -> item.Id = id)
                     parent "fieldValues" (item.Values |> List.map valueNode)

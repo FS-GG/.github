@@ -13,8 +13,11 @@ trap 'rm -rf "$PRIVATE_TMP"' EXIT
 
 LOG="$PRIVATE_TMP/test.log"
 # `leg.sh` runs the V2Tend tests (derivation, reads, writer); `leg.sh cli` runs the tend CLI tests in cli-join.
+# `leg.sh migration` runs the migration-apply tests (the shared item-scoped write discipline, #5123).
 if [ "${1:-}" = "cli" ]; then
   dotnet test "$ROOT/tests/coord-board-v2-cli-join/coord-board-v2-cli-join.fsproj" -c Release --nologo --filter "FullyQualifiedName~TendApplication" >"$LOG" 2>&1
+elif [ "${1:-}" = "migration" ]; then
+  dotnet test "$ROOT/tests/coord-board-v2-cli-join/coord-board-v2-cli-join.fsproj" -c Release --nologo --filter "FullyQualifiedName~BoardV2MigrationTests" >"$LOG" 2>&1
 else
   dotnet test "$ROOT/tests/coord-board-v2-projection/coord-board-v2-projection.fsproj" -c Release --nologo --filter "FullyQualifiedName~V2Tend" >"$LOG" 2>&1
 fi
