@@ -2779,12 +2779,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "3008677b36dec29a4f6df18500cfb3aa79e00c7a9b48c2e1a97eb1665ddcbe6a",
-      "tree-sha256": "c8a79b623e1dcb5a04287aa2ca2d2ca522a5850575be53cba16950b0c5fee0cf",
+      "sha256": "cef2662f1c1ec38321a0067e8cafd695f3fd0e6196f0463c0ae0eec62468b167",
+      "tree-sha256": "f58fe55a22ffd2be20224dc14fe8f6716bf806a3049d7263ff79af5795832053",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "3008677b36dec29a4f6df18500cfb3aa79e00c7a9b48c2e1a97eb1665ddcbe6a",
+          "sha256": "cef2662f1c1ec38321a0067e8cafd695f3fd0e6196f0463c0ae0eec62468b167",
           "executable": false
         },
         {

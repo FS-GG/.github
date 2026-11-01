@@ -63,6 +63,10 @@ The boundary order is: observe results → reconcile acceptance/blockers → upd
 readback → select/admit work → dispatch → update Status and verify readback. Reconcile before yielding
 or handing off. A periodic freshness sweep is a backstop, not the primary mechanism.
 
+Every dispatch brief starts with the exact line `fsgg-dispatch: item=OWNER/REPO#N role=worker|critic|analyst|report`,
+naming the admitted Delivery and the dispatch's role. Passive telemetry attributes the subagent's usage to that
+item from this line only; a missing or malformed marker is recorded as unattributed, never inferred from prose.
+
 Keep Owner, Done when, Current deliverable, Next action, Blocked on and Acceptance evidence in the
 existing owning issue. Preserve complete Done when and native history. No routine claim, mandatory
 packet, second filing owner, lifecycle ledger or duplicate status/closure table is required.

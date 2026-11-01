@@ -114,6 +114,36 @@ actual hosted compilation and focused assertions remain required. Coherent publi
 compatibility, installed producer capture and restart/restore durability remain separate gates. This
 candidate does not replace the qualified installed 0.105 board executable or its accepted binding.
 
+### Claude Code subagent dispatch attribution — 2026-11-01 (#5171)
+
+Passive capture attributes a selected Claude Code subagent transcript,
+`<project>/<session>/subagents/agent-<id>.jsonl`, to a dispatch and a Delivery. It reads only what Claude
+Code already writes: the sibling `agent-<id>.meta.json` (`toolUseId`, `spawnDepth`, `parentAgentId`), the
+transcript's first record (its timestamp and the first line of the brief), and the launch result for that
+`toolUseId` and agent in the spawning transcript (`resolvedModel`). It reuses the existing kinds, so the
+receiver needs no change and the store needs no migration:
+
+- `expected-dispatch`: dispatch id `sha256("claude-code-subagent-dispatch/1", session, toolUseId)` truncated to
+  32 hex characters, relation `child`, runtime `claude-code-subagent`, `expectedAt` from the first record
+  (`host-wall`). The parent is the session (`claude-code-session-dispatch/1`) or, for a nested spawn, the
+  spawning subagent's dispatch. The activation id names the session (`claude-code-session-activation/1`); no
+  activation fact is written.
+- `invocation-lineage`: invocation id is the subagent's existing passive thread id, so the per-response
+  `provider-usage-observation/1` facts join by `threadId`; the root invocation is the session id.
+- `runtime-admission`: `requestedModel` is the launch result's `resolvedModel`; `featureId` is the item,
+  `attemptId` is the dispatch id, `producerStream` is `claude-code-subagent:<role>`.
+
+The item comes only from the brief's first line, `fsgg-dispatch: item=OWNER/REPO#N role=worker|critic|analyst|report`.
+A missing or malformed marker, or an unreadable first record, writes no dispatch rows: an item-less
+`diagnostic` with code `item-unattributed:<reason>` names the dispatch and invocation. Missing metadata writes
+`dispatch-identity-unavailable`. A launch result not yet written leaves the admission pending; if the
+transcript retires without one, a `runtime-gap` records `claude-launch-result-unavailable`. Identities and
+contents are deterministic, so a re-read replays identical facts and a resumed agent (SendMessage) adds
+turns to the same dispatch. A per-source status in the cursor (`dispatch`) and retired entry (`d`) keeps a
+pass from re-emitting. These dispatches carry no terminal fact and their runtime is not a settled budget
+runtime, so an item with them keeps its budget population open; usage stays `provider-usage-observation/1`
+and outside qualified item totals.
+
 ## Capability boundary
 
 Instrument real repository-owned launch, dispatch, provider, check and delivery boundaries once. Guidance alone

@@ -88,6 +88,38 @@ module RuntimeUsage =
         val subagentThreadId: sessionId: string -> agentId: string -> string
         val decodeLine: line: byte array -> Result<Line, string>
 
+        /// The first-line brief marker `fsgg-dispatch: item=OWNER/REPO#N role=worker|critic|analyst|report`.
+        type DispatchMarker = { Item: string; Role: string }
+
+        type MarkerReading =
+            | Marked of DispatchMarker
+            /// The prompt's first line is not a dispatch marker; the item is never guessed from prose.
+            | MissingMarker
+            /// The first line starts as a marker but does not match its exact grammar.
+            | MalformedMarker
+
+        /// Allowlisted fields of a subagent's `agent-<id>.meta.json`.
+        type SubagentMeta =
+            {
+                ToolUseId: string
+                SpawnDepth: int
+                /// Present exactly when SpawnDepth exceeds one.
+                ParentAgentId: string option
+            }
+
+        /// The first record of a subagent transcript: its host-wall time and the parsed marker only.
+        type SubagentOpening = { StartedAt: string; Marker: MarkerReading }
+
+        val readDispatchMarker: prompt: string -> MarkerReading
+        val decodeSubagentMeta: bytes: byte array -> Result<SubagentMeta, string>
+        val decodeSubagentOpening: line: byte array -> Result<SubagentOpening, string>
+        /// Ok(Some resolvedModel) only for the parent record that is the launch result of this tool use and agent.
+        val decodeSubagentLaunch: agentId: string -> toolUseId: string -> line: byte array -> Result<string option, string>
+        /// Deterministic 32-hex identities; a re-read derives the same values.
+        val subagentDispatchId: sessionId: string -> toolUseId: string -> string
+        val sessionDispatchId: sessionId: string -> string
+        val sessionActivationId: sessionId: string -> string
+
     val collectCodex:
         task: string ->
         turnId: string option ->

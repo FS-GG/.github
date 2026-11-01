@@ -116,6 +116,13 @@ module SkillTelemetryReaders =
           /// Modification time of the opened descriptor, in Unix seconds, used only to recognize a quiescent source.
           ModifiedAtUnixSeconds: int64 }
 
+    /// A selected Claude source that is a subagent transcript `<project>/<session>/subagents/agent-<id>.jsonl`.
+    type ClaudeSubagentSource =
+        { SessionId: string
+          AgentId: string
+          /// The subagent's derived thread identity; its passive usage observations carry it as threadId.
+          InvocationId: string }
+
     type NativeCounters =
         {
             Input: int64
@@ -187,6 +194,19 @@ module SkillTelemetryReaders =
         val scanPassive:
             codexHome: string -> path: string -> prior: PassiveCursor option -> maximumBytes: int -> maximumRecords: int ->
                 Result<PassiveScan, ReaderError>
+
+        /// Some for a path below `claudeHome/projects/<project>/<session-uuid>/subagents/agent-<id>.jsonl`.
+        val claudeSubagentSource: claudeHome: string -> path: string -> ClaudeSubagentSource option
+        /// The subagent's metadata and, for a nested spawn, the spawning subagent's tool-use identity.
+        val readClaudeSubagentMeta:
+            claudeHome: string -> path: string ->
+                Result<FS.GG.Coord.RuntimeUsage.ClaudeTranscript.SubagentMeta * string option, string>
+        /// Ok None while the transcript's opening record is still being written.
+        val readClaudeSubagentOpening:
+            claudeHome: string -> path: string -> Result<FS.GG.Coord.RuntimeUsage.ClaudeTranscript.SubagentOpening option, string>
+        /// The launch-resolved model from the spawning transcript's launch result, when present.
+        val findClaudeSubagentLaunch:
+            claudeHome: string -> path: string -> meta: FS.GG.Coord.RuntimeUsage.ClaudeTranscript.SubagentMeta -> string option
 
         val coverageForParent: Guid option -> Coverage
 
