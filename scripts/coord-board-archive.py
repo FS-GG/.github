@@ -32,7 +32,8 @@ THE GUARDS, ALL FAIL-CLOSED
    read completely or the run refuses. This is the "never a live row's blocker" guard the reconciler design keeps.
 2. Newest 200 kept. Candidates are ranked by `closedAt` descending, with ties broken by repository, number and
    item id, so the selection never depends on connection order. The first `--keep` stay; only the rest are
-   planned.
+   planned. The reconciler (tend) must use exactly this ranking (closedAt, then repository, number and item
+   id); a shared test pins the two together when tend lands (#5136).
 3. Complete read or nothing. The scan reads `items(query: "status:Done")` in pages of 100, at most 5 pages, the
    500-item board limit. A partial page set, a count mismatch, a GraphQL error or an over-limit board refuses
    without archiving anything.
@@ -58,10 +59,12 @@ The custody record marks every archived card `enrolled: true/false` from the pri
 LOCKING (#5136 design, section 8)
 =================================
 
-While it runs as a hosted workflow, this tool cannot share the fdev board-writer lock. Root accepted the design's
-mitigation: the reconciler (tend) writes nothing to archive-eligible cards (Done and closed, beyond the newest 200),
-so the two writers are disjoint by construction. Once #5141 lands, real runs move to fdev and take
-`$XDG_RUNTIME_DIR/fsgg/board-writer-<project>.lock` with `fcntl.flock(LOCK_EX)` around every send.
+`--execute` takes the shared Project 3 writer lock around each card's preimage re-read, send and readback:
+`$XDG_RUNTIME_DIR/fsgg/board-writer-<project>.lock`, plus the installed engine's legacy locks at /tmp during the
+transition, with `flock(LOCK_EX | LOCK_NB)`, exactly as tools/routine-delivery.py and V2WriterLock take them (#5141).
+It refuses when XDG_RUNTIME_DIR is unset or relative, and stops (nothing sent for that card) when the lock is busy.
+`--execute` is therefore a Root-run, fdev-only writer. The hosted workflow only runs the counts-only dry run, which
+takes no lock; the reconciler (tend) writes nothing to archive-eligible cards, so the two cannot overlap.
 
 Environment: GH_TOKEN with organization Projects read, plus write for `--execute`. COORD_ARCHIVE_GH overrides the
 `gh` binary (tests).
@@ -123,7 +126,9 @@ query($id:ID!){
   node(id:$id){ ... on ProjectV2Item{
     id isArchived project{ id }
     status: fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue{ name } }
-    content{ __typename ... on Issue{ id state closedAt } ... on PullRequest{ id state closedAt } }
+    content{ __typename
+      ... on Issue{ id state closedAt blocking(first:50){ totalCount nodes{ id state } } }
+      ... on PullRequest{ id state closedAt } }
   } }
 }
 """
@@ -232,7 +237,7 @@ def scan(owner: str, number: int) -> tuple[dict, list[dict]]:
     return project, rows
 
 
-def live_blockers(owner: str, number: int) -> set[str]:
+def live_blockers(owner: str, number: int) -> tuple[set[str], int]:
     """Content ids every live (not Done) card names as a native blocker, read completely, or Refused.
 
     A Done card that a live card is still blocked by stays visible: the guard the reconciler design keeps from the
@@ -273,7 +278,7 @@ def live_blockers(owner: str, number: int) -> set[str]:
         raise Refused(f"live cards still have more pages after {MAX_PAGES}: refusing a partial read")
     if total is None or seen != total:
         raise Refused("the live cards read differ from the live count")
-    return protected
+    return protected, total
 
 
 def plan(rows: list[dict], keep: int = KEEP, protected: set[str] | None = None) -> tuple[list[dict], list[dict], list[tuple[dict, str]]]:
@@ -326,6 +331,79 @@ def enrolled_nodes(path: str | None) -> set[str] | None:
         raise Refused("the enrollment binding is unreadable") from None
 
 
+BOARD_WRITER_LOCK = "board-writer-{project}.lock"
+LEGACY_LOCKS = ("fsgg-v2-migration-{project}.lock", "fsgg-v2-observation-{project}.lock")
+
+
+def lock_paths(project_id: str, directory: str | None = None, legacy_directory: str | None = None) -> list[Path]:
+    """The shared Project 3 writer lock paths, as tools/routine-delivery.py and the engine's V2WriterLock take them.
+
+    Production uses $XDG_RUNTIME_DIR/fsgg and refuses when it is unset or relative; during the transition it also
+    takes the installed engine's legacy locks at the literal /tmp path. Both directories are injectable for tests,
+    so no test opens a production path (#5126).
+    """
+    production = directory is None
+    if production:
+        runtime = os.environ.get("XDG_RUNTIME_DIR")
+        if not runtime or not os.path.isabs(runtime):
+            raise Refused("the board writer lock needs an absolute XDG_RUNTIME_DIR; refusing to write without the shared lock")
+        directory = os.path.join(runtime, "fsgg")
+    # An injected lock directory also hosts the legacy locks unless they are injected separately: a test never
+    # touches /tmp.
+    legacy = legacy_directory if legacy_directory is not None else ("/tmp" if production else directory)
+    return [Path(directory) / BOARD_WRITER_LOCK.format(project=project_id)] + [Path(legacy) / name.format(project=project_id) for name in LEGACY_LOCKS]
+
+
+class WriterLock:
+    """flock(2) LOCK_EX | LOCK_NB on every path, all or none. Busy is a refusal, never a wait or a queue."""
+
+    def __init__(self, paths: list[Path]):
+        self.paths, self.held = paths, []
+
+    def __enter__(self):
+        import fcntl
+        taken: list[int] = []
+        try:
+            for path in self.paths:
+                path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+                taken.append(fd)
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            for fd in taken:
+                os.close(fd)
+            raise LockBusy("the board writer lock is held by another writer") from None
+        except OSError as exc:
+            for fd in taken:
+                os.close(fd)
+            raise Refused(f"the board writer lock is unavailable ({type(exc).__name__})") from None
+        self.held = taken
+        return self
+
+    def __exit__(self, *_):
+        import fcntl
+        for fd in reversed(self.held):
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
+        self.held = []
+        return False
+
+
+class LockBusy(Exception):
+    """Another writer holds the shared board lock: the run stops before this card, with nothing sent for it."""
+
+
+def reader_admits_archived(version: str | None) -> bool:
+    """True when the asserted installed reader is 0.114.1 or later, the first to report archived enrolled rows."""
+    try:
+        parts = tuple(int(x) for x in str(version).split("."))
+    except ValueError:
+        return False
+    return len(parts) == 3 and parts >= (0, 114, 1)
+
+
 class Custody:
     """Append-only private custody: one JSON line per step, flushed and fsynced before the next step."""
 
@@ -350,9 +428,11 @@ def read_item(item_id: str) -> dict:
     if not isinstance(node, dict):
         raise Refused("the card is unreadable by id")
     content = node.get("content") if isinstance(node.get("content"), dict) else {}
+    blocking = content.get("blocking")
     return {"itemId": node.get("id"), "archived": node.get("isArchived"), "projectId": (node.get("project") or {}).get("id"),
             "status": (node.get("status") or {}).get("name"), "contentId": content.get("id"),
-            "state": content.get("state"), "closedAt": content.get("closedAt")}
+            "state": content.get("state"), "closedAt": content.get("closedAt"), "kind": content.get("__typename"),
+            "blocking": blocking}
 
 
 def preimage_matches(observed: dict, planned: dict, project_id: str) -> str | None:
@@ -365,11 +445,26 @@ def preimage_matches(observed: dict, planned: dict, project_id: str) -> str | No
         return "Status is no longer Done"
     if (observed.get("contentId"), observed.get("state"), observed.get("closedAt")) != (planned["contentId"], planned["state"], planned["closedAt"]):
         return "content identity, state or closedAt changed"
+    # Blocker recheck at the preimage: a blocker link added after the run's live read is caught here. An issue that
+    # still blocks an OPEN issue stays visible; a truncated or unreadable list is never archived.
+    if observed.get("kind") == "Issue":
+        blocking = observed.get("blocking")
+        listed = blocking.get("nodes") if isinstance(blocking, dict) else None
+        if not isinstance(listed, list) or blocking.get("totalCount") != len(listed):
+            return "the blocking list is truncated or unreadable"
+        if any(not isinstance(b, dict) or b.get("state") != "CLOSED" for b in listed):
+            return "it still blocks an open issue"
     return None
 
 
-def archive_one(row: dict, project_id: str, custody: Custody, enrolled: set[str]) -> str:
-    """Preimage re-read, one send, readback. Returns 'archived' or 'skipped'; raises Uncertain to stop the run."""
+def archive_one(row: dict, project_id: str, custody: Custody, enrolled: set[str], locks: list[Path]) -> str:
+    """Under the shared writer lock: preimage re-read, one send, readback. Returns 'archived' or 'skipped'; raises
+    Uncertain or LockBusy to stop the run."""
+    with WriterLock(locks):
+        return _archive_locked(row, project_id, custody, enrolled)
+
+
+def _archive_locked(row: dict, project_id: str, custody: Custody, enrolled: set[str]) -> str:
     ref = {"itemId": row["itemId"], "contentId": row["contentId"], "repo": row["repo"], "number": row["number"],
            "closedAt": row["closedAt"], "enrolled": row["contentId"] in enrolled}
     try:
@@ -412,6 +507,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-archive", type=int, default=0, help="required with --execute: at most this many sends")
     ap.add_argument("--enrollment-binding", default=None, help="private runtime binding; required with --execute")
     ap.add_argument("--custody-dir", default=None, help="private custody directory (default under ~/.local/share/fs-gg-private)")
+    ap.add_argument("--reader-version", default=None,
+                    help="the installed board-v2 reader version; an enrolled card is archived only when it is >= 0.114.1")
+    ap.add_argument("--lock-dir", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--legacy-lock-dir", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--counts-only", action="store_true",
                     help="print counts only, never a repository or number (for public logs; refused with --execute)")
     args = ap.parse_args(argv)
@@ -425,7 +524,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         enrolled = enrolled_nodes(args.enrollment_binding)
         project, rows = scan(args.owner, args.project)
-        protected = live_blockers(args.owner, args.project)
+        protected, live_total = live_blockers(args.owner, args.project)
+        if len(rows) + live_total != project.get("totalCount"):
+            raise Refused("Done and live counts do not add up to the board total: the board changed while it was read")
     except Refused as exc:
         print(f"coord-board-archive: REFUSED, nothing archived: {exc}", file=sys.stderr)
         return 1
@@ -452,6 +553,17 @@ def main(argv: list[str] | None = None) -> int:
         print("DRY RUN: nothing archived.")
         return 0
 
+    batch = archive[: args.max_archive]
+    enrolled_planned = [row for row in batch if row["contentId"] in (enrolled or set())]
+    if enrolled_planned and not reader_admits_archived(args.reader_version):
+        print(f"coord-board-archive: REFUSED, nothing archived: {len(enrolled_planned)} planned card(s) are enrolled V2 rows; "
+              "assert --reader-version 0.114.1 or later, the first reader that reports an archived enrolled row", file=sys.stderr)
+        return 1
+    try:
+        locks = lock_paths(str(project["id"]), args.lock_dir, args.legacy_lock_dir)
+    except Refused as exc:
+        print(f"coord-board-archive: REFUSED, nothing archived: {exc}", file=sys.stderr)
+        return 1
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     directory = Path(args.custody_dir) if args.custody_dir else Path.home() / ".local/share/fs-gg-private/board-done-retention" / stamp
     custody = Custody(directory)
@@ -459,8 +571,13 @@ def main(argv: list[str] | None = None) -> int:
                    keep=args.keep, planned=len(archive), maxArchive=args.max_archive)
     counts = {"archived": 0, "skipped": 0}
     try:
-        for row in archive[: args.max_archive]:
-            counts[archive_one(row, str(project["id"]), custody, enrolled or set())] += 1
+        for row in batch:
+            counts[archive_one(row, str(project["id"]), custody, enrolled or set(), locks)] += 1
+    except (LockBusy, Refused) as exc:
+        custody.record(step="stopped", reason=f"{exc}; nothing sent for the remaining cards", **counts)
+        print(f"coord-board-archive: STOPPED, lock refused ({exc}); custody {custody.path}", file=sys.stderr)
+        custody.close()
+        return 4
     except Uncertain as exc:
         custody.record(step="stopped", reason="uncertain send; no resend", itemId=str(exc), **counts)
         print(f"coord-board-archive: STOPPED on an uncertain send ({exc}); custody {custody.path}", file=sys.stderr)

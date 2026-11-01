@@ -162,6 +162,13 @@
       "status": "current-revision-retired",
       "gs2089": "unresolved",
       "reason": "At revision 32f7a973 the source returned a refused delivery with zero mutation attempts before invoking gh. Published and materialized historical Drivers copies remain pending runtime retirement."
+    },
+    {
+      "path": "scripts/coord-board-archive.py",
+      "sha256": "a7b21a589777295c83339239dac2e3e786d1b8fb7382358351d569aead6fcc9b",
+      "status": "root-run-gated-writer",
+      "gs2089": "unresolved",
+      "reason": "Project 3 Done-retention archiver (#5119). Its only provider write, archiveProjectV2Item, runs only under --execute, which a Root operator runs on fdev with --expect-project-id, --max-archive, the private enrollment binding and the shared board-writer flock; the hosted workflow runs a counts-only dry run with a read-only App token and never --execute. Fence owner Root approved this route on 2026-11-01."
     }
   ]
 }

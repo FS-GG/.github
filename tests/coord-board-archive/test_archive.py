@@ -39,7 +39,8 @@ def node(r: dict) -> dict:
     return {"id": r["itemId"], "isArchived": r["archived"], "status": {"name": r["status"]} if r["status"] else None, "content": content}
 
 
-def scan_page(rows: list[dict], total: int | None = None, board: int = 222, has_next: bool = False, cursor: str | None = "c1") -> dict:
+def scan_page(rows: list[dict], total: int | None = None, board: int | None = None, has_next: bool = False, cursor: str | None = "c1") -> dict:
+    board = (len(rows) if total is None else total) if board is None else board  # default: no live cards
     return {"data": {"organization": {"projectV2": {"id": PROJECT, "title": "Coordination V2", "all": {"totalCount": board},
             "items": {"totalCount": len(rows) if total is None else total,
                       "pageInfo": {"hasNextPage": has_next, "endCursor": cursor if has_next else None},
@@ -56,6 +57,8 @@ def live_page(blockers_by_card: list[list[str]] | None = None, total: int | None
 
 def item_read(r: dict, archived: bool | None = None, project: str = PROJECT, status: str = "Done", **content) -> dict:
     c = {"__typename": r["kind"], "id": r["contentId"], "state": r["state"], "closedAt": r["closedAt"]}
+    if r["kind"] == "Issue":
+        c["blocking"] = {"totalCount": 0, "nodes": []}
     c.update(content)
     return {"data": {"node": {"id": r["itemId"], "isArchived": r["archived"] if archived is None else archived,
                               "project": {"id": project}, "status": {"name": status}, "content": c}}}
@@ -93,6 +96,7 @@ class Stub:
         os.environ["COORD_ARCHIVE_GH"] = str(self.path)
         test.addCleanup(lambda: os.environ.__setitem__("COORD_ARCHIVE_GH", previous) if previous else os.environ.pop("COORD_ARCHIVE_GH", None))
         self.custody = Path(self.dir.name, "custody")
+        self.locks = Path(self.dir.name, "locks")
         self.binding = Path(self.dir.name, "binding.json")
 
     def calls(self, kind: str | None = None) -> list[dict]:
@@ -204,7 +208,7 @@ class LiveBlockers(unittest.TestCase):
 
     def test_live_blockers_are_read_completely_or_refused(self):
         Stub(self, live=[live_page([["I_2", "I_9"], []])])
-        self.assertEqual(A.live_blockers("FS-GG", 3), {"I_2", "I_9"})
+        self.assertEqual(A.live_blockers("FS-GG", 3), ({"I_2", "I_9"}, 2))
         for name, replies in {"truncated list": [live_page([["I_2"]], truncated=True)],
                               "count mismatch": [live_page([["I_2"]], total=2)],
                               "partial pages": [live_page([[]], total=9, has_next=True)] * 5,
@@ -215,7 +219,7 @@ class LiveBlockers(unittest.TestCase):
 
     def test_the_dry_run_reports_a_protected_card(self):
         rows = [row(n, closed=f"2026-10-{n:02d}T00:00:00Z") for n in range(1, 6)]
-        Stub(self, scan=[scan_page(rows)], live=[live_page([["I_1"]])])
+        Stub(self, scan=[scan_page(rows, board=6)], live=[live_page([["I_1"]])])
         code, out, _ = run(["--keep", "2"])
         self.assertEqual(code, 0)
         self.assertIn("plan to archive 2", out)
@@ -231,7 +235,8 @@ class Execute(unittest.TestCase):
     def args(self, stub: Stub, *extra: str) -> list[str]:
         stub.binding.write_text(json.dumps({"selectedIssues": {self.order[0]["contentId"]: "FS-GG/.github#1"}}))
         return ["--keep", "2", "--execute", "--expect-project-id", PROJECT, "--max-archive", "10",
-                "--enrollment-binding", str(stub.binding), "--custody-dir", str(stub.custody), *extra]
+                "--enrollment-binding", str(stub.binding), "--custody-dir", str(stub.custody),
+                "--reader-version", "0.114.1", "--lock-dir", str(stub.locks), *extra]
 
     def test_dry_run_is_the_default_and_sends_nothing(self):
         stub = Stub(self, scan=[scan_page(self.rows)])
@@ -309,6 +314,109 @@ class Execute(unittest.TestCase):
             self.assertEqual(code, 3, err)
             self.assertEqual(len(stub.calls("mutation")), 1)
             self.assertEqual([rec["step"] for rec in stub.records()], ["run", "intent", "uncertain", "stopped"])
+
+    def one_card(self, stub_kwargs=None):
+        r = self.order[0]
+        kwargs = dict(scan=[scan_page(self.rows)], item=[item_read(r), item_read(r, archived=True)],
+                      mutation=[{"data": {"archiveProjectV2Item": {"item": {"id": r["itemId"], "isArchived": True}}}}])
+        kwargs.update(stub_kwargs or {})
+        return Stub(self, **kwargs)
+
+    def test_each_send_holds_the_shared_writer_lock(self):
+        # The lock is held during the send: a second LOCK_NB taker sees it busy from inside the stub's mutation.
+        stub = self.one_card()
+        argv = self.args(stub, "--max-archive", "1")
+        seen = []
+        real = A.graphql
+        def probing(query, variables):
+            if "archiveProjectV2Item" in query:
+                import fcntl
+                fd = os.open(stub.locks / f"board-writer-{PROJECT}.lock", os.O_RDWR)
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    seen.append("free")
+                except BlockingIOError:
+                    seen.append("held")
+                finally:
+                    os.close(fd)
+            return real(query, variables)
+        A.graphql = probing
+        try:
+            self.assertEqual(run(argv)[0], 0)
+        finally:
+            A.graphql = real
+        self.assertEqual(seen, ["held"])
+        names = sorted(p.name for p in stub.locks.iterdir())
+        self.assertEqual(names, sorted([f"board-writer-{PROJECT}.lock", f"fsgg-v2-migration-{PROJECT}.lock", f"fsgg-v2-observation-{PROJECT}.lock"]))
+
+    def test_a_busy_lock_stops_before_any_send(self):
+        import fcntl
+        stub = self.one_card()
+        stub.locks.mkdir(mode=0o700)
+        fd = os.open(stub.locks / f"fsgg-v2-migration-{PROJECT}.lock", os.O_RDWR | os.O_CREAT, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            code, _, err = run(self.args(stub, "--max-archive", "1"))
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
+        self.assertEqual(code, 4, err)
+        self.assertEqual((stub.calls("item"), stub.calls("mutation")), ([], []))
+        self.assertEqual([rec["step"] for rec in stub.records()], ["run", "stopped"])
+
+    def test_an_unset_or_relative_xdg_runtime_dir_refuses_before_any_send(self):
+        for value in (None, "relative/run"):
+            stub = self.one_card()
+            argv = self.args(stub, "--max-archive", "1")
+            index = argv.index("--lock-dir"); del argv[index:index + 2]
+            previous = os.environ.get("XDG_RUNTIME_DIR")
+            if value is None:
+                os.environ.pop("XDG_RUNTIME_DIR", None)
+            else:
+                os.environ["XDG_RUNTIME_DIR"] = value
+            try:
+                code, _, err = run(argv)
+            finally:
+                if previous is None: os.environ.pop("XDG_RUNTIME_DIR", None)
+                else: os.environ["XDG_RUNTIME_DIR"] = previous
+            self.assertEqual(code, 1, err)
+            self.assertIn("absolute XDG_RUNTIME_DIR", err)
+            self.assertEqual((stub.calls("item"), stub.calls("mutation")), ([], []))
+
+    def test_an_enrolled_card_needs_an_asserted_0_114_1_reader(self):
+        for version in (None, "0.114.0", "0.113.9", "junk"):
+            stub = self.one_card()
+            argv = self.args(stub, "--max-archive", "1")
+            index = argv.index("--reader-version"); del argv[index:index + 2]
+            if version: argv += ["--reader-version", version]
+            code, _, err = run(argv)
+            self.assertEqual(code, 1, (version, err))
+            self.assertIn("enrolled V2 rows", err)
+            self.assertEqual(stub.calls("mutation"), [])
+        for version in ("0.114.1", "0.115.0"):
+            stub = self.one_card()
+            argv = self.args(stub, "--max-archive", "1")
+            argv[argv.index("--reader-version") + 1] = version
+            self.assertEqual(run(argv)[0], 0, version)
+            self.assertEqual(len(stub.calls("mutation")), 1)
+
+    def test_counts_that_do_not_add_up_refuse(self):
+        for board in (len(self.rows) + 1, len(self.rows) - 1):
+            stub = Stub(self, scan=[scan_page(self.rows, board=board)])
+            code, _, err = run(["--keep", "2"])
+            self.assertEqual(code, 1)
+            self.assertIn("do not add up", err)
+
+    def test_the_preimage_rechecks_blockers(self):
+        r = self.order[0]
+        for blocking in ({"totalCount": 1, "nodes": [{"id": "I_live", "state": "OPEN"}]},
+                         {"totalCount": 2, "nodes": [{"id": "I_live", "state": "CLOSED"}]}, None):
+            stub = self.one_card({"item": [item_read(r, blocking=blocking)]})
+            self.assertEqual(run(self.args(stub, "--max-archive", "1"))[0], 0)
+            self.assertEqual(stub.calls("mutation"), [])
+            self.assertEqual([rec["step"] for rec in stub.records()], ["run", "skipped", "finished"])
+        stub = self.one_card({"item": [item_read(r, blocking={"totalCount": 1, "nodes": [{"id": "I_done", "state": "CLOSED"}]}), item_read(r, archived=True)]})
+        self.assertEqual(run(self.args(stub, "--max-archive", "1"))[0], 0)
+        self.assertEqual(len(stub.calls("mutation")), 1)
 
     def test_max_archive_bounds_the_sends(self):
         r = self.order[0]
