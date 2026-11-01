@@ -289,6 +289,65 @@ module LiveHandlers =
                     Writes.postIssueComment ctx.Transport target body
                     |> Result.map (fun id -> (opkey, string id)))
 
+    // .github#5100: see LiveHandlers.fsi.
+    let deliveryReferenceLinkage
+        (ctx: Context)
+        (target: Ref)
+        (pr: int)
+        (closing: Ref option)
+        : Result<Ref, string> =
+        match closing with
+        | Some _ -> Delivery.deliveryReferenceLinkage target closing target.Owner target.Repo "" (fun _ -> Error "unread")
+        | None ->
+            match Reads.prBody ctx.Transport target.Owner target.Repo pr with
+            | Error error -> Error $"the pull request body could not be read: %s{Errors.explain error}"
+            | Ok body ->
+                // The item's sub-issue list is read once, and only when a candidate needs it.
+                let listed =
+                    lazy
+                        (match Reads.subIssues ctx.Transport target.Owner target.Repo target.Number with
+                         | Error error -> Error $"the sub-issue read failed: %s{Errors.explain error}"
+                         | Ok listing when listing.Total <> List.length listing.Children ->
+                             Error
+                                 $"the sub-issue read is truncated (%d{List.length listing.Children} of %d{listing.Total})"
+                         | Ok listing -> Ok listing.Children)
+
+                let read (candidate: Ref) =
+                    match listed.Force() with
+                    | Error reason -> Error reason
+                    | Ok children ->
+                        match Reads.issueParent ctx.Transport candidate.Owner candidate.Repo candidate.Number with
+                        | Error error -> Error $"the parent read failed: %s{Errors.explain error}"
+                        | Ok facts ->
+                            Ok(
+                                {
+                                    Candidate = candidate
+                                    Open = facts.Open
+                                    Parent = facts.Parent
+                                    ListedUnderTarget =
+                                        children
+                                        |> List.exists (fun child ->
+                                            String.Equals(
+                                                child.Ref,
+                                                candidate.Canonical,
+                                                StringComparison.OrdinalIgnoreCase
+                                            ))
+                                }
+                                : Delivery.DeliveryReferenceFacts
+                            )
+
+                Delivery.deliveryReferenceLinkage target None target.Owner target.Repo body read
+
+    let deliveryReferenceProved (ctx: Context) (target: Ref) (pr: int) (closing: Ref option) : bool =
+        if closing |> Option.exists ((=) target) then
+            false
+        else
+            match deliveryReferenceLinkage ctx target pr closing with
+            | Ok _ -> true
+            | Error reason ->
+                eprint $"fsgg-coord-engine: delivery: no verified Delivery reference: %s{reason}"
+                false
+
     /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
     /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE
     /// claim held by this worker (`marker = None` — the same fact `delivery` already refuses to act on
@@ -603,7 +662,7 @@ module LiveHandlers =
                                   int option *
                                   string *
                                   bool *
-                                  bool *
+                                  (bool * bool) *
                                   bool *
                                   Driver.ReviewChain option *
                                   string option *
@@ -621,7 +680,7 @@ module LiveHandlers =
                                     None,
                                     "",
                                     false,
-                                    false,
+                                    (false, false),
                                     false,
                                     None,
                                     None,
@@ -657,6 +716,10 @@ module LiveHandlers =
 
                                     let linkageCanonical = closing |> Option.exists ((=) target)
 
+                                    // .github#5100: without canonical closing linkage, a strict PR may
+                                    // `Refs` one open native sub-issue Delivery of this item instead.
+                                    let deliveryReference = deliveryReferenceProved ctx target pr closing
+
                                     let pathsVerified =
                                         deliveryPathClassifier ctx target deliveryTouchSet files |> projectPathVerdict
 
@@ -689,7 +752,7 @@ module LiveHandlers =
                                         Some pr,
                                         head,
                                         itemBranchCanonical,
-                                        linkageCanonical,
+                                        (linkageCanonical, deliveryReference),
                                         pathsVerified,
                                         review,
                                         reviewProblem,
@@ -786,7 +849,8 @@ module LiveHandlers =
                                             BoardState = statusWireName candidate.Item.Status
                                         }
                                     ItemBranchCanonical = if pr.IsSome then itemBranchCanonical else true
-                                    ClosingLinkageCanonical = if pr.IsSome then closingLinkageCanonical else false
+                                    ClosingLinkageCanonical = if pr.IsSome then fst closingLinkageCanonical else false
+                                    DeliveryReferenceLinkage = if pr.IsSome then snd closingLinkageCanonical else false
                                     PathsVerified = if pr.IsSome then pathsVerified else false
                                     InReview = pr.IsSome
                                     Review = review
@@ -908,6 +972,9 @@ module LiveHandlers =
                                                                 }
                                                             ClosingLinkageCanonical =
                                                                 currentClosing |> Option.exists ((=) target)
+                                                            // .github#5100: re-proved live at the fence.
+                                                            DeliveryReferenceLinkage =
+                                                                deliveryReferenceProved ctx target pr.Value currentClosing
                                                             IssueClosed = currentCandidate.Item.State = Closed
                                                             BoardDone = currentCandidate.Item.Status = Done
                                                             ClaimReleased = generation.IsNone

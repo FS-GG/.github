@@ -1648,6 +1648,108 @@ module Reads =
                             Malformed(subject, "the sub-issue graph response is missing `repository.issue.subIssues`")
                         )
 
+    // ---- one issue's state and native parent (.github#5100) ------------------------------------------
+
+    type IssueParent = { Open: bool; Parent: Ref option }
+
+    [<Literal>]
+    let private IssueParentDoc =
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { state parent { number repository { nameWithOwner } } } } rateLimit { cost remaining } }"
+
+    let issueParent (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<IssueParent> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} parent"
+
+        let request =
+            {
+                Method = "POST"
+                Path = "graphql"
+                Query = []
+                Body =
+                    Transport.Query(
+                        IssueParentDoc,
+                        [
+                            "owner", Transport.VString owner
+                            "repo", Transport.VString repo
+                            "number", Transport.VNumber(double number)
+                        ]
+                    )
+                Budget = GraphQl
+                IfNoneMatch = None
+                Subject = subject
+            }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                match GraphQl.decode subject response.Body Ok with
+                | Error e -> Error e
+                | Ok data ->
+                    try
+                        let issue = data.GetProperty("repository").GetProperty("issue")
+
+                        let isOpen =
+                            match issue.TryGetProperty "state" with
+                            | true, s when s.ValueKind = JsonValueKind.String && s.GetString() = "OPEN" -> Ok true
+                            | true, s when s.ValueKind = JsonValueKind.String && s.GetString() = "CLOSED" -> Ok false
+                            | _ -> Error(Malformed(subject, "the issue state is neither OPEN nor CLOSED"))
+
+                        let parent =
+                            match issue.TryGetProperty "parent" with
+                            | true, p when p.ValueKind = JsonValueKind.Null -> Ok None
+                            | true, p when p.ValueKind = JsonValueKind.Object ->
+                                let num =
+                                    match p.TryGetProperty "number" with
+                                    | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                                    | _ -> None
+
+                                let nwo =
+                                    match p.TryGetProperty "repository" with
+                                    | true, r when r.ValueKind = JsonValueKind.Object -> str r "nameWithOwner"
+                                    | _ -> None
+
+                                match num, nwo with
+                                | Some num, Some nwo when nwo.Split('/').Length = 2 ->
+                                    let parts = nwo.Split('/')
+
+                                    Ok(
+                                        Some
+                                            {
+                                                Owner = parts.[0]
+                                                Repo = parts.[1]
+                                                Number = num
+                                            }
+                                    )
+                                | _ ->
+                                    Error(
+                                        Malformed(
+                                            subject,
+                                            "a parent is present but carries no readable `number`/`repository.nameWithOwner`"
+                                        )
+                                    )
+                            | _ ->
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        "the issue carries no `parent` field; an absent key is a FAILED READ, never 'no parent'"
+                                    )
+                                )
+
+                        match isOpen, parent with
+                        | Ok isOpen, Ok parent -> Ok { Open = isOpen; Parent = parent }
+                        | Error e, _
+                        | _, Error e -> Error e
+                    with
+                    | :? System.Collections.Generic.KeyNotFoundException
+                    | :? System.NullReferenceException
+                    | :? System.InvalidOperationException ->
+                        Error(Malformed(subject, "the parent response is missing `repository.issue`"))
+
     let refIsPullRequest (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<bool> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number} (pull-request probe)"

@@ -135,6 +135,29 @@ module LiveHandlers =
         pr: int ->
             FS.GG.Coord.GitHub.Errors.IoResult<string * string>
 
+    /// The live, fail-closed proof behind `Delivery.Snapshot.DeliveryReferenceLinkage` (.github#5100):
+    /// with no closing reference, read the PR body, the item's native sub-issue list (refused when
+    /// truncated) and each `Refs` candidate's state and native parent, then apply
+    /// `Delivery.deliveryReferenceLinkage`. Any failed read is a refusal, never a pass.
+    ///
+    /// Not `private` — `tests/FS.GG.Coord.Cli.Lifecycle.Tests` drives it directly against a `Fake.Recorder`.
+    val deliveryReferenceLinkage:
+        ctx: Kernel.Context ->
+        target: FS.GG.Coord.Types.Ref ->
+        pr: int ->
+        closing: FS.GG.Coord.Types.Ref option ->
+            Result<FS.GG.Coord.Types.Ref, string>
+
+    /// The snapshot fact both `delivery` read sites use: false whenever the PR already closes the item
+    /// (canonical linkage needs no second route), otherwise `deliveryReferenceLinkage` succeeded. A
+    /// refusal prints its reason to stderr.
+    val deliveryReferenceProved:
+        ctx: Kernel.Context ->
+        target: FS.GG.Coord.Types.Ref ->
+        pr: int ->
+        closing: FS.GG.Coord.Types.Ref option ->
+            bool
+
     /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
     /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE
     /// claim held by this worker (`marker = None` — the same fact `delivery` already refuses to act on
