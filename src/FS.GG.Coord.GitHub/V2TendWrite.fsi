@@ -182,7 +182,9 @@ module V2TendWrite =
         closure: V2Tend.Closure -> item: ItemState -> issue: IssueReread -> comment: string -> Result<DeliveryToClose, string>
 
     /// Read back every `possible-send` record of the reconciler's own custody; a proven target rewrites it to
-    /// `verified`. Never sends. Returns the keys still uncertain, and one outcome per record.
+    /// `verified`. Never sends. Returns the item ids still held by an uncertain record (a close record holds its
+    /// item as well as its issue, so an uncertain close blocks every later write to that item), and one outcome
+    /// per record.
     val sweepOwn: context: Context -> Set<string> * Outcome list
 
     /// The merge gate's custody pass (GR), under the writer lock: a read-only sweep of `possible-send` records,
@@ -198,8 +200,10 @@ module V2TendWrite =
           GateUncertain: Set<string>
           GateDeferred: Set<string> }
 
-    /// Apply the plan's Apply effects (one guarded mutation per item, in dependency order, within
-    /// `MaxItemsPerRun`) and its Close closures. Never resends; refuses items held by any custody.
+    /// Apply the plan's Apply effects (one guarded mutation per item, items in topological dependency order,
+    /// within `MaxItemsPerRun`) and its Close closures. Never resends; refuses items held by any custody. The
+    /// immediate re-read covers the item and, for S3, S3b and S4, the deciding PRs; O1's and T1i's inputs on other
+    /// items are not re-read before the send yet (added when those rules are enabled).
     val apply: context: Context -> input: RunInput -> Outcome list
 
     /// `fsgg.board-tend-outcomes/1`: one entry per outcome (local, private custody: it names cards).

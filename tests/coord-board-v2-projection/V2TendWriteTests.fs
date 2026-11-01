@@ -99,6 +99,12 @@ let ``the allowlist refuses hand-written issue and foreign mutations before disp
           request "mutation($project: ID!, $item: ID!) { archiveProjectV2Item(input: {projectId: $project, itemId: \"PVTI_foreign\"}) { clientMutationId } }" [ "project", VId projectId; "item", VId "PVTI_1" ] "PVTI_1"
           // a closable issue mutation followed by another issue mutation on the same variable
           request "mutation($issue: ID!) { b: closeIssue(input: {issueId: $issue}) { clientMutationId } c: updateIssue(input: {id: $issue}) { clientMutationId } }" [ "issue", VId "I_delivery" ] "I_delivery"
+          // a variable declared twice, a variable supplied twice
+          request "mutation($issue: ID!, $issue: ID!, $c0: String!) { closeIssue(input: {issueId: $issue, stateReason: COMPLETED, clientMutationId: $c0}) { clientMutationId } }" [ "issue", VId "I_delivery"; "c0", VString "x" ] "I_delivery"
+          request "mutation($issue: ID!, $c0: String!) { closeIssue(input: {issueId: $issue, stateReason: COMPLETED, clientMutationId: $c0}) { clientMutationId } }" [ "issue", VId "I_delivery"; "issue", VId "I_other"; "c0", VString "x" ] "I_delivery"
+          // closeIssue on the closable issue with another state reason, or none
+          request "mutation($issue: ID!, $c0: String!) { closeIssue(input: {issueId: $issue, stateReason: NOT_PLANNED, clientMutationId: $c0}) { clientMutationId } }" [ "issue", VId "I_delivery"; "c0", VString "x" ] "I_delivery"
+          request "mutation($issue: ID!, $c0: String!) { closeIssue(input: {issueId: $issue, clientMutationId: $c0}) { clientMutationId } }" [ "issue", VId "I_delivery"; "c0", VString "x" ] "I_delivery"
           // two operations, a query, an unparseable document
           request "mutation($project: ID!, $item: ID!) { archiveProjectV2Item(input: {projectId: $project, itemId: $item}) { clientMutationId } } mutation { x }" [ "project", VId projectId; "item", VId "PVTI_1" ] "PVTI_1"
           request "query { viewer { login } }" [] "PVTI_1"
@@ -348,6 +354,41 @@ let ``C1 comments with merge commits and recorded verdicts, then closes the Deli
         let records, _ = h.Context.Custody.Records()
         let _, record = records.Head
         Assert.Equal("verified", string record.["state"])
+    finally Directory.Delete(root, true)
+
+[<Fact>]
+let ``an uncertain close is never resent, and the item's field writes are refused too`` () =
+    let root = temporary ()
+    try
+        let board = closureBoard ()
+        // Run 1: the comment send fails after custody was written.
+        board.FailMutation <- true
+        let first = run (harness "run1" root board) (plan [] [ closure ]) (snapshotOf board [])
+        Assert.Equal(("uncertain", "comment-unconfirmed"), (first.Head.Result, first.Head.Detail))
+        Assert.Equal(1, board.Mutations.Length)
+        board.FailMutation <- false
+        // Run 2: the close and a field effect on the same item are refused; nothing is sent.
+        let effects = [ effect "T1f:d" "PVTI_d" "FS-GG/x#20" V2Tend.TrackField None "Follow-up" [ "T1f" ] [] ]
+        let second = run (harness "run2" root board) (plan effects [ closure ]) (snapshotOf board [])
+        Assert.Equal<(string * string * string) list>(
+            [ "fields", "refused", "uncertain-custody"; "close", "refused", "uncertain-custody" ],
+            second |> List.map (fun o -> o.Kind, o.Result, o.Detail))
+        Assert.Equal(1, board.Mutations.Length)
+        Assert.True(board.Items.["PVTI_d"].Open)
+    finally Directory.Delete(root, true)
+
+[<Fact>]
+let ``items are applied in dependency order, so a child listed first still converges in one run`` () =
+    let root = temporary ()
+    try
+        let board = Board()
+        board.AddItem("PVTI_o", item "FS-GG/x#1" "I_o" [ "Work level", "Outcome" ])
+        board.AddItem("PVTI_d", item "FS-GG/x#10" "I_d" [ "Work level", "Delivery" ])
+        let effects =
+            [ effect "T1f:d" "PVTI_d" "FS-GG/x#10" V2Tend.TrackField None "Follow-up" [ "T1f" ] [ "S9:o" ]
+              effect "S9:o" "PVTI_o" "FS-GG/x#1" V2Tend.TrackField None "Follow-up" [ "T1f" ] [] ]
+        let outcomes = run (harness "run1" root board) (plan effects []) (snapshotOf board [])
+        Assert.Equal<(string * string) list>([ "PVTI_o", "written"; "PVTI_d", "written" ], outcomes |> List.map (fun o -> o.Subject, o.Result))
     finally Directory.Delete(root, true)
 
 [<Fact>]

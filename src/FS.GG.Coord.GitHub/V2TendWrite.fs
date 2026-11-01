@@ -89,6 +89,8 @@ module V2TendWrite =
 
     let private commentText = Regex(@"#[^\r\n]*")
     let private argumentVariable (argument: string) = Regex(@"\b" + argument + @"\s*:\s*(\$?)(\w+)")
+    let private declaredVariable = Regex(@"\$(\w+)\s*:")
+    let private stateReason = Regex(@"\bstateReason\s*:\s*(\w+)")
 
     let admits (projectId: string) (closable: string -> bool) (request: Request) : Result<unit, string> =
         match request.Method, request.Path, request.Body with
@@ -96,6 +98,12 @@ module V2TendWrite =
             match V2TendReads.parseDocument document with
             | None -> Error "the mutation document does not parse"
             | Some parsed when parsed.HasStringLiteral -> Error "a tend mutation carries every value in a variable, never a literal"
+            | Some _ when (variables |> List.map fst |> List.distinct |> List.length) <> variables.Length ->
+                Error "a variable is supplied twice"
+            | Some _ when (let header = commentText.Replace(document, " ") in
+                           let declared = [ for m in declaredVariable.Matches(header.Substring(0, max 0 (header.IndexOf '{'))) -> m.Groups.[1].Value ]
+                           (List.distinct declared).Length <> declared.Length) ->
+                Error "a variable is declared twice"
             | Some { Operations = [ { Kind = "mutation"; RootFields = fields } ] } when not fields.IsEmpty ->
                 let text = commentText.Replace(document, " ")
                 let variable name = variables |> List.tryPick (fun (n, v) -> if n = name then Some v else None)
@@ -111,7 +119,11 @@ module V2TendWrite =
                     match fields with
                     | [ field ] when issueRootFields.Contains field ->
                         let argument = if field = "addComment" then "subjectId" else "issueId"
+                        // closeIssue closes as completed and nothing else (decision 9).
+                        let reasons = [ for m in stateReason.Matches text -> m.Groups.[1].Value ]
                         match variable "issue" with
+                        | _ when field = "closeIssue" && reasons <> [ "COMPLETED" ] -> Error "closeIssue must carry stateReason: COMPLETED, once"
+                        | _ when field = "addComment" && not reasons.IsEmpty -> Error "addComment carries no stateReason"
                         | Some(VId issue) when issue = request.Subject && closable issue && bound argument "issue" 1 -> Ok()
                         | _ -> Error(sprintf "%s is admitted only for the issue of a C1 Delivery closure in this plan" field)
                     | _ -> Error "an issue mutation must be alone in its document"
@@ -441,7 +453,10 @@ module V2TendWrite =
           "Track", card.Track |> Option.map trackText
           "Roadmap", card.Roadmap ]
 
-    // A difference between the snapshot and the immediate re-read refuses the item's effects this run.
+    // A difference between the snapshot and the immediate re-read refuses the item's effects this run. The re-read
+    // covers the item itself and, for S3, S3b and S4, the deciding PRs. The inputs of O1 (the children's Status)
+    // and T1i (the parent's Track) live on other items and are not re-read before the send; that is added when
+    // those rules are enabled (both are gated or heuristic and off in the starting set).
     let private drift (card: V2Tend.Card) (item: ItemState) (deciding: V2Tend.LinkedPr list) : string option =
         let canonical = V2TendReads.canonicalRef
         if item.Archived then Some "item-archived"
@@ -798,6 +813,9 @@ module V2TendWrite =
                 if string record["state"] = "possible-send" then
                     let key = string record["key"]
                     let kind = string record["kind"]
+                    // A close record is keyed by its issue node id; the item it holds is its itemId. Uncertainty is
+                    // reported by item, so an uncertain close also blocks the item's field writes and its next close.
+                    let held = record["itemId"] |> Option.ofObj |> Option.map string |> Option.defaultValue key
                     let reference = record["ref"] |> Option.ofObj |> Option.map string |> Option.defaultValue ""
                     let proven =
                         match kind with
@@ -819,8 +837,8 @@ module V2TendWrite =
                         record["state"] <- "verified"
                         record["verifiedAt"] <- context.Clock.GetUtcNow().ToString("o")
                         (try context.Custody.Rewrite(path, record) with _ -> ())
-                        yield key, { Subject = key; Ref = reference; Kind = "sweep"; Result = "verified"; Detail = kind }
-                    else yield key, { Subject = key; Ref = reference; Kind = "sweep"; Result = "uncertain"; Detail = kind } ]
+                        yield held, { Subject = key; Ref = reference; Kind = "sweep"; Result = "verified"; Detail = kind }
+                    else yield held, { Subject = key; Ref = reference; Kind = "sweep"; Result = "uncertain"; Detail = kind } ]
         let uncertain = outcomes |> List.filter (fun (_, o) -> o.Result = "uncertain") |> List.map fst |> Set.ofList
         let malformedOutcome = if malformed > 0 then [ { Subject = "custody"; Ref = ""; Kind = "sweep"; Result = "malformed"; Detail = string malformed } ] else []
         uncertain, (outcomes |> List.map snd) @ malformedOutcome
@@ -924,14 +942,28 @@ module V2TendWrite =
     let apply (context: Context) (input: RunInput) : Outcome list =
         let cards = input.Snapshot.Cards |> List.map (fun c -> c.ItemId, c) |> Map.ofList
         let eligible = archiveEligible input.Snapshot context.Settings.ArchiveRetention
-        let blocked (itemId: string) (issueKey: string option) =
-            if input.OwnUncertain.Contains itemId || (issueKey |> Option.exists input.OwnUncertain.Contains) then Some "uncertain-custody"
+        let blocked (itemId: string) =
+            if input.OwnUncertain.Contains itemId then Some "uncertain-custody"
             elif input.GateUncertain.Contains itemId then Some "gate-custody-uncertain"
             elif input.GateDeferred.Contains itemId then Some "gate-deferred-pending"
             elif eligible.Contains itemId then Some "archive-eligible"
             else None
-        // Item groups in the order their first effect appears; the plan lists effects in dependency order.
-        let groups = input.Plan.Apply |> List.groupBy (fun e -> e.ItemId)
+        // Item groups in dependency order: an item whose effects depend on another item's effects comes after it
+        // (Kahn's order, ties in plan order), so a parent's fill and its child's move converge in one run. A cycle,
+        // which the derivation never produces, leaves its items in plan order, where they defer.
+        let groups =
+            let grouped = input.Plan.Apply |> List.groupBy (fun e -> e.ItemId)
+            let itemOf = input.Plan.Apply |> List.map (fun e -> e.Id, e.ItemId) |> Map.ofList
+            let needs =
+                grouped
+                |> List.map (fun (itemId, effects) ->
+                    itemId, effects |> List.collect (fun e -> e.DependsOn) |> List.choose itemOf.TryFind |> List.filter ((<>) itemId) |> Set.ofList)
+                |> Map.ofList
+            let rec order (placed: string list) (remaining: (string * V2Tend.Effect list) list) =
+                match remaining |> List.tryFind (fun (itemId, _) -> Set.isSubset needs.[itemId] (Set.ofList placed)) with
+                | Some((itemId, _) as next) -> next :: order (itemId :: placed) (remaining |> List.filter (fun (i, _) -> i <> itemId))
+                | None -> remaining
+            order [] grouped
         // An effect is sent only after every effect it depends on (outside its own item) was written.
         let succeeded = Collections.Generic.HashSet<string>()
         let mutable items = 0
@@ -946,7 +978,7 @@ module V2TendWrite =
                     | None, _ -> Some("refused", "card-missing")
                     | _, Some d -> Some("deferred", "dependency-not-written:" + d)
                     | Some c, None ->
-                        match blocked itemId None with
+                        match blocked itemId with
                         | Some reason -> Some("refused", reason)
                         | None when items >= context.Settings.MaxItemsPerRun -> Some("deferred", "budget")
                         | None -> None
@@ -959,7 +991,7 @@ module V2TendWrite =
                     yield outcome ]
         let closeOutcomes =
             [ for closure in input.Plan.Close do
-                match blocked closure.ItemId None with
+                match blocked closure.ItemId with
                 | Some reason -> yield { Subject = closure.ItemId; Ref = closure.Ref; Kind = "close"; Result = "refused"; Detail = reason }
                 | None when items >= context.Settings.MaxItemsPerRun -> yield { Subject = closure.ItemId; Ref = closure.Ref; Kind = "close"; Result = "deferred"; Detail = "budget" }
                 | None ->

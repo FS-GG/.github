@@ -645,7 +645,7 @@ mutations:
     command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
     target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
     find: |-
-      if input.OwnUncertain.Contains itemId || (issueKey |> Option.exists input.OwnUncertain.Contains) then Some "uncertain-custody"
+      if input.OwnUncertain.Contains itemId then Some "uncertain-custody"
     replace: |-
       if false then Some "uncertain-custody"
     breaks: >-
@@ -890,6 +890,76 @@ mutations:
                                   Some { new IDisposable with member _.Dispose() = () }
     breaks: >-
       tend writes while another Project 3 writer holds the lock
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: W23/uncertain-close-holds-item
+    gate: "an uncertain close holds its item, not only its issue"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      let held = record["itemId"] |> Option.ofObj |> Option.map string |> Option.defaultValue key
+    replace: |-
+      let held = key
+    breaks: >-
+      an uncertain C1 close is resent on the next run
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: W24/close-completed-only
+    gate: "closeIssue carries stateReason COMPLETED and nothing else"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      | _ when field = "closeIssue" && reasons <> [ "COMPLETED" ] -> Error "closeIssue must carry stateReason: COMPLETED, once"
+    replace: |-
+      | _ when false -> Error "closeIssue must carry stateReason: COMPLETED, once"
+    breaks: >-
+      a Delivery is closed as not planned, or with no reason
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: W25/variable-supplied-twice
+    gate: "a variable supplied twice is refused"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      | Some _ when (variables |> List.map fst |> List.distinct |> List.length) <> variables.Length ->
+    replace: |-
+      | Some _ when false ->
+    breaks: >-
+      a second issue variable, which the HTTP body may send instead of the checked one, passes
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: W26/variable-declared-twice
+    gate: "a variable declared twice is refused"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      (List.distinct declared).Length <> declared.Length) ->
+    replace: |-
+      false) ->
+    breaks: >-
+      a document declaring one variable twice passes the allowlist
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: W27/topological-order
+    gate: "items are applied in dependency order"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+                  order [] grouped
+    replace: |-
+                  grouped
+    breaks: >-
+      a child listed before its parent is deferred, so O1 needs a second run
     anchor:
       pattern: 'board-tend leg: \d+ passed, \d+ failed'
       produced_by: tests/coord-board-tend-mutation/leg.sh
