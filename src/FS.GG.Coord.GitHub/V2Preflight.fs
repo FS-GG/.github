@@ -583,23 +583,26 @@ module V2Preflight =
             match ctx.Inputs.ProtectedMainFreshness with
             // A stale checkout can equal a stale tracking ref, so neither a match nor a difference is evidence offline.
             | LocalTrackingRef -> unknown ConstructorIdentity ProtectedMain NotLive []
-            | LiveMain | AssertedMain when built = main ->
-                supported ConstructorIdentity ("constructor source revision equals the intended protected main (" + source + ")")
             | LiveMain | AssertedMain ->
-                // A later main is admitted only by content (#5113): it must descend from the constructor's source
-                // revision and leave every path of the constructor closure unchanged. Evidence for any other pair of
-                // revisions, or none at all, decides nothing.
-                match ctx.Inputs.ConstructorContent with
-                | NotObserved kind -> unknown ConstructorIdentity ConstructorClosure kind []
-                | Known content when content.Built <> built || content.Main <> main -> unknown ConstructorIdentity ConstructorClosure NotEvaluated []
-                | Known content when not content.BuiltIsAncestor -> unsupported ConstructorIdentity ConstructorNotAncestorOfMain []
-                | Known content when content.ChangedInsideClosure <> 0 ->
-                    unsupported ConstructorIdentity ConstructorDiffersFromMain [ string content.ChangedInsideClosure ]
-                | Known content when content.ClosureEntries <= 0 -> unknown ConstructorIdentity ConstructorClosure Incomplete []
-                | Known content ->
-                    supported ConstructorIdentity
-                        ("constructor closure of " + string content.ClosureEntries + " entries is unchanged from the constructor source revision to its descendant, the intended protected main ("
-                         + source + "); " + string content.ChangedOutsideClosure + " changed paths lie outside it")
+                if built = main then supported ConstructorIdentity ("constructor source revision equals the intended protected main (" + source + ")")
+                else
+                    // A later main is admitted only by content (#5113): it must descend from the constructor's source
+                    // revision and leave every path of the constructor closure unchanged. Evidence for any other pair of
+                    // revisions, or none at all, decides nothing. (if/elif, not guarded match arms: a guarded match
+                    // compiles a MatchFailureException that embeds this file's absolute path, which breaks the
+                    // path-independent package payload.)
+                    match ctx.Inputs.ConstructorContent with
+                    | NotObserved kind -> unknown ConstructorIdentity ConstructorClosure kind []
+                    | Known content ->
+                        if content.Built <> built || content.Main <> main then unknown ConstructorIdentity ConstructorClosure NotEvaluated []
+                        elif not content.BuiltIsAncestor then unsupported ConstructorIdentity ConstructorNotAncestorOfMain []
+                        elif content.ChangedInsideClosure <> 0 then
+                            unsupported ConstructorIdentity ConstructorDiffersFromMain [ string content.ChangedInsideClosure ]
+                        elif content.ClosureEntries <= 0 then unknown ConstructorIdentity ConstructorClosure Incomplete []
+                        else
+                            supported ConstructorIdentity
+                                ("constructor closure of " + string content.ClosureEntries + " entries is unchanged from the constructor source revision to its descendant, the intended protected main ("
+                                 + source + "); " + string content.ChangedOutsideClosure + " changed paths lie outside it")
 
     let private predecessorIntegrity (ctx: Context) =
         match predecessorGap ctx, ctx.Analysis with

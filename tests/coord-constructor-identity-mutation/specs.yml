@@ -15,8 +15,8 @@ mutations:
   - bash
   - tests/coord-constructor-identity-mutation/leg.sh
   target: src/FS.GG.Coord.GitHub/V2Preflight.fs
-  find: '| Known content when content.ChangedInsideClosure <> 0 ->'
-  replace: '| Known content when false ->'
+  find: elif content.ChangedInsideClosure <> 0 then
+  replace: elif false then
   breaks: a main that changed the planner, the hosts or the build configuration is admitted as if it were the installed constructor
   anchor:
     pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
@@ -27,8 +27,8 @@ mutations:
   - bash
   - tests/coord-constructor-identity-mutation/leg.sh
   target: src/FS.GG.Coord.GitHub/V2Preflight.fs
-  find: '| Known content when not content.BuiltIsAncestor -> unsupported ConstructorIdentity ConstructorNotAncestorOfMain []'
-  replace: '| Known content when false -> unsupported ConstructorIdentity ConstructorNotAncestorOfMain []'
+  find: elif not content.BuiltIsAncestor then
+  replace: elif false then
   breaks: an unrelated or older main whose diff happens to miss the closure is admitted, so the comparison is no longer anchored on history
   anchor:
     pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
@@ -39,8 +39,8 @@ mutations:
   - bash
   - tests/coord-constructor-identity-mutation/leg.sh
   target: src/FS.GG.Coord.GitHub/V2Preflight.fs
-  find: '| Known content when content.Built <> built || content.Main <> main ->'
-  replace: '| Known content when false ->'
+  find: if content.Built <> built || content.Main <> main then
+  replace: if false then
   breaks: evidence read for another constructor or another main can support this one
   anchor:
     pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
@@ -63,8 +63,8 @@ mutations:
   - bash
   - tests/coord-constructor-identity-mutation/leg.sh
   target: src/FS.GG.Coord.GitHub/V2Preflight.fs
-  find: '| Known content when content.ClosureEntries <= 0 ->'
-  replace: '| Known content when false ->'
+  find: elif content.ClosureEntries <= 0 then
+  replace: elif false then
   breaks: a closure that covers nothing reports zero changed paths and admits every descendant main
   anchor:
     pattern: 'constructor-identity leg: \d+ passed, \d+ failed'
