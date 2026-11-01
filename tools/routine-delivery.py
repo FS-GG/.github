@@ -21,6 +21,7 @@ import sys
 import tempfile
 import urllib.parse
 import zipfile
+from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Protocol
@@ -1809,6 +1810,16 @@ BOARD_CONTINUES = "<!-- fsgg:delivery-continues/v1 -->"
 BOARD_WRITABLE_PREIMAGES = ("Backlog", "Ready", "In progress", "In review")
 BOARD_CUSTODY_SCHEMA = "fsgg.routine-board-custody/1"
 BOARD_ENFORCE_REPOSITORY = "fs-gg/.github"
+# Custody record states (board-reconciler design §6, #5136). `deferred` is written when the writer lock stays busy;
+# replay moves it to `possible-send` before its one send. `superseded`, `refused` and `not-applicable` are terminal.
+BOARD_CUSTODY_STATES = ("possible-send", "verified", "deferred", "superseded", "refused", "not-applicable")
+# One writer lock for every Project 3 writer (design §8): flock(2) LOCK_EX on a fixed path under $XDG_RUNTIME_DIR,
+# plus, during the transition, the installed engine's legacy migration lock at the literal /tmp path. The engine's
+# F# writers use the same paths (src/FS.GG.Coord.GitHub/V2WriterLock.fs); a test pins that they agree.
+BOARD_WRITER_LOCK_NAME = "board-writer-PVT_kwDOEYAWY84Bldpa.lock"
+BOARD_LEGACY_LOCK_NAME = "fsgg-v2-migration-PVT_kwDOEYAWY84Bldpa.lock"
+BOARD_LEGACY_OBSERVATION_LOCK_NAME = "fsgg-v2-observation-PVT_kwDOEYAWY84Bldpa.lock"
+BOARD_LOCK_WAIT_SECONDS = 60.0
 
 
 class BoardCustody:
@@ -1833,9 +1844,52 @@ class BoardCustody:
         record = json.loads(path.read_text(encoding="utf-8"))
         if (not isinstance(record, dict) or record.get("schema") != BOARD_CUSTODY_SCHEMA
                 or record.get("repo", "").lower() != repo.lower() or record.get("pr") != pr
-                or not isinstance(record.get("delivery"), str) or record.get("state") not in ("possible-send", "verified")):
+                or not isinstance(record.get("delivery"), str) or record.get("state") not in BOARD_CUSTODY_STATES):
             raise RuntimeError("board custody record is malformed")
         return record
+
+    def records(self) -> tuple[list[dict], int]:
+        """Every record in the directory, with the count of unreadable or malformed ones (never sent for)."""
+        if not self.root.is_dir():
+            return [], 0
+        found: list[dict] = []
+        malformed = 0
+        for path in sorted(self.root.glob("*.json")):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+                repo, pr = record["repo"], record["pr"]
+                if (not isinstance(repo, str) or type(pr) is not int or path != self.path(repo, pr)
+                        or self.existing(repo, pr) != record):
+                    raise ValueError
+            except (OSError, ValueError, KeyError, TypeError, RuntimeError):
+                malformed += 1
+                continue
+            found.append(record)
+        return found, malformed
+
+    def create_exclusive(self, repo: str, pr: int, record: dict) -> bool:
+        """Create a new record only if none exists for (repo, PR). Used for `deferred`, which is written while the
+        lock is busy: the key is this PR's own, so no other writer can hold it, and an existing record is kept."""
+        self._private_root()
+        path = self.path(repo, pr)
+        fd, tmp = tempfile.mkstemp(dir=self.root, prefix=path.name + ".")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(dict(record, schema=BOARD_CUSTODY_SCHEMA, repo=repo, pr=pr), handle, sort_keys=True)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.link(tmp, path)
+            except FileExistsError:
+                return False
+        finally:
+            os.unlink(tmp)
+        directory = os.open(self.root, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+        return True
 
     def _private_root(self) -> None:
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -1859,6 +1913,74 @@ class BoardCustody:
             os.fsync(directory)
         finally:
             os.close(directory)
+
+
+class BoardWriterLock:
+    """The shared Project 3 writer lock: flock(2) LOCK_EX on every path in `paths`, all or none.
+
+    `acquire` polls with LOCK_NB until `wait` seconds pass (the gate's bounded wait, design §6) and returns False
+    if another holder kept a path busy; it never blocks past the bound. A configuration error (an unwritable or
+    missing directory, a symlinked lock file, which O_NOFOLLOW refuses) raises instead, so the caller reports
+    `refused-lock` rather than a busy lock. The directory is injectable so tests never open the production path
+    (#5126)."""
+
+    def __init__(self, paths: list[pathlib.Path], *, wait: float = BOARD_LOCK_WAIT_SECONDS,
+                 clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
+                 poll: float = 0.5) -> None:
+        self.paths = list(paths)
+        self.wait, self.clock, self.sleep, self.poll = wait, clock, sleep, poll
+        self.held: list[int] = []
+
+    def _try_once(self) -> bool:
+        import fcntl
+        taken: list[int] = []
+        try:
+            for path in self.paths:
+                path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+                taken.append(fd)
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            for fd in taken:
+                os.close(fd)
+            return False
+        except BaseException:
+            for fd in taken:
+                os.close(fd)
+            raise
+        self.held = taken
+        return True
+
+    def acquire(self) -> bool:
+        deadline = self.clock() + self.wait
+        while True:
+            if self._try_once():
+                return True
+            if self.clock() >= deadline:
+                return False
+            self.sleep(min(self.poll, max(0.0, deadline - self.clock())))
+
+    def release(self) -> None:
+        import fcntl
+        for fd in reversed(self.held):
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
+        self.held = []
+
+
+def board_writer_lock_paths(directory: pathlib.Path | None = None,
+                            legacy_directory: pathlib.Path | None = None) -> list[pathlib.Path]:
+    """Production paths unless both directories are injected. Production refuses without $XDG_RUNTIME_DIR."""
+    if directory is None:
+        runtime = os.environ.get("XDG_RUNTIME_DIR")
+        if not runtime or not os.path.isabs(runtime):
+            raise RuntimeError("board writer lock needs an absolute XDG_RUNTIME_DIR; refusing to write without the shared lock")
+        directory = pathlib.Path(runtime) / "fsgg"
+    legacy = legacy_directory if legacy_directory is not None else pathlib.Path("/tmp")
+    # The installed engine's legacy migration-apply and refresh locks, so the gate excludes both writers.
+    return [directory / BOARD_WRITER_LOCK_NAME, legacy / BOARD_LEGACY_LOCK_NAME, legacy / BOARD_LEGACY_OBSERVATION_LOCK_NAME]
 
 
 def default_board_custody_root() -> pathlib.Path:
@@ -2139,9 +2261,12 @@ def _board_item_valid(value: Any) -> bool:
 
 
 def board_transition(api: Any, rules: Any, repo: str, body: Any, delivery: str, mode: str,
-                     pr: int = 0, custody: BoardCustody | None = None) -> str:
+                     pr: int = 0, custody: BoardCustody | None = None, lock: BoardWriterLock | None = None,
+                     merged_at: str | None = None) -> str:
     """The one post-merge Delivery Status transition (design §2b steps 1-6). Never raises, never sets Done,
-    never resends. Advisory mode reads only and reports what enforce would do."""
+    never resends. Advisory mode reads only and reports what enforce would do. In enforce the send happens only
+    under the shared writer lock; when the lock stays busy past its bounded wait, a `deferred` record is written
+    instead and replayed later (board-reconciler design §6)."""
     refuse = "refused-preimage" if mode == "enforce" else "would-refuse-preimage"
     try:
         target = "In progress" if BOARD_CONTINUES in rules.visible_text(body) else "In review"
@@ -2165,6 +2290,30 @@ def board_transition(api: Any, rules: Any, repo: str, body: Any, delivery: str, 
         return refuse
     if mode != "enforce":
         return f"would-write:{target}"
+    if custody is None:
+        return "refused-custody"
+    if lock is None:
+        return "refused-lock"
+    try:
+        locked = lock.acquire()
+    except Exception:
+        return "refused-lock"
+    if not locked:
+        try:
+            created = custody.create_exclusive(repo, pr, {
+                "delivery": delivery, "itemId": before["itemId"], "from": before["status"], "to": target,
+                "state": "deferred", "mergedAt": merged_at, "recordedAt": datetime.now(timezone.utc).isoformat()})
+        except Exception:
+            return "refused-custody"
+        return "deferred" if created else "uncertain"
+    try:
+        return _board_send_locked(api, repo, delivery, pr, custody, before, target, options, merged_at)
+    finally:
+        lock.release()
+
+
+def _board_send_locked(api: Any, repo: str, delivery: str, pr: int, custody: BoardCustody, before: dict,
+                       target: str, options: dict, merged_at: str | None) -> str:
     try:
         adjacent = api.board_item(delivery)
     except Exception:
@@ -2172,8 +2321,6 @@ def board_transition(api: Any, rules: Any, repo: str, body: Any, delivery: str, 
     if adjacent != before:
         return "refused-preimage"
     # Durable possible-send custody, written and fsynced before the send. Without it, enforce does not send.
-    if custody is None:
-        return "refused-custody"
     # Defence in depth: a record for this PR means a send may already have happened (normally only seen on
     # the merged-PR recovery path, which reads back instead). Never overwrite it and never send again.
     try:
@@ -2183,7 +2330,7 @@ def board_transition(api: Any, rules: Any, repo: str, body: Any, delivery: str, 
         return "uncertain"
     try:
         record = {"delivery": delivery, "itemId": before["itemId"], "from": before["status"], "to": target,
-                  "state": "possible-send", "recordedAt": datetime.now(timezone.utc).isoformat()}
+                  "state": "possible-send", "mergedAt": merged_at, "recordedAt": datetime.now(timezone.utc).isoformat()}
         custody.write(repo, pr, record)
     except Exception:
         return "refused-custody"
@@ -2218,6 +2365,10 @@ def board_custody_readback(api: Any, custody: BoardCustody, repo: str, pr: int) 
         return None
     if record["state"] == "verified":
         return "written"
+    if record["state"] in ("deferred", "superseded", "not-applicable"):
+        return record["state"]  # replay owns a deferred record; the other two are terminal
+    if record["state"] == "refused":
+        return "refused-preimage"
     try:
         after = api.board_item(record["delivery"])
     except Exception:
@@ -2229,6 +2380,105 @@ def board_custody_readback(api: Any, custody: BoardCustody, repo: str, pr: int) 
     except Exception:
         pass
     return "written"
+
+
+def _board_order(record: dict) -> tuple[int, str]:
+    """Merge order. A record written before deferral existed has no `mergedAt` and is ordered oldest."""
+    merged = record.get("mergedAt")
+    return (1, merged) if isinstance(merged, str) else (0, "")
+
+
+def board_replay(api: Any, custody: BoardCustody, lock: BoardWriterLock,
+                 current: tuple[str, int] | None = None) -> Counter:
+    """Start-of-run custody pass (board-reconciler design §6), only under the shared lock:
+
+    1. a read-only readback sweep of every `possible-send` record (never sends), except the current PR's own,
+       which the merged-PR recovery path reads back itself;
+    2. supersession per Delivery over all its records by `mergedAt`: every `deferred` record older than some
+       other record for that Delivery is durably rewritten to `superseded` before anything is sent;
+    3. replay, in merge order, of each Delivery's newest record when it is `deferred`: a closed Delivery is
+       `not-applicable`, a Status other than the recorded preimage is `refused`, and otherwise the record is
+       durably moved to `possible-send` before exactly one send and to `verified` after a readback proves it.
+    Never raises. Returns counts only (no references), which the caller reports on stderr."""
+    counts: Counter = Counter()
+    try:
+        records, counts["malformed"] = custody.records()
+    except Exception:
+        counts["unreadable"] += 1
+        return counts
+    if not any(r["state"] in ("possible-send", "deferred") for r in records):
+        return counts
+    try:
+        locked = lock.acquire()
+    except Exception:
+        counts["lock-error"] += 1
+        return counts
+    if not locked:
+        counts["lock-busy"] += 1
+        return counts
+    try:
+        for record in records:
+            if record["state"] != "possible-send" or (
+                    current is not None and (record["repo"].lower(), record["pr"]) == (current[0].lower(), current[1])):
+                continue
+            outcome = board_custody_readback(api, custody, record["repo"], record["pr"])
+            counts["swept-verified" if outcome == "written" else "swept-uncertain"] += 1
+        records, _ = custody.records()
+        by_delivery: dict[str, list[dict]] = defaultdict(list)
+        for record in records:
+            by_delivery[record["delivery"].lower()].append(record)
+        pending: list[dict] = []
+        for group in by_delivery.values():
+            group.sort(key=_board_order)
+            for older in group[:-1]:
+                if older["state"] == "deferred":
+                    custody.write(older["repo"], older["pr"], dict(older, state="superseded"))
+                    counts["superseded"] += 1
+            if group[-1]["state"] == "deferred":
+                pending.append(group[-1])
+        for record in sorted(pending, key=_board_order):
+            counts[_board_replay_one(api, custody, record)] += 1
+    except Exception:
+        counts["error"] += 1
+    finally:
+        lock.release()
+    return counts
+
+
+def _board_replay_one(api: Any, custody: BoardCustody, record: dict) -> str:
+    repo, pr = record["repo"], record["pr"]
+    try:
+        item = api.board_item(record["delivery"])
+    except Exception:
+        return "unreadable"
+    if not _board_item_valid(item):
+        return "unreadable"
+    if item["state"] == "CLOSED":
+        custody.write(repo, pr, dict(record, state="not-applicable"))
+        return "not-applicable"
+    options = {name: identity for identity, name in item["options"]}
+    target = record.get("to")
+    if (item["itemId"] != record.get("itemId") or item["status"] != record.get("from")
+            or not isinstance(target, str) or not _BOARD_NODE_ID.fullmatch(options.get(target) or "")):
+        custody.write(repo, pr, dict(record, state="refused"))
+        return "refused"
+    custody.write(repo, pr, dict(record, state="possible-send"))
+    print("fsgg routine board replay: possible-send recorded; one Status send follows", file=sys.stderr)
+    try:
+        api.board_set_status(item["projectId"], item["itemId"], item["statusFieldId"], options[target])
+    except Exception:
+        return "uncertain"
+    try:
+        after = api.board_item(record["delivery"])
+    except Exception:
+        return "uncertain"
+    if after != dict(item, status=target):
+        return "uncertain"
+    try:
+        custody.write(repo, pr, dict(record, state="verified", verifiedAt=datetime.now(timezone.utc).isoformat()))
+    except Exception:
+        pass  # possible-send stays; the next sweep reads back and never resends
+    return "verified"
 
 
 def board_routine_body(body: Any) -> bool:
@@ -2251,6 +2501,7 @@ def summarize(
     board_gate: str = "advisory",
     board_rules_loader: Callable[[], Any] | None = None,
     board_custody: BoardCustody | None = None,
+    board_lock: BoardWriterLock | None = None,
 ) -> tuple[int, Summary]:
     if board_gate not in BOARD_GATE_MODES:
         raise RuntimeError("board gate mode is not advisory or enforce")
@@ -2288,6 +2539,11 @@ def summarize(
     base_ref, base_sha = base_of(before)
     routine_state = "unobserved"
     board = {"boardGate": "not-applicable", "boardGateReason": None, "boardTransition": "not-applicable"}
+    if apply and board_gate == "enforce" and board_custody is not None and board_lock is not None:
+        # Start of every enforce invocation: sweep possible-send records and replay deferred ones (design §6).
+        replay = +board_replay(api, board_custody, board_lock, (repo, pr_number))  # drop zero counts
+        if replay:
+            print("fsgg routine board replay: " + " ".join(f"{k}={replay[k]}" for k in sorted(replay)), file=sys.stderr)
     def bound(*values: Any, native: dict[str, Any] = before) -> Summary:
         now = datetime.now(timezone.utc)
         outcome_at = outcome_time_of(native)
@@ -2440,12 +2696,13 @@ def summarize(
                 disposition, coherent,
             )
 
-    def board_after_merge() -> None:
+    def board_after_merge(merged_pr: dict) -> None:
         # After the merged-PR and merge-commit readback, and only for a linked Delivery.
         # An overridden PR gets no Status transition: there is no verified Delivery to move.
         if gate is not None and gate.verdict == "linked" and gate.delivery is not None:
             board["boardTransition"] = board_transition(
-                api, board_rules, repo, before.get("body"), gate.delivery, board_gate, pr_number, board_custody)
+                api, board_rules, repo, before.get("body"), gate.delivery, board_gate, pr_number, board_custody,
+                board_lock, outcome_time_of(merged_pr))
 
     request = merge_effect_request(
         repo, pr_number, expected_head, base_ref, base_sha, merge_method,
@@ -2521,14 +2778,14 @@ def summarize(
                     "coherent validation failed and the merge effect remains unproven",
                     disposition, coherent,
                 )
-            board_after_merge()
+            board_after_merge(after)
             return 4, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                 "delivered-disputed", "delivered", publication, merge_commit, attempts, reason,
                 disposition, "disputed", native=after,
             )
     if effect_confirmed:
-        board_after_merge()
+        board_after_merge(after)
         delivered_result = bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
             "delivered", "delivered", publication, merge_commit, attempts, None,
@@ -2799,11 +3056,27 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--board-gate-custody",
                         help="private directory for durable possible-send records (enforce); "
                              "default $XDG_STATE_HOME/fsgg/board-gate")
+    result.add_argument("--board-lock-dir",
+                        help="tests only: directory for the shared Project 3 writer lock and its legacy companion "
+                             "(enforce); default $XDG_RUNTIME_DIR/fsgg and /tmp")
     result.add_argument("--install-routine-producer", action="store_true",
                         help="closed first installation only; never ordinary eligibility success")
     result.add_argument("--routine-producer-source", help="immutable protected FS-GG/.github template commit")
     result.add_argument("--installation-prior-result", help="retained installation Summary; prior effects force readback-only")
     return result
+
+
+def board_lock_from_args(args: argparse.Namespace) -> BoardWriterLock | None:
+    """The shared writer lock for enforce, or None: without $XDG_RUNTIME_DIR the merge still runs, but the
+    Status write is refused (`refused-lock`) rather than made without the lock."""
+    if args.board_gate != "enforce":
+        return None
+    directory = pathlib.Path(args.board_lock_dir) if args.board_lock_dir else None
+    try:
+        return BoardWriterLock(board_writer_lock_paths(directory, directory))
+    except RuntimeError:
+        print("fsgg routine board lock unavailable: XDG_RUNTIME_DIR is unset; no Status write", file=sys.stderr)
+        return None
 
 
 def main(argv: list[str]) -> int:
@@ -2818,6 +3091,8 @@ def main(argv: list[str]) -> int:
         parser().error("--board-gate enforce runs only from the FS-GG/.github checkout with the shared rules module")
     if args.board_gate_custody is not None and args.board_gate != "enforce":
         parser().error("--board-gate-custody requires --board-gate enforce")
+    if args.board_lock_dir is not None and args.board_gate != "enforce":
+        parser().error("--board-lock-dir requires --board-gate enforce")
     if args.evidence_run is not None and (args.evidence_run <= 0 or args.watch_checks):
         parser().error("--evidence-run requires a positive run ID and cannot combine with watch")
     if args.evidence_run is not None and args.install_routine_producer:
@@ -2926,6 +3201,7 @@ def main(argv: list[str]) -> int:
             installation_prior=prior, board_gate=args.board_gate,
             board_custody=(BoardCustody(pathlib.Path(args.board_gate_custody) if args.board_gate_custody
                                         else default_board_custody_root()) if args.board_gate == "enforce" else None),
+            board_lock=board_lock_from_args(args),
         )
     except (RuntimeError, AmbiguousWrite) as error:
         code = 3
