@@ -4,11 +4,12 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/src/FS.GG.Coord.GitHub" "$work/scripts" "$work/.github/workflows"
-for f in projects-audit.sh repos-audit.sh coord-board-archive.py check-roster-closure.py; do : >"$work/scripts/$f"; done
+for f in projects-audit.sh repos-audit.sh check-roster-closure.py; do : >"$work/scripts/$f"; done
 # The named exemption (scripts/board-drift-fetch.py, owner Programme/root, Refs #4730) is read, not skipped.
 printf '%s\n' 'info = page["pageInfo"]' >"$work/scripts/board-drift-fetch.py"
 printf '%s\n' 'info = page.get("pageInfo")' >"$work/scripts/board-currency-fetch.py"
 printf '%s\n' 'data = doc["data"]' >"$work/scripts/board-linkage.py"
+printf '%s\n' 'data = response["data"]' >"$work/scripts/coord-board-archive.py"
 : >"$work/.github/workflows/coord-board-archive.yml"
 : >"$work/src/FS.GG.Coord.GitHub/GraphQl.fs"
 : >"$work/src/FS.GG.Coord.GitHub/GraphQlEnvelope.fs"
@@ -29,11 +30,11 @@ if python3 "$root/scripts/check-graphql-boundary.py" --root "$work" >/dev/null 2
   echo "FAIL: checker accepted a production shell transport bypass" >&2; exit 1
 fi
 : >"$work/scripts/projects-audit.sh"
-printf '%s\n' 'info = page["pageInfo"]' >"$work/scripts/coord-board-archive.py"
+printf '%s\n' 'info = page["pageInfo"]' >"$work/scripts/check-roster-closure.py"
 if python3 "$root/scripts/check-graphql-boundary.py" --root "$work" >/dev/null 2>&1; then
   echo "FAIL: checker accepted a second production page parser" >&2; exit 1
 fi
-: >"$work/scripts/coord-board-archive.py"
+: >"$work/scripts/check-roster-closure.py"
 # An exempt file with raw GraphQL is NOT a finding, and the exemption is announced.
 out=$(python3 "$root/scripts/check-graphql-boundary.py" --root "$work")
 case "$out" in *"EXEMPT scripts/board-drift-fetch.py"*"Programme/root"*"#4730"*) ;; *)
