@@ -428,7 +428,7 @@ module Done =
              closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { totalCount nodes { number merged mergedAt mergeCommit { oid } repository { nameWithOwner } closingIssuesReferences(first: 10) { totalCount nodes { number repository { nameWithOwner } } } } } \
              timelineItems(last: 10, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { closer { __typename ... on PullRequest { number merged mergedAt mergeCommit { oid } repository { nameWithOwner } } ... on Commit { oid associatedPullRequests(first: 5) { totalCount nodes { number merged mergedAt mergeCommit { oid } repository { nameWithOwner } } } } } } } } \
              subIssues(first: 100) { totalCount nodes { number state } } \
-             projectItems(first: 20) { totalCount nodes { project { number } status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } \
+             projectItems(first: 20) { totalCount nodes { project { number } status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } isArchived } } \
              parent { number repository { name owner { login } } } \
            } \
          } rateLimit { cost remaining } }"
@@ -728,7 +728,18 @@ module Done =
                                         if not onOurBoard then
                                             None
                                         else
+                                            // An archived card on our board (#5119): Done retention archives only Done cards,
+                                            // so its Done Status is still the fact, and Done facts read it explicitly. Any other
+                                            // Status on an archived card is not a live row and reads as no Status.
+                                            let isArchived =
+                                                match n.TryGetProperty "isArchived" with
+                                                | true, value -> value.ValueKind = JsonValueKind.True
+                                                | _ -> false
                                             match n.TryGetProperty "status" with
+                                            | true, s when isArchived && s.ValueKind = JsonValueKind.Object ->
+                                                match s.TryGetProperty "name" with
+                                                | true, nm when nm.ValueKind = JsonValueKind.String && boardStatusOf (nm.GetString()) = Done -> Some Done
+                                                | _ -> Some NoStatus
                                             | true, s when s.ValueKind = JsonValueKind.Object ->
                                                 match s.TryGetProperty "name" with
                                                 | true, nm when nm.ValueKind = JsonValueKind.String ->
