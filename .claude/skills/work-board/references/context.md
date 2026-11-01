@@ -29,6 +29,14 @@ require another serial run of an already qualified profile or impose a blanket o
 rule on independently qualified operations that fit together. Preserve actual large-image profiles,
 exclusive shared writes and existing source custody.
 
+Before each heavy launch (SDK or re-qualification build/test, native workload, large image build), Root
+runs `scripts/fdev-lane-capacity.py`: one read-only JSON line with CPU count, 1/5/15-minute load,
+MemAvailable, free disk at `$HOME` and active heavy build processes, plus `admit` (exit 0) or `hold`
+(exit 3) with reasons. Defaults hold at 5-minute load of 0.85 x nproc or more, under 6 GiB available or
+under 20 GB free; each is a flag. On `hold`, admit heavy lanes serially: start one, re-run the probe
+when it ends, and leave the others Ready with the hold reason named. An unreadable input is a hold. The
+verdict is a point-in-time sample: it adds to, and never replaces, the reservation view below.
+
 Retain current CPU/memory limits, availability and observation time in the existing owner artifact,
 including helpers/build servers and all known/Unknown reservations. Use the applicable quota, CPU set and
 profile limits rather than host core count. For the existing integer resource fields, floor fractional
