@@ -124,6 +124,7 @@ registry like any other, and this org gates its registries.
 | [0095](0095-utel-resource-containment-for-fresh-profiles.md) | Enforced resource containment for separately authorized fresh UTEL profiles; legacy physical-copy proof and holds remain unchanged | Accepted policy; implementation, production budgets and admission pending |
 | [0096](0096-proportionate-verification-and-unrecoverable-holds.md) | Ordinary local build/test of unpublished source needs no original-operation admission; the 439/46 unrecoverable inherited holds are released for isolated fresh operations | Accepted |
 | [0097](0097-one-org-wide-serialized-publication-writer.md) | One org-wide serialized publication writer: every publishing job takes a ticketed lock over the public Actions job list; the job's end releases it | Accepted |
+| [0098](0098-shared-algorithms-library-and-product-knowledge-pack.md) | A new leaf FS.GG.Algorithms repository owns the algorithms library and the `fs-gg-algorithms` product skill, whose knowledge pack is an Atlas archive materialized into game workspaces | Accepted |
 
 ## Supersession map
 
