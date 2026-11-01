@@ -206,7 +206,7 @@ also validated by `--run` before the input-read marker, so an unsafe sealed path
 ### Held in this revision
 
 - **Image Ids** (`app_image`, `pg_image`): admitted after the build and the pull; every real run refuses until a pin-only revision.
-- **Three plan values** marked `HELD` (`validate_plan` lists them; a plan holding one refuses before any container starts). See "The eight plan values".
+- **No plan value** is held since #5184 (see "The eight plan values"). `Held` and `validate_plan`'s refusal of a held value stay for later plans.
 
 ### The synthetic input kind (#5184)
 
@@ -233,17 +233,19 @@ built from this repository at `79db622f` (tag `coherent-set/v0.113.0`). Paths be
 | 1 | host-init `verify` | `verify-installed-adoption --connection-file --request-file`, its only two flags (`Host/HostConfiguration.fs`). The request (`fsgg.orchestration.installed-adoption-request/1`) has an exact field set, a window of at most 10 minutes and `ordinaryCapacity` 1 (`Host/InstalledAdoptionVerification.fs`). Its backup identity is created at random by `init` and printed only on stdout (`Host/Program.fs`), so a `request` step builds the file from init's archived stdout, which must be exactly one `host-init/1` object; it fails closed (exit 65) and writes nothing otherwise | filled |
 | 2 | host-init `serve` | Host `5d525ad2` accepts runner roots, the executor binding and the telemetry options **only with GitHub settings** (`local-executor-requires-github-main-configuration`, `local-telemetry-requires-local-executor`), and those need the GitHub API and a token. The no-egress serve is the one filled: tokens and connection from files, loopback prefix, fixed fixture identities, `--backup-identity` read from the file the `request` step wrote | filled (no-GitHub mode) |
 | 3 | host-restart `verify` | dropped: `verify-installed-adoption` refuses a store that is not empty (`dedicated-store-not-empty`), and verify and serve's startup pause have written rows by then; the Host has no read-only status command | removed |
-| 4 | host-restart `serve` | the same argv, but the backup identity must cross containers (`/work` is per container; a second `init` refuses a schema-2 store). Owed: the driver reads `02-init/stdout` from the `admitted` checkpoint's custody extract and passes it on | held |
-| 5 | feed-admin `prepare` | `prepare-main-admission` exists, but no pinned fixture assignment file exists at `5d525ad2` (only test code), the request has 33 exact fields, and posting it to `/v1/main/admit` returns 503 without GitHub settings | held: Root decision |
-| 6 | feed-admin `resume` | no command: `POST /v1/resume` with `operator.token` and values read from `/v1/status` at run time; it returns 404 `legacy-main-control-route-not-supported` without GitHub settings | held: Root decision |
+| 4 | host-restart `serve` | the same argv, but the backup identity must cross containers (`/work` is per container; a second `init` refuses a schema-2 store). The plan names it `BID_REF`; at the first checkpoint that holds host-init (`admitted`) the driver reads `steps/02-init/stdout` from the custody extract, requires exactly one `host-init/1` object (else it aborts, before any removal or kill), logs it, and substitutes it when it starts a host-restart. `validate_plan` refuses a start that needs it before such a checkpoint, and the reference anywhere but a host service | filled (driver) |
+| 5 | feed-admin `prepare` | `prepare-main-admission` exists, but no pinned fixture assignment file exists at `5d525ad2` (only test code), the request has 33 exact fields, and posting it to `/v1/main/admit` returns 503 without GitHub settings | dropped by Root's ruling |
+| 6 | feed-admin `resume` | no command: `POST /v1/resume` with `operator.token` and values read from `/v1/status` at run time; it returns 404 `legacy-main-control-route-not-supported` without GitHub settings | dropped by Root's ruling |
 | 7 | feed-replay `activate` | `telemetry workspace activate-remote --config --workspace --producer --stream --repository --endpoint --credential-reference --spool-root` (`Cli/TelemetryApplication.fs`). No network call and no digest printed. It needs the spool root 0700 under a private parent and drain needs `*.ready` at 0600, while the seal makes 0755/0644: a `private` step (`chmod -R u=rwX,go=`) comes first | filled |
 | 8 | feed-replay `drain` | `telemetry workspace drain --config --repository --binding-digest`. The digest is computed from the association alone (`Cli/WorkspaceTelemetryApplication.fs`, `associationDigest`: int32-LE length-prefixed UTF-8 of workspace, producer, stream, `remote`, the endpoint's AbsoluteUri, the credential reference, the spool root, then the repositories), so it is a literal in the plan; the test recomputes it | filled |
 
-**What blocks the run (a Root decision, #5184).** On Host `5d525ad2`, admitting, resuming and invoking main work all need GitHub settings, and the
-first effect after prepare is an external GitHub claim. The pod has no egress, so design section 5 steps 4 and 5 (the fixture executor binding, the
-assignment, resume, the invocation) cannot run in it. Options: a Host source change that admits an offline fixture mode (FS.GG.Coordination), or a
-plan without the assignment (then the Host part qualifies init, verify, serve and restart reconciliation, and actor capture stays open). Neither is
-taken here.
+**Root's ruling: no Host assignment step in the pod** ([#5184](https://github.com/FS-GG/.github/issues/5184#issuecomment-6559191767)). On
+Host `5d525ad2`, admitting, resuming and invoking main work all need GitHub settings, and the first effect after prepare is an external GitHub claim;
+the pod has no egress beyond the model API (decision 1, #5068). So `prepare-main-admission` and `resume` are not run in the pod: main-work assignment
+and resume stay host-side, outside it. `feed-admin` only waits for the Host and holds its slot, with no credential. Widening pod egress to the GitHub
+API and a Host offline fixture mode were both rejected. Consequence: in the pod the Host part qualifies `init`, `verify-installed-adoption`, the
+no-GitHub `serve` and its restarts; design section 5's assignment, resume and controlled invocation, and the actor capture that depends on them, are
+not shown by the pod.
 
 **Still open after the resolution:** `drain` exits 0 with `processed: 0` when nothing is pending, so the verdict reads its
 `fsgg.telemetry.workspace-drain/1` stdout; a passive chain sends only its earliest pending batch per run, so the three real batches may need up to
@@ -261,7 +263,7 @@ README with the baseline's identifier classes.
 
 - Whether `--cgroups=split` places pod members (and the infra container) under the pod unit's cgroup. The driver asserts it (`assert-cgroups`) and
   aborts if not. The pod harness's `n5b-cgroups` case answers it (`pod-harness/README.md`); it has not run.
-- The Host's main route without egress (see "The eight plan values"): a Root decision.
+- Design section 5's assignment, resume and invocation inside the pod: not run there, by Root's ruling (see "The eight plan values").
 - Seccomp applicability to PostgreSQL and the .NET applications, the CLI and Host wire compatibility, a Generic credential for the Host outbox,
   `cp --preserve` and `sha256sum` in the base image, `openssl` on the host: pod-harness items. (`setsid -w` is asserted by the precheck.)
 - That `docker-entrypoint.sh` of the pinned pg image honours `POSTGRES_PASSWORD_FILE` with a read-only root and `PGDATA` on the volume.

@@ -100,12 +100,16 @@ check(F5.VOLUME_ROOT == M.PROD['volume_root'] and F5.DEFAULTS['cred_root'] == M.
 check(M.HOST_UID == {'pg': 428678, 'app': 428679}, 'the host uid gate is design section 3\'s {428678, 428679}')
 errs, held = M.validate_plan(M.PLAN)
 check(errs == [], f'the production plan keeps every invariant: {errs}')
-# #5184 resolved the eight r2 values: host-init verify and serve, feed-replay activate and drain are filled from the pinned sources; host-restart's verify is
-# dropped (verify refuses a non-empty store). Three remain held, each naming its blocker: two need a Root decision (the Host's GitHub-only main route), one a driver change.
-check(len(held) == 3 and all('#5184' in h for h in held), 'the production plan holds exactly three values, each naming #5184')
-check(sorted({h.split(':')[0] for h in held}) == ['feed-admin.prepare', 'feed-admin.resume', 'host-restart.service'], 'the held values are the GitHub-only main route and the cross-container backup identity')
-check(all('GitHub' in h for h in held if h.startswith('feed-admin')) and 'backup identity' in next(h for h in held if h.startswith('host-restart')), 'each held value states its blocker')
+# #5184 resolved the eight r2 values: host-init verify and serve, host-restart serve (the driver carries the backup identity), feed-replay activate and
+# drain are filled from the pinned sources; host-restart's verify is dropped (verify refuses a non-empty store); prepare and resume are dropped by Root's
+# ruling (no Host assignment step in the pod: main work is admitted and resumed host-side). Nothing is held.
+check(held == [], f'the production plan holds nothing: {held}')
 check([n_ for n_, _ in M.PLAN['generations']['host-restart']['steps']] == ['wait-pg'], 'host-restart runs no verify (verify-installed-adoption refuses a non-empty store)')
+fa_ = M.PLAN['generations']['feed-admin']
+check([n_ for n_, _ in fa_['steps']] == ['wait-host'] and fa_['creds'] == [] and fa_['service'] == M.HOLD,
+      'feed-admin runs no Host assignment step (Root ruling: no prepare-main-admission or resume in the pod), holds no credential and only holds its slot')
+src_r2 = open(POD).read()
+check("'prepare-main-admission'" not in src_r2 and "'/v1/resume'" not in src_r2 and 'issuecomment-6559191767' in src_r2, 'the plan has no prepare or resume command and cites the ruling')
 check(sum(1 for a in M.PLAN['actions'] if a[0] == 'checkpoint') == 5, 'the production plan uses five of finalizer r5\'s eight checkpoints')
 
 
@@ -120,6 +124,8 @@ def complete_plan():
 
 
 TP = complete_plan()
+HELD_PLAN = copy.deepcopy(TP)                            # a plan with one value still to decide (the production plan holds none since #5184)
+HELD_PLAN['generations']['host-init']['steps'][2] = ('request', M.Held('held for a test'))
 check(M.validate_plan(TP) == ([], []), 'the completed plan validates with no error and nothing held')
 
 
@@ -654,8 +660,10 @@ with tempfile.TemporaryDirectory() as tmp:
     w = World(tmp)
     code, r, _ = go(w, PRE, env={'app_image': None, 'pg_image': None})
     check(code == 5 and err(r, 'no image ids are pinned'), 'the production image pins (None) refuse')
-    code, r, _ = go(w, PRE, env={'plan': M.PLAN})
-    check(code == 5 and err(r, 'the plan has held steps') and 'podPrecheck' not in r['gates'], 'the production plan refuses (held steps) before any container starts')
+    held_plan = copy.deepcopy(TP)
+    held_plan['generations']['host-init']['steps'][2] = ('request', M.Held('x'))
+    code, r, _ = go(w, PRE, env={'plan': held_plan}, argv=M.plan_argv(held_plan))
+    check(code == 5 and err(r, 'the plan has held steps') and 'podPrecheck' not in r['gates'], 'a plan with a held step refuses before any container starts')
     code, r, _ = go(w, PRE, argv='["x"]')
     check(code == 5 and err(r, 'argv-json must name this operator\'s plan'), 'argv-json that does not name the plan refuses')
     bad = copy.deepcopy(TP)
@@ -883,6 +891,7 @@ class DriveWorld(World):
         self.owned, self.locked = {}, []
         self.trigger, self.archived, self.archive_s, self.fin_dead, self.partial_ack, self.no_cgroup_line = None, {}, 0, False, False, set()
         self.term_late = set()
+        self.init_stdout = '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"3f2c1a9e-5b7d-4e8f-9a0b-1c2d3e4f5a6b"}\n'   # what Host init prints
         self.cust = os.path.join(self.state, 'learn-custody', self.opid)
         self.ckdir = os.path.join(self.state, 'learn-checkpoint', self.opid)
         os.makedirs(self.cust)
@@ -955,7 +964,8 @@ class DriveWorld(World):
                     sd = os.path.join(out, 'steps', f'{k:02d}-{nm}')
                     os.makedirs(sd)
                     open(os.path.join(sd, 'rc'), 'w').write('0\n')
-                    open(os.path.join(sd, 'stdout'), 'w').write(json.dumps({'step': nm}) + '\n')
+                    so = self.init_stdout if (slot, nm) == ('host', 'init') else json.dumps({'step': nm}) + '\n'
+                    open(os.path.join(sd, 'stdout'), 'w').write(so)
                 i += 2 + cnt
             if slot not in self.no_complete:
                 open(os.path.join(out, 'steps', 'complete'), 'w').close()
@@ -1250,9 +1260,9 @@ with tempfile.TemporaryDirectory() as tmp:
         stat.S_IMODE(os.lstat(os.path.join(d, gn, f)).st_mode) == 0o600 for gn in CRED_GENS for f in os.listdir(os.path.join(d, gn)))
     check(modes_ok and sorted(os.listdir(d)) == sorted(CRED_GENS), 'credentials: one 0700 directory per generation that has credentials, every file 0600, nothing else (no work directory)')
     check(all(sorted(os.listdir(os.path.join(d, gn))) == CRED_GENS[gn] for gn in CRED_GENS) and rec['holders'] == CRED_GENS, 'credentials: each generation holds exactly the files it names')
-    check('pg.connection' not in CRED_GENS['feed-replay'] and 'operator.token' not in CRED_GENS['feed-replay'] and 'collector.secret' not in CRED_GENS['feed-admin']
+    check('pg.connection' not in CRED_GENS['feed-replay'] and 'operator.token' not in CRED_GENS['feed-replay'] and 'feed-admin' not in CRED_GENS
           and not any('collector.secret' in CRED_GENS[gn] for gn in ('host-init', 'host-restart')) and 'hold' not in CRED_GENS,
-          'N4: the /in replay gets no pg connection or operator token, feed-admin no collector grant, host never the grant, hold nothing')
+          'N4: the /in replay gets no pg connection or operator token, feed-admin (no Host assignment step since #5184) and hold nothing, host never the grant')
     check(not any(f.endswith(('.key', '.csr', '.ext')) for _, _, fs in os.walk(d) for f in fs), 'credentials: no private key, request or extension file survives')
     check(len(seen) == 6 and len(set(seen)) == 6 and all(len(x) >= 43 for x in seen), 'credentials: six distinct CSPRNG values (secrets.token_urlsafe), none shorter than 32 bytes of entropy')
     check(M.default_deps()['token'] is M.secrets.token_urlsafe, 'credentials: production draws from secrets.token_urlsafe')
@@ -1321,6 +1331,39 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             check(cm == [], f'{gn}: no credentials, no /cred mount')
 
+# ---- #5184 plan value 4: host-restart's serve gets host-init's backup identity, read back from the custody of the `admitted` checkpoint
+DBID = '3f2c1a9e-5b7d-4e8f-9a0b-1c2d3e4f5a6b'
+with tempfile.TemporaryDirectory() as tmp:
+    w = DriveWorld(tmp)
+    code, r, out, log = drive(w)
+    hr = [c['argv'] for c in w.ctrs.values() if c['slot'] == 'host'] + [c for c in w.calls if c[:3] == ['podman', 'run', '-d'] and c[c.index('--name') + 1].endswith('-host')]
+    restarts = [a for a in hr if a[a.index('step-runner') + 2:a.index('step-runner') + 3] == ['wait-pg'] and 'init' not in a[a.index('step-runner'):]]
+    check(code == 0 and restarts and all(a[-2:] == ['--backup-identity', DBID] and M.BID_REF not in a for a in restarts),
+          'every host-restart container serves with --backup-identity = host-init\'s, substituted by the driver')
+    bl = events(log, 'backup-identity')
+    check(len(bl) == 1 and bl[0]['backupIdentity'] == DBID and bl[0]['n'] == 1, 'the driver reads the backup identity once, from the first checkpoint (admitted), and logs it')
+for what, so in (('another schema', '{"schema":"fsgg.orchestration.host-init/2","backupIdentity":"%s"}\n' % DBID),
+                 ('two objects', ('{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}\n' % DBID) * 2),
+                 ('an upper-case identity', '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}\n' % DBID.upper()), ('nothing', '')):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = DriveWorld(tmp)
+        w.init_stdout = so
+        code, r, out, log = drive(w)
+        check(code == 3 and any('init stdout' in e for e in r['errors']) and not events(log, 'remove') and not events(log, 'kill'),
+              f'drive: host-init init stdout with {what} aborts at the first checkpoint, before any removal or kill')
+# validate_plan: the reference needs a checkpoint holding host-init first, and only a host service may carry it
+bad = copy.deepcopy(TP)
+i_ = bad['actions'].index(['checkpoint', 'admitted'])
+bad['actions'][i_:i_] = [['stop', 'host'], ['remove', 'host'], ['start', 'host-restart'], ['wait-ready', 'host']]
+check(any('no checkpoint with host-init' in e for e in M.validate_plan(bad)[0]), 'validate_plan: a host-restart started before any checkpoint held host-init is refused')
+bad2 = copy.deepcopy(TP)
+bad2['generations']['recv-restart']['service'] = bad2['generations']['recv-restart']['service'] + ['--x', M.BID_REF]
+check(any('only for a host service' in e for e in M.validate_plan(bad2)[0]), 'validate_plan: the reference in a non-host service is refused')
+bad3 = copy.deepcopy(TP)
+bad3['generations']['host-init']['steps'] = bad3['generations']['host-init']['steps'] + [('x', ['/bin/echo', M.BID_REF])]
+check(any('only for a host service' in e for e in M.validate_plan(bad3)[0]), 'validate_plan: the reference in a step is refused (only the driver-started service carries it)')
+check(M.validate_plan(TP) == ([], []), 'validate_plan control: the production order (admitted checkpoint before any host-restart) passes')
+
 # ---- authority: each refusal leaves nothing behind
 AUTH_CASES = [
     ('another uid', lambda w: None, {'geteuid': lambda: UID + 1}, 'run as fsgg-learn-qual'),
@@ -1330,8 +1373,8 @@ AUTH_CASES = [
     ('an admission for another operator', lambda w: (os.unlink(os.path.join(w.view, 'admissions', w.opid + '.admit')), w.admit(operator_sha=H('9'))), {}, 'does not name this op'),
     ('no input-read marker', lambda w: os.unlink(os.path.join(w.state, 'learn-input', w.opid, 'input-read')), {}, 'no input-read marker'),
     ('a claim of another op', lambda w: w.claim(opid='op-zzz'), {}, 'names another op'),
-    ('a held plan', lambda w: (setattr(w, 'env_over', {'plan': M.PLAN}), os.unlink(os.path.join(w.view, 'admissions', w.opid + '.admit')), w.admit(plan=M.PLAN)), {}, 'the plan cannot run'),
-    ('an admission for another plan (#5184: the driver binds the admitted argv)', lambda w: setattr(w, 'env_over', {'plan': M.PLAN}), {}, 'not given for this plan and input kind'),
+    ('a held plan', lambda w: (setattr(w, 'env_over', {'plan': HELD_PLAN}), os.unlink(os.path.join(w.view, 'admissions', w.opid + '.admit')), w.admit(plan=HELD_PLAN)), {}, 'the plan cannot run'),
+    ('an admission for another plan (#5184: the driver binds the admitted argv)', lambda w: setattr(w, 'env_over', {'plan': HELD_PLAN}), {}, 'not given for this plan and input kind'),
     ('a driver that already ran', lambda w: os.makedirs(os.path.join(w.state, 'learn-drive', w.opid)), {}, 'already ran'),
 ]
 for what, mut, dover, needle in AUTH_CASES:
@@ -1682,6 +1725,24 @@ with tempfile.TemporaryDirectory() as tmp:
         raises(lambda: M.readback_extract(extract(st, complete), 'host', gen), M.Abort, needle, f'N8 readback: {what} is refused')
     check(M.readback_extract(extract(dict(ok_st, phase='terminal', reason='error', exit=1), False), 'host', gen)['phase'] == 'terminal',
           'readback: a step that failed has no steps/complete, and its evidence is still read back')
+# #5184 value 4, action by action: no backup identity in custody, no host-restart; the identity comes only from a checkpoint that held host-init
+with tempfile.TemporaryDirectory() as tmp:
+    w, drv = driver_at(tmp)
+    with contextlib.redirect_stdout(io.StringIO()):
+        drv.slots['host'] = None
+        n_runs = len([c for c in w.calls if c[:3] == ['podman', 'run', '-d']])
+        raises(lambda: drv.a_start('host-restart'), M.Abort, 'no backup identity of host-init in custody', 'value 4: a host-restart start before the identity is in custody aborts')
+        check(len([c for c in w.calls if c[:3] == ['podman', 'run', '-d']]) == n_runs, 'value 4: ... and creates no container')
+with tempfile.TemporaryDirectory() as tmp:
+    w, drv = driver_at(tmp)
+    with contextlib.redirect_stdout(io.StringIO()):
+        drv.a_checkpoint('a')
+        check(drv.bid == DBID, 'value 4 control: a checkpoint that held host-init yields the identity')
+bad4 = copy.deepcopy(TP)
+bad4['generations']['host-plain'] = copy.deepcopy(bad4['generations']['host-init'])
+bad4['actions'][bad4['actions'].index(['start', 'host-init'])] = ['start', 'host-plain']
+check(any('no checkpoint with host-init' in e for e in M.validate_plan(bad4)[0]), 'validate_plan: a checkpoint that held another host generation does not supply the identity')
+
 # ---- N8: the drive budget is enforced
 with tempfile.TemporaryDirectory() as tmp:
     w = DriveWorld(tmp)
@@ -1725,7 +1786,7 @@ def syn_claim(w, opid=None, snapshot='snap-1', sm_extra=None, claim_extra=None):
 
 check(json.loads(SYN_ARGV) == [M.PLAN_SCHEMA, M.plan_digest(TP), 'input:synthetic'] and SYN_ARGV != M.plan_argv(TP), 'SYN: the synthetic argv-json is the plan argv plus the explicit declaration')
 check(M.argv_input_kind(M.plan_argv(TP), TP) == 'real' and M.argv_input_kind(SYN_ARGV, TP) == 'synthetic' and M.argv_input_kind('["x"]', TP) is None
-      and M.argv_input_kind(M.synthetic_plan_argv(M.PLAN), TP) is None, 'SYN: the input kind comes only from an argv that names THIS plan')
+      and M.argv_input_kind(M.synthetic_plan_argv(HELD_PLAN), TP) is None, 'SYN: the input kind comes only from an argv that names THIS plan')
 check(M.INPUT_KINDS == mod('fin5syn', FIN).INPUT_KINDS, 'SYN: the pod operator and finalizer r5 read the same directories and record types per input kind')
 check((L.SYNTHETIC_CLAIMS, L.SYNTHETIC_CLAIM_SCHEMA, L.SYNTHETIC_INPUTS, L.SYNTHETIC_SNAPSHOT_SCHEMA) == tuple(M.INPUT_KINDS['synthetic'][k] for k in ('claims', 'claim', 'inputs', 'sealed')),
       'SYN: ... and they are the seal tool\'s own synthetic constants')

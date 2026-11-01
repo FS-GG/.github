@@ -16,7 +16,7 @@ The cases, in order (`plan` lists each with what runs, as which uid, what it may
   phase B, the N5b spike: n5b-cgroups (inside a delegated learn-pod-* unit, a pod whose members run with --cgroups=split: are the members, their conmon
            and the infra container under the unit's cgroup?).
   phase C, the synthetic-snapshot pod qualification, which is also the install receipt op: syn-precheck, syn-run (the whole plan, the recovery driver
-           included, on a synthetic claim), syn-reuse. HELD until the pod operator's image pins and plan values exist.
+           included, on a synthetic claim), syn-reuse. HELD until the pod operator's image pins exist.
 
 Rules that make the harness safe to admit as one finite sequence: it runs only as uid 30034 from a root-owned copy; every name it creates is
 hq-<run-id>-<case>; it stops and resets only units it started, by exact name; every unit it starts has its own RuntimeMaxSec, so nothing outlives a dead
@@ -148,7 +148,7 @@ def cases(env, run_id, argv_json=None, ident=None):
                      'blocks phase C until the pod start is changed); census after: clean',
          'receipts': ['the spike RESULT sha256', 'every member\'s cgroup path', 'census after: clean']},
         {'id': 'syn-precheck', 'phase': 'C', 'title': 'the synthetic op\'s non-input precheck (the install receipt op begins here)',
-         'held': 'the image pins of the pod start (after INSTALL-FDEV step 7) and the three held plan values (#5184)',
+         'held': 'the image pins of the pod start (after INSTALL-FDEV step 7)',
          'precondition': 'Root: synthetic seal (learn_seal_claim.py --mode synthetic manifest and seal of a synth-tree), the admission for '
                          f'{syn_op} with the synthetic argv-json, the loop volume',
          'commands': [pod_argv(env, '--precheck-only', syn_op, aj, idt)], 'creates': [f'pod learn-pre-{syn_op} (removed by the operator)'],

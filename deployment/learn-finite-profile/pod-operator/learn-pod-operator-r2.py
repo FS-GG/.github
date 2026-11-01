@@ -132,11 +132,15 @@ SERVE_ARGS = ['--connection-file', '/cred/pg.connection', '--token-file', '/cred
               '--pilot-principal', FIXTURE_IDS['principal'], '--repository-node-id', FIXTURE_IDS['repoNode'], '--repository-database-id', FIXTURE_IDS['repoDb'],
               '--issue-node-id', FIXTURE_IDS['issueNode'], '--issue-database-id', FIXTURE_IDS['issueDb']]
 HOST_SERVE = ['/bin/sh', '-c', 'b=$(cat /work/backup-identity) && [ -n "$b" ] || exit 70; exec "$@" --backup-identity "$b"', 'serve', HOSTX, 'serve'] + SERVE_ARGS
-HOST_NO_EGRESS = ('Host 5d525ad2 admits (/v1/main/admit: 503 without GitHub) and resumes (/v1/resume: 404 legacy-main-control-route-not-supported) main work only '
-                  'with GitHub settings (the GitHub API and a token), and its first effect after prepare is an external GitHub claim; the pod has no egress. '
-                  'A Root design decision on #5184 (a Host offline fixture mode, or no assignment in the pod)')
-CROSS_BID = ('host-restart needs the backup identity host-init created, across containers (/work is per container; a second init refuses a schema-2 store): '
-             'a driver change (read 02-init/stdout from the admitted checkpoint\'s custody extract) is owed, #5184')
+# Root ruling (#5184, issuecomment-6559191767): the finite pod plan carries NO Host assignment step. Host 5d525ad2 admits and resumes main work only with
+# GitHub settings, and the pod has no egress beyond the model API (decision 1, #5068), so prepare-main-admission and resume are not run in the pod: main-work
+# assignment and resume stay host-side. feed-admin therefore only waits for the Host and holds its slot (no credentials).
+# host-restart's serve needs the backup identity host-init created, across containers (/work is per container; a second init refuses a schema-2 store).
+# The plan names it by BID_REF; the DRIVER substitutes it at the start, from host-init's init stdout that a checkpoint put in custody (validate_plan
+# requires such a checkpoint before any start that uses it). It is a store identity, not a secret.
+BID_REF = '%host-init-backup-identity%'
+INIT_STDOUT_REL = INIT_STDOUT[len('/out/host/'):]
+INIT_OBJECT = re.compile(r'\{"schema":"fsgg\.orchestration\.host-init/1","backupIdentity":"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"\}\n?')
 # the producer association (activate-remote) and its binding digest: sha256 over the int32-LE-length-prefixed UTF-8 of [workspace, producer, stream,
 # 'remote', endpoint AbsoluteUri, credential reference, spool root] + repositories (WorkspaceTelemetryApplication.associationDigest). The tests recompute it.
 SPOOL_ROOT = '/work/spool/' + 'passive-prospective-0106-20261018/spool'
@@ -163,9 +167,10 @@ GENERATIONS = {
     # #5184: no verify after a restart: verify-installed-adoption refuses any store that is not empty (dedicated-store-not-empty), and init's verify
     # and serve's startup pause have written rows by then. WAIT_PG and the readiness probe are what a restart can check.
     'host-restart': {'slot': 'host', 'creds': ['pg.connection', 'operator.token', 'runner.token', 'ca.pem'],
-                     'steps': [WAIT_PG], 'service': Held(CROSS_BID), 'ready': ['--ready-tcp', str(HOST_PORT), '--ready-timeout', '600']},
-    'feed-admin': {'slot': 'feed', 'creds': ['pg.connection', 'operator.token', 'ca.pem'],
-                   'steps': [('wait-host', ['wait-tcp', str(HOST_PORT), '300']), ('prepare', Held(HOST_NO_EGRESS)), ('resume', Held(HOST_NO_EGRESS))],
+                     'steps': [WAIT_PG], 'service': [HOSTX, 'serve'] + SERVE_ARGS + ['--backup-identity', BID_REF],
+                     'ready': ['--ready-tcp', str(HOST_PORT), '--ready-timeout', '600']},
+    'feed-admin': {'slot': 'feed', 'creds': [],
+                   'steps': [('wait-host', ['wait-tcp', str(HOST_PORT), '300'])],
                    'service': HOLD, 'ready': ['--ready-file', '/out/feed/steps/complete', '--ready-timeout', '600']},
     'feed-replay': {'slot': 'feed', 'creds': ['ca.pem', 'collector.secret', 'spool.sha256'], 'input': True,
                     'steps': [('copy', ['/bin/cp', '-R', '--preserve=mode,timestamps', '/in/.', '/work/spool']),
@@ -802,8 +807,11 @@ def validate_plan(plan):
             errs.append(f'generation {gname}: bad readiness options')
         if g.get('input') and slot != 'feed':
             errs.append(f'generation {gname}: only the feed slot mounts /in')
+        if any(strs(st[1]) and BID_REF in st[1] for st in g.get('steps', []) if isinstance(st, (list, tuple)) and len(st) == 2) \
+                or BID_REF in (g.get('ready') or []) or (strs(svc) and BID_REF in svc and slot != 'host'):
+            errs.append(f'generation {gname}: the backup-identity reference is only for a host service')
     S = {s: None for s in SLOTS}
-    ck, replay, acts = 0, 0, plan['actions']
+    ck, replay, acts, bid = 0, 0, plan['actions'], False
 
     def need(cond, why):
         if not cond:
@@ -816,6 +824,8 @@ def validate_plan(plan):
         v, arg = a[0], (a[1] if len(a) > 1 else None)
         if v == 'start':
             g = gens.get(arg)
+            if g is not None and strs(g.get('service')) and BID_REF in g['service']:
+                need(bid, 'no checkpoint with host-init in the host slot holds the backup identity this start needs')
             if need(g is not None and g.get('slot') in SLOTS, 'unknown generation') and need(S[g['slot']] is None, 'the slot is occupied'):
                 S[g['slot']] = {'gen': arg, 'running': True, 'done': 'may' if (g['slot'] != 'pg' and g.get('service') is None) else 'no', 'dirty': g['slot'] != 'pg'}
                 replay += bool(g.get('input'))
@@ -851,6 +861,7 @@ def validate_plan(plan):
             if need(isinstance(arg, str) and re.fullmatch(r'[a-z0-9][a-z0-9-]{0,39}', arg) is not None, 'bad label') and \
                need(all(S[r_] is not None and S[r_]['running'] for r_ in ROLES), 'finalizer r5 needs all three role containers running at a checkpoint'):
                 ck += 1
+                bid = bid or S['host']['gen'] == 'host-init'
                 for r_ in ROLES:
                     S[r_]['dirty'] = False
         elif v == 'sleep':
@@ -1332,6 +1343,18 @@ class Abort(Exception):
     pass
 
 
+def backup_identity_from(extract_host):
+    """host-init's backup identity from its init stdout as the finalizer extracted it into custody: exactly one host-init/1 object, else abort."""
+    try:
+        raw = read_private(f'{extract_host}/{INIT_STDOUT_REL}', 4096)
+    except (OSError, Refuse):
+        raise Abort('custody readback: no init stdout of host-init')
+    m = INIT_OBJECT.fullmatch(raw.decode('utf-8', 'replace'))
+    if not m:
+        raise Abort('custody readback: host-init\'s init stdout is not exactly one host-init/1 object')
+    return m.group(1)
+
+
 class Driver:
     """Runs PLAN against this op's pod. Every container is created by ctr_argv; every destructive act on a role container needs custody first (the
     checkpoint handshake with finalizer r5, read back); every action is logged with a hash chain."""
@@ -1342,7 +1365,7 @@ class Driver:
         p = paths(env)
         self.ckdir, self.cust, self.logdir = f"{p['checkpoints']}/{opid}", f"{p['custody']}/{opid}", f"{p['drive']}/{opid}"
         self.slots, self.ck, self.head, self.lines, self.t0 = {s: None for s in SLOTS}, 0, '0' * 64, 0, deps['monotonic']()
-        self.unit_cg = None
+        self.unit_cg, self.bid = None, None
 
     # ---- log, clock, reads
     def log(self, event, **kv):
@@ -1413,7 +1436,12 @@ class Driver:
         slot = g['slot']
         if self.slots[slot] is not None:
             raise Abort(f'start {gname}: the {slot} slot is occupied')
-        rc, _, err = self.run(ctr_argv(self.env, self.opid, gname, slot, self.sid), 120)
+        argv = ctr_argv(self.env, self.opid, gname, slot, self.sid)
+        if BID_REF in argv:                                     # host-restart's serve: host-init's backup identity, read back from custody
+            if not self.bid:
+                raise Abort(f'start {gname}: no backup identity of host-init in custody')
+            argv = [self.bid if x == BID_REF else x for x in argv]
+        rc, _, err = self.run(argv, 120)
         if rc != 0:
             raise Abort(f'start {gname}: {start_errno(err)}')
         self.adopt(slot, gname)
@@ -1491,6 +1519,9 @@ class Driver:
         if why:
             raise Abort(f'ack-{n} does not acknowledge this request with every role accepted: {why}')
         custody = {r_: readback_extract(f'{self.cust}/checkpoints/{n}/extract-{r_}', r_, self.gens[self.slots[r_]['gen']]) for r_ in ROLES}
+        if self.bid is None and self.slots['host']['gen'] == 'host-init':
+            self.bid = backup_identity_from(f'{self.cust}/checkpoints/{n}/extract-host')
+            self.log('backup-identity', n=n, backupIdentity=self.bid)
         self.ck = n
         for r_ in ROLES:
             self.slots[r_]['dirty'] = False

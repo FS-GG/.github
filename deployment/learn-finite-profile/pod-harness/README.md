@@ -39,7 +39,7 @@ A run id is 4 to 12 lowercase letters and digits. Every unit, pod and container 
 | A | `a29-cap` | two dummy `learn-op-hq-<id>-c1/c2` units, r6 `--precheck-only`, both stopped | exit 5, `concurrency refused: 2 ops already active (max 2)` |
 | A | `a0-r4-smoke` | **held** | Home's A0 r4 harness (`12ec5ebf…`) is not in this repository; it pins operator r5 |
 | B | `n5b-cgroups` | the spike unit (below) | the spike completes and removes its pod; `members-and-infra-under-unit` passes, `not-under-unit` or `split-refused` is a finding |
-| C | `syn-precheck`, `syn-run`, `syn-reuse` | the pod operator on a synthetic claim | **held** until the pod operator's image pins and its three held plan values exist |
+| C | `syn-precheck`, `syn-run`, `syn-reuse` | the pod operator on a synthetic claim | **held** until the pod operator's image pins exist (a pin-only revision after INSTALL-FDEV step 7) |
 
 The exclusion case in the other direction (an active reader op refuses a pod op) needs the pod start past its image-pin gate, so it waits with
 phase C. The A27b negative with a wrong digest cannot be produced on fdev: ack writer r2 writes only the admitted digest. Both are covered by the

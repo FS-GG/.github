@@ -77,7 +77,7 @@ check(all(set(c) >= {'id', 'phase', 'title', 'commands', 'creates', 'writes', 'e
 names = ' '.join(x for c in p1['cases'] for x in c['creates'])
 check(all(re.search(r'hq-run1-', x) for c in p1['cases'] for x in c['creates'] if 'learn-' in x and 'hq-' in x)
       and not re.search(r'learn-(op|pod|fin|pre)-(?!hq-run1-)', names.replace('learn-op-success', '')), 'every unit, pod and container the harness creates is named hq-<run>-*')
-check({c['id'] for c in p1['cases'] if c['held']} == {'a0-r4-smoke', 'syn-precheck', 'syn-run', 'syn-reuse'}, 'held: the A0 r4 smoke (Home source) and phase C (pins and plan values)')
+check({c['id'] for c in p1['cases'] if c['held']} == {'a0-r4-smoke', 'syn-precheck', 'syn-run', 'syn-reuse'}, 'held: the A0 r4 smoke (Home source) and phase C (the image pins)')
 a27 = next(c for c in p1['cases'] if c['id'] == 'a27-unacked')
 check(a27['commands'] == [['/usr/bin/python3', '-I', '/usr/local/libexec/fsgg-learn/learn-operator-r6.py', '--precheck-only', '--id', 'hq-run1-a27']],
       'A27 runs the installed operator r6 --precheck-only once, under the harness op id')
@@ -599,7 +599,7 @@ with tempfile.TemporaryDirectory() as tmp:
     w = syn_world(tmp)
     for cid in ('syn-precheck', 'syn-run', 'syn-reuse'):
         R, code = case(w, cid, extra=SA, env={'held_override': True})
-        check(R['verdict'] == 'held' and code == 0, f'{cid} is held in this revision (pins and plan values), whatever the arguments')
+        check(R['verdict'] == 'held' and code == 0, f'{cid} is held in this revision (the image pins), whatever the arguments')
 
 
 def unheld(cid):
