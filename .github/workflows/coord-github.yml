@@ -34,6 +34,8 @@ on:
       - "src/FS.GG.Telemetry.Store/**"
       - "tests/FS.GG.Coord.GitHub.Tests/**"
       - "tests/coord-board-v2-projection/**"
+      - "tests/coord-board-tend-mutation/**"
+      - "tests/coord-constructor-identity-mutation/**"
       - "tests/coord-board-v2-cli-join/**"
       - ".github/workflows/coord-board-v2-refresh.yml"
       - "tests/producer-fence-attacks/**"
@@ -87,6 +89,8 @@ on:
       - "src/FS.GG.Telemetry.Store/**"
       - "tests/FS.GG.Coord.GitHub.Tests/**"
       - "tests/coord-board-v2-projection/**"
+      - "tests/coord-board-tend-mutation/**"
+      - "tests/coord-constructor-identity-mutation/**"
       - "tests/coord-board-v2-cli-join/**"
       - ".github/workflows/coord-board-v2-refresh.yml"
       - "tests/producer-fence-attacks/**"
@@ -126,6 +130,7 @@ on:
       - "Directory.Packages.props"
       - "global.json"
       - ".github/workflows/coord-github.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -168,6 +173,17 @@ jobs:
           dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-build -c Release --logger "console;verbosity=normal"
           dotnet test tests/coord-board-v2-projection/coord-board-v2-projection.fsproj --no-build -c Release --logger "console;verbosity=normal"
           dotnet test tests/coord-board-v2-cli-join/coord-board-v2-cli-join.fsproj --no-build -c Release --logger "console;verbosity=normal"
+
+      # The board-tend derivation mutation matrix (#5136 phase 2 PR 2) is still runnable: every leg's `find` still
+      # matches V2Tend.fs. Runs no mutation; the sweep itself is on demand.
+      - name: The board-tend mutation matrix is still runnable
+        run: bash tests/coord-board-tend-mutation/run.sh
+
+      # The #5113 constructor-identity mutation legs mutate V2ConstructorClosure.fs, V2Preflight.fs and
+      # V2EnrollmentCommands.fs by exact source text. This checks, in seconds, that every leg still matches; it runs no
+      # mutation. The sweep itself is on demand: scripts/gate-mutate.py --specs tests/coord-constructor-identity-mutation/specs.yml
+      - name: Constructor-identity mutation matrix is runnable
+        run: bash tests/coord-constructor-identity-mutation/run.sh
 
       - name: Verify GS2-08.6 producer attack oracle
         run: |

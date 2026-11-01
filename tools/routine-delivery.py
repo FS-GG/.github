@@ -19,7 +19,9 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 import zipfile
+from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Protocol
@@ -1322,6 +1324,99 @@ class GhApi:
             jobs.extend(job for job in page["jobs"] if isinstance(job, dict))
         return jobs
 
+    # ---- Board-currency merge gate reads/write (design §2b). Every failure raises; callers map it to a
+    # fixed verdict and never echo provider text, bodies or tokens.
+
+    def _graphql(self, query: str, variables: dict[str, str | int]) -> dict[str, Any]:
+        args = ["graphql", "-f", f"query={query}"]
+        for name, value in variables.items():
+            args.extend(["-F", f"{name}={value}"] if type(value) is int else ["-f", f"{name}={value}"])
+        value = self._run(args)
+        if not isinstance(value, dict) or value.get("errors") or not isinstance(value.get("data"), dict):
+            raise RuntimeError("board read is incomplete")
+        return value["data"]
+
+    def board_pr(self, repo: str, pr: int) -> dict[str, Any]:
+        """Body, author, last body editor and state in one read (REST has no body editor)."""
+        owner, name = board_repo_parts(repo)
+        data = self._graphql(BOARD_PR_QUERY, {"owner": owner, "name": name, "number": pr})
+        node = ((data.get("repository") or {}).get("pullRequest"))
+        if not isinstance(node, dict) or node.get("number") != pr or not isinstance(node.get("body"), str):
+            raise RuntimeError("board pull request read is incomplete")
+        edited_at = node.get("lastEditedAt")
+        login = lambda actor: actor.get("login") if isinstance(actor, dict) else None
+        return {"repo": repo, "number": pr, "state": node.get("state"), "body": node["body"],
+                "author": login(node.get("author")), "edited": edited_at is not None,
+                "editor": login(node.get("editor"))}
+
+    def board_cards(self, refs: list[str]) -> dict[str, dict | None]:
+        """Each ref's Project 3 card (Work level, Status, state, native parent) plus the parent's card."""
+        if not refs:
+            return {}
+        if len(refs) > BOARD_MAX_REFS:
+            raise RuntimeError("board read is unbounded")
+        variables: dict[str, str | int] = {}
+        declared, selected = [], []
+        for index, ref in enumerate(refs):
+            repo, _, number = ref.partition("#")
+            owner, name = board_repo_parts(repo)
+            if not number.isdigit():
+                raise RuntimeError("board reference is malformed")
+            variables.update({f"o{index}": owner, f"n{index}": name, f"k{index}": int(number)})
+            declared.append(f"$o{index}:String!,$n{index}:String!,$k{index}:Int!")
+            selected.append(f"r{index}:repository(owner:$o{index},name:$n{index}){{issueOrPullRequest(number:$k{index})"
+                            "{__typename ...on Issue{...IssueCard parent{...IssueCard}} ...on PullRequest{...PrCard}}}")
+        query = (f"query({','.join(declared)}){{{' '.join(selected)}}}"
+                 f"fragment IssueCard on Issue{{{BOARD_CARD_SELECTION}}}"
+                 f"fragment PrCard on PullRequest{{{BOARD_CARD_SELECTION}}}")
+        data = self._graphql(query, variables)
+        cards: dict[str, dict | None] = {}
+        parents: dict[str, dict | None] = {}
+        for index, ref in enumerate(refs):
+            node = (data.get(f"r{index}") or {}).get("issueOrPullRequest")
+            if not isinstance(node, dict):
+                raise RuntimeError("board reference read is incomplete")
+            cards[ref] = board_card(node)
+            parent = node.get("parent")
+            if node.get("__typename") == "Issue" and parent is not None:
+                if not isinstance(parent, dict):
+                    raise RuntimeError("board parent read is incomplete")
+                parents[board_card_key(parent)] = board_card(parent)
+        for key, card in parents.items():
+            cards.setdefault(key, card)
+        return cards
+
+    def board_item(self, ref: str) -> dict[str, Any]:
+        """Fresh complete reported state of one issue's Project 3 item and the live Status field schema."""
+        repo, _, number = ref.partition("#")
+        owner, name = board_repo_parts(repo)
+        if not number.isdigit():
+            raise RuntimeError("board reference is malformed")
+        data = self._graphql(BOARD_ITEM_QUERY, {"owner": owner, "name": name, "number": int(number)})
+        issue = (data.get("repository") or {}).get("issue")
+        if not isinstance(issue, dict):
+            raise RuntimeError("board item read is incomplete")
+        return board_item_state(issue)
+
+    def board_done_when(self, ref: str) -> str | None:
+        """The Delivery issue's body, for its `## Done when` section (the delivery-marker warning)."""
+        repo, _, number = ref.partition("#")
+        owner, name = board_repo_parts(repo)
+        if not number.isdigit():
+            raise RuntimeError("board reference is malformed")
+        data = self._graphql("query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){body}}}",
+                             {"owner": owner, "name": name, "number": int(number)})
+        body = ((data.get("repository") or {}).get("issue") or {}).get("body")
+        return body if isinstance(body, str) else None
+
+    def board_set_status(self, project_id: str, item_id: str, field_id: str, option_id: str) -> None:
+        """Exactly one native single-select send. Never retried: a failure is reported, not resent."""
+        command = ["gh", "project", "item-edit", "--id", item_id, "--project-id", project_id,
+                   "--field-id", field_id, "--single-select-option-id", option_id]
+        result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            raise RuntimeError("board status send is unconfirmed")
+
 
 @dataclass(frozen=True)
 class Summary:
@@ -1346,16 +1441,35 @@ class Summary:
     routineEligibility: str = "not-required"
     producerInstallation: str = "not-selected"
     producerSource: str | None = None
+    # Board-currency merge gate (design §2b). Defaults keep every pre-gate result shape valid.
+    boardGate: str = "not-applicable"
+    boardGateReason: str | None = None
+    boardTransition: str = "not-applicable"
+    # Result schema minor version within fsgg.routine-delivery/v1: 1 adds the optional deliveryMarker field
+    # (board-reconciler design §12 PR 5). A result without it is minor 0; readers ignore fields they do not use.
+    schemaMinor: int = 1
+    # The routine PR's declared relation to its Delivery: {"declared": "continues|completes|none|both",
+    # "advisory": bool, "warning": str | None}; None when the PR is not a routine PR.
+    deliveryMarker: dict | None = None
+
+
+# A result written before the board gate existed lacks these fields and stays a valid prior result.
+BOARD_RESULT_FIELDS = frozenset({"boardGate", "boardGateReason", "boardTransition"})
+# A result written before minor 1 lacks these, and stays a valid prior result too.
+MARKER_RESULT_FIELDS = frozenset({"schemaMinor", "deliveryMarker"})
 
 
 def installation_result_shape(value: Any) -> bool:
-    legacy = {f.name for f in fields(Summary)}
+    current = {f.name for f in fields(Summary)}
     if not isinstance(value, dict):
         return False
-    if set(value) == legacy:
+    keys = set(value)
+    shapes = [current - board - marker for board in (frozenset(), BOARD_RESULT_FIELDS) for marker in (frozenset(), MARKER_RESULT_FIELDS)]
+    if keys in shapes:
         return True
     evidence = value.get("deliveryEvidence")
-    return (set(value) == legacy | {"deliveryEvidence"}
+    return (keys - {"deliveryEvidence"} in shapes
+            and "deliveryEvidence" in keys
             and isinstance(evidence, dict)
             and evidence.get("schema") == "fsgg.routine-delivery-evidence/1")
 
@@ -1696,6 +1810,753 @@ def routine_contract(api: NativeApi, repo: str, pr: dict[str, Any], head: str) -
     return "passed"
 
 
+# ---------------------------------------------------------------------------------------------------
+# Board-currency merge gate (docs/coordination/2026-10-31-board-currency-gate.md §2b; Refs #5094).
+#
+# Before the merge effect, a routine PR applied with --apply is checked for R1 linkage: exactly one
+# Project 3 Delivery with a parent Outcome, judged by scripts/board-currency-rules.py (linkage_of), with a
+# valid Root override evaluated first. After a confirmed merge, the linked open Delivery's Status moves
+# once to In review (or In progress with the delivery-continues marker) under a guarded write. Advisory
+# mode (the default until Root's phase 3) never changes the merge decision and never writes; it records
+# the verdict and what enforce would write. Result text is a fixed vocabulary: no body, title, login or
+# provider message is ever copied into the result or the logs.
+
+BOARD_GATE_MODES = ("advisory", "enforce")
+BOARD_OWNER = "FS-GG"
+BOARD_NUMBER = 3
+BOARD_MAX_REFS = 20
+BOARD_ROUTINE_MARKER = "fsgg:routine-development/v1"
+BOARD_CONTINUES = "<!-- fsgg:delivery-continues/v1 -->"
+BOARD_COMPLETES = "<!-- fsgg:delivery-completes/v1 -->"
+# The routine PR's declaration check (board-reconciler design §12 PR 5, Root's ruling on #5150): advisory for its
+# first 7 days, then required, which Root turns on with --delivery-marker required.
+DELIVERY_MARKER_MODES = ("advisory", "required")
+_DONE_WHEN_STEP = re.compile(r"\b(?:releas\w*|install\w*|read-?back\w*|qualif\w*)\b", re.I)
+BOARD_WRITABLE_PREIMAGES = ("Backlog", "Ready", "In progress", "In review")
+BOARD_CUSTODY_SCHEMA = "fsgg.routine-board-custody/1"
+BOARD_ENFORCE_REPOSITORY = "fs-gg/.github"
+# Custody record states (board-reconciler design §6, #5136). `deferred` is written when the writer lock stays busy;
+# replay moves it to `possible-send` before its one send. `superseded`, `refused` and `not-applicable` are terminal.
+BOARD_CUSTODY_STATES = ("possible-send", "verified", "deferred", "superseded", "refused", "not-applicable")
+# One writer lock for every Project 3 writer (design §8): flock(2) LOCK_EX on a fixed path under $XDG_RUNTIME_DIR,
+# plus, during the transition, the installed engine's legacy migration lock at the literal /tmp path. The engine's
+# F# writers use the same paths (src/FS.GG.Coord.GitHub/V2WriterLock.fs); a test pins that they agree.
+BOARD_WRITER_LOCK_NAME = "board-writer-PVT_kwDOEYAWY84Bldpa.lock"
+BOARD_LEGACY_LOCK_NAME = "fsgg-v2-migration-PVT_kwDOEYAWY84Bldpa.lock"
+BOARD_LEGACY_OBSERVATION_LOCK_NAME = "fsgg-v2-observation-PVT_kwDOEYAWY84Bldpa.lock"
+BOARD_LOCK_WAIT_SECONDS = 60.0
+
+
+class BoardCustody:
+    """Durable possible-send custody for the one post-merge Status write (design §2b step 4).
+
+    One JSON record per (repository, PR), keyed by those two alone so a later run can find it before it
+    knows anything else, and carrying the Delivery, item, preimage and target. Written atomically and
+    fsynced BEFORE the send, and atomically rewritten to `verified` after a successful readback. A record
+    that exists means a send may have happened: no later run sends again for that PR."""
+
+    def __init__(self, root: pathlib.Path) -> None:
+        self.root = root
+
+    def path(self, repo: str, pr: int) -> pathlib.Path:
+        key = hashlib.sha256(f"{repo.lower()}#{pr}".encode()).hexdigest()[:32]
+        return self.root / f"{key}.json"
+
+    def existing(self, repo: str, pr: int) -> dict | None:
+        path = self.path(repo, pr)
+        if not path.exists():
+            return None
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if (not isinstance(record, dict) or record.get("schema") != BOARD_CUSTODY_SCHEMA
+                or record.get("repo", "").lower() != repo.lower() or record.get("pr") != pr
+                or not isinstance(record.get("delivery"), str) or record.get("state") not in BOARD_CUSTODY_STATES):
+            raise RuntimeError("board custody record is malformed")
+        return record
+
+    def records(self) -> tuple[list[dict], int]:
+        """Every record in the directory, with the count of unreadable or malformed ones (never sent for)."""
+        if not self.root.is_dir():
+            return [], 0
+        found: list[dict] = []
+        malformed = 0
+        for path in sorted(self.root.glob("*.json")):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+                repo, pr = record["repo"], record["pr"]
+                if (not isinstance(repo, str) or type(pr) is not int or path != self.path(repo, pr)
+                        or self.existing(repo, pr) != record):
+                    raise ValueError
+            except (OSError, ValueError, KeyError, TypeError, RuntimeError):
+                malformed += 1
+                continue
+            found.append(record)
+        return found, malformed
+
+    def create_exclusive(self, repo: str, pr: int, record: dict) -> bool:
+        """Create a new record only if none exists for (repo, PR). Used for `deferred`, which is written while the
+        lock is busy: the key is this PR's own, so no other writer can hold it, and an existing record is kept."""
+        self._private_root()
+        path = self.path(repo, pr)
+        fd, tmp = tempfile.mkstemp(dir=self.root, prefix=path.name + ".")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(dict(record, schema=BOARD_CUSTODY_SCHEMA, repo=repo, pr=pr), handle, sort_keys=True)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.link(tmp, path)
+            except FileExistsError:
+                return False
+        finally:
+            os.unlink(tmp)
+        directory = os.open(self.root, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+        return True
+
+    def _private_root(self) -> None:
+        self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        info = self.root.stat()
+        if hasattr(os, "getuid") and info.st_uid != os.getuid():
+            raise RuntimeError("board custody directory is not owned by this user")
+        if stat.S_IMODE(info.st_mode) != 0o700:
+            os.chmod(self.root, 0o700)
+
+    def write(self, repo: str, pr: int, record: dict) -> None:
+        self._private_root()
+        path = self.path(repo, pr)
+        fd, tmp = tempfile.mkstemp(dir=self.root, prefix=path.name + ".")
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(dict(record, schema=BOARD_CUSTODY_SCHEMA, repo=repo, pr=pr), handle, sort_keys=True)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+        directory = os.open(self.root, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+
+class BoardWriterLock:
+    """The shared Project 3 writer lock: flock(2) LOCK_EX on every path in `paths`, all or none.
+
+    `acquire` polls with LOCK_NB until `wait` seconds pass (the gate's bounded wait, design §6) and returns False
+    if another holder kept a path busy; it never blocks past the bound. A configuration error (an unwritable or
+    missing directory, a symlinked lock file, which O_NOFOLLOW refuses) raises instead, so the caller reports
+    `refused-lock` rather than a busy lock. The directory is injectable so tests never open the production path
+    (#5126)."""
+
+    def __init__(self, paths: list[pathlib.Path], *, wait: float = BOARD_LOCK_WAIT_SECONDS,
+                 clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
+                 poll: float = 0.5) -> None:
+        self.paths = list(paths)
+        self.wait, self.clock, self.sleep, self.poll = wait, clock, sleep, poll
+        self.held: list[int] = []
+
+    def _try_once(self) -> bool:
+        import fcntl
+        taken: list[int] = []
+        try:
+            for path in self.paths:
+                path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+                taken.append(fd)
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            for fd in taken:
+                os.close(fd)
+            return False
+        except BaseException:
+            for fd in taken:
+                os.close(fd)
+            raise
+        self.held = taken
+        return True
+
+    def acquire(self) -> bool:
+        deadline = self.clock() + self.wait
+        while True:
+            if self._try_once():
+                return True
+            if self.clock() >= deadline:
+                return False
+            self.sleep(min(self.poll, max(0.0, deadline - self.clock())))
+
+    def release(self) -> None:
+        import fcntl
+        for fd in reversed(self.held):
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
+        self.held = []
+
+
+def board_writer_lock_paths(directory: pathlib.Path | None = None,
+                            legacy_directory: pathlib.Path | None = None) -> list[pathlib.Path]:
+    """Production paths unless both directories are injected. Production refuses without $XDG_RUNTIME_DIR."""
+    if directory is None:
+        runtime = os.environ.get("XDG_RUNTIME_DIR")
+        if not runtime or not os.path.isabs(runtime):
+            raise RuntimeError("board writer lock needs an absolute XDG_RUNTIME_DIR; refusing to write without the shared lock")
+        directory = pathlib.Path(runtime) / "fsgg"
+    legacy = legacy_directory if legacy_directory is not None else pathlib.Path("/tmp")
+    # The installed engine's legacy migration-apply and refresh locks, so the gate excludes both writers.
+    return [directory / BOARD_WRITER_LOCK_NAME, legacy / BOARD_LEGACY_LOCK_NAME, legacy / BOARD_LEGACY_OBSERVATION_LOCK_NAME]
+
+
+def default_board_custody_root() -> pathlib.Path:
+    state = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
+    return pathlib.Path(state) / "fsgg" / "board-gate"
+
+
+def board_origin_is_github(url: str) -> bool:
+    """True only for FS-GG/.github on github.com: https://github.com/FS-GG/.github[.git][/] (no userinfo, port,
+    query or fragment), ssh://git@github.com/FS-GG/.github[.git] or git@github.com:FS-GG/.github[.git].
+    Host and path are compared exactly (case-insensitive); a suffix match is never enough."""
+    text = url.strip()
+    scp = re.fullmatch(r"git@github\.com:([^/]+/[^/]+?)(?:\.git)?/?", text, re.I)
+    if scp:
+        path = scp.group(1)
+    else:
+        parts = urllib.parse.urlsplit(text)
+        if (parts.scheme.lower() not in ("https", "ssh") or (parts.hostname or "").lower() != "github.com"
+                or parts.port is not None or parts.query or parts.fragment
+                or (parts.scheme.lower() == "https" and (parts.username or parts.password))
+                or (parts.scheme.lower() == "ssh" and parts.username != "git")):
+            return False
+        path = parts.path.strip("/")
+        path = path[:-4] if path.lower().endswith(".git") else path
+    return path.lower() == BOARD_ENFORCE_REPOSITORY
+
+
+def board_enforce_allowed() -> bool:
+    """Enforce runs only from the FS-GG/.github checkout: the distributed receiver copy of this file never
+    enforces (design §2b). The checkout must hold the shared rules module and have FS-GG/.github on
+    github.com as origin (parsed exactly, see board_origin_is_github)."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    if not (root / "scripts" / "board-currency-rules.py").is_file():
+        return False
+    try:
+        proc = subprocess.run(["git", "-C", str(root), "config", "--get", "remote.origin.url"],
+                              capture_output=True, text=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return proc.returncode == 0 and board_origin_is_github(proc.stdout)
+
+_BOARD_NAME = re.compile(r"[A-Za-z0-9_.-]{1,100}")
+_BOARD_TOKEN = re.compile(r"[a-z0-9-]{1,40}")
+_BOARD_NODE_ID = re.compile(r"[A-Za-z0-9_=-]{1,200}")
+# GitHub's closing keywords, as the rules module reads them. A Delivery this merge closes is treated as
+# closed: GitHub closes it asynchronously and the built-in "Item closed -> Done" workflow is Done's only writer.
+_BOARD_CLOSING = re.compile(
+    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+"
+    r"((?:[\w.-]+/[\w.-]+)?#\d+(?:\s*(?:,|and|&)\s*(?:[\w.-]+/[\w.-]+)?#\d+)*)", re.I)
+_BOARD_ONE_REF = re.compile(r"(?:([\w.-]+/[\w.-]+))?#(\d+)")
+
+BOARD_PR_QUERY = (
+    "query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name)"
+    "{pullRequest(number:$number){number state body lastEditedAt author{login} editor{login}}}}")
+_BOARD_SINGLE = "{__typename ...on ProjectV2ItemFieldSingleSelectValue{name}}"
+BOARD_CARD_SELECTION = (
+    "number state repository{nameWithOwner} projectItems(first:20,includeArchived:false){totalCount "
+    "nodes{project{number owner{__typename ...on Organization{login}}} "
+    f'workLevel:fieldValueByName(name:"Work level"){_BOARD_SINGLE} '
+    f'status:fieldValueByName(name:"Status"){_BOARD_SINGLE}}}}}')
+_BOARD_FIELD = "field{__typename ...on ProjectV2FieldCommon{id name}}"
+BOARD_ITEM_QUERY = (
+    "query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number)"
+    "{state projectItems(first:20,includeArchived:false){totalCount nodes{id "
+    "project{id number owner{__typename ...on Organization{login}} "
+    'field(name:"Status"){__typename ...on ProjectV2SingleSelectField{id name options{id name}}}} '
+    "fieldValues(first:100){totalCount nodes{__typename "
+    f"...on ProjectV2ItemFieldSingleSelectValue{{name optionId {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldTextValue{{text {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldNumberValue{{number {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldDateValue{{date {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldIterationValue{{iterationId title startDate duration {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldLabelValue{{labels(first:100){{totalCount nodes{{name}}}} {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldMilestoneValue{{milestone{{id}} {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldRepositoryValue{{repository{{id}} {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldUserValue{{users(first:100){{totalCount nodes{{login}}}} {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldPullRequestValue{{pullRequests(first:100){{totalCount nodes{{id}}}} {_BOARD_FIELD}}} "
+    f"...on ProjectV2ItemFieldReviewerValue{{reviewers(first:100){{totalCount nodes{{__typename "
+    f"...on User{{login}} ...on Team{{slug}} ...on Mannequin{{login}}}}}} {_BOARD_FIELD}}}"
+    "}}}}}}}")
+
+
+def board_repo_parts(repo: str) -> tuple[str, str]:
+    owner, _, name = repo.partition("/")
+    if not _BOARD_NAME.fullmatch(owner) or not _BOARD_NAME.fullmatch(name):
+        raise RuntimeError("board reference is malformed")
+    return owner, name
+
+
+def board_card_key(node: dict) -> str:
+    repo = (node.get("repository") or {}).get("nameWithOwner")
+    if not isinstance(repo, str) or type(node.get("number")) is not int:
+        raise RuntimeError("board card identity is incomplete")
+    return f"{repo}#{node['number']}"
+
+
+def _board_project3(nodes: Any) -> list[dict]:
+    if not isinstance(nodes, list) or any(not isinstance(node, dict) for node in nodes):
+        raise RuntimeError("board item list is malformed")
+    return [node for node in nodes
+            if (node.get("project") or {}).get("number") == BOARD_NUMBER
+            and ((node.get("project") or {}).get("owner") or {}).get("login") == BOARD_OWNER]
+
+
+def board_card(node: dict) -> dict | None:
+    """The rules module's card shape for one issue; None when it is not on Project 3 or is not an issue.
+    A PR is never a Delivery, matching board-linkage and the observer (linkage_of)."""
+    if node.get("__typename") == "PullRequest":
+        return None
+    key = board_card_key(node)
+    repo, number = key.rsplit("#", 1)[0], node["number"]
+    items = node.get("projectItems")
+    if (not isinstance(items, dict) or type(items.get("totalCount")) is not int
+            or not isinstance(items.get("nodes"), list) or items["totalCount"] != len(items["nodes"])):
+        return {"repo": repo, "number": number, "unreadable": True}
+    project3 = _board_project3(items["nodes"])
+    if not project3:
+        return None
+    if len(project3) != 1:
+        return {"repo": repo, "number": number, "unreadable": True}
+
+    def single(value: Any) -> str | None:
+        return value.get("name") if isinstance(value, dict) and isinstance(value.get("name"), str) else None
+    parent = node.get("parent")
+    return {"repo": repo, "number": number, "state": node.get("state"),
+            "workLevel": single(project3[0].get("workLevel")), "status": single(project3[0].get("status")),
+            "parent": ({"repo": board_card_key(parent).rsplit("#", 1)[0], "number": parent["number"]}
+                       if isinstance(parent, dict) else None)}
+
+
+def _board_complete(value: Any) -> None:
+    """Every nested connection the read reported must be complete: a truncated value proves nothing."""
+    if isinstance(value, dict):
+        if "totalCount" in value and (not isinstance(value.get("nodes"), list)
+                                      or value["totalCount"] != len(value["nodes"])):
+            raise RuntimeError("board item value is truncated")
+        for item in value.values():
+            _board_complete(item)
+    elif isinstance(value, list):
+        for item in value:
+            _board_complete(item)
+
+
+def board_item_state(issue: dict) -> dict[str, Any]:
+    """Normalize one issue's Project 3 item: identities, live Status options, Status and every other value."""
+    state = issue.get("state")
+    items = issue.get("projectItems")
+    if state not in ("OPEN", "CLOSED") or not isinstance(items, dict) or items.get("totalCount") != len(items.get("nodes") or []):
+        raise RuntimeError("board item read is incomplete")
+    project3 = _board_project3(items["nodes"])
+    if len(project3) != 1:
+        raise RuntimeError("board item is absent or ambiguous")
+    item = project3[0]
+    project, field = item.get("project") or {}, (item.get("project") or {}).get("field") or {}
+    options = field.get("options")
+    if (not isinstance(item.get("id"), str) or not isinstance(project.get("id"), str)
+            or field.get("__typename") != "ProjectV2SingleSelectField" or not isinstance(field.get("id"), str)
+            or not isinstance(options, list)
+            or any(not isinstance(o, dict) or not isinstance(o.get("id"), str) or not isinstance(o.get("name"), str)
+                   for o in options)
+            or len({o["name"] for o in options}) != len(options)):
+        raise RuntimeError("board Status schema is unreadable")
+    values = item.get("fieldValues")
+    if not isinstance(values, dict) or values.get("totalCount") != len(values.get("nodes") or []):
+        raise RuntimeError("board item values are truncated")
+    _board_complete(values["nodes"])
+    status_nodes = [v for v in values["nodes"] if isinstance(v, dict)
+                    and ((v.get("field") or {}).get("id") == field["id"])]
+    others = [v for v in values["nodes"] if v not in status_nodes]
+    if len(status_nodes) > 1 or any(not isinstance(v, dict) for v in values["nodes"]):
+        raise RuntimeError("board Status value is ambiguous")
+    by_name = {o["name"]: o["id"] for o in options}
+    status = None
+    if status_nodes:
+        status = status_nodes[0].get("name")
+        if not isinstance(status, str) or by_name.get(status) != status_nodes[0].get("optionId"):
+            raise RuntimeError("board Status value is not a live option")
+    return {"state": state, "itemId": item["id"], "projectId": project["id"], "statusFieldId": field["id"],
+            "options": [[o["id"], o["name"]] for o in options], "status": status,
+            "values": sorted(json.dumps(v, sort_keys=True, separators=(",", ":")) for v in others)}
+
+
+def load_board_rules() -> Any | None:
+    """The shared R1 implementation, or None where it is not installed (receiver workspaces)."""
+    path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "board-currency-rules.py"
+    try:
+        if not path.is_file():
+            return None
+        spec = importlib.util.spec_from_file_location("routine_board_currency_rules", path)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    except (Exception, SystemExit):
+        # A broken or exiting module is an absent one; it never ends the merge helper.
+        return None
+    params = getattr(module, "PARAMS", None)
+    logins = params.get("rootLogins") if isinstance(params, dict) else None
+    if (not all(callable(getattr(module, name, None)) for name in ("override_of", "linkage_of", "pr_refs", "visible_text"))
+            or not isinstance(logins, list) or not logins
+            or not all(isinstance(login, str) and login for login in logins)):
+        return None
+    return module
+
+
+@dataclass(frozen=True)
+class BoardVerdict:
+    verdict: str                     # linked | overridden | refused | unknown | unavailable
+    reason: str | None
+    delivery: str | None = None      # owner/repo#N of the linked Delivery
+
+
+def evaluate_board_gate(api: Any, rules: Any, repo: str, number: int, rest_body: Any) -> BoardVerdict:
+    """Design §2 evaluation order for one open routine PR. Pure apart from the API reads; never raises."""
+    if rules is None:
+        return BoardVerdict("unavailable", "rules-module-unavailable")
+    try:
+        pr = api.board_pr(repo, number)
+    except Exception:
+        return BoardVerdict("unknown", "pr-read-failed")
+    if (not isinstance(pr, dict) or pr.get("body") != rest_body or pr.get("state") != "OPEN"
+            or not isinstance(pr.get("edited"), bool)):
+        # The REST envelope already passed eligibility; a different body or state is a moved candidate.
+        return BoardVerdict("unknown", "pr-read-inconsistent")
+    try:
+        roots = {login.lower() for login in rules.PARAMS["rootLogins"]}
+        if rules.override_of(pr, roots) is not None:
+            return BoardVerdict("overridden", "valid-override")
+        refs = sorted(rules.pr_refs(repo, pr["body"]) - {f"{repo}#{number}"})
+    except Exception:
+        return BoardVerdict("unknown", "rules-error")
+    if len(refs) > BOARD_MAX_REFS:
+        return BoardVerdict("unknown", "too-many-refs")
+    try:
+        cards = api.board_cards(refs) if refs else {}
+    except Exception:
+        return BoardVerdict("unknown", "board-read-failed")
+    if not isinstance(cards, dict) or any(ref not in cards for ref in refs):
+        return BoardVerdict("unknown", "board-read-incomplete")
+    try:
+        # Each ref is resolved from its own issue, so a miss is a definite "not on Project 3".
+        failures, delivery = rules.linkage_of(dict(pr, repo=repo, number=number, state="OPEN"), rules.RefIndex(cards).get,
+                                              anonymous_unreadable=False)
+    except Exception:
+        return BoardVerdict("unknown", "rules-error")
+    if not isinstance(failures, list) or any(
+            not isinstance(f, tuple) or len(f) != 2 or f[0] not in ("R1", "U")
+            or not isinstance(f[1], str) or not _BOARD_TOKEN.fullmatch(f[1]) for f in failures):
+        return BoardVerdict("unknown", "rules-error")
+    unknown = [reason for rule, reason in failures if rule == "U"]
+    if unknown:
+        return BoardVerdict("unknown", f"U {unknown[0]}")
+    if failures:
+        return BoardVerdict("refused", f"R1 {failures[0][1]}")
+    if not isinstance(delivery, dict) or not isinstance(delivery.get("repo"), str) or type(delivery.get("number")) is not int:
+        return BoardVerdict("unknown", "rules-error")
+    return BoardVerdict("linked", None, f"{delivery['repo']}#{delivery['number']}")
+
+
+def board_closing_refs(rules: Any, repo: str, body: Any) -> set[str]:
+    refs: set[str] = set()
+    for match in _BOARD_CLOSING.finditer(rules.visible_text(body)):
+        for ref in _BOARD_ONE_REF.finditer(match.group(1)):
+            refs.add(f"{ref.group(1) or repo}#{int(ref.group(2))}".lower())
+    return refs
+
+
+def _board_item_valid(value: Any) -> bool:
+    return (isinstance(value, dict)
+            and set(value) == {"state", "itemId", "projectId", "statusFieldId", "options", "status", "values"}
+            and value["state"] in ("OPEN", "CLOSED")
+            and all(isinstance(value[k], str) and _BOARD_NODE_ID.fullmatch(value[k])
+                    for k in ("itemId", "projectId", "statusFieldId"))
+            and isinstance(value["options"], list) and isinstance(value["values"], list)
+            and all(isinstance(o, list) and len(o) == 2 and all(isinstance(x, str) for x in o) for o in value["options"])
+            and len({o[1] for o in value["options"]}) == len(value["options"])
+            and (value["status"] is None or isinstance(value["status"], str)))
+
+
+def board_transition(api: Any, rules: Any, repo: str, body: Any, delivery: str, mode: str,
+                     pr: int = 0, custody: BoardCustody | None = None, lock: BoardWriterLock | None = None,
+                     merged_at: str | None = None) -> str:
+    """The one post-merge Delivery Status transition (design §2b steps 1-6). Never raises, never sets Done,
+    never resends. Advisory mode reads only and reports what enforce would do. In enforce the send happens only
+    under the shared writer lock; when the lock stays busy past its bounded wait, a `deferred` record is written
+    instead and replayed later (board-reconciler design §6)."""
+    refuse = "refused-preimage" if mode == "enforce" else "would-refuse-preimage"
+    try:
+        target = "In progress" if BOARD_CONTINUES in rules.visible_text(body) else "In review"
+        if delivery.lower() in board_closing_refs(rules, repo, body):
+            return "not-applicable"
+    except Exception:
+        return refuse
+    try:
+        before = api.board_item(delivery)
+    except Exception:
+        return refuse
+    if not _board_item_valid(before):
+        return refuse
+    if before["state"] == "CLOSED":
+        return "not-applicable"
+    if before["status"] == target:
+        return "noop"
+    options = {name: identity for identity, name in before["options"]}
+    if before["status"] not in BOARD_WRITABLE_PREIMAGES or not _BOARD_NODE_ID.fullmatch(options.get(target) or ""):
+        # Blocked records Root's judgement; Done, empty and unknown values are never overwritten.
+        return refuse
+    if mode != "enforce":
+        return f"would-write:{target}"
+    if custody is None:
+        return "refused-custody"
+    if lock is None:
+        return "refused-lock"
+    try:
+        locked = lock.acquire()
+    except Exception:
+        return "refused-lock"
+    if not locked:
+        try:
+            created = custody.create_exclusive(repo, pr, {
+                "delivery": delivery, "itemId": before["itemId"], "from": before["status"], "to": target,
+                "state": "deferred", "mergedAt": merged_at, "recordedAt": datetime.now(timezone.utc).isoformat()})
+        except Exception:
+            return "refused-custody"
+        return "deferred" if created else "uncertain"
+    try:
+        return _board_send_locked(api, repo, delivery, pr, custody, before, target, options, merged_at)
+    finally:
+        lock.release()
+
+
+def _board_send_locked(api: Any, repo: str, delivery: str, pr: int, custody: BoardCustody, before: dict,
+                       target: str, options: dict, merged_at: str | None) -> str:
+    try:
+        adjacent = api.board_item(delivery)
+    except Exception:
+        return "refused-preimage"
+    if adjacent != before:
+        return "refused-preimage"
+    # Durable possible-send custody, written and fsynced before the send. Without it, enforce does not send.
+    # Defence in depth: a record for this PR means a send may already have happened (normally only seen on
+    # the merged-PR recovery path, which reads back instead). Never overwrite it and never send again.
+    try:
+        if custody.existing(repo, pr) is not None:
+            return "uncertain"
+    except Exception:
+        return "uncertain"
+    try:
+        record = {"delivery": delivery, "itemId": before["itemId"], "from": before["status"], "to": target,
+                  "state": "possible-send", "mergedAt": merged_at, "recordedAt": datetime.now(timezone.utc).isoformat()}
+        custody.write(repo, pr, record)
+    except Exception:
+        return "refused-custody"
+    print("fsgg routine board transition: possible-send recorded; one Status send follows", file=sys.stderr)
+    try:
+        api.board_set_status(before["projectId"], before["itemId"], before["statusFieldId"], options[target])
+    except Exception:
+        return "uncertain"
+    try:
+        after = api.board_item(delivery)
+    except Exception:
+        return "uncertain"
+    if after != dict(before, status=target):
+        return "uncertain"
+    try:
+        custody.write(repo, pr, dict(record, state="verified", verifiedAt=datetime.now(timezone.utc).isoformat()))
+    except Exception:
+        pass  # the possible-send record stays; a later run reads back again and never resends
+    return "written"
+
+
+def board_custody_readback(api: Any, custody: BoardCustody, repo: str, pr: int) -> str | None:
+    """Read-only recovery for a PR whose custody record exists: a send may already have happened, so this
+    never sends. A `verified` record reports `written` without a read; a `possible-send` record is read back
+    and, when Status equals the recorded target, atomically rewritten to `verified`. Returns None when there
+    is no record."""
+    try:
+        record = custody.existing(repo, pr)
+    except Exception:
+        return "uncertain"
+    if record is None:
+        return None
+    if record["state"] == "verified":
+        return "written"
+    if record["state"] in ("deferred", "superseded", "not-applicable"):
+        return record["state"]  # replay owns a deferred record; the other two are terminal
+    if record["state"] == "refused":
+        return "refused-preimage"
+    try:
+        after = api.board_item(record["delivery"])
+    except Exception:
+        return "uncertain"
+    if not (_board_item_valid(after) and after.get("status") == record.get("to")):
+        return "uncertain"
+    try:
+        custody.write(repo, pr, dict(record, state="verified", verifiedAt=datetime.now(timezone.utc).isoformat()))
+    except Exception:
+        pass
+    return "written"
+
+
+def _board_order(record: dict) -> tuple[int, str]:
+    """Merge order. A record written before deferral existed has no `mergedAt` and is ordered oldest."""
+    merged = record.get("mergedAt")
+    return (1, merged) if isinstance(merged, str) else (0, "")
+
+
+def board_replay(api: Any, custody: BoardCustody, lock: BoardWriterLock,
+                 current: tuple[str, int] | None = None) -> Counter:
+    """Start-of-run custody pass (board-reconciler design §6), only under the shared lock:
+
+    1. a read-only readback sweep of every `possible-send` record (never sends), except the current PR's own,
+       which the merged-PR recovery path reads back itself;
+    2. supersession per Delivery over all its records by `mergedAt`: every `deferred` record older than some
+       other record for that Delivery is durably rewritten to `superseded` before anything is sent;
+    3. replay, in merge order, of each Delivery's newest record when it is `deferred`: a closed Delivery is
+       `not-applicable`, a Status other than the recorded preimage is `refused`, and otherwise the record is
+       durably moved to `possible-send` before exactly one send and to `verified` after a readback proves it.
+    Never raises. Returns counts only (no references), which the caller reports on stderr."""
+    counts: Counter = Counter()
+    try:
+        records, counts["malformed"] = custody.records()
+    except Exception:
+        counts["unreadable"] += 1
+        return counts
+    if not any(r["state"] in ("possible-send", "deferred") for r in records):
+        return counts
+    try:
+        locked = lock.acquire()
+    except Exception:
+        counts["lock-error"] += 1
+        return counts
+    if not locked:
+        counts["lock-busy"] += 1
+        return counts
+    try:
+        for record in records:
+            if record["state"] != "possible-send" or (
+                    current is not None and (record["repo"].lower(), record["pr"]) == (current[0].lower(), current[1])):
+                continue
+            outcome = board_custody_readback(api, custody, record["repo"], record["pr"])
+            counts["swept-verified" if outcome == "written" else "swept-uncertain"] += 1
+        records, _ = custody.records()
+        by_delivery: dict[str, list[dict]] = defaultdict(list)
+        for record in records:
+            by_delivery[record["delivery"].lower()].append(record)
+        pending: list[dict] = []
+        for group in by_delivery.values():
+            group.sort(key=_board_order)
+            for older in group[:-1]:
+                if older["state"] == "deferred":
+                    custody.write(older["repo"], older["pr"], dict(older, state="superseded"))
+                    counts["superseded"] += 1
+            if group[-1]["state"] == "deferred":
+                pending.append(group[-1])
+        for record in sorted(pending, key=_board_order):
+            counts[_board_replay_one(api, custody, record)] += 1
+    except Exception:
+        counts["error"] += 1
+    finally:
+        lock.release()
+    return counts
+
+
+def _board_replay_one(api: Any, custody: BoardCustody, record: dict) -> str:
+    repo, pr = record["repo"], record["pr"]
+    try:
+        item = api.board_item(record["delivery"])
+    except Exception:
+        return "unreadable"
+    if not _board_item_valid(item):
+        return "unreadable"
+    if item["state"] == "CLOSED":
+        custody.write(repo, pr, dict(record, state="not-applicable"))
+        return "not-applicable"
+    options = {name: identity for identity, name in item["options"]}
+    target = record.get("to")
+    if (item["itemId"] != record.get("itemId") or item["status"] != record.get("from")
+            or not isinstance(target, str) or not _BOARD_NODE_ID.fullmatch(options.get(target) or "")):
+        custody.write(repo, pr, dict(record, state="refused"))
+        return "refused"
+    custody.write(repo, pr, dict(record, state="possible-send"))
+    print("fsgg routine board replay: possible-send recorded; one Status send follows", file=sys.stderr)
+    try:
+        api.board_set_status(item["projectId"], item["itemId"], item["statusFieldId"], options[target])
+    except Exception:
+        return "uncertain"
+    try:
+        after = api.board_item(record["delivery"])
+    except Exception:
+        return "uncertain"
+    if after != dict(item, status=target):
+        return "uncertain"
+    try:
+        custody.write(repo, pr, dict(record, state="verified", verifiedAt=datetime.now(timezone.utc).isoformat()))
+    except Exception:
+        pass  # possible-send stays; the next sweep reads back and never resends
+    return "verified"
+
+
+def board_routine_body(body: Any) -> bool:
+    return isinstance(body, str) and BOARD_ROUTINE_MARKER in body
+
+
+def delivery_declaration(rules: Any, body: Any) -> str:
+    """continues, completes, none or both: the delivery markers in the PR body outside code (raw text when the
+    rules module is unavailable)."""
+    text = body if isinstance(body, str) else ""
+    try:
+        visible = rules.visible_text(text) if rules is not None else text
+    except Exception:
+        visible = text
+    found = (BOARD_CONTINUES in visible, BOARD_COMPLETES in visible)
+    return {(True, False): "continues", (False, True): "completes", (True, True): "both"}.get(found, "none")
+
+
+def done_when_section(body: Any) -> str | None:
+    """The text of an issue body's `## Done when` section, or None."""
+    if not isinstance(body, str):
+        return None
+    lines = body.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    for index, line in enumerate(lines):
+        if line.strip().lower() == "## done when":
+            section = []
+            for following in lines[index + 1:]:
+                if following.startswith("## "):
+                    break
+                section.append(following)
+            return "\n".join(section).strip() or None
+    return None
+
+
+def delivery_marker_result(api: Any, rules: Any, body: Any, gate: Any, mode: str) -> dict:
+    declared = delivery_declaration(rules, body)
+    warning = None
+    if declared == "none":
+        warning = ("routine PR declares neither fsgg:delivery-continues/v1 nor fsgg:delivery-completes/v1; "
+                   "exactly one is required after the advisory period")
+    elif declared == "both":
+        warning = "routine PR declares both fsgg:delivery-continues/v1 and fsgg:delivery-completes/v1; exactly one is required"
+    elif declared == "completes" and getattr(gate, "verdict", None) == "linked" and getattr(gate, "delivery", None):
+        try:
+            done = done_when_section(api.board_done_when(gate.delivery))
+        except Exception:
+            done = None
+        if done is not None and _DONE_WHEN_STEP.search(done):
+            warning = ("routine PR declares fsgg:delivery-completes/v1 but its Delivery's Done when names a release, "
+                       "install or readback step; C1 would close the Delivery after this merge")
+    return {"declared": declared, "advisory": mode == "advisory", "warning": warning}
+
+
 def summarize(
     api: NativeApi,
     *,
@@ -1709,7 +2570,18 @@ def summarize(
     candidate_observer: Callable[[Summary], None] | None = None,
     producer_source: str | None = None,
     installation_prior: dict | None = None,
+    board_gate: str = "advisory",
+    board_rules_loader: Callable[[], Any] | None = None,
+    board_custody: BoardCustody | None = None,
+    board_lock: BoardWriterLock | None = None,
+    delivery_marker: str = "advisory",
 ) -> tuple[int, Summary]:
+    if board_gate not in BOARD_GATE_MODES:
+        raise RuntimeError("board gate mode is not advisory or enforce")
+    if delivery_marker not in DELIVERY_MARKER_MODES:
+        raise RuntimeError("delivery marker mode is not advisory or required")
+    if board_gate == "enforce" and not board_enforce_allowed():
+        raise RuntimeError("board gate enforce runs only from the FS-GG/.github checkout")
     if producer_source is not None and repo == FOURD_REPOSITORY and merge_method != "squash":
         raise RuntimeError("FourD producer installation requires the accepted squash merge method")
     if producer_source is not None and (publication_required or not coherent_workflow
@@ -1741,6 +2613,12 @@ def summarize(
         raise RuntimeError("native pull request readback is not an object")
     base_ref, base_sha = base_of(before)
     routine_state = "unobserved"
+    board = {"boardGate": "not-applicable", "boardGateReason": None, "boardTransition": "not-applicable"}
+    if apply and board_gate == "enforce" and board_custody is not None and board_lock is not None:
+        # Start of every enforce invocation: sweep possible-send records and replay deferred ones (design §6).
+        replay = +board_replay(api, board_custody, board_lock, (repo, pr_number))  # drop zero counts
+        if replay:
+            print("fsgg routine board replay: " + " ".join(f"{k}={replay[k]}" for k in sorted(replay)), file=sys.stderr)
     def bound(*values: Any, native: dict[str, Any] = before) -> Summary:
         now = datetime.now(timezone.utc)
         outcome_at = outcome_time_of(native)
@@ -1751,7 +2629,7 @@ def summarize(
         result = Summary(*values, baseRef=base_ref, baseSha=base_sha,
                        outcomeAt=outcome_at,
                        observedAt=now.isoformat().replace("+00:00", "Z"),
-                       routineEligibility=routine_state)
+                       routineEligibility=routine_state, **board)
         if producer_source is not None:
             if result.reason is None and getattr(api, "_installation_policy_fact", None) in ("required-policy-observed-empty", "no-required-contexts-reported",
                     "native-policy-unavailable; no-required-contexts-reported", "native-policy-unavailable; required-contexts-passed"):
@@ -1820,6 +2698,12 @@ def summarize(
                 disposition, coherent,
             )
     if is_merged(before):
+        # Crash recovery: a previous enforce run merged this PR and may have sent the Status write before it
+        # died. Its custody record is keyed by (repo, PR); read back only, never send.
+        if apply and board_gate == "enforce" and board_custody is not None:
+            recovered = board_custody_readback(api, board_custody, repo, pr_number)
+            if recovered is not None:
+                board.update(boardGateReason="custody-readback", boardTransition=recovered)
         coherent_disputed = coherent == "failed" or disposition in {"invalid", "deferred", "failed"}
         disputed = coherent_disputed or routine_state == "unresolved"
         merged_result = bound(
@@ -1865,6 +2749,44 @@ def summarize(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(current) if isinstance(current, dict) else None,
                 "refused", "not-delivered", publication, None, 0, str(error), disposition, coherent,
             )
+
+    gate: BoardVerdict | None = None
+    board_rules = None
+    if board_routine_body(before.get("body")):
+        # Design §2 evaluation order, before the merge effect and only under --apply (this point).
+        board_rules = (board_rules_loader or load_board_rules)()
+        gate = evaluate_board_gate(api, board_rules, repo, pr_number, before.get("body"))
+        board.update(boardGate=gate.verdict, boardGateReason=gate.reason)
+        # The delivery declaration: advisory records it with a warning and changes nothing; required refuses a PR
+        # that declares neither or both, before any merge attempt.
+        board["deliveryMarker"] = delivery_marker_result(api, board_rules, before.get("body"), gate, delivery_marker)
+        if delivery_marker == "required" and board["deliveryMarker"]["declared"] in ("none", "both"):
+            return 2, bound(
+                "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+                "refused", "not-delivered", publication, None, 0,
+                f"delivery-marker {board['deliveryMarker']['declared']}", disposition, coherent,
+            )
+        if board_gate == "enforce" and gate.verdict == "refused":
+            return 2, bound(
+                "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+                "refused", "not-delivered", publication, None, 0, f"board-linkage {gate.reason}",
+                disposition, coherent,
+            )
+        if board_gate == "enforce" and gate.verdict in ("unknown", "unavailable"):
+            # Fail closed: no merge attempt, so attempts stay 0 and delivery is certainly absent.
+            return 3, bound(
+                "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+                "indeterminate", "not-delivered", publication, None, 0, "board-linkage unknown",
+                disposition, coherent,
+            )
+
+    def board_after_merge(merged_pr: dict) -> None:
+        # After the merged-PR and merge-commit readback, and only for a linked Delivery.
+        # An overridden PR gets no Status transition: there is no verified Delivery to move.
+        if gate is not None and gate.verdict == "linked" and gate.delivery is not None:
+            board["boardTransition"] = board_transition(
+                api, board_rules, repo, before.get("body"), gate.delivery, board_gate, pr_number, board_custody,
+                board_lock, outcome_time_of(merged_pr))
 
     request = merge_effect_request(
         repo, pr_number, expected_head, base_ref, base_sha, merge_method,
@@ -1940,12 +2862,14 @@ def summarize(
                     "coherent validation failed and the merge effect remains unproven",
                     disposition, coherent,
                 )
+            board_after_merge(after)
             return 4, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                 "delivered-disputed", "delivered", publication, merge_commit, attempts, reason,
                 disposition, "disputed", native=after,
             )
     if effect_confirmed:
+        board_after_merge(after)
         delivered_result = bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
             "delivered", "delivered", publication, merge_commit, attempts, None,
@@ -2210,11 +3134,36 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--watch-seconds", type=int, help="required watch budget, 1..600 seconds")
     result.add_argument("--evidence-run", type=int, help="append verified PR checkout evidence from this native run")
     result.add_argument("--apply", action="store_true")
+    result.add_argument("--delivery-marker", choices=DELIVERY_MARKER_MODES, default="advisory",
+                        help="routine PR delivery declaration (exactly one of fsgg:delivery-continues/v1 and "
+                             "fsgg:delivery-completes/v1): advisory records it with a warning; required refuses before merge")
+    result.add_argument("--board-gate", choices=BOARD_GATE_MODES, default="advisory",
+                        help="board-currency merge gate under --apply for routine PRs; advisory records only. "
+                             "enforce runs only from the FS-GG/.github checkout")
+    result.add_argument("--board-gate-custody",
+                        help="private directory for durable possible-send records (enforce); "
+                             "default $XDG_STATE_HOME/fsgg/board-gate")
+    result.add_argument("--board-lock-dir",
+                        help="tests only: directory for the shared Project 3 writer lock and its legacy companion "
+                             "(enforce); default $XDG_RUNTIME_DIR/fsgg and /tmp")
     result.add_argument("--install-routine-producer", action="store_true",
                         help="closed first installation only; never ordinary eligibility success")
     result.add_argument("--routine-producer-source", help="immutable protected FS-GG/.github template commit")
     result.add_argument("--installation-prior-result", help="retained installation Summary; prior effects force readback-only")
     return result
+
+
+def board_lock_from_args(args: argparse.Namespace) -> BoardWriterLock | None:
+    """The shared writer lock for enforce, or None: without $XDG_RUNTIME_DIR the merge still runs, but the
+    Status write is refused (`refused-lock`) rather than made without the lock."""
+    if args.board_gate != "enforce":
+        return None
+    directory = pathlib.Path(args.board_lock_dir) if args.board_lock_dir else None
+    try:
+        return BoardWriterLock(board_writer_lock_paths(directory, directory))
+    except RuntimeError:
+        print("fsgg routine board lock unavailable: XDG_RUNTIME_DIR is unset; no Status write", file=sys.stderr)
+        return None
 
 
 def main(argv: list[str]) -> int:
@@ -2225,6 +3174,12 @@ def main(argv: list[str]) -> int:
         parser().error("--pr must be positive")
     if not SHA_RE.fullmatch(args.head):
         parser().error("--head must be a lowercase 40-hex commit SHA")
+    if args.board_gate == "enforce" and not board_enforce_allowed():
+        parser().error("--board-gate enforce runs only from the FS-GG/.github checkout with the shared rules module")
+    if args.board_gate_custody is not None and args.board_gate != "enforce":
+        parser().error("--board-gate-custody requires --board-gate enforce")
+    if args.board_lock_dir is not None and args.board_gate != "enforce":
+        parser().error("--board-lock-dir requires --board-gate enforce")
     if args.evidence_run is not None and (args.evidence_run <= 0 or args.watch_checks):
         parser().error("--evidence-run requires a positive run ID and cannot combine with watch")
     if args.evidence_run is not None and args.install_routine_producer:
@@ -2330,7 +3285,10 @@ def main(argv: list[str]) -> int:
             merge_method=args.merge_method, publication_required=args.publication == "required",
             apply=args.apply, coherent_workflow=args.coherent_workflow, candidate_observer=observer,
             producer_source=args.routine_producer_source if args.install_routine_producer else None,
-            installation_prior=prior,
+            installation_prior=prior, board_gate=args.board_gate, delivery_marker=args.delivery_marker,
+            board_custody=(BoardCustody(pathlib.Path(args.board_gate_custody) if args.board_gate_custody
+                                        else default_board_custody_root()) if args.board_gate == "enforce" else None),
+            board_lock=board_lock_from_args(args),
         )
     except (RuntimeError, AmbiguousWrite) as error:
         code = 3

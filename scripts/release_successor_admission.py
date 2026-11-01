@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from typing import Protocol
 
+import release_source_closure
 from release_successor_execution import ordered_effects
 
 REPOSITORY = "FS-GG/.github"
 REPOSITORY_ID = 1269292704
 WORKFLOW = ".github/workflows/release-successor-publish.yml"
 OPERATOR = "EHotwagner"
+PUBLISHER_CLOSURE = "coherent-set-publisher"
 
 
 class Refused(RuntimeError):
@@ -70,5 +72,12 @@ def publisher_context_authorized(api, publisher_sha, run_id, *, hosted_install=F
     ):
         return False
     head = api.get(f"repos/{REPOSITORY}/git/ref/heads/main")
-    return (head.get("object", {}).get("sha") == publisher_sha
-            and (not hosted_install or head.get("object", {}).get("type") == "commit"))
+    live = head.get("object", {}).get("sha")
+    if hosted_install:
+        return live == publisher_sha and head.get("object", {}).get("type") == "commit"
+    if live == publisher_sha:
+        return True
+    # A merge after dispatch no longer revokes the running publisher by itself (#5107): live
+    # main must descend from the pinned publisher source with its release and controller
+    # closure unchanged. The installer path above keeps the exact-head rule.
+    return isinstance(live, str) and release_source_closure.admits(api, REPOSITORY, PUBLISHER_CLOSURE, publisher_sha, live)

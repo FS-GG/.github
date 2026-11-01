@@ -131,6 +131,13 @@ intake, runtime/resource and reservation facts beside actual owner execution. A 
 the affected decision; recompute the remaining ordered proposals after each newly admitted operation.
 The read-only report itself acquires no reservation or authority and never dispatches.
 
+## Board size budget
+
+Coordination Project 3 and its readers hold at most 500 items. When Done exceeds 200, Done cards older than the
+newest 200 by close time are archived, never deleted. [#5119](https://github.com/FS-GG/.github/issues/5119) owns
+the rule. `scripts/coord-board-archive.py` applies it with a dry run first. Readers refuse a larger board. An
+archived enrolled card is an explicit archived membership, not a missing row.
+
 ## Planning and observation stay separate
 
 Status is owner-controlled current lifecycle state: Backlog, Ready, In progress, In review, Blocked or Done.
@@ -164,11 +171,13 @@ Inspection `fsgg.coord.board-v2-inspection/3` adds per-item workItem classificat
 direct-child identities, completeness/gap/observation time/digest and raw closure stateReason, closedAt,
 Done when, Blocked on and Acceptance evidence. Acceptance remains Unverified by inspection. Null,
 permission denial, partial pagination, truncation, identity contradiction and cycles are scoped gaps,
-never empty coverage. Visible unenrolled children remain unschedulable. Incomplete parent coverage fences
+never empty coverage. Visible unenrolled children remain unschedulable by inspection; a Root-admitted unenrolled Delivery is
+dispatched by Root outside inspection's selection ([admission marker](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#file-the-delivery-issue-at-dispatch)). Incomplete parent coverage fences
 rollup, without fencing an independently complete child's action join.
 
 Integrator `fsgg.coord.board-v2-integrator-observations/2` binds each selected slice to hierarchySha256
-alongside existing native body/source/attempt joins. Only exact enrolled Delivery nodes are candidates;
+alongside existing native body/source/attempt joins. Inspection's candidate set covers exact enrolled Delivery nodes only (see the
+[admission marker](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#file-the-delivery-issue-at-dispatch) for Root-admitted unenrolled ones);
 Outcome or Unknown classification refuses fresh selection. Existing action/prerequisite/intake/current
 owner/PR/head/touch-set/reservation/remaining-capacity checks remain. A parent's/sibling's Blocked value
 is not automatically inherited; explicit relevant prerequisites remain binding. Existing original owner/

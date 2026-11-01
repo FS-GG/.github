@@ -8,7 +8,9 @@ module V2Enrollment =
     open System.Text.Json.Nodes
     open System.Text.RegularExpressions
 
-    let rowCap = 100
+    let rowCap = V2Projection.maximumProgrammeRows
+    let legacyRowCap = V2Projection.legacyProgrammeRowCap
+    let previousRowCap = V2Projection.previousProgrammeRowCap
 
     type Refusal =
         | DuplicateIssue
@@ -31,6 +33,8 @@ module V2Enrollment =
         | GitReadFailed
         | NativeReadFailed
         | SuccessorNotRederived
+        | ReaderNotVerified
+        | ReaderAlreadyBound
 
     let refusalCode (refusal: Refusal) =
         match refusal with
@@ -54,6 +58,8 @@ module V2Enrollment =
         | GitReadFailed -> "GitReadFailed"
         | NativeReadFailed -> "NativeReadFailed"
         | SuccessorNotRederived -> "SuccessorNotRederived"
+        | ReaderNotVerified -> "ReaderNotVerified"
+        | ReaderAlreadyBound -> "ReaderAlreadyBound"
 
     type PlanSpec =
         | ProgrammeIssue3008

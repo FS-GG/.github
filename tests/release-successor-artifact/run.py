@@ -192,17 +192,25 @@ class LiteralSuccessorArtifactTests(CandidateArtifactTests):
         self.assertFalse(self.output.exists())
 
 
+def _below(version):
+    major, minor, patch = (int(part) for part in version.split("."))
+    return f"{major}.{minor}.{patch - 1}" if patch else f"{major}.{minor - 1}.0" if minor else f"{major - 1}.0.0"
+
+
 class CurrentReleaseArtifactTests(CandidateArtifactTests):
+    # Derived (#5156): the version bump and a synthetic promoted predecessor below it, never a pin. The
+    # publisher binds the real predecessor from its promoted release and tag after this reader passes.
     VERSION = gate.CURRENT_RELEASE["version"]
-    PREVIOUS = gate.CURRENT_RELEASE["predecessor"]
-    PREVIOUS_SOURCE = gate.CURRENT_RELEASE['predecessorSource']
-    PREVIOUS_CONTENT = gate.CURRENT_RELEASE['predecessorContentId']
+    PREVIOUS = _below(VERSION)
+    PREVIOUS_SOURCE = "d" * 40
+    PREVIOUS_CONTENT = "sha256:" + "d" * 64
 
     def test_current_predecessor_identity_is_checked_by_the_actual_artifact_reader(self):
         path = self.candidate / 'previous-stable-channel.json'
         original = path.read_bytes()
-        for field, value in (('sourceSha', 'e' * 40), ('version', '0.0.1'),
-                             ('contentId', 'sha256:' + 'e' * 64)):
+        for field, value in (('sourceSha', 'e' * 39), ('version', self.VERSION), ('version', '9.0.0'),
+                             ('version', '0.114'), ('contentId', 'sha256:' + 'e' * 63),
+                             ('promotedAt', '2026-09-19')):
             with self.subTest(field=field):
                 predecessor = json.loads(original)
                 predecessor[field] = value

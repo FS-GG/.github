@@ -41,6 +41,42 @@ module Guard =
         finally
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
 
+    /// .github#5007 — the operator's telemetry configuration must be unreachable from a test run.
+    ///
+    /// Asserted against the REAL resolver (`WorkspaceTelemetryApplication.configuredPath`), not a restatement
+    /// of it, and with the selectors cleared exactly as an un-isolated test sees them. If the redirect in
+    /// `CacheSandbox.install` is removed, this is red on every machine -- not only on one that happens to
+    /// have `~/.config/fs-gg/telemetry.json` -- which is what the original defect lacked.
+    [<Fact>]
+    let ``the telemetry config fallback resolves inside the sandbox, never to the operator's own file`` () =
+        let names = [ "FSGG_TELEMETRY_CONFIG"; "FSGG_TELEMETRY_STORE" ]
+        let prior = names |> List.map (fun name -> name, Environment.GetEnvironmentVariable name)
+
+        try
+            match CacheSandbox.ConfigRoot with
+            | None -> failwith "the config sandbox never installed -- the operator's telemetry.json would be read"
+            | Some config ->
+                Assert.Equal(config, Environment.GetEnvironmentVariable "XDG_CONFIG_HOME")
+                Assert.True(IO.Directory.Exists config, "the config sandbox must exist before any test uses it")
+
+                // Selectors cleared: these are the process values at startup, and a fixture that sets them
+                // must restore them. Prove the startup state, then resolve through the engine.
+                for name in names do
+                    Environment.SetEnvironmentVariable(name, null)
+
+                let resolved = FS.GG.Coord.Cli.WorkspaceTelemetryApplication.configuredPath None
+                Assert.StartsWith(config, resolved)
+                Assert.NotEqual<string>(CacheSandbox.RealTelemetryConfig, resolved)
+                Assert.False(IO.File.Exists resolved, "no telemetry config may exist in the sandbox by default")
+        finally
+            prior |> List.iter (fun (name, value) -> Environment.SetEnvironmentVariable(name, value))
+
+    [<Fact>]
+    let ``the process starts with no telemetry selector set`` () =
+        // Order-independent: a fixture restores the values it found, so a leak would show here or nowhere.
+        Assert.Null(Environment.GetEnvironmentVariable "FSGG_TELEMETRY_CONFIG")
+        Assert.Null(Environment.GetEnvironmentVariable "FSGG_TELEMETRY_STORE")
+
     /// REPAIR 4 (.github#2525) — THE TEST THAT REPLACES ONE THAT COULD NOT FAIL.
     ///
     /// Its predecessor filtered leaked files for `CacheSandbox.Marker`. That string lives in the sandbox

@@ -16,9 +16,19 @@
     <Compile Include="V2InspectionAcquisitionTests.fs" />
     <Compile Include="V2ObservationTransportTests.fs" />
     <Compile Include="V2MigrationTests.fs" />
+    <Compile Include="V2EnrollmentPr1Base.fs" />
     <Compile Include="V2EnrollmentTests.fs" />
+    <Compile Include="V2ReaderRebindTests.fs" />
+    <Compile Include="V2EnrollmentDifferentialTests.fs" />
     <Compile Include="V2PreflightTests.fs" />
+    <Compile Include="V2ConstructorClosureTests.fs" />
     <Compile Include="V2NativeResolveTests.fs" />
+    <Compile Include="V2RoutesTests.fs" />
+    <Compile Include="V2TendTests.fs" />
+    <Compile Include="V2TendReadsTests.fs" />
+    <Compile Include="TendFakeGitHub.fs" />
+    <Compile Include="V2TendWriteTests.fs" />
+    <Compile Include="V2TendProposeTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

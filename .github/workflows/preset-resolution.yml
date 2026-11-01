@@ -16,6 +16,7 @@ on:
       - "scripts/check-preset-resolution.py"
       - "tests/preset-resolution/**"
       - ".github/workflows/preset-resolution.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

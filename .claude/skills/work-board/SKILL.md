@@ -42,8 +42,9 @@ controller conversion remains owned by the governing LEARN outcome, not this ada
    supported fit needs no additional blanket one-expensive-operation limit. Prefer finishing owned
    acceptance and useful prerequisites; reconsider
    older deferred work and explain material repeated bypasses. Do not let new easy fixes starve product work.
-   An Outcome is never an implementation assignment; linked but unenrolled Deliveries stay unschedulable.
-5. Execute one bounded admitted Delivery through [$pnext-item](https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/SKILL.md), then update Status and verify readback after dispatch. The same owner carries
+   An Outcome is never an implementation assignment; linked but unenrolled Deliveries stay unschedulable unless Root admits one pending batch enrollment.
+5. Admit a dispatch only with its native Delivery issue
+   ([rules](references/lifecycle-contract.md#file-the-delivery-issue-at-dispatch)). Execute one bounded admitted Delivery through [$pnext-item](https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/SKILL.md), then update Status and verify readback after dispatch. The same owner carries
    implementation/relevant tests, one independent review for substantive changes, repair, delivery and whole-promise verification.
    Apply the lifecycle contract's risk rules and preserve exact-head required CI and native gates.
    Before invocation read [final-input and operation-horizon guidance](references/delivery-reliability.md#final-inputs-and-failure-gated-invocation);
@@ -55,6 +56,7 @@ controller conversion remains owned by the governing LEARN outcome, not this ada
    hosted capacity; delegate only when authorized and useful. Otherwise continue eligible serial work
    and name its constraint/reopening event. A free agent slot is not resource capacity.
 7. Read back accepted scope and remaining assertions, reconcile Delivery Status before its parent and return to selection.
+   Root's closing comment quotes the generator's own printed counts, not a paraphrase.
    A merge, worker return, completed milestone or stopped watcher does not end a clearing invocation.
 
 The boundary order is: observe results → reconcile acceptance/blockers → update Status and verify

@@ -40,6 +40,7 @@ module DeliveryTests =
             Freshness = freshness head
             ItemBranchCanonical = true
             ClosingLinkageCanonical = true
+            DeliveryReferenceLinkage = false
             PathsVerified = true
             InReview = true
             Review = Some(review head)
@@ -192,7 +193,7 @@ module DeliveryTests =
 
         transition
             Delivery.ReviewReady
-            (Delivery.RepairReviewHandoff "canonical closing linkage is missing")
+            (Delivery.RepairReviewHandoff "neither canonical closing linkage nor a verified Delivery reference is present")
             (Delivery.inspect invalid)
 
     let acceptanceReceipt head : Delivery.Obligation =
@@ -265,7 +266,7 @@ module DeliveryTests =
         for mutated in mutations do
             transition
                 Delivery.ReviewReady
-                (Delivery.RepairReviewHandoff "canonical closing linkage is missing")
+                (Delivery.RepairReviewHandoff "neither canonical closing linkage nor a verified Delivery reference is present")
                 (Delivery.inspect mutated)
 
     [<Fact>]
@@ -1425,3 +1426,171 @@ module DeliveryTests =
         Assert.Contains("generator timed out", result.Reason)
         Assert.True(result.AuthorityRevisions = [ "delivery-route:def" ])
         Assert.False(Delivery.pathsVerified results)
+
+    // ---- .github#5100: a strict PR may `Refs` its Delivery instead of closing its item ----------------
+
+    let private outcome: Types.Ref =
+        {
+            Owner = "FS-GG"
+            Repo = ".github"
+            Number = 4730
+        }
+
+    let private deliveryRef number : Types.Ref =
+        {
+            Owner = "FS-GG"
+            Repo = ".github"
+            Number = number
+        }
+
+    let private nativeDelivery number : Delivery.DeliveryReferenceFacts =
+        {
+            Candidate = deliveryRef number
+            Open = true
+            Parent = Some outcome
+            ListedUnderTarget = true
+        }
+
+    /// A reader over a fixed world; any candidate it does not know is a failed read.
+    let private worldOf (facts: Delivery.DeliveryReferenceFacts list) (candidate: Types.Ref) =
+        match facts |> List.tryFind (fun f -> f.Candidate = candidate) with
+        | Some f -> Ok f
+        | None -> Error $"unreadable %s{candidate.Canonical}"
+
+    let private linkage closing body facts =
+        Delivery.deliveryReferenceLinkage outcome closing "FS-GG" ".github" body (worldOf facts)
+
+    [<Fact>]
+    let ``#5100 declaredReferences reads the board-currency Refs grammar and nothing else`` () =
+        let body =
+            "Refs #5100, FS-GG/.github#5098 and #5092\n"
+            + "refs fs-gg/.GITHUB#5100\n"
+            + "Refs .github#7\n"
+            + "`Refs #8`\n"
+            + "```\nRefs #9\n```\n"
+            + "Closes #10"
+
+        Assert.Equal<Types.Ref list>(
+            [ deliveryRef 5100; deliveryRef 5098; deliveryRef 5092 ],
+            Delivery.declaredReferences "FS-GG" ".github" body
+        )
+
+    [<Fact>]
+    let ``#5100 a PR that Refs exactly one open native sub-issue Delivery of its item is linked`` () =
+        // The Outcome and an unrelated issue may also be named; only the Delivery qualifies.
+        let unrelated =
+            { nativeDelivery 17 with
+                Parent = Some(deliveryRef 99)
+                ListedUnderTarget = false
+            }
+
+        match linkage None "Refs #5100, #4730 and #17" [ nativeDelivery 5100; unrelated ] with
+        | Ok delivery -> Assert.Equal(deliveryRef 5100, delivery)
+        | Error reason -> failwith reason
+
+    [<Fact>]
+    let ``#5100 Delivery reference linkage fails closed on every weakened fact`` () =
+        let refused name closing body facts =
+            match linkage closing body facts with
+            | Error _ -> ()
+            | Ok delivery -> failwith $"%s{name}: expected a refusal, got %s{delivery.Canonical}"
+
+        let good = nativeDelivery 5100
+        refused "closes the Delivery" (Some(deliveryRef 5100)) "Refs #5100" [ good ]
+        refused "closes another issue" (Some(deliveryRef 1)) "Refs #5100" [ good ]
+        refused "names no Refs" None "Part of #5100" [ good ]
+        refused "names only the item" None "Refs #4730" [ good ]
+        refused "Delivery is closed" None "Refs #5100" [ { good with Open = false } ]
+        refused "Delivery has no parent" None "Refs #5100" [ { good with Parent = None } ]
+        refused "Delivery parent is another issue" None "Refs #5100" [ { good with Parent = Some(deliveryRef 1) } ]
+        refused "item sub-issue list lacks it" None "Refs #5100" [ { good with ListedUnderTarget = false } ]
+        refused "an unrelated candidate is unreadable" None "Refs #5100, #18" [ good ]
+        refused "two qualifying Deliveries" None "Refs #5100, #5101" [ good; nativeDelivery 5101 ]
+
+        let tooMany =
+            [ 1 .. Delivery.maxDeliveryReferenceCandidates + 1 ]
+            |> List.map (fun n -> $"#%d{5100 + n}")
+            |> String.concat ", "
+
+        refused
+            "names more candidates than are read"
+            None
+            $"Refs #5100, %s{tooMany}"
+            (good :: ([ 1 .. Delivery.maxDeliveryReferenceCandidates + 1 ] |> List.map (fun n -> { nativeDelivery (5100 + n) with Open = false })))
+
+    [<Fact>]
+    let ``#5100 a verified Delivery reference reaches guarded land; without it the closing refusal stands`` () =
+        let refsOnly =
+            { snapshot "head-a" with
+                ClosingLinkageCanonical = false
+                DeliveryReferenceLinkage = true
+            }
+
+        Assert.True(Delivery.landingLinkageAuthorized refsOnly)
+        transition Delivery.Accepted Delivery.GuardedLand (Delivery.inspect refsOnly)
+
+        let unlinked =
+            { refsOnly with
+                DeliveryReferenceLinkage = false
+            }
+
+        Assert.False(Delivery.landingLinkageAuthorized unlinked)
+
+        transition
+            Delivery.ReviewReady
+            (Delivery.RepairReviewHandoff "neither canonical closing linkage nor a verified Delivery reference is present")
+            (Delivery.inspect unlinked)
+
+    [<Fact>]
+    let ``#5100 a merged Delivery reference never completes the item through the engine`` () =
+        // Root closes the Delivery at acceptance; the engine's terminal completion keeps requiring
+        // canonical closing linkage, so it can never close or stamp the Outcome.
+        let merged =
+            { snapshot "head-a" with
+                ClosingLinkageCanonical = false
+                DeliveryReferenceLinkage = true
+                Merged = true
+                MergeReachable = true
+            }
+
+        let refusal snapshot =
+            match Delivery.inspectWithPostMergeVerification (verified "merge-sha") snapshot with
+            | Delivery.NoVerdict reason -> reason
+            | decision -> failwithf "expected the terminal refusal, got %A" decision
+
+        let projected = refusal merged
+        Assert.Contains("terminal completion requires canonical closing linkage", projected)
+        Assert.Contains("Refs-only Delivery landing ends at merge", projected)
+        Assert.Contains("the engine releases nothing", projected)
+        Assert.DoesNotContain("two-phase", projected)
+
+        let cleanup =
+            refusal
+                { merged with
+                    IssueClosed = true
+                    BoardDone = true
+                    ClaimReleased = true
+                    CleanupEligible = true
+                }
+
+        Assert.Contains("Refs-only Delivery landing ends at merge", cleanup)
+
+    [<Fact>]
+    let ``#5100 identity is owner, repo and number: a same-numbered issue in another repo never qualifies`` () =
+        let otherRepoOutcome: Types.Ref = { outcome with Repo = "Game" }
+
+        // The Delivery's parent is FS-GG/Game#4730, not the item FS-GG/.github#4730.
+        match linkage None "Refs #5100" [ { nativeDelivery 5100 with Parent = Some otherRepoOutcome } ] with
+        | Error _ -> ()
+        | Ok delivery -> failwith $"a parent in another repo authorized %s{delivery.Canonical}"
+
+        // A candidate FS-GG/Game#4730 is not the item, and its own reads must still qualify it.
+        let foreign =
+            { nativeDelivery 4730 with
+                Candidate = otherRepoOutcome
+                Parent = Some { outcome with Number = 1 }
+            }
+
+        match linkage None "Refs FS-GG/Game#4730" [ foreign ] with
+        | Error _ -> ()
+        | Ok delivery -> failwith $"a foreign same-numbered candidate authorized %s{delivery.Canonical}"

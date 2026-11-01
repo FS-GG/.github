@@ -48,6 +48,7 @@ on:
       - "scripts/lib/gate.py"
       - "tests/repo-filter-monopoly/**"
       - ".github/workflows/repo-filter-monopoly.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

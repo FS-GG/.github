@@ -130,6 +130,31 @@ otherwise `context`), never an absent field that reads as "nothing to report". A
 mandatory section (for example `doneWhen` or `owner`), so an empty shell is noticed. Replaying the same observations
 yields identical bytes.
 
+## Batched enrollment and the supported-route preflight (`enrollment`, `route-preflight`)
+
+Two dispatch roots, registered like `context-view` (ahead of the typed handler table, so they are not in the command
+catalogue; the V1 writer census classifies both as `writes: never`), carry the batched programme-enrollment work of #4941. They are reached through the `fsgg-coord` shim, which execs the engine, and run the
+same code as the `tools/BoardV2Import` tool (`FS.GG.Coord.GitHub.V2EnrollmentCommands`), so the two surfaces cannot drift.
+
+```bash
+fsgg-coord-engine enrollment resolve-issues --request F --native-facts-output NEW          # read-only GETs
+fsgg-coord-engine enrollment plan           --request F --native-facts F --repository DIR --template-output NEW --payload-output NEW
+fsgg-coord-engine enrollment prepare        --request F --native-facts F --repository DIR --template F --payload F \
+                                     --private-output NEW --public-output NEW --receipt-output NEW
+fsgg-coord-engine enrollment bind-runtime   --private-binding F --repository DIR --merge-sha SHA --runtime-output NEW
+fsgg-coord-engine enrollment render-carrier --receipt F --output NEW
+fsgg-coord-engine route-preflight --route ROUTE --stage STAGE --repository DIR [--online | --native-facts F] [route arguments]
+```
+
+Every command prints one closed refusal code on stderr (`board-v2 successor refused: CODE`) and never a payload, nonce, native
+identity, path or input text. Outputs are exclusive, owner-only files. `route-preflight` exits `0` only when every check is
+supported, `10` when any is unsupported and `11` when none is unsupported but any is unknown (`Unknown` is never `0`); `2` is a
+refusal to run. Routes: `ProgrammeEnrollmentSuccessor` (`PlanSuccessor`, `PrepareSuccessor`, `BindRuntime`), `RoutineDelivery`
+(`OpenPullRequest`, `MergePullRequest`) and `PublicationWriterRegistration` (`RegisterWriter`, `RunWriter`). Native reads are
+`GET` through the GitHub CLI against a ten-endpoint allowlist; the maintained routine and closing-keyword gates run from the
+base blobs, and the publication coverage gate is observed only when the checkout holds the base's bytes. The reference is
+[docs/coordination/board-v2-import-preparation.md](../../docs/coordination/board-v2-import-preparation.md).
+
 ## Telemetry, qualification, and roadmap closure (0.82.0)
 
 The engine owns the deterministic telemetry boundary. `telemetry usage collect codex|claude` emits the

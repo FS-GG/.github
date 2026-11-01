@@ -702,7 +702,19 @@ REQUIRED_PERMISSIONS = {"contents": "read", "issues": "read"}
 # 5/6/7. Keys permitted at each level. `defaults:` is refused at the top precisely because
 # `defaults.run.shell` changes the shell EVERY step runs under, which is the premise question 3 rests
 # on; `shell:` and `continue-on-error:` are refused at the step level for the same reason.
-TOP_KEYS = {"name", "on", "permissions", "jobs"}
+TOP_KEYS = {"name", "on", "permissions", "jobs", "concurrency"}
+# `concurrency:` (#4730 CI-load) is the one top-level key added to that list, and only in this exact
+# shape: PR-keyed, cancelling ONLY on a pull_request event. It cannot weaken the fence — a cancelled
+# run of a superseded head is not a green context, and a merge_group / push / dispatch run keeps its
+# own sha-keyed group and is never cancelled. Any other group or cancel expression is refused, so the
+# key cannot be turned into a way to cancel the run for the head a merge is waiting on. Only a head
+# action (opened, synchronize, reopened) keys on the PR number (#5159): an `edited` run keys on its own
+# run id, so a body edit never cancels the head run this required context is waiting on.
+CONCURRENCY_EXPECTED = {
+    "group": "fsgg-claim-fence-${{ contains(fromJSON('[\"opened\",\"synchronize\",\"reopened\"]'), "
+             "github.event.action) && github.event.pull_request.number || github.run_id }}",
+    "cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
+}
 JOB_KEYS = {"runs-on", "timeout-minutes", "steps", "permissions"}
 STEP_KEYS = {"name", "id", "uses", "run", "env", "if"}
 PERMITTED_USES = {"actions/checkout@v7", "./.github/actions/setup-policy-python"}
@@ -835,6 +847,13 @@ def main():
             "EVERY step runs under and so changes what the execution measurement below MEANS. A "
             "subject closed at the job and step levels and open at the top is the same escape in a "
             "different key."
+        )
+
+    if "concurrency" in document and document["concurrency"] != CONCURRENCY_EXPECTED:
+        problems.append(
+            f"the workflow's `concurrency:` is {document['concurrency']!r}, not the PR-keyed shape "
+            f"{CONCURRENCY_EXPECTED!r} — a different group or an unconditional cancel could cancel the "
+            "run a merge_group or main-push head is waiting on."
         )
 
     # ---- Question 1: is there a trigger filter? (allowlist) ------------------------------------
@@ -1019,6 +1038,7 @@ FILTER = "carries filter key(s)"
 PERMS = "EFFECTIVE permissions"
 UNRESOLVED = "NOT MEASURED"
 TOPKEY = "unexpected top-level key(s)"
+CONCURRENCY = "not the PR-keyed shape"
 
 EVALUATE_TAIL = '          echo "rc=$rc" >> "$GITHUB_OUTPUT"\n'
 FINDING_WARNING = (
@@ -1094,6 +1114,12 @@ MUTANTS = [
          INCONCLUSIVE_WARNING,
          INCONCLUSIVE_WARNING + '          if [ "$ARMED" = "true" ]; then exit 1; fi\n', 1
      ), UNRESOLVED),
+    ("R19a #4730: an unconditional `cancel-in-progress: true` could cancel a merge_group run",
+     lambda t: t.replace("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", "cancel-in-progress: true", 1), CONCURRENCY),
+    ("R19b #4730: a ref-keyed group would share one group across main pushes",
+     lambda t: t.replace("github.event.pull_request.number || github.run_id", "github.event.pull_request.number || github.ref", 1), CONCURRENCY),
+    ("R19c #5159: a PR-wide group lets a body edit cancel the head run a merge is waiting on",
+     lambda t: t.replace("contains(fromJSON('[\"opened\",\"synchronize\",\"reopened\"]'), github.event.action) && ", "", 1), CONCURRENCY),
     ("R19 F2b: `defaults: {run: {shell: bash}}` changes the shell EVERY step runs under",
      lambda t: t.replace("\njobs:\n", "\ndefaults:\n  run:\n    shell: bash\n\njobs:\n", 1), TOPKEY),
     # R20 (F2c) is asserted separately: it is about where a write LANDS, not about a verdict.

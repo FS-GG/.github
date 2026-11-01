@@ -1,0 +1,6 @@
+{"schema":"fsgg.board-tend-snapshot/1","observedAt":"2026-11-01T12:00:00Z",
+ "cards":[
+  {"itemId":"O-active","ref":"FS-GG/x#110","workLevel":"Outcome","track":"Active delivery","status":"Ready","subIssues":[{"ref":"FS-GG/x#111","open":true}]},
+  {"itemId":"D-declared","ref":"FS-GG/x#111","workLevel":"Delivery","status":"Ready","parent":"FS-GG/x#110","intendedLine":"Work level: Delivery · Track: Follow-up"},
+  {"itemId":"D-parentless","ref":"FS-GG/x#112","workLevel":"Delivery","status":"Ready","intendedLine":"Track: Active delivery"}
+ ]}

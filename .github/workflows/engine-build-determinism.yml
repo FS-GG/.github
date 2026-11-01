@@ -58,6 +58,7 @@ on:
       - "scripts/check-engine-build-determinism.py"
       - "tests/engine-build-determinism/**"
       - ".github/workflows/engine-build-determinism.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

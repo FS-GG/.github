@@ -1,0 +1,7 @@
+{"schema":"fsgg.board-tend-snapshot/1","observedAt":"2026-11-01T12:00:00Z",
+ "cards":[
+  {"itemId":"I-closed-old","ref":"FS-GG/x#20","workLevel":"Delivery","track":"Follow-up","status":"In progress","open":false,"closedAt":"2026-11-01T11:40:00Z"},
+  {"itemId":"I-closed-new","ref":"FS-GG/x#21","workLevel":"Delivery","track":"Follow-up","status":"In progress","open":false,"closedAt":"2026-11-01T11:55:00Z"},
+  {"itemId":"I-closed-blocked","ref":"FS-GG/x#22","workLevel":"Delivery","track":"Follow-up","status":"Blocked","open":false,"closedAt":"2026-11-01T10:00:00Z"},
+  {"itemId":"I-closed-done","ref":"FS-GG/x#23","workLevel":"Delivery","track":"Follow-up","status":"Done","open":false,"closedAt":"2026-11-01T10:00:00Z"}
+ ]}

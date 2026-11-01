@@ -101,6 +101,31 @@ module V2Projection =
             VerifiedAt: DateTimeOffset
         }
 
+    /// The programme enrollment row ceiling the reader enforces, for both the private payload rows and the binding's
+    /// selected issues: 500 (#5119). Readers before #4941 refuse more than 100; coherent 0.114.0 readers refuse more than 250.
+    val maximumProgrammeRows: int
+
+    /// The Coordination board item limit (500, #5119). The complete project-membership read refuses a board that reports more.
+    val maximumBoardItems: int
+
+    /// The ceiling before the first lift. Any population at or below it is readable by every reader of the line.
+    val legacyProgrammeRowCap: int
+
+    /// The ceiling of the coherent 0.114.0 readers (250). A population above it is readable only by a 500-row reader.
+    val previousProgrammeRowCap: int
+
+    /// The CLI bounded transport's request ceiling (shared by inspect and refresh, scaled from inspect measurements
+    /// only; a programme refresh is batched to fit it, plus one one-shot run per written row, #5131) for a binding that selects this many rows: never below the
+    /// historical 500, and scaled by the selected population up to `maximumProgrammeRows`.
+    val refreshRequestCeiling: selectedRows: int -> int
+
+    /// The CLI bounded transport's deadline in seconds (scaled from inspect measurements only) for a binding that selects this many rows: never below the
+    /// historical 270, scaled by the selected population up to `maximumProgrammeRows` (410 seconds at 500 rows).
+    val refreshDeadlineSeconds: selectedRows: int -> float
+
+    /// The one-shot Observation writer's explicit 409 message for an archived card (Done retention, #5119).
+    val archivedCardWriteRefusal: string
+
     /// Validate the reviewed binding without performing IO.
     val validateBinding: binding: Binding -> IoResult<unit>
 
@@ -148,13 +173,20 @@ module V2Projection =
             IoResult<Report>
 
     /// Complete exact-project population. Unexpected members remain visible but unenrolled.
+    /// A complete-membership row. `readMemberships` pages the project `items` connection, which excludes archived cards,
+    /// so it always yields `Archived = false`; inspection adds an explicit `Archived = true` row for an enrolled issue
+    /// whose card is archived (Done retention, #5119).
     type Membership =
-        { ItemId: string; ContentId: string; Kind: string; Issue: IssueRef option; Enrolled: bool }
+        { ItemId: string; ContentId: string; Kind: string; Issue: IssueRef option; Enrolled: bool; Archived: bool }
     val readMemberships: transport: IGitHubTransport -> binding: Binding -> IoResult<Membership list>
 
     /// Fresh immutable owner/schema/native membership and four planning values. Performs queries only;
     /// unseeded fields remain None, incomplete or mismatched identities remain errors. No projection.
+    /// `WorkLevel` is read in the same membership query for a binding-5 successor with a bound Work level field
+    /// (#5119): `Some("Unknown", None)` when unset, `Some(name, Some optionId)` when set, `None` when not read.
+    /// `Archived` is the card's native `isArchived`: an issue's `projectItems` include archived cards, while the
+    /// project `items` connection (and so `readMemberships`) excludes them, so callers must reconcile it explicitly.
     type PlanningObservation =
         { ItemId: string; Status: string option; Roadmap: string option; Track: string option
-          Observation: string option; MembershipPages: int }
+          Observation: string option; MembershipPages: int; WorkLevel: (string * string option) option; Archived: bool }
     val readPlanning: transport: IGitHubTransport -> binding: Binding -> request: Request -> IoResult<PlanningObservation>

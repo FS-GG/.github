@@ -25,6 +25,7 @@ on:
       - "tests/**"
       - "scripts/check-harness-identity.py"
       - ".github/workflows/harness-identity.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

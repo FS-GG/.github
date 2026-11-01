@@ -127,6 +127,17 @@ permissions:
   issues: read     # the gate reads `fsgg:claim` and `fsgg:merge-election` marker comments on the item
                    # the pull request's branch names — both valid `GITHUB_TOKEN` scopes
 
+# Head-keyed concurrency (#4730 CI-load, #5159): a head action (opened, synchronize, reopened) keys on
+# the pull request, so a newer head cancels the superseded head's run. Every other event keys on
+# `github.run_id`, which is unique to the run. For a body edit or label event that means it never
+# cancels the head run for the SAME head, and is never cancelled itself: a cancelled required check on a
+# live head reads as failing, and a re-run replays the stale body (#5159). For a non-PR event it means
+# no pending run is dropped: GitHub discards an older PENDING run in a shared group even without
+# cancel-in-progress. scripts/check-pr-concurrency.py derives both from this block.
+concurrency:
+  group: fsgg-claim-fence-${{ contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # The job id is the check-run name, and therefore the name slice 8 would arm. It is deliberately
   # NOT `claim-generation`: that is `coherence.yml`'s already-armed, deliberately narrower fence

@@ -36,6 +36,7 @@ on:
       - "scripts/fsgg-coord"
       - "tests/coord-guards/**"
       - ".github/workflows/coord-guards.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

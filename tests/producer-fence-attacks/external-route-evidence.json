@@ -11,7 +11,7 @@
     },
     {
       "path": ".github/workflows/feed-autofix.yml",
-      "sha256": "00ef3c3b5f75e02701aa87d1792b8635fcaa30fe3192fd31cb1fc41ee54d66a4",
+      "sha256": "974cf5e806eac91b951b1899ad1e5342b4dd743c7efea83be0934a0b91cea852",
       "status": "current-revision-retired",
       "gs2089": "resolved",
       "reason": "The scheduled route retains offline fixtures and a read-only feed audit; App mint, registry write, issue, branch, and pull-request effects are absent."
@@ -102,21 +102,21 @@
     },
     {
       "path": ".github/workflows/skill-registry-autofix.yml",
-      "sha256": "15c0354feca76dd795843aef9102089b93601c43c58dbe1d88aa4ca59694e81d",
+      "sha256": "0cfb22f8ae293a49cee8b4dd1fed4ab1dbe497f09f0c974ba27827be68c654b1",
       "status": "current-revision-retired",
       "gs2089": "resolved",
       "reason": "The scheduled route runs local registry validation only and has no App token, registry write, branch, pull-request, merge, comment, or close effect."
     },
     {
       "path": ".github/workflows/skillmirror-redrive.yml",
-      "sha256": "fb3a9fd68119ed697cc10e1b48ad2920bff4309e0ff3b8e53c192c33e8b48fdb",
+      "sha256": "90824672f1950b5c96d42bc73ad445e70878193a0a69fc228289be8a094d4fbe",
       "status": "current-revision-retired",
       "gs2089": "resolved",
       "reason": "The scheduled route retains its hermetic oracle only; re-pin, branch, pull-request, and close effects are absent."
     },
     {
       "path": ".github/workflows/touch-set-drift.yml",
-      "sha256": "1b51744e4c493218d5c8cc59f1469a1fbeee7220178c8185cf4c0dd6e57bae66",
+      "sha256": "e650b8af6205b9338f5c56ddf96844c95e4117f49f45d821c446e5373fa38baf",
       "status": "current-revision-read-only",
       "gs2089": "resolved",
       "reason": "The check retains issue and pull-request reads and reports to its own log/summary; sticky comment POST, PATCH, and DELETE effects are absent."
@@ -162,6 +162,13 @@
       "status": "current-revision-retired",
       "gs2089": "unresolved",
       "reason": "At revision 32f7a973 the source returned a refused delivery with zero mutation attempts before invoking gh. Published and materialized historical Drivers copies remain pending runtime retirement."
+    },
+    {
+      "path": "scripts/coord-board-archive.py",
+      "sha256": "a7b21a589777295c83339239dac2e3e786d1b8fb7382358351d569aead6fcc9b",
+      "status": "root-run-gated-writer",
+      "gs2089": "unresolved",
+      "reason": "Project 3 Done-retention archiver (#5119). Its only provider write, archiveProjectV2Item, runs only under --execute, which a Root operator runs on fdev with --expect-project-id, --max-archive, the private enrollment binding and the shared board-writer flock; the hosted workflow runs a counts-only dry run with a read-only App token and never --execute. Fence owner Root approved this route on 2026-11-01."
     }
   ]
 }

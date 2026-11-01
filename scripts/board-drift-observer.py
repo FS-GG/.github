@@ -35,6 +35,15 @@ THE RULES (a finding carries the letter)
      positives (a progress note that opens "Root/fdev ... decision") and false negatives (a ruling
      phrased without those words, or a ruling made outside a comment on the card). A comment that
      carries ACK_TOKEN is a disposition and is never itself a ruling.
+  s  A watched workflow's cron has stopped firing (SCHEDULE_WATCH): the nightly main-health observer has no
+     fulfilling run newer than 2 days, or this observer's own PREVIOUS fulfilling run is older than 2 hours.
+     A fulfilling run is a `schedule` run or a `workflow_dispatch` run by the hourly fdev dispatcher (Root
+     decision on #4990: the dispatcher is the designed fallback for a dropped cron).
+     Not a card rule: it reads schedule.json (board-drift-schedule-fetch.py), the mutual half of the
+     main-health observer's freshness check. Reported in the same issue, with no ack route (nothing on a
+     card to comment on): it clears when the schedule fires again. LIMIT: the self-check is reported by a
+     run, so it can only appear when a run happens; a total stop of this workflow is caught by the
+     main-health observer's freshness check, which reads this workflow's schedule from outside.
   x  The card's content could not be read (null content). Not a rule of the spec: "I could not look" is
      never "no drift" (.github#266), and a silent skip would hide exactly the card that needs a look.
 
@@ -49,6 +58,11 @@ say "no drift" about a board it did not read.
 
 REPORT ISSUE (one issue, fixed title and label)
 ===============================================
+
+Since phase 2 of the board-currency design the issue is "Board findings: Project 3" (#4985, renamed from
+"Board drift: Project 3", which the report still recognises and renames). `check --currency` merges the
+board-currency findings (scripts/board-currency-rules.py) into the same finding set, through the same
+private-placeholder gate, so drift and currency findings share one issue, one digest and one writer.
 
   no findings, no issue            -> nothing
   findings, no issue               -> create
@@ -115,13 +129,27 @@ import sys
 from pathlib import Path
 
 SNAPSHOT_SCHEMA = "fsgg:board-drift-snapshot/v1"
+SCHEDULE_SCHEMA = "fsgg:board-drift-schedule/v1"
 FINDINGS_SCHEMA = "fsgg:board-drift-findings/v1"
-REPORT_TITLE = "Board drift: Project 3"
+REPORT_TITLE = "Board findings: Project 3"
+# The issue's title before drift and board-currency findings converged (design §4, Root decision 3:
+# reuse #4985). The report still finds an issue with the legacy title and renames it.
+LEGACY_TITLES = ("Board drift: Project 3",)
+CURRENCY_SCHEMA = "fsgg:board-currency-findings/v1"
+CURRENCY_RULES = ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "U")
 REPORT_LABEL = "board-drift"
 REPORT_REPO = "FS-GG/.github"
 MARKER_PREFIX = "fsgg:board-drift/v1"
 
 NO_VERDICT = 2
+
+# Rule s: workflow file -> (longest allowed gap since its newest `schedule` run, why).
+# Two days for the nightly main-health observer (2x its cadence, and a missed night is not paged at once);
+# two hours for this observer itself (2x its hourly cadence). Strictly greater than is a finding.
+SCHEDULE_WATCH: dict[str, tuple[dt.timedelta, str]] = {
+    "main-health-observer.yml": (dt.timedelta(days=2), "peer"),
+    "board-drift-observer.yml": (dt.timedelta(hours=2), "self"),
+}
 
 HMAC_KEY_ENV = "BOARD_DRIFT_HMAC_KEY"
 MIN_KEY_BYTES = 16
@@ -302,6 +330,7 @@ def analyze(
     root_logins: tuple[str, ...] = DEFAULT_ROOT_LOGINS,
     reveal_private: bool = False,
     hmac_key: bytes | None = None,
+    schedule: dict | None = None,
 ) -> list[dict]:
     """PURE. Findings for a validated snapshot at `now`, in a stable order.
 
@@ -423,8 +452,73 @@ def analyze(
                             reveal=rv, key=hk, status=status, commentUrl=last.get("url"))
                 )
 
-    order = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "x": 5}
+    if schedule is not None:
+        out += schedule_findings(schedule, now)
+
+    order = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "s": 5, "x": 6}
     return sorted(out, key=lambda f: (order[f["rule"]], f["ref"], f["key"]))
+
+
+def key_rule(key: str) -> str:
+    """The rule of a finding key (`<rule>|<ref>|<extra>`)."""
+    return key.split("|", 1)[0]
+
+
+def validate_schedule(doc: object) -> dict:
+    if not isinstance(doc, dict) or doc.get("schema") != SCHEDULE_SCHEMA:
+        raise NoVerdict(f"schedule document schema is not {SCHEDULE_SCHEMA}")
+    if not isinstance(doc.get("workflows"), list):
+        raise NoVerdict("schedule document lacks its workflows array")
+    return doc
+
+
+def schedule_finding(file: str, kind: str, text: str, role: str) -> dict:
+    """A rule-s finding. Workflow files are public repository paths: nothing here is private, and there
+    is no card to comment on, so there is no ack token. The key excludes ages so it dedupes."""
+    ref = f"workflow:{file}"
+    return {"rule": "s", "ref": ref, "key": f"s|{ref}|{kind}", "text": text, "rank": "normal", "role": role}
+
+
+def schedule_findings(doc: object, now: dt.datetime) -> list[dict]:
+    """PURE. Rule s: a watched workflow whose newest fulfilling run is too old, never ran, is absent or
+    disabled, or could not be read. A fulfilling run is a `schedule` run, or a `workflow_dispatch` run that
+    the hourly fdev dispatcher triggered (the designed fallback for a dropped cron; the fetch decides which
+    dispatches qualify, by actor and event). A watched workflow missing from the document counts as
+    unreadable."""
+    validate_schedule(doc)
+    entries = {e.get("file"): e for e in doc["workflows"] if isinstance(e, dict)}
+    out: list[dict] = []
+    for file, (limit, role) in SCHEDULE_WATCH.items():
+        who = "this observer's previous fulfilling run" if role == "self" else "the fulfilling run"
+        entry = entries.get(file)
+        state = (entry or {}).get("state")
+        if state == "absent":
+            out.append(schedule_finding(file, "absent", f"workflow file not found on the default branch ({who} cannot exist)", role))
+            continue
+        created = parse_time((entry or {}).get("createdAt"))
+        times = [parse_time((entry or {}).get(k)) for k in ("newestScheduleRunAt", "newestDispatchRunAt")]
+        given = [(entry or {}).get(k) for k in ("newestScheduleRunAt", "newestDispatchRunAt")]
+        if state != "ok" or created is None or any(g and t is None for g, t in zip(given, times)):
+            out.append(schedule_finding(file, "unreadable", "schedule history could not be read (no verdict on this schedule)", role))
+            continue
+        if entry.get("workflowState") != "active":
+            out.append(schedule_finding(file, "disabled", f"workflow state is {entry.get('workflowState')!r}: a disabled workflow does not fire", role))
+            continue
+        newest = max((t for t in times if t is not None), default=None)
+        if newest is None:
+            if now - created > limit:
+                out.append(schedule_finding(file, "never-ran", f"no scheduled or dispatcher run since the workflow was registered "
+                                            f"{iso(created)} (more than {format_limit(limit)})", role))
+            continue
+        if now - newest > limit:
+            out.append(schedule_finding(file, "stale", f"newest scheduled or dispatcher run {iso(newest)} is older than "
+                                        f"{format_limit(limit)}; {who} is overdue", role))
+    return out
+
+
+def format_limit(limit: dt.timedelta) -> str:
+    hours = limit.total_seconds() / 3600
+    return f"{hours / 24:g} days" if hours >= 48 else f"{hours:g} hours"
 
 
 def digest(findings: list[dict]) -> str:
@@ -437,8 +531,51 @@ RULE_TITLES = {
     "c": "c. In progress with no activity",
     "d": "d. Missing Status, Track or Work level",
     "e": "e. Root ruling comment newer than the last Status change (heuristic)",
+    "s": "s. A watched workflow's schedule has stopped firing (peer and self check)",
     "x": "x. Content could not be read",
+    # Board-currency rule set (scripts/board-currency-rules.py), merged in by `check --currency`.
+    "R1": "R1. Routine PR references exactly one open Delivery with a parent Outcome",
+    "R2": "R2. Closure, Done and Outcome acceptance agree",
+    "R3": "R3. Blocked names an open blocker",
+    "R4": "R4. Active Status has live evidence",
+    "R5": "R5. Outcome with every sub-issue closed",
+    "R6": "R6. Open Outcome with no open Delivery",
+    "R7": "R7. Status, Work level and Track are set on a native issue",
+    "R8": "R8. Delivery Status agrees with its PR state",
+    "R9": "R9. Delivery sits under an Outcome",
+    "U": "U. Board-currency input could not be read (Unknown)",
 }
+
+
+def currency_findings(document: object, key: bytes | None, reveal: bool = False) -> list[dict]:
+    """PURE. Board-currency findings as report records, through the same visibility gate as drift findings.
+
+    The ruleset document carries raw subjects and an explicit `public` flag. A subject that is not
+    explicitly public (private, unknown, or a draft card) is published only as `private:<HMAC>`, with no
+    title. Currency findings have no ack route: they clear when the native state they read changes."""
+    if (not isinstance(document, dict) or not str(document.get("schema", "")).startswith("fsgg:board-currency-findings/")
+            or not isinstance(document.get("findings"), list)):
+        raise NoVerdict("currency findings file is not a board-currency findings document")
+    if not reveal and (key is None or len(key) < MIN_KEY_BYTES):
+        raise NoVerdict(f"{HMAC_KEY_ENV} is missing or shorter than {MIN_KEY_BYTES} bytes: refusing to publish "
+                        "placeholders without a key")
+    out = []
+    for f in document["findings"]:
+        rule, subject, reason = f.get("rule"), f.get("subject"), f.get("reason")
+        if rule not in CURRENCY_RULES or not isinstance(subject, str) or not isinstance(reason, str):
+            raise NoVerdict("currency finding lacks a rule, subject or reason")
+        public = reveal or f.get("public") is True
+        ref = subject if public else opaque(subject, key)
+        record = {"rule": rule, "ref": ref, "key": f"{rule}|{ref}|{reason}", "text": str(f.get("text", "")),
+                  "rank": "normal", "ack": "", "ruleset": document.get("ruleset")}
+        if f.get("pending"):
+            record["text"] += f" ({f['pending']})"
+        if public and f.get("title"):
+            record["title"] = f["title"]
+        if not public:
+            record["private"] = True
+        out.append(record)
+    return sorted(out, key=lambda r: (CURRENCY_RULES.index(r["rule"]), r["ref"], r["key"]))
 
 
 def code(value: object) -> str:
@@ -458,17 +595,26 @@ def _marker(findings: list[dict]) -> str:
 
 def finding_line(f: dict) -> str:
     title = f" {code(f['title'])}" if f.get("title") else ""
-    return f"- {code(f['ref'])}{title}: {code(f['text'])} Ack: {code(f['ack'])}"
+    if f.get("ack"):
+        ack = f" Ack: {code(f['ack'])}"
+    elif f["rule"] == "s":
+        ack = " Clears when the schedule fires again."
+    else:
+        ack = ""
+    return f"- {code(f['ref'])}{title}: {code(f['text'])}{ack}"
 
 
 def render_body(findings: list[dict], snapshot_meta: dict, limit: int = BODY_LIMIT) -> str:
     head = [
         _marker(findings),
         "",
-        f"Generated by the scheduled board-drift observer from a read-only snapshot of Project "
+        f"Generated by the hourly board observer from read-only snapshots of Project "
         f"{snapshot_meta.get('number', 3)} taken {snapshot_meta.get('fetchedAt', 'unknown')} "
-        f"({snapshot_meta.get('items', '?')} cards). It never edits board fields: Root resolves each finding "
-        "with a guarded Status write or a recorded disposition, and this issue is rewritten when the set changes.",
+        f"({snapshot_meta.get('items', '?')} cards): board-drift rules a-e, s and x, and the deterministic "
+        f"board-currency rules R1-R9 and U ({snapshot_meta.get('currencyRuleset') or 'not evaluated'}; design "
+        "`docs/coordination/2026-10-31-board-currency-gate.md`). It never edits board fields: Root resolves each "
+        "finding with a guarded Status write, a native fix or a recorded disposition, and this issue is rewritten "
+        "when the set changes.",
         "",
         "This repository is public. Cards in private or unknown-visibility repositories appear only as "
         "`private:<id>` with no title; reveal them locally by running `board-drift-fetch.py` then "
@@ -481,12 +627,14 @@ def render_body(findings: list[dict], snapshot_meta: dict, limit: int = BODY_LIM
         "Disposition: write the Status, or comment on the card from the Root login with the finding's "
         "`Ack:` token (`[board-drift-ack] <rule>:<key>`, or `<rule>:*` for any finding of that rule) when no "
         "Status change is owed. An ack must be newer than the evidence it covers. Rule e is a first-line "
-        "ruling-marker heuristic with known precision and recall limits.",
+        "ruling-marker heuristic with known precision and recall limits. Board-currency findings (R1-R9, U) "
+        "have no ack: each clears when the native state it reads is fixed. Rule s (a schedule that stopped "
+        "firing) has no ack either: it clears when that schedule fires again.",
         "",
         f"Owner: {code('FS-GG/.github#4730')}. Rule: work-board lifecycle-contract, same-turn Status write.",
     ]
     sections: list[tuple[str, list[dict]]] = []
-    for rule in ("a", "b", "c", "d", "e", "x"):
+    for rule in ("a", "b", "c", "d", "e", "s", "x") + CURRENCY_RULES:
         normal = [f for f in findings if f["rule"] == rule and f.get("rank") != "low"]
         low = [f for f in findings if f["rule"] == rule and f.get("rank") == "low"]
         if normal:
@@ -498,7 +646,9 @@ def render_body(findings: list[dict], snapshot_meta: dict, limit: int = BODY_LIM
     shown = 0
     full = False
     for title, group in sections:
-        header = ["", f"### {title}", ""]
+        # R1 churns with every merge, so its section leads with a count (Root decision on #5103).
+        count = f" ({len(group)})" if title.startswith("R1.") else ""
+        header = ["", f"### {title}{count}", ""]
         cost = sum(len(x) + 1 for x in header)
         if full or budget - cost < 0:
             break
@@ -522,8 +672,8 @@ def render_clear_body(snapshot_meta: dict) -> str:
     return "\n".join([
         _marker([]),
         "",
-        f"No board drift findings at {snapshot_meta.get('fetchedAt', 'unknown')}. The observer reopens this "
-        "issue if drift reappears.",
+        f"No board findings at {snapshot_meta.get('fetchedAt', 'unknown')}. The observer reopens this "
+        "issue if a finding reappears.",
     ]) + "\n"
 
 
@@ -545,9 +695,11 @@ def plan_report(findings: list[dict], existing: dict | None, snapshot_meta: dict
             return {
                 "action": "close",
                 "body": render_clear_body(snapshot_meta),
-                "comment": "No board drift findings at the latest hourly observation "
-                f"({snapshot_meta.get('fetchedAt', 'unknown')}). Closing; the observer reopens this issue if drift reappears.\n",
+                "comment": "No board findings at the latest hourly observation "
+                f"({snapshot_meta.get('fetchedAt', 'unknown')}). Closing; the observer reopens this issue if a finding reappears.\n",
             }
+        if existing and existing.get("title") in LEGACY_TITLES:
+            return {"action": "rename", "reason": "no findings; legacy title"}
         return {"action": "noop", "reason": "no findings and no open report issue"}
 
     current = digest(findings)
@@ -555,6 +707,8 @@ def plan_report(findings: list[dict], existing: dict | None, snapshot_meta: dict
     if existing is not None and previous and previous.get("digest") == current:
         # Unchanged set: leave the issue alone. That includes an issue Root closed - it is reopened
         # only when the finding set changes, never merely because the same findings still stand.
+        if existing.get("title") in LEGACY_TITLES:
+            return {"action": "rename", "reason": "finding set unchanged; legacy title"}
         return {"action": "noop", "reason": "finding set unchanged"
                 + ("" if existing.get("state") == "open" else " (issue closed; not reopened)")}
 
@@ -567,11 +721,24 @@ def plan_report(findings: list[dict], existing: dict | None, snapshot_meta: dict
         previous_keys = set(previous["keys"])
         added = sorted(current_keys - previous_keys)
         removed = sorted(previous_keys - current_keys)
+        # Root decision (#5103 review): comment only when the drift set changes or a NEW non-R1 currency
+        # finding appears. R1 churns with every merge; it is shown as a count plus a list in the body only,
+        # and a change that touches nothing else rewrites the body without a comment or a reopen.
+        notable = [k for k in added + removed if key_rule(k) not in CURRENCY_RULES]
+        notable += [k for k in added if key_rule(k) in CURRENCY_RULES and key_rule(k) != "R1"]
+        if not notable:
+            return {"action": "update", "body": body, "comment": None}
+        listed_added = [k for k in added if key_rule(k) != "R1"]
+        listed_removed = [k for k in removed if key_rule(k) != "R1"]
+        r1_added = len(added) - len(listed_added)
+        r1_removed = len(removed) - len(listed_removed)
         comment = [f"Finding set changed: {len(added)} new, {len(removed)} cleared, {len(current_keys)} open."]
-        comment += [f"- new {code(key)}" for key in added[:50]]
-        comment += [f"- cleared {code(key)}" for key in removed[:50]]
-        if len(added) > 50 or len(removed) > 50:
+        comment += [f"- new {code(key)}" for key in listed_added[:50]]
+        comment += [f"- cleared {code(key)}" for key in listed_removed[:50]]
+        if len(listed_added) > 50 or len(listed_removed) > 50:
             comment.append("- (list truncated; the body holds the current set)")
+        if r1_added or r1_removed:
+            comment.append(f"- R1: {r1_added} new, {r1_removed} cleared (listed in the body only)")
     else:
         comment = [f"Finding set changed: {len(current_keys)} open (previous set not recorded in full)."]
     return {
@@ -602,14 +769,14 @@ def gh_api(args: list[str], payload: dict | None = None, *, allow_status: tuple[
 
 
 def find_report_issue(repo: str) -> dict | None:
-    """The single issue with REPORT_TITLE and REPORT_LABEL. Two matching issues are a hard error."""
+    """The single issue with REPORT_LABEL and REPORT_TITLE (or a legacy title). Two open ones are a hard error."""
     out = gh_api([f"repos/{repo}/issues?labels={REPORT_LABEL}&state=all&per_page=100", "--paginate", "--jq", ".[]"])
     matches = []
     for line in out.splitlines():
         if not line.strip():
             continue
         issue = json.loads(line)
-        if "pull_request" not in issue and issue.get("title") == REPORT_TITLE:
+        if "pull_request" not in issue and issue.get("title") in (REPORT_TITLE, *LEGACY_TITLES):
             matches.append(issue)
     open_ones = [i for i in matches if i.get("state") == "open"]
     if len(open_ones) > 1:
@@ -623,6 +790,9 @@ def apply_plan(repo: str, plan: dict, existing: dict | None) -> str:
     action = plan["action"]
     if action == "noop":
         return f"noop: {plan['reason']}"
+    if action == "rename":
+        gh_api([f"repos/{repo}/issues/{existing['number']}", "-X", "PATCH"], {"title": REPORT_TITLE})
+        return f"renamed #{existing['number']}"
     if action in ("create", "reopen", "update"):
         # Ensure the label before it is needed; 422 means it exists.
         gh_api([f"repos/{repo}/labels", "-X", "POST", "-f", f"name={REPORT_LABEL}", "-f", "color=d93f0b",
@@ -635,14 +805,15 @@ def apply_plan(repo: str, plan: dict, existing: dict | None) -> str:
     if action == "close":
         gh_api([f"repos/{repo}/issues/{number}/comments"], {"body": plan["comment"]})
         gh_api([f"repos/{repo}/issues/{number}", "-X", "PATCH"],
-               {"state": "closed", "state_reason": "completed", "body": plan["body"]})
+               {"state": "closed", "state_reason": "completed", "body": plan["body"], "title": REPORT_TITLE})
         return f"closed #{number}"
-    patch = {"body": plan["body"]}
+    patch = {"body": plan["body"], "title": REPORT_TITLE}
     if action == "reopen":
         patch["state"] = "open"
     gh_api([f"repos/{repo}/issues/{number}", "-X", "PATCH"], patch)
-    gh_api([f"repos/{repo}/issues/{number}/comments"], {"body": plan["comment"]})
-    return f"{'reopened' if action == 'reopen' else 'updated'} #{number}"
+    if plan.get("comment"):
+        gh_api([f"repos/{repo}/issues/{number}/comments"], {"body": plan["comment"]})
+    return f"{'reopened' if action == 'reopen' else 'updated'} #{number}" + ("" if plan.get("comment") else " (body only)")
 
 
 def snapshot_meta(snapshot: dict) -> dict:
@@ -656,13 +827,23 @@ def cmd_check(args: argparse.Namespace) -> int:
         now = parse_time(args.now) if args.now else dt.datetime.now(dt.timezone.utc)
         if now is None:
             raise NoVerdict(f"--now {args.now!r} is not an ISO timestamp")
+        # With --schedule, an unusable document is NO VERDICT: the schedule read records its own failures per
+        # workflow, so a missing or malformed file is a broken step, never "no drift".
+        schedule = validate_schedule(json.loads(Path(args.schedule).read_text(encoding="utf-8"))) if args.schedule else None
         findings = analyze(snapshot, now, pr_window_hours=args.pr_window_hours, stale_days=args.stale_days,
                            root_logins=tuple(args.root_login or DEFAULT_ROOT_LOGINS),
-                           reveal_private=args.reveal_private, hmac_key=load_key(dict(os.environ)))
+                           reveal_private=args.reveal_private, hmac_key=load_key(dict(os.environ)),
+                           schedule=schedule)
+        currency_ruleset = None
+        if args.currency:
+            document = json.loads(Path(args.currency).read_text(encoding="utf-8"))
+            findings += currency_findings(document, load_key(dict(os.environ)), reveal=args.reveal_private)
+            currency_ruleset = document.get("ruleset")
     except (NoVerdict, OSError, json.JSONDecodeError) as exc:
         print(f"board-drift-observer: NO VERDICT: {exc}", file=sys.stderr)
         return NO_VERDICT
-    result = {"schema": FINDINGS_SCHEMA, "meta": snapshot_meta(snapshot), "evaluatedAt": iso(now),
+    meta = dict(snapshot_meta(snapshot), currencyRuleset=currency_ruleset)
+    result = {"schema": FINDINGS_SCHEMA, "meta": meta, "evaluatedAt": iso(now),
               "digest": digest(findings), "findings": findings}
     Path(args.out).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"board-drift-observer: {len(findings)} finding(s)")
@@ -696,6 +877,8 @@ def main(argv: list[str] | None = None) -> int:
     check = sub.add_parser("check", help="analyze a snapshot and write findings.json")
     check.add_argument("--snapshot", required=True)
     check.add_argument("--out", required=True)
+    check.add_argument("--schedule", default=None,
+                       help="schedule.json from board-drift-schedule-fetch.py; enables rule s")
     check.add_argument("--now", default=None, help="ISO timestamp override, for tests")
     check.add_argument("--pr-window-hours", type=float, default=24)
     check.add_argument("--stale-days", type=float, default=7)
@@ -703,6 +886,8 @@ def main(argv: list[str] | None = None) -> int:
                        help="LOCAL OPERATOR USE ONLY: print real names for private/unknown-visibility cards. "
                             "The workflow never passes this.")
     check.add_argument("--root-login", action="append", help=f"Root account login (default {DEFAULT_ROOT_LOGINS[0]})")
+    check.add_argument("--currency", default=None,
+                       help="board-currency findings.json (scripts/board-currency-rules.py check) to merge into the report")
     check.set_defaults(func=cmd_check)
 
     report = sub.add_parser("report", help="open, update or close the single report issue")

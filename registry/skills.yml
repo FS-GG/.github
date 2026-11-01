@@ -107,7 +107,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-10-30"
+updated: "2026-10-31"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -367,7 +367,7 @@ skills:
   # work-board — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: 169945b2d619a46040e1dd68109e7f151832a72fcd53280ad540339807c65007, materializes-when: always }
+  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: 3008677b36dec29a4f6df18500cfb3aa79e00c7a9b48c2e1a97eb1665ddcbe6a, materializes-when: always }
   # padd-item — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
@@ -427,4 +427,4 @@ skills:
   # Reconciled, not hand-authored: scope/sha256/materializes-when verbatim from the manifest
   # entry, `source` from its `supplied-by`. Re-home and annotate these into the block they
   # belong to, then set `updated:` and prepend a registry/skills.CHANGELOG.md entry.
-  - { id: work-board-coord,       scope: operator,owner: .github,         source: .github/.claude/skills/work-board-coord/SKILL.md, sha256: 768f7ba0b2e81b9b9b3b05ac06c8c734b97d3ae5d318da5d65555db89f8fb74c, materializes-when: "false" }
+  - { id: work-board-coord,       scope: operator,owner: .github,         source: .github/.claude/skills/work-board-coord/SKILL.md, sha256: 6e3a5d260d19d53c8c231549f372dd38db4b0645382b2e6488297c38c05c8001, materializes-when: "false" }

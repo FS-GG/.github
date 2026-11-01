@@ -38,6 +38,7 @@ module DeliveryApplicationTests =
                 }
             ItemBranchCanonical = true
             ClosingLinkageCanonical = true
+            DeliveryReferenceLinkage = false
             PathsVerified = true
             InReview = true
             Review =
@@ -2067,3 +2068,201 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         with
         | Error e -> failwithf "expected ensureAuthorization to succeed as a no-op, got %A" e
         | Ok() -> ()
+
+    // ---- .github#5100: the live Delivery-reference proof and its merge fence ----------------------
+
+    let private outcomeTarget: Ref =
+        {
+            Owner = "FS-GG"
+            Repo = ".github"
+            Number = 4730
+        }
+
+    let private subIssueListingIn (total: int) (children: (string * int) list) : string =
+        let nodes =
+            children
+            |> List.map (fun (nwo, n) -> $"""{{"number":%d{n},"state":"OPEN","repository":{{"nameWithOwner":"%s{nwo}"}}}}""")
+            |> String.concat ","
+
+        $"""{{"data":{{"repository":{{"issue":{{"subIssues":{{"totalCount":%d{total},"nodes":[%s{nodes}]}}}}}}}}}}"""
+
+    let private subIssueListing (total: int) (children: int list) : string =
+        subIssueListingIn total (children |> List.map (fun n -> "FS-GG/.github", n))
+
+    let private parentOf (state: string) (parent: int option) : string =
+        let parentJson =
+            match parent with
+            | Some n -> $"""{{"number":%d{n},"repository":{{"nameWithOwner":"FS-GG/.github"}}}}"""
+            | None -> "null"
+
+        $"""{{"data":{{"repository":{{"issue":{{"state":"%s{state}","parent":%s{parentJson}}}}}}}}}"""
+
+    /// One scripted world: the PR body, the Outcome's sub-issue listing, and each candidate's parent read.
+    let private deliveryWorld (requests: ResizeArray<string>) prBody listing (parents: Map<int, string>) =
+        ensureAuthorizationTransport (fun req ->
+            match req.Method, req.Path.Trim '/', req.Body with
+            | "GET", "repos/FS-GG/.github/pulls/9002", _ ->
+                requests.Add "pr-body"
+                okResponse (jsonBody prBody)
+            | "POST", "graphql", Query(document, variables) when document.Contains "subIssues(" ->
+                requests.Add "sub-issues"
+                Assert.Contains(("number", Transport.VNumber 4730.0), variables)
+                okResponse listing
+            | "POST", "graphql", Query(document, variables) when document.Contains "parent {" ->
+                let number =
+                    variables
+                    |> List.pick (function
+                        | "number", Transport.VNumber n -> Some(int n)
+                        | _ -> None)
+
+                requests.Add $"parent %d{number}"
+
+                match parents.TryFind number with
+                | Some body -> okResponse body
+                | None -> Error(Errors.NotFound $"no parent fixture for #%d{number}")
+            | method', path, _ -> Error(Errors.NotFound $"unexpected request in the #5100 fixture: %s{method'} %s{path}"))
+
+    let private liveLinkage transport closing =
+        FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryReferenceLinkage
+            (ensureAuthorizationContext transport)
+            outcomeTarget
+            9002
+            closing
+
+    [<Fact>]
+    let ``#5100 the live proof reads the body, the item's sub-issues and the Delivery's parent`` () =
+        let requests = ResizeArray<string>()
+
+        let transport =
+            deliveryWorld
+                requests
+                "Implements the Delivery.\n\nRefs #5100"
+                (subIssueListing 2 [ 5092; 5100 ])
+                (Map [ 5100, parentOf "OPEN" (Some 4730) ])
+
+        match liveLinkage transport None with
+        | Ok delivery -> Assert.Equal(5100, delivery.Number)
+        | Error reason -> failwith reason
+
+        Assert.Equal<string list>([ "pr-body"; "sub-issues"; "parent 5100" ], List.ofSeq requests)
+
+    [<Fact>]
+    let ``#5100 the live proof fails closed on each weakened live fact`` () =
+        let refused name closing prBody listing parents =
+            let requests = ResizeArray<string>()
+
+            match liveLinkage (deliveryWorld requests prBody listing parents) closing with
+            | Error _ -> requests
+            | Ok delivery -> failwith $"%s{name}: expected a refusal, got %s{delivery.Canonical}"
+
+        let listed = subIssueListing 2 [ 5092; 5100 ]
+        let parented = Map [ 5100, parentOf "OPEN" (Some 4730) ]
+
+        // A closing reference refuses before any read.
+        let closingRequests =
+            refused "closes the Delivery" (Some { outcomeTarget with Number = 5100 }) "Refs #5100" listed parented
+
+        Assert.Empty closingRequests
+
+        refused "truncated sub-issue list" None "Refs #5100" (subIssueListing 3 [ 5092; 5100 ]) parented
+        |> ignore
+
+        refused "not in the item's sub-issue list" None "Refs #5100" (subIssueListing 1 [ 5092 ]) parented
+        |> ignore
+
+        refused "Delivery parent is another issue" None "Refs #5100" listed (Map [ 5100, parentOf "OPEN" (Some 1) ])
+        |> ignore
+
+        refused "Delivery is closed" None "Refs #5100" listed (Map [ 5100, parentOf "CLOSED" (Some 4730) ])
+        |> ignore
+
+        refused "parent read fails" None "Refs #5100" listed Map.empty |> ignore
+
+        // Identity is owner, repo and number: FS-GG/Game#5100 in the listing is not FS-GG/.github#5100.
+        refused
+            "only a same-numbered issue from another repo is listed"
+            None
+            "Refs #5100"
+            (subIssueListingIn 2 [ "FS-GG/.github", 5092; "FS-GG/Game", 5100 ])
+            parented
+        |> ignore
+
+    [<Fact>]
+    let ``#5100 the merge fence refuses when the Delivery reference no longer holds`` () =
+        let inspected =
+            { guardedLandingFacts "claim-generation-a" with
+                ClosingLinkageCanonical = false
+                DeliveryReferenceLinkage = true
+            }
+
+        let transition =
+            match Delivery.inspect inspected with
+            | Delivery.Next next when next.Action = Delivery.GuardedLand -> next
+            | other -> failwithf "expected guarded land from a verified Delivery reference, got %A" other
+
+        let authorize currentAuthority =
+            DeliveryApplication.authorizeGuardedLanding
+                transition.FreshnessToken
+                transition.ActionKey
+                inspected
+                currentAuthority
+                (Some "claim-generation-a")
+
+        Assert.Equal(DeliveryApplication.MergeAuthorized, authorize inspected)
+
+        match authorize { inspected with DeliveryReferenceLinkage = false } with
+        | DeliveryApplication.MergeRefused reason -> Assert.Contains("Delivery reference", reason)
+        | other -> failwithf "expected the fence to refuse, got %A" other
+
+    [<Fact>]
+    let ``#5100 the snapshot fact skips the proof when the PR already closes the item`` () =
+        let requests = ResizeArray<string>()
+
+        let transport =
+            deliveryWorld
+                requests
+                "Refs #5100"
+                (subIssueListing 2 [ 5092; 5100 ])
+                (Map [ 5100, parentOf "OPEN" (Some 4730) ])
+
+        let proved closing =
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryReferenceProved
+                (ensureAuthorizationContext transport)
+                outcomeTarget
+                9002
+                closing
+
+        Assert.False(proved (Some outcomeTarget))
+        Assert.Empty requests
+        Assert.True(proved None)
+        Assert.False(proved (Some { outcomeTarget with Number = 5100 }))
+
+    [<Fact>]
+    let ``#5100 both delivery read sites take the Delivery reference from the live proof`` () =
+        let writer =
+            File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"))
+
+        let at (text: string) (from: int) = writer.IndexOf(text, from, StringComparison.Ordinal)
+
+        // The inspect read: proved from this read's closing ref, then carried into the snapshot.
+        let inspectClosing = at "Reads.prClosingRef ctx.Transport target.Owner target.Repo pr," 0
+        let inspectProof = at "let deliveryReference = deliveryReferenceProved ctx target pr closing" inspectClosing
+        let carried = at "(linkageCanonical, deliveryReference)" inspectProof
+        let snapshotField = at "DeliveryReferenceLinkage = if pr.IsSome then snd closingLinkageCanonical else false" carried
+
+        Assert.True(inspectClosing >= 0, "the inspect read no longer reads the closing ref")
+        Assert.True(inspectProof > inspectClosing, "the inspect read does not run the live Delivery proof")
+        Assert.True(carried > inspectProof, "the inspect read drops the proved Delivery reference")
+        Assert.True(snapshotField > carried, "the snapshot does not take the proved Delivery reference")
+
+        // The merge fence: re-proved from the fresh closing ref after the authority refresh.
+        let guardedBranch = at "transition.Action = Delivery.GuardedLand" 0
+        let authorityRefresh = at "let currentAuthority" guardedBranch
+
+        let reproof =
+            at "deliveryReferenceProved ctx target pr.Value currentClosing" authorityRefresh
+
+        let fence = at "DeliveryApplication.guardedLandingWithMergePolicy" authorityRefresh
+
+        Assert.True(authorityRefresh > guardedBranch, "guarded delivery does not refresh mutable linkage authority")
+        Assert.True(reproof > authorityRefresh && reproof < fence, "the Delivery reference is not re-proved at the merge fence")

@@ -56,5 +56,6 @@ claim/status automation or add Status writes to inspection.
    independently authorized work with reconciled Status can continue.
 
 Status reconciliation does not dispatch work, release reservations, retry uncertain effects, weaken
-acceptance or close issues. Native issue closure remains a separately authorized effect. A discrepancy
+acceptance or close issues. Native issue closure remains a separately authorized effect; closing an accepted Delivery follows
+[rule 3](lifecycle-contract.md#file-the-delivery-issue-at-dispatch). A discrepancy
 between closure, Done and full acceptance requires reconciliation, not automatic closure or parent rollup.

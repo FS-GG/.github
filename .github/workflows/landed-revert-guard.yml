@@ -1,0 +1,97 @@
+# landed-revert-guard -- a PR's merge must not silently revert work that landed on its base (#4730).
+#
+# #4977's squash merge (99c83d57) deleted ~2,530 lines #4968 (dd7665f6) had delivered one commit earlier,
+# and main stayed green because the tests went with the code. scripts/check-landed-reverts.py computes
+# the real squash result (`git merge-tree`, byte-identical to the merged tree for 281/281 recent PRs),
+# finds base lines added within a lookback window that the result drops without replacing, and refuses
+# at 30 undeclared lines (fewer only warn). A deliberate revert is declared by naming the reverted
+# commits: `<!-- fsgg:declared-revert/v1 reverts=<sha|#PR>[,...] -->` in a commit message or the PR body.
+#
+# ONE LIGHT JOB, AND WHY EACH COST CHOICE (#4730 CI load):
+#   * No `paths:` filter. The subject is the merge result, and a revert can touch any file, so a filter
+#     would exempt exactly the PR that needs it. This is the only reason the job is unfiltered.
+#   * `opened, synchronize, reopened, edited`. `edited` is here, and only here, so that a declaration added
+#     to the PR body re-runs this ~10 s job and clears it; the CI-load cut that dropped `edited` from the
+#     heavier workflows (#4730) does not apply to one light job. The body is read live from the event
+#     payload of the run that `edited` starts (`github.event.pull_request.body`, passed through the
+#     environment to --body-file); a manual "re-run" replays the old payload, so edit the body instead.
+#     A marker in a commit message works too, and also survives into the squash message.
+#   * PR-keyed concurrency with cancel-in-progress, so a superseded push does not run to completion. An
+#     `edited` run keys on its own run id (#5159), so a body edit never cancels the same head's run.
+#   * The fixture is a separate path-filtered workflow (landed-reverts-selftest.yml): ordinary PRs pay
+#     for the gate, not for proving the gate.
+#   * Stdlib git and Python only: no setup action, no install, no network after checkout (~15 s).
+#
+# THE BASE IS READ LIVE: after a full-history checkout it is origin/<base ref> as fetched by this job,
+# not the base sha frozen in the event payload, so a PR that waited in the queue is judged against what
+# is on the base now. It is advisory until `no-silent-revert` is added to the required contexts, which
+# is a repository-settings effect and is not made here.
+#
+# FAIL CLOSED: the script exits 0 only when it read the history and found nothing to refuse. A shallow
+# clone, an unreadable object or a head that does not merge cleanly is exit 3 (red), never green.
+name: landed-revert-guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: landed-revert-guard-${{ contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  no-silent-revert:
+    name: no-silent-revert
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # fetch-depth 0: the branch point, the lookback window and `git blame` need the history; a shallow
+      # clone is refused by the script rather than guessed at.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # THE CHECK RUNS FROM THE BASE, NOT FROM THE PR. The checked-out tree is the PR head, so a PR that edits
+      # scripts/check-landed-reverts.py, scripts/lib/gate.py or registry/landed-revert-allowlist.json would
+      # otherwise be judged by its own edits. All three are read from the base commit with `git show`; a
+      # base that lacks the script fails the step (set -e) instead of passing. The allowlist is optional on
+      # the base (absent = empty). A PR may still edit this workflow file: that is the repository's
+      # writer-trust boundary (.fsgg/routine-development.json), the same one every required check has.
+      #
+      # The body is attacker-controlled text: it reaches the script through the environment and a file, never
+      # interpolated into the shell. The verdict is also written to the job summary, with the lines each
+      # declaration covered.
+      - name: Refuse a merge that reverts work landed on the base without declaring it
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          printf '%s' "$PR_BODY" > "$work/body.md"
+          base="$(git rev-parse --verify "refs/remotes/origin/${BASE_REF}^{commit}")"
+          mkdir -p "$work/tool/lib"
+          git show "$base:scripts/check-landed-reverts.py" > "$work/tool/check-landed-reverts.py"
+          git show "$base:scripts/lib/gate.py" > "$work/tool/lib/gate.py"
+          if git cat-file -e "$base:registry/landed-revert-allowlist.json" 2>/dev/null; then
+            git show "$base:registry/landed-revert-allowlist.json" > "$work/allowlist.json"
+          else
+            printf '{"entries": []}\n' > "$work/allowlist.json"
+          fi
+          rc=0
+          python3 "$work/tool/check-landed-reverts.py" --base "$base" --head "$HEAD_SHA" \
+            --body-file "$work/body.md" --allowlist "$work/allowlist.json" > "$work/out.txt" 2>&1 || rc=$?
+          cat "$work/out.txt"
+          {
+            echo "### no-silent-revert (exit $rc)"
+            echo '```'
+            grep -v '^::' "$work/out.txt" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"

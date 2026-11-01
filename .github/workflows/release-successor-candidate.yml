@@ -1,8 +1,11 @@
 name: release-successor-candidate
 
-# Source/byte qualification for coherent set 0.113.0 only. This route has no tag, release,
-# journal, package-feed, OIDC or promotion write. Its retained Actions artifact
+# Source/byte qualification for the coherent set version in Directory.Build.props. This route has no
+# tag, release, journal, package-feed, OIDC or promotion write. Its retained Actions artifact
 # is an unpromoted candidate, not a published release or an admission receipt.
+# The version and predecessor are derived, never rebound per release (#5156): the version is
+# FsggCoherentSetVersion, the predecessor is the newest promoted coherent-set release below it, read
+# with its stable channel and tag commit (scripts/release_route.py).
 on:
   workflow_dispatch:
 
@@ -30,8 +33,13 @@ jobs:
           global-json-file: global.json
       - uses: ./.github/actions/setup-policy-python
       - name: Refuse malformed candidate gate behavior before costly qualification
-        run: python3 tests/release-successor-candidate/run.py
-      - name: Bind the current main source and stable version
+        run: |
+          set -euo pipefail
+          python3 tests/release-successor-candidate/run.py
+          python3 tests/release-source-closure/run.py
+      # The dispatch-time main SHA is pinned. A later main is admitted only when the pinned
+      # source is its ancestor and the release closure is unchanged between them (#5107).
+      - name: Bind the pinned dispatch source and stable version
         id: identity
         env:
           SOURCE_SHA: ${{ github.sha }}
@@ -41,11 +49,12 @@ jobs:
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF" = refs/heads/main
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
-          version="$(dotnet msbuild src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -getProperty:Version | tr -d '[:space:]')"
-          test "$version" = 0.113.0
+          python3 scripts/release_source_closure.py check --route coherent-set --source "$SOURCE_SHA"
+          version="$(python3 scripts/release_route.py version)"
+          test "$(dotnet msbuild src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -getProperty:Version | tr -d '[:space:]')" = "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Verify the stable predecessor and unused package version
+        id: predecessor
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -53,24 +62,35 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/predecessor artifacts/packages
-          gh release download coherent-set/v0.112.0 --repo "$GITHUB_REPOSITORY" \
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          predecessor="$(python3 scripts/release_route.py predecessor \
+            --releases "$RUNNER_TEMP/releases.json" --version "$VERSION")"
+          gh release download "coherent-set/v$predecessor" --repo "$GITHUB_REPOSITORY" \
             --pattern stable-channel.json --dir artifacts/predecessor
+          git fetch --quiet --no-tags origin \
+            "+refs/tags/coherent-set/v$predecessor:refs/tags/coherent-set/v$predecessor"
+          tag_source="$(git rev-parse --verify "refs/tags/coherent-set/v$predecessor^{commit}")"
           python3 scripts/release-saga.py predecessor \
             --channel artifacts/predecessor/stable-channel.json \
-            --release-tag coherent-set/v0.112.0 \
-            --tag-source d5af6a987e915bd0a1b572bcc09ad0d4b2e798b5 \
+            --release-tag "coherent-set/v$predecessor" \
+            --tag-source "$tag_source" \
             > artifacts/predecessor/identity.json
-          test "$(jq -r .version artifacts/predecessor/identity.json)" = 0.112.0
+          python3 scripts/release_route.py route --version "$VERSION" \
+            --channel artifacts/predecessor/stable-channel.json --tag-source "$tag_source" \
+            > "$RUNNER_TEMP/route.json"
+          test "$(jq -r .version artifacts/predecessor/identity.json)" = "$predecessor"
+          test "$(jq -r .predecessor "$RUNNER_TEMP/route.json")" = "$predecessor"
           python3 scripts/check-release-candidate-uniqueness.py \
-            --version "$VERSION" --predecessor 0.112.0
+            --version "$VERSION" --predecessor "$predecessor"
           release_status="$(curl --silent --show-error --location -o /dev/null -w '%{http_code}' \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H 'Accept: application/vnd.github+json' \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/coherent-set/v0.113.0")"
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/coherent-set/v$VERSION")"
           test "$release_status" = 404
           test -z "$(git ls-remote --tags origin \
-            'refs/tags/coherent-set/v0.113.0' 'refs/tags/kit/v0.113.0' \
-            'refs/tags/drivers/v0.113.0' 'refs/tags/coord-engine/v0.113.0')"
+            "refs/tags/coherent-set/v$VERSION" "refs/tags/kit/v$VERSION" \
+            "refs/tags/drivers/v$VERSION" "refs/tags/coord-engine/v$VERSION")"
+          echo "predecessor=$predecessor" >> "$GITHUB_OUTPUT"
       - name: Test the telemetry producer and prepare the browser fixture
         run: |
           set -euo pipefail
@@ -174,16 +194,18 @@ jobs:
           python3 scripts/release-saga.py assert-artifacts \
             --manifest artifacts/packages/release-manifest.json
           cp artifacts/predecessor/stable-channel.json artifacts/packages/previous-stable-channel.json
-      - name: Refuse a changed main or newly occupied version before retention
+      - name: Refuse a changed release closure or newly occupied version before retention
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ github.sha }}
           VERSION: ${{ steps.identity.outputs.version }}
+          PREDECESSOR: ${{ steps.predecessor.outputs.predecessor }}
         run: |
           set -euo pipefail
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python3 scripts/release_source_closure.py check --route coherent-set --source "$SOURCE_SHA"
           python3 scripts/check-release-candidate-uniqueness.py \
-            --version "$VERSION" --predecessor 0.112.0
+            --version "$VERSION" --predecessor "$PREDECESSOR"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-successor-candidate-${{ github.sha }}-${{ github.run_id }}

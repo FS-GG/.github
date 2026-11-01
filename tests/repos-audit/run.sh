@@ -927,6 +927,9 @@ invisible()      { noflows "$1"; local slug="${1//\//__}"; : > "$FIX/$slug.gone"
 
 # TRIES=1 by default: no retry, no sleep, so the failure legs are fast and deterministic. The retry
 # leg overrides it. The delay is always 0 — the fixture must never actually sleep.
+# The org Renovate preset the audit reads for a recorded pause (Refs #4730). Every leg runs against an
+# ENABLED preset unless it says otherwise, so the real repo's default.json (currently paused) cannot leak in.
+PRESET="$WORK/renovate-preset.json"; printf '{"enabled": true}\n' > "$PRESET"; export REPOS_AUDIT_RENOVATE_PRESET="$PRESET"
 # shellcheck disable=SC2120  # every caller today is a bare `run 2>&1`, so shellcheck is right that no
 # argument is ever passed. `"$@"` STAYS: it is the forwarding a wrapper is expected to do, and dropping
 # it is the trap — a later `run --apply` would then have its flag SILENTLY swallowed rather than
@@ -1015,6 +1018,85 @@ out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'live dispatch sender.*not declared' \
     && printf '%s' "$out" | grep -q 'live repository_dispatch listener.*not declared'; } \
   && ok "omitting every dispatch declaration -> live graph fails closed" || bad "omitted dispatch graph" "rc=$rc: $out"
+# A repository posting a dispatch to ITSELF (producer == target) is a first-class edge (Refs #4730).
+# release-saga-start.yml posts `release-saga-reconcile` to its own repo and release-saga-promote.yml
+# listens; the listener alone was reported "not declared" with no way to declare it, which kept the
+# audit red from 2026-09-10. The post is read from a plain `gh api repos/$GITHUB_REPOSITORY/dispatches
+# -f event_type=` step, across backslash continuations, and never from a comment.
+self_wire() { # <post-event> <listener-event> [post-repo-expr]
+  wire FS-GG/FS.GG.Rendering; wire FS-GG/FS.GG.SDD
+  local rs='FS-GG__FS.GG.Rendering'
+  printf '%s\n%s\n%s\n' coord.yml start.yml listen.yml > "$FIX/$rs.list"
+  printf 'jobs:\n  coordination:\n    uses: FS-GG/.github/.github/workflows/coordination-coherence.yml@main\n' > "$FIX/$rs/coord.yml"
+  printf 'jobs:\n  start:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          gh api --method POST \\\n            "repos/%s/dispatches" \\\n            -f event_type=%s \\\n            -F "client_payload[x]=1"\n' "${3:-\$GITHUB_REPOSITORY}" "$1" > "$FIX/$rs/start.yml"
+  printf 'on: {repository_dispatch: {types: ["%s"]}}\njobs: {listen: {runs-on: ubuntu-latest}}\n' "$2" > "$FIX/$rs/listen.yml"
+}
+mkreg "$REG"
+cat >> "$REG" <<'YAML'
+dispatches:
+  - { producer: FS-GG/FS.GG.Rendering, target: FS-GG/FS.GG.Rendering, event-type: fixture-self }
+YAML
+self_wire fixture-self fixture-self
+if out="$(run 2>&1)"; then ok "declared self-dispatch post and listener -> audit passes"; else bad "declared self-dispatch" "$out"; fi
+self_wire fixture-self wrong-event
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'no matching repository_dispatch listener' <<<"$out"; } \
+  && ok "self-dispatch listener event mutation -> audit fails" || bad "self-dispatch listener mutation" "rc=$rc: $out"
+self_wire fixture-self fixture-self
+mkreg "$REG"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'live dispatch sender FS-GG/FS.GG.Rendering -> FS-GG/FS.GG.Rendering (fixture-self) is not declared' <<<"$out"; } \
+  && ok "undeclared self-dispatch post -> audit fails (the sender half is read, not skipped)" || bad "undeclared self-dispatch" "rc=$rc: $out"
+cat >> "$REG" <<'YAML'
+dispatches:
+  - { producer: FS-GG/FS.GG.Rendering, target: FS-GG/FS.GG.Rendering, event-type: fixture-self }
+YAML
+self_wire fixture-self fixture-self '${{ github.repository }}'
+if out="$(run 2>&1)"; then ok "the \${{ github.repository }} spelling of the self post is read the same way"; else bad "expression spelling" "$out"; fi
+self_wire fixture-self fixture-self FS-GG/FS.GG.SDD
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'no matching dispatch-sender.yml caller' <<<"$out"; } \
+  && ok "a post to ANOTHER repository is not read as a self post" || bad "other-repo post read as self" "rc=$rc: $out"
+
+# A listener whose sender is not wired yet is a reviewed, falsifiable claim (Refs #4730). Root dropped the
+# never-wired Templates -> SDD `composition-registry-updated` edge; deleting it alone would have turned
+# SDD's real listener into an "undeclared listener" finding. The claim holds only while the listener is
+# live AND nobody posts the event to it.
+nosender_wire() { # <listener-event>: SDD listens, nothing sends
+  dispatch_wire fixture-event "$1"
+  printf '%s\n' coord.yml > "$FIX/FS-GG__FS.GG.Rendering.list"
+  rm -f "$FIX/FS-GG__FS.GG.Rendering/dispatch.yml"
+}
+lws_reg() { mkreg "$REG"; cat >> "$REG" <<'YAML'
+listeners-without-sender:
+  - target: FS-GG/FS.GG.SDD
+    event-type: fixture-event
+    reason: sender not wired yet
+YAML
+}
+nosender_wire fixture-event
+mkreg "$REG"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'live repository_dispatch listener.*not declared' <<<"$out"; } \
+  && ok "a listener with no sender and no claim -> audit fails (control: the claim is what clears it)" || bad "unclaimed senderless listener" "rc=$rc: $out"
+lws_reg
+if out="$(run 2>&1)"; then ok "a claimed listener with no sender -> audit passes"; else bad "claimed senderless listener" "$out"; fi
+nosender_wire wrong-event
+lws_reg
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'claims FS-GG/FS.GG.SDD listens for .fixture-event., but no such live' <<<"$out"; } \
+  && ok "a claim whose listener is gone is stale -> audit fails" || bad "stale listener claim" "rc=$rc: $out"
+dispatch_wire fixture-event fixture-event
+lws_reg
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'claimed as a listener WITHOUT a sender, but a live sender now posts it' <<<"$out"; } \
+  && ok "a sender appearing for a claimed listener must be promoted -> audit fails" || bad "claim hides a live sender" "rc=$rc: $out"
+mkreg "$REG"; cat >> "$REG" <<'YAML'
+listeners-without-sender:
+  - { target: FS-GG/FS.GG.SDD, event-type: fixture-event }
+YAML
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -ne 0 ]; } && ok "a claim with no reason is refused (not a mute button)" || bad "reasonless claim accepted" "$out"
 mkreg "$REG"; wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 
 # --- fails closed when the roster is unreachable or empty (#316, child (h) of #266) ---
@@ -3917,6 +3999,73 @@ out="$(run 2>&1)" && rc=0 || rc=$?
     && printf '%s' "$out" | grep -q 'fake-cli is deliberately out of scope'; } \
   && ok "engine bump-offer: a behind byte-copy receiver with NO engine proposal reds; fake-cli is explicit out-of-scope" \
   || bad "engine no-offer must be a finding, not engine freshness alone" "rc=$rc: $out"
+
+# --- a RECORDED, DELIBERATE pause of dependency automation (Refs #4730) -----------------------------
+# While default.json disables Renovate AND registry/repos.yml records the authority, the per-receiver
+# "no bump offered" findings (kit and engine) are replaced by ONE owned finding. Lifting the pause, or never
+# having recorded it, brings the normal findings back. The kit-pin / engine-pin freshness findings never
+# move: a receiver is behind whether or not Renovate runs.
+pause_record() { cat >> "$REG" <<'YAML'
+dependency-automation-pause:
+  authority: FS-GG/.github#4334
+  owner: Root
+  reason: Renovate paused for the default-branch cleanup; stays paused while CI capacity binds.
+YAML
+}
+REG_BEFORE_PAUSE="$WORK/reg-before-pause.yml"; cp "$REG" "$REG_BEFORE_PAUSE"   # the roster the engine leg above ran against
+pin FS-GG/FS.GG.Rendering 0.6.0; offer_clear FS-GG/FS.GG.Rendering   # kit side behind too, so BOTH sweeps have a subject
+count_of() { grep -c -- "$1" <<<"$2" || true; }   # grep -c exits 1 on zero matches
+cp "$REG_BEFORE_PAUSE" "$REG"; printf '{"enabled": true}\n' > "$PRESET"
+act="$(run 2>&1)" || true
+act_kit="$(count_of '::error::repos-audit: bump-offer' "$act")"; act_eng="$(count_of '::error::repos-audit: engine bump-offer' "$act")"
+if [ "$act_kit" -ge 1 ] && [ "$act_eng" -ge 1 ] && [ "$(count_of 'dependency automation' "$act")" -eq 0 ]; then
+  ok "pause control: with the preset enabled and no record, the kit and engine no-bump findings both fire ($act_kit + $act_eng) and no pause finding exists"
+else bad "pause control: the active state did not produce the normal no-bump findings" "kit=$act_kit eng=$act_eng: $act"; fi
+
+cp "$REG_BEFORE_PAUSE" "$REG"; pause_record; printf '{"enabled": false}\n' > "$PRESET"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && [ "$(count_of '::error::repos-audit: dependency automation paused' "$out")" -eq 1 ] \
+    && [ "$(count_of '::error::repos-audit: bump-offer' "$out")" -eq 0 ] \
+    && [ "$(count_of '::error::repos-audit: engine bump-offer' "$out")" -eq 0 ] \
+    && grep -q 'authority FS-GG/.github#4334, owner Root' <<<"$out" \
+    && grep -q 'FS-GG/FS.GG.Rendering' <<<"$out" \
+    && grep -q 'kit-pin freshness — FS-GG/FS.GG.Rendering' <<<"$out"; } \
+  && ok "recorded pause: ONE owned finding replaces the no-bump findings (kit and engine); the freshness findings remain; the run is still red" \
+  || bad "a recorded pause must collapse the no-bump findings into one owned finding" "rc=$rc: $out"
+
+cp "$REG_BEFORE_PAUSE" "$REG"; pause_record; printf '{"enabled": true}\n' > "$PRESET"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && grep -q 'records a dependency-automation-pause (FS-GG/.github#4334) but' <<<"$out" \
+    && [ "$(count_of '::error::repos-audit: bump-offer' "$out")" -ge 1 ] \
+    && [ "$(count_of '::error::repos-audit: engine bump-offer' "$out")" -ge 1 ] \
+    && [ "$(count_of 'dependency automation paused' "$out")" -eq 0 ]; } \
+  && ok "pause lifted: the normal no-bump findings return, and the stale record is a finding to delete" \
+  || bad "lifting the pause must bring the per-receiver findings back" "rc=$rc: $out"
+
+cp "$REG_BEFORE_PAUSE" "$REG"; printf '{"enabled": false}\n' > "$PRESET"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && grep -q 'dependency automation is paused but UNRECORDED' <<<"$out" \
+    && [ "$(count_of '::error::repos-audit: bump-offer' "$out")" -ge 1 ] \
+    && [ "$(count_of '::error::repos-audit: engine bump-offer' "$out")" -ge 1 ]; } \
+  && ok "an UNRECORDED pause hides nothing: per-receiver findings stay and the missing record is its own finding" \
+  || bad "an unrecorded pause must not suppress findings" "rc=$rc: $out"
+
+cp "$REG_BEFORE_PAUSE" "$REG"; printf 'dependency-automation-pause:\n  authority: FS-GG/.github#4334\n' >> "$REG"; printf '{"enabled": false}\n' > "$PRESET"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ] && grep -q 'invalid dependency-automation-pause record' <<<"$out"; } \
+  && ok "a pause record without owner and reason is a no-verdict, not a suppression" \
+  || bad "a malformed pause record must be refused" "rc=$rc: $out"
+
+printf '{"enabled": true}\n' > "$PRESET"; cp "$REG_BEFORE_PAUSE" "$REG"; wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+tool_manifest FS-GG/FS.GG.SDD declared
+mkdir -p "$FIX/FS-GG__FS.GG.Rendering"
+cat > "$FIX/FS-GG__FS.GG.Rendering/dotnet-tools.json" <<'JSON'
+{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.14.0","commands":["fsgg-coord-engine"]},"fake-cli":{"version":"6.1.4","commands":["fake"]}}}
+JSON
+offer_clear FS-GG/FS.GG.Rendering
 
 # Mutation 1: force the verdict program's no-offer arm to green.  The same owed receiver must then
 # cease to red, proving this leg is driven by the offer verdict rather than a copied freshness alarm.

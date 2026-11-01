@@ -707,6 +707,12 @@ let main argv =
             | "context-view" :: _ ->
                 invoked <- "context-view"
                 ContextViewApplication.tryRun arguments |> Option.defaultValue ExitError
+            | "enrollment" :: _ ->
+                invoked <- "enrollment"
+                EnrollmentApplication.tryRun arguments |> Option.defaultValue ExitError
+            | "route-preflight" :: _ ->
+                invoked <- "route-preflight"
+                EnrollmentApplication.tryRun arguments |> Option.defaultValue ExitError
             | "board-v2" :: _ ->
                 invoked <- "board-v2-refresh"
                 BoardV2Application.tryRun arguments |> Option.defaultValue ExitError

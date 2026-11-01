@@ -1,0 +1,4 @@
+{"schema":"fsgg.board-tend-snapshot/1","observedAt":"2026-11-01T12:00:00Z",
+ "cards":[
+  {"itemId":"D-offboard","ref":"FS-GG/x#100","parent":"FS-GG/x#999","status":"Ready","track":"Follow-up"}
+ ]}

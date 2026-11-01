@@ -137,6 +137,28 @@ module V2Migration =
     val collectEffectReadback:
         transport: IGitHubTransport -> scope: Scope -> before: Snapshot -> change: Change -> returnedId: string -> IoResult<Snapshot>
 
+    /// An item-scoped readback of one planning-value initialization (#5123).
+    type ItemObservation =
+        | ItemEffect of Item
+        | ItemPending
+
+    /// Read one Project item: identity, timestamp, content and its complete field values, drained as the
+    /// complete snapshot drains them. One request unless the item holds more than 50 values.
+    val collectItem: transport: IGitHubTransport -> itemId: string -> IoResult<Item>
+
+    /// Two reads of an item agree, independent of value order.
+    val sameItem: expected: Item -> actual: Item -> bool
+
+    /// Check one item readback after an initialization: `ItemEffect` when only the selected value appeared (the
+    /// item timestamp may move), `ItemPending` when the item still shows its exact pre-effect values, and an
+    /// error for anything else. Only `InitializePlanningValue` is item-scoped.
+    val itemTransition: before: Item -> after: Item -> change: Change -> IoResult<ItemObservation>
+
+    /// Check one complete readback after a group of initializations from one base snapshot: every applied
+    /// value is present and exact, and with those values removed and their items' timestamps restored the
+    /// snapshot equals the base. Every applied change must be in the base's freshly derived delta.
+    val validateGroup: scope: Scope -> before: Snapshot -> after: Snapshot -> applied: Change list -> IoResult<unit>
+
     /// Stable determining native identity excluding collection time.
     val snapshotDigest: snapshot: Snapshot -> string
 

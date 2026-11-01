@@ -7,10 +7,12 @@ name: board-drift-observer
 # them actionable. Status depends on Root writing it after each ruling, dispatch or merge, and nothing
 # detected a miss. This workflow is the detector. Hourly, it reads Project 3 and compares each card's
 # Status with signals it can observe (open PRs that say Refs, closed/Done mismatches, idle In progress
-# cards, missing fields, Root ruling comments newer than the last Status change) and keeps ONE issue,
-# "Board drift: Project 3", current: opened or rewritten when the finding set changes, commented once
-# per change, closed when there are no findings. It never writes a board field; Root stays the single
-# guarded writer. The rules and the report planner are in scripts/board-drift-observer.py.
+# cards, missing fields, Root ruling comments newer than the last Status change), evaluates the
+# deterministic board-currency rules R1-R9 (scripts/board-currency-rules.py), and keeps ONE issue,
+# "Board findings: Project 3" (#4985, renamed from "Board drift: Project 3"), current: opened or rewritten
+# when the finding set changes, commented once per change, closed when there are no findings. It never
+# writes a board field; Root stays the single guarded writer. The drift rules and the report planner are
+# in scripts/board-drift-observer.py.
 #
 # TWO JOBS, TWO CREDENTIALS, NEITHER ABLE TO DO THE OTHER'S JOB
 # =============================================================
@@ -24,6 +26,20 @@ name: board-drift-observer
 # The report job runs only if the read job succeeded and has no `always()`: a fetch error, a partial page,
 # an incomplete search or an unreadable snapshot leaves the run red and the report issue untouched.
 # This workflow can never say "no drift" about a board it did not read (.github#266).
+#
+# A THIRD READ, FOR THE SCHEDULES (rule s)
+# ========================================
+#
+# A cron GitHub stops firing leaves no red run and no issue, so the two scheduled observers watch each
+# other. The main-health observer judges this workflow's schedule from outside. This workflow judges the
+# nightly main-health observer (no fulfilling run in 2 days) and its own PREVIOUS fulfilling run (none in 2
+# hours; the current run is excluded, or it would always find itself). A fulfilling run is a `schedule` run
+# or a `workflow_dispatch` run by the hourly fdev dispatcher (the token owner), the designed fallback for a
+# dropped cron (Root decision on #4990). The read uses the run's GITHUB_TOKEN with `actions: read` in the
+# read job (three REST calls per workflow), so the Project 3 App token is not widened. A failed read becomes
+# a finding, not a red run: a dead Actions API must not also silence the
+# board report. The self-check is reported by a run, so it shows only when a run happens; a total stop of
+# this workflow is the main-health observer's to report.
 #
 # The org App's installation grants are pinned in permission-coherence.yml (re-pin in #4969). The mint
 # below asks only for scopes already in that inventory, at read, so it neither widens nor depends on
@@ -54,6 +70,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -92,6 +109,32 @@ jobs:
           set -euo pipefail
           python3 scripts/board-drift-fetch.py --owner FS-GG --project 3 --out "$SCRATCH/snapshot.json"
 
+      # Board-currency rules (design docs/coordination/2026-10-31-board-currency-gate.md, phase 2): their own
+      # read-only snapshot with native hierarchy, blockers and PRs. Fail-closed like the drift read: a failed
+      # or partial read leaves the run red and the report issue untouched.
+      - name: Read Project 3 for the board-currency rules (read-only)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          SCRATCH: ${{ steps.scratch.outputs.dir }}
+        run: |
+          set -euo pipefail
+          python3 scripts/board-currency-fetch.py --owner FS-GG --project 3 --out "$SCRATCH/currency-snapshot.json"
+
+      # Rule s input. GITHUB_TOKEN (actions: read), not the App token. Per-workflow read failures are recorded
+      # in schedule.json and become findings; the step fails only when misconfigured.
+      - name: Read the schedule history of the watched workflows
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCRATCH: ${{ steps.scratch.outputs.dir }}
+        run: |
+          set -euo pipefail
+          python3 scripts/board-drift-schedule-fetch.py --repo "$GITHUB_REPOSITORY" \
+            --workflow main-health-observer.yml --workflow board-drift-observer.yml \
+            --dispatcher-login EHotwagner \
+            --out "$SCRATCH/schedule.json"
+
       # The placeholder key is used here and nowhere else: only this step needs it, and the report job
       # never sees it. Absent or short, `check` exits NO VERDICT and the run is red (it never falls back
       # to an unkeyed hash). Create it once: openssl rand -hex 32 | gh secret set BOARD_DRIFT_HMAC_KEY --repo FS-GG/.github
@@ -102,8 +145,14 @@ jobs:
           BOARD_DRIFT_HMAC_KEY: ${{ secrets.BOARD_DRIFT_HMAC_KEY }}
         run: |
           set -euo pipefail
+          # Pure: the currency evaluation needs no key; the drift check merges its findings through the same
+          # private-placeholder gate, so the key still reaches only this step.
+          python3 scripts/board-currency-rules.py check \
+            --snapshot "$SCRATCH/currency-snapshot.json" --out "$SCRATCH/currency.json"
           python3 scripts/board-drift-observer.py check \
-            --snapshot "$SCRATCH/snapshot.json" --out "$SCRATCH/findings.json" | tee "$SCRATCH/check.log"
+            --snapshot "$SCRATCH/snapshot.json" --currency "$SCRATCH/currency.json" \
+            --schedule "$SCRATCH/schedule.json" \
+            --out "$SCRATCH/findings.json" | tee "$SCRATCH/check.log"
           {
             echo '### Board drift observation'
             echo

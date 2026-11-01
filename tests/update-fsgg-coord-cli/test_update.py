@@ -271,15 +271,35 @@ if EXTRA:
         self.assertEqual(result["commands"][0]["cleanup"], "direct-child-reaped-group-termination-requested")
 
     def test_fake_installer_inherits_runtime_resource_policy(self):
+        # `resource.getrlimit` spells "no limit" as RLIM_INFINITY, and CPython changed that spelling:
+        # -1 up to 3.14, 18446744073709551615 from 3.15. The fake installer runs under /usr/bin/python3
+        # while this process may be a different minor (CI's setup-python resolves "3.x"), so raw integers
+        # from the two interpreters are not comparable (.github#5018). Each side reports a limit as None
+        # when it equals ITS OWN interpreter's RLIM_INFINITY, so the comparison is on the semantics the
+        # test is about: finite limits are inherited exactly, and an unlimited one stays unlimited.
         fake = self.bin / "dotnet"
         fake.write_text(fake.read_text().replace("import base64,hashlib,json,os,pathlib,shutil,sys,zipfile",
                                                 "import base64,hashlib,json,os,pathlib,shutil,sys,zipfile,resource") +
-                        "\n(root/'runtime-limits.json').write_text(json.dumps({name:resource.getrlimit(getattr(resource,name)) for name in ('RLIMIT_AS','RLIMIT_FSIZE','RLIMIT_CPU')}))\n")
-        expected = {name: list(resource.getrlimit(getattr(resource, name)))
+                        "\n(root/'runtime-limits.json').write_text(json.dumps({name:[None if v==resource.RLIM_INFINITY else v for v in resource.getrlimit(getattr(resource,name))] for name in ('RLIMIT_AS','RLIMIT_FSIZE','RLIMIT_CPU')}))\n")
+        expected = {name: [None if v == resource.RLIM_INFINITY else v
+                           for v in resource.getrlimit(getattr(resource, name))]
                     for name in ("RLIMIT_AS", "RLIMIT_FSIZE", "RLIMIT_CPU")}
         code, result = self.invoke()
         self.assertEqual(code, 0, result)
         self.assertEqual(json.loads((self.root / "runtime-limits.json").read_text()), expected)
+
+    def test_rlimit_projection_is_interpreter_independent_and_not_vacuous(self):
+        # Control for the projection above (.github#5018): both interpreters must agree on an unlimited and
+        # on a finite limit, and a finite limit must NOT project to None or the test above passes vacuously.
+        project = ("import resource,json,sys;i=resource.RLIM_INFINITY;"
+                   "resource.setrlimit(resource.RLIMIT_FSIZE,tuple(i if v=='inf' else int(v) for v in sys.argv[1:3]));"
+                   "print(json.dumps([None if v==i else v for v in resource.getrlimit(resource.RLIMIT_FSIZE)]))")
+        for value, expected in (("inf", [None, None]), (str(1 << 40), [1 << 40, 1 << 40])):
+            for interpreter in {sys.executable, "/usr/bin/python3"}:
+                with self.subTest(interpreter=interpreter, limit=value):
+                    out = subprocess.run([interpreter, "-c", project, value, value],
+                                         capture_output=True, text=True, check=True).stdout
+                    self.assertEqual(json.loads(out), expected)
 
     def test_reaped_leader_with_open_pipe_retains_unsupported_group_boundary(self):
         # Finite fake lifecycle: terminal leader plus pipe still held elsewhere.
@@ -522,6 +542,37 @@ class BoardNativeResultsTests(unittest.TestCase):
         report["items"] = [item]
         expected = {key: report[key] for key in ("bindingVersion", "schemaVersion", "projectId", "selectedIssues")}
         return report, expected
+
+    def archived(self, **item_changes):
+        report, expected = self.inspection(5)
+        report["memberships"][0].update(archived=True, discrepancy=self.decoder["ARCHIVED_CARD"])
+        report["items"][0].update(health=self.decoder["ARCHIVED_HEALTH"], discrepancies=[self.decoder["ARCHIVED_CARD"]])
+        report["items"][0].update(item_changes)
+        return report, expected
+
+    def test_archived_enrolled_membership_is_explicit_and_closed(self):
+        # #5119: an archived enrolled card is an explicit archived membership whose item is Archived, never Verified.
+        report, expected = self.inspection(5)
+        self.decoder["decode_inspection"](report, expected)  # older producers omit `archived`
+        report["memberships"][0].update(archived=False)
+        self.decoder["decode_inspection"](report, expected)
+        self.decoder["decode_inspection"](*self.archived())
+        refusals = []
+        for change in (dict(enrolled=False), dict(discrepancy=None), dict(archived="yes"), dict(archived=None), dict(extra=1)):
+            report, expected = self.archived()
+            report["memberships"][0].update(change)
+            refusals.append((report, expected))
+        refusals += [self.archived(health="Verified"), self.archived(health="Unknown"), self.archived(discrepancies=[])]
+        report, expected = self.inspection(5)  # `archived: null` refuses on its own, not only through the item check
+        report["memberships"][0].update(archived=None)
+        refusals.append((report, expected))
+        for item_changes in (dict(health=self.decoder["ARCHIVED_HEALTH"]), dict(discrepancies=[self.decoder["ARCHIVED_CARD"]])):
+            report, expected = self.inspection(5)  # an item claiming archived without an archived membership
+            report["items"][0].update(item_changes)
+            refusals.append((report, expected))
+        for report, expected in refusals:
+            with self.assertRaises(self.decoder["Unknown"]):
+                self.decoder["decode_inspection"](report, expected)
 
     def test_state_only_dependency_observation_accepts_actual_producer_shape(self):
         report, expected = self.inspection(5)

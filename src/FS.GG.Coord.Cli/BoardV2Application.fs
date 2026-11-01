@@ -208,8 +208,11 @@ module BoardV2Application =
                    membershipGap = report.MembershipGap |> Option.map Errors.explain
                    memberships = report.Memberships |> List.map (fun memberItem ->
                        {| itemId = memberItem.ItemId; contentId = memberItem.ContentId; kind = memberItem.Kind
-                          issue = memberItem.Issue |> Option.map issueWire; enrolled = memberItem.Enrolled
-                          discrepancy = if memberItem.Enrolled then None else Some "Unexpected/unselected membership; no automatic enrollment" |})
+                          issue = memberItem.Issue |> Option.map issueWire; enrolled = memberItem.Enrolled; archived = memberItem.Archived
+                          discrepancy =
+                            if memberItem.Archived then Some V2ProjectionSource.archivedCardDiscrepancy
+                            elif memberItem.Enrolled then None
+                            else Some "Unexpected/unselected membership; no automatic enrollment" |})
                    nativeIntegrator = {| observedAt = (if report.NativeIntegrator.ObservedAt = DateTimeOffset.MinValue then None else Some report.NativeIntegrator.ObservedAt); repositoryGaps = report.NativeIntegrator.RepositoryGaps
                                          pullRequests = report.NativeIntegrator.PullRequests
                                          resourceGap = if context.IsNone then Some "Missing runtime/integrator observations; no capacity inferred from collaboration slots" else None |}
@@ -297,7 +300,7 @@ module BoardV2Application =
 
     type private MigrationCommand =
         | MigrationPrepare of scopePath: string * reportPath: string
-        | MigrationApply of preparedPath: string * expectedSha256: string * accountableOwner: string * selectionReference: string * windowUntil: DateTimeOffset
+        | MigrationApply of preparedPath: string * expectedSha256: string * accountableOwner: string * selectionReference: string * windowUntil: DateTimeOffset * maxEffects: int
         | MigrationReadback of preparedPath: string
 
     let private migrationSyntax (arguments: string list) : Result<MigrationCommand, string> =
@@ -315,7 +318,8 @@ module BoardV2Application =
                 match command with
                 | "migration-prepare" when exact [ "--scope-file"; "--report-file" ] -> Ok(MigrationPrepare(path "--scope-file", path "--report-file"))
                 | "migration-readback" when exact [ "--prepared-file" ] -> Ok(MigrationReadback(path "--prepared-file"))
-                | "migration-apply" when exact [ "--prepared-file"; "--prepared-sha256"; "--accountable-owner"; "--selection-reference"; "--planning-window-until" ] ->
+                | "migration-apply" when exact [ "--prepared-file"; "--prepared-sha256"; "--accountable-owner"; "--selection-reference"; "--planning-window-until" ]
+                                         || exact [ "--prepared-file"; "--prepared-sha256"; "--accountable-owner"; "--selection-reference"; "--planning-window-until"; "--max-effects" ] ->
                     let sha = values["--prepared-sha256"]
                     let owner = values["--accountable-owner"]
                     let reference = values["--selection-reference"]
@@ -325,7 +329,15 @@ module BoardV2Application =
                        || String.IsNullOrWhiteSpace reference || reference.Length > 2048 || (reference |> Seq.exists Char.IsControl)
                        || not (DateTimeOffset.TryParse(values["--planning-window-until"], Globalization.CultureInfo.InvariantCulture, Globalization.DateTimeStyles.None, &expiry)) then
                         Error "migration requires exact prepared digest, accountable selection and bounded planning window"
-                    else Ok(MigrationApply(path "--prepared-file", sha.ToLowerInvariant(), owner, reference, expiry))
+                    else
+                        // Effects per invocation (#5123): at most 500, the invocation's request ceiling.
+                        match values.TryFind "--max-effects" with
+                        | None -> Ok(MigrationApply(path "--prepared-file", sha.ToLowerInvariant(), owner, reference, expiry, 500))
+                        | Some text ->
+                            match Int32.TryParse(text, Globalization.NumberStyles.None, Globalization.CultureInfo.InvariantCulture) with
+                            | true, count when count >= 1 && count <= 500 ->
+                                Ok(MigrationApply(path "--prepared-file", sha.ToLowerInvariant(), owner, reference, expiry, count))
+                            | _ -> Error "--max-effects must be a whole number from 1 to 500"
                 | _ -> Error "unsupported migration command or argument; no effects admitted")
         | [] -> Error "missing migration command"
 
@@ -404,6 +416,8 @@ module BoardV2Application =
            || revision adapter <> Some scope.SourceRevision || revision cli <> Some scope.SourceRevision then
             Error "selected source/adapter/CLI identity differs from the actual executing assemblies"
         else Ok()
+    // Planning-value initializations per group between complete reads (#5123).
+    let private migrationPlanningGroupSize = 25
     let private migrationFresh (connection: V2MigrationTransport.IConnection) (scope: V2Migration.Scope) =
         V2Migration.collect connection.Reads scope |> Result.bind (V2Migration.prepare scope)
     let private migrationStable (connection: V2MigrationTransport.IConnection) (scope: V2Migration.Scope) =
@@ -471,7 +485,19 @@ module BoardV2Application =
     type private MigrationAdmission =
         { Prepared: V2Migration.Prepared; Directory: string; WindowUntil: DateTimeOffset }
 
-    let private executeMigration (connection: V2MigrationTransport.IConnection) (syncDirectory: string -> unit) (clock: TimeProvider) (command: MigrationCommand) =
+    // Resolves the shared writer lock for a project and a legacy lock name (board-reconciler design §8, #5126).
+    // Production resolves V2WriterLock.production; every test seam injects a private directory instead.
+    type private WriterLock = string -> string -> V2WriterLock.Location
+
+    let private productionWriterLock : WriterLock =
+        fun projectId legacyName ->
+            match V2WriterLock.production projectId legacyName with
+            | Ok location -> location
+            | Error reason -> raise (IOException reason)
+
+    let private injectedWriterLock (directory: string) : WriterLock = V2WriterLock.inDirectory directory
+
+    let private executeMigration (writerLock: WriterLock) (connection: V2MigrationTransport.IConnection) (syncDirectory: string -> unit) (clock: TimeProvider) (command: MigrationCommand) =
         let privateWrite = privateWrite syncDirectory
         let privateJson = privateJson syncDirectory
         let utf8 = System.Text.UTF8Encoding(false, true)
@@ -507,7 +533,7 @@ module BoardV2Application =
                     prepareStage <- "prepared-report-write"
                     privateJson reportPath (V2Migration.encodePrepared ({ prepared with PreparedPath = Some reportPath }))
                     0)
-            | MigrationApply(preparedPath, expectedHash, owner, selection, windowUntil) ->
+            | MigrationApply(preparedPath, expectedHash, owner, selection, windowUntil, maxEffects) ->
                 let raw = privateRead (4L * 1024L * 1024L) preparedPath
                 if migrationDigest raw <> expectedHash then Error "selected-prepared-byte-digest-differs"
                 else
@@ -521,6 +547,9 @@ module BoardV2Application =
                             migrationIdentity scope |> Result.bind (fun () ->
                                 let directory = preparedPath + ".invocation"
                                 privatePath directory
+                                // The shared writer lock is taken before the invocation marker, so a held lock
+                                // refuses with no marker, no custody file and no send (#5136, #5126).
+                                use lease = V2WriterLock.acquire (writerLock "PVT_kwDOEYAWY84Bldpa" V2WriterLock.migrationLegacyName)
                                 // Exclusive marker, never removed. Reopening this identity is readback-only.
                                 let reservationMetadata =
                                     {| preparedSha256 = expectedHash;
@@ -542,7 +571,9 @@ module BoardV2Application =
                                        cliArtifactSha256 = scope.CliArtifactSha256;
                                        planningWindowUntil = windowUntil;
                                        requestCeiling = 500;
-                                       secondsCeiling = 270 |}
+                                       secondsCeiling = 270;
+                                       maxEffects = maxEffects;
+                                       planningGroupSize = migrationPlanningGroupSize |}
                                 privateJson (Path.Combine(directory, "invocation.json")) (JsonSerializer.Serialize(invocationMetadata))
                                 migrationStable connection scope |> Result.mapError migrationErrorClass
                                 |> Result.bind (fun fresh ->
@@ -550,12 +581,108 @@ module BoardV2Application =
                                     elif not fresh.Snapshot.CanUpdate then Error "native-project-update-capability-absent"
                                     else
                                         let admission: MigrationAdmission = { Prepared = { fresh with PreparedPath = Some boundPath }; Directory = directory; WindowUntil = windowUntil }
-                                        let lockPath = Path.Combine(Path.GetTempPath(), "fsgg-v2-migration-PVT_kwDOEYAWY84Bldpa.lock")
-                                        use lease = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
-                                        let rec effects (sequence: int) (expected: V2Migration.Prepared) =
+                                        // #5123: consecutive planning-value initializations run as one bounded group from one
+                                        // complete base read. Each effect re-reads only its item before its send and reads only
+                                        // its item back (at most 8 item reads); the group ends with one complete read that must
+                                        // show exactly the group's effects. Every custody file of the single-effect path is kept.
+                                        let encodeItem (item: V2Migration.Item) =
+                                            JsonSerializer.Serialize(
+                                                {| schema = "fs.gg.board-v2.migration-item/1"; id = item.Id; contentId = item.ContentId; contentKind = item.ContentKind
+                                                   repository = Option.toObj item.Repository; number = Option.toNullable item.Number; updatedAt = item.UpdatedAt
+                                                   archived = item.Archived
+                                                   values = item.Values |> List.map (fun (value: V2Migration.ItemValue) -> {| id = value.Id; fieldId = value.FieldId; kind = value.Kind; value = value.Value |}) |})
+                                        let isPlanning = function V2Migration.InitializePlanningValue _ -> true | _ -> false
+                                        let planningGroup (start: int) (groupBase: V2Migration.Prepared) (group: V2Migration.Change list) : Result<int * V2Migration.Change list, string> =
+                                            let items = Collections.Generic.Dictionary<string, V2Migration.Item>()
+                                            for item in groupBase.Snapshot.Items do items.[item.Id] <- item
+                                            let rec next (sequence: int) (applied: V2Migration.Change list) (remaining: V2Migration.Change list) =
+                                                match remaining with
+                                                | [] -> Ok(sequence, List.rev applied)
+                                                | _ when clock.GetUtcNow() >= admission.WindowUntil ->
+                                                    if applied.IsEmpty then Error "planning-window-expired" else Ok(sequence, List.rev applied)
+                                                | change :: rest ->
+                                                    let itemId = match change with V2Migration.InitializePlanningValue(_, itemId, _, _) -> itemId | _ -> ""
+                                                    match items.TryGetValue itemId with
+                                                    | false, _ -> Error "group-item-absent-from-base"
+                                                    | true, expectedItem ->
+                                                        V2Migration.collectItem connection.Reads itemId |> Result.mapError migrationErrorClass
+                                                        |> Result.bind (fun observedItem ->
+                                                            if not (V2Migration.sameItem expectedItem observedItem) then Error "determining-facts-changed-before-effect"
+                                                            else
+                                                                V2Migration.request groupBase change |> Result.mapError migrationErrorClass
+                                                                |> Result.bind (fun request ->
+                                                                    let prefix = Path.Combine(directory, sequence.ToString("D3", Globalization.CultureInfo.InvariantCulture))
+                                                                    let exact = match request.Body with Json json -> json | _ -> invalidOp "typed JSON request expected"
+                                                                    privateJson (prefix + "-precondition.json") (V2Migration.encodePrepared groupBase)
+                                                                    privateJson (prefix + "-item-precondition.json") (encodeItem observedItem)
+                                                                    if clock.GetUtcNow() >= admission.WindowUntil then invalidOp "planning window expired before send"
+                                                                    privateJson (prefix + "-intent.json") exact
+                                                                    let intentMetadata =
+                                                                        {| method = request.Method;
+                                                                           path = request.Path;
+                                                                           budget = "GraphQl";
+                                                                           requestSha256 = migrationDigest (Transport.canonicalMutationBytes request);
+                                                                           bodySha256 = migrationDigest (utf8.GetBytes exact);
+                                                                           bodyBytes = utf8.GetByteCount exact;
+                                                                           originalPreparedSha256 = expectedHash;
+                                                                           sequence = sequence;
+                                                                           itemScoped = true |}
+                                                                    privateJson (prefix + "-intent-metadata.json") (JsonSerializer.Serialize(intentMetadata))
+                                                                    // Once this durable intent exists, every later exception remains uncertain.
+                                                                    if clock.GetUtcNow() >= admission.WindowUntil then invalidOp "planning window expired after custody before dispatch"
+                                                                    let outcome = connection.Dispatch(groupBase, change, admission.WindowUntil)
+                                                                    let accepted =
+                                                                        match outcome with
+                                                                        | Ok response ->
+                                                                            privateJson (prefix + "-response.json") response.Body
+                                                                            let receiptMetadata =
+                                                                                {| httpStatus = response.Status;
+                                                                                   responseSha256 = migrationDigest (utf8.GetBytes response.Body);
+                                                                                   responseBytes = utf8.GetByteCount response.Body |}
+                                                                            privateJson (prefix + "-receipt.json") (JsonSerializer.Serialize(receiptMetadata))
+                                                                            migrationResponse change request response
+                                                                        | Error error ->
+                                                                            let errorMetadata =
+                                                                                {| state = "Unknown";
+                                                                                   errorClass = migrationErrorClass error;
+                                                                                   reason = migrationFailureReason error |}
+                                                                            privateJson (prefix + "-error.json") (JsonSerializer.Serialize(errorMetadata))
+                                                                            Error error
+                                                                    let rec observe (attempt: int) : Result<unit, string> =
+                                                                        if clock.GetUtcNow() >= admission.WindowUntil || connection.RemainingTime <= TimeSpan.Zero then Error "Unknown-after-possible-send-observation-window-expired"
+                                                                        else
+                                                                            match V2Migration.collectItem (connection.ObservationReads admission.WindowUntil) itemId with
+                                                                            | Error _ -> Error "Unknown-after-possible-send-readback-unavailable"
+                                                                            | Ok after ->
+                                                                                let observationPrefix =
+                                                                                    if attempt = 1 then prefix
+                                                                                    else prefix + "-visibility-" + attempt.ToString("D3", Globalization.CultureInfo.InvariantCulture)
+                                                                                privateJson (observationPrefix + "-native-readback.json") (encodeItem after)
+                                                                                match accepted with
+                                                                                | Error _ -> Error "Unknown-original-outcome-retained-readback-only"
+                                                                                | Ok returnedId when returnedId <> itemId -> Error "Unknown-original-outcome-retained-readback-only"
+                                                                                | Ok _ ->
+                                                                                    match V2Migration.itemTransition observedItem after change with
+                                                                                    | Ok(V2Migration.ItemEffect settled) ->
+                                                                                        items.[itemId] <- settled
+                                                                                        Ok()
+                                                                                    | Ok V2Migration.ItemPending when attempt < 7 ->
+                                                                                        let delay = TimeSpan.FromSeconds([| 1.0; 1.0; 2.0; 4.0; 8.0; 14.0 |].[attempt - 1])
+                                                                                        if min (admission.WindowUntil - clock.GetUtcNow()) connection.RemainingTime <= delay then
+                                                                                            Error "Unknown-after-possible-send-observation-window-expired"
+                                                                                        else
+                                                                                            System.Threading.Tasks.Task.Delay(delay, clock, System.Threading.CancellationToken.None).GetAwaiter().GetResult()
+                                                                                            observe (attempt + 1)
+                                                                                    | Ok V2Migration.ItemPending -> Error "Unknown-visibility-observation-exhausted-original-intent-retained"
+                                                                                    | Error _ -> Error "Unknown-original-outcome-retained-readback-only"
+                                                                    observe 1 |> Result.bind (fun () -> next (sequence + 1) (change :: applied) rest)))
+                                            next start [] group
+                                        let rec effects (sequence: int) (sent: int) (expected: V2Migration.Prepared) (observedFirst: V2Migration.Prepared option) =
                                             if clock.GetUtcNow() >= admission.WindowUntil then Error "planning-window-expired"
                                             else
-                                                migrationFresh connection expected.Scope |> Result.mapError migrationErrorClass
+                                                (match observedFirst with
+                                                 | Some observed -> Ok observed
+                                                 | None -> migrationFresh connection expected.Scope |> Result.mapError migrationErrorClass)
                                                 |> Result.bind (fun observed ->
                                                     let current = { observed with PreparedPath = expected.PreparedPath }
                                                     if current.Digest <> expected.Digest then Error "determining-facts-changed-before-effect"
@@ -564,6 +691,26 @@ module BoardV2Application =
                                                         | [] ->
                                                             privateJson (Path.Combine(directory, "completed.json")) (V2Migration.encodePrepared current)
                                                             Ok 0
+                                                        | _ when sent >= maxEffects ->
+                                                            // The budget stops before any further send; a new preparation continues the work.
+                                                            privateJson (Path.Combine(directory, "effect-budget.json"))
+                                                                (JsonSerializer.Serialize({| sent = sent; maxEffects = maxEffects; remaining = current.Changes.Length; next = "re-prepare to continue" |}))
+                                                            Error "effect-budget-reached-reprepare-to-continue"
+                                                        | (V2Migration.InitializePlanningValue _ :: _) as changes ->
+                                                            let group = changes |> List.takeWhile isPlanning |> List.truncate (min migrationPlanningGroupSize (maxEffects - sent))
+                                                            planningGroup sequence current group
+                                                            |> Result.bind (fun (nextSequence, applied) ->
+                                                                migrationFresh connection current.Scope |> Result.mapError migrationErrorClass
+                                                                |> Result.mapError (fun _ -> "Unknown-after-group-complete-readback-unavailable")
+                                                                |> Result.bind (fun fresh ->
+                                                                    let groupPrefix = Path.Combine(directory, (nextSequence - 1).ToString("D3", Globalization.CultureInfo.InvariantCulture) + "-group")
+                                                                    privateJson (groupPrefix + "-native-readback.json") (V2Migration.encodeReadback current.Scope fresh.Snapshot)
+                                                                    match V2Migration.validateGroup current.Scope current.Snapshot fresh.Snapshot applied with
+                                                                    | Error _ -> Error "Unknown-group-readback-differs-original-intent-retained"
+                                                                    | Ok() ->
+                                                                        let settled = { fresh with PreparedPath = current.PreparedPath }
+                                                                        privateJson (groupPrefix + "-readback.json") (V2Migration.encodePrepared settled)
+                                                                        effects nextSequence (sent + applied.Length) settled (Some settled)))
                                                         | change :: _ ->
                                                             V2Migration.request current change |> Result.mapError migrationErrorClass
                                                             |> Result.bind (fun request ->
@@ -643,8 +790,8 @@ module BoardV2Application =
                                                                                             observe (attempt + 1)
                                                                                     | Ok V2Migration.PendingVisibility -> Error "Unknown-visibility-observation-exhausted-original-intent-retained"
                                                                                     | Error _ -> Error "Unknown-original-outcome-retained-readback-only"
-                                                                observe 1 |> Result.bind (effects (sequence + 1))))
-                                        effects 1 admission.Prepared)))
+                                                                observe 1 |> Result.bind (fun next -> effects (sequence + 1) (sent + 1) next None)))
+                                        effects 1 0 admission.Prepared None)))
             | MigrationReadback preparedPath ->
                 let original = Path.Combine(preparedPath + ".invocation", "prepared.json")
                 let raw = privateRead (4L * 1024L * 1024L) original
@@ -684,7 +831,7 @@ module BoardV2Application =
                            failedAt = clock.GetUtcNow() |}
                     privateJson (migrationPrepareFailurePath reportPath) (JsonSerializer.Serialize(failureMetadata))
                 with _ -> () // The exit code and stderr remain; no retry or rewrite follows.
-            | MigrationApply(preparedPath, _, _, _, _) ->
+            | MigrationApply(preparedPath, _, _, _, _, _) ->
                 let directory = preparedPath + ".invocation"
                 if ownsInvocation && Directory.Exists directory then
                     try
@@ -704,15 +851,15 @@ module BoardV2Application =
             | Error code -> terminal code None
         with error -> terminal "invocation-io-or-unexpected-failure" (Some(error.GetType().FullName))
 
-    let runMigrationWithCustody (connection: V2MigrationTransport.IConnection) (syncDirectory: string -> unit) (clock: TimeProvider) (arguments: string list) =
+    let runMigrationWithCustody (lockDirectory: string) (connection: V2MigrationTransport.IConnection) (syncDirectory: string -> unit) (clock: TimeProvider) (arguments: string list) =
         try
             match migrationSyntax arguments with
-            | Ok command -> executeMigration connection syncDirectory clock command
+            | Ok command -> executeMigration (injectedWriterLock lockDirectory) connection syncDirectory clock command
             | Error _ -> 1
         with _ -> 1
 
-    let runMigrationWithConnection (connection: V2MigrationTransport.IConnection) (arguments: string list) =
-        runMigrationWithCustody connection syncMigrationDirectory TimeProvider.System arguments
+    let runMigrationWithConnection (lockDirectory: string) (connection: V2MigrationTransport.IConnection) (arguments: string list) =
+        runMigrationWithCustody lockDirectory connection syncMigrationDirectory TimeProvider.System arguments
 
     let private parseSyntax arguments =
         let rec flags values = function
@@ -729,8 +876,203 @@ module BoardV2Application =
         | ("refresh" | "inspect") :: rest -> flags Map.empty rest
         | _ -> Error "expected board-v2 refresh or inspect"
 
+    // ---- board-v2 tend, plan-only (#5136 phase 2 PR 3) ----
+
+    type private TendCommand = { PlanPath: string; Rules: Set<string>; Apply: bool }
+
+    let private tendSyntax (arguments: string list) =
+        let rec flags (values: Map<string, string>) = function
+            | [] -> Ok values
+            | "--apply" :: rest when not (values.ContainsKey "--apply") -> flags (values.Add("--apply", "")) rest
+            | ("--plan-file" | "--rules") as flag :: value :: rest when not (values.ContainsKey flag) && not (value.StartsWith("--", StringComparison.Ordinal)) ->
+                flags (values.Add(flag, value)) rest
+            | _ -> Error "board-v2 tend takes --plan-file NEW [--rules R1,R2,...] or --plan-file NEW --apply"
+        flags Map.empty arguments
+        |> Result.bind (fun values ->
+            match values.TryFind "--plan-file" with
+            | None -> Error "board-v2 tend needs --plan-file"
+            | Some _ when values.ContainsKey "--apply" && values.ContainsKey "--rules" ->
+                Error "board-v2 tend --apply takes its rules from the enable file, never from --rules"
+            | Some plan ->
+                let rules =
+                    values.TryFind "--rules"
+                    |> Option.map (fun text -> text.Split(',', StringSplitOptions.RemoveEmptyEntries ||| StringSplitOptions.TrimEntries) |> Set.ofArray)
+                    |> Option.defaultValue (set [ "W1h"; "T1f" ])
+                let unknown = rules - V2Tend.applyRules
+                if not unknown.IsEmpty then Error("unknown tend rules: " + String.Join(",", unknown))
+                else Ok { PlanPath = Path.GetFullPath plan; Rules = rules; Apply = values.ContainsKey "--apply" })
+
+    type TendDependencies =
+        { Reads: IGitHubTransport
+          SendOnce: Transport.Request -> Errors.IoResult<Transport.Response>
+          Clock: TimeProvider
+          Wait: TimeSpan -> unit
+          WriterLock: Result<V2WriterLock.Location, string>
+          ConfigHome: string
+          StateHome: string
+          SyncDirectory: string -> unit }
+
+    let private tendProject = "PVT_kwDOEYAWY84Bldpa"
+    let private privateModeBits =
+        UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute
+
+    let private tendBounded (transport: IGitHubTransport) (ceiling: int) =
+        let mutable calls = 0
+        { new IGitHubTransport with
+            member _.Send request =
+                if calls >= ceiling then Error(Errors.Malformed(request.Subject, "tend read ceiling reached; coverage Unknown"))
+                else
+                    calls <- calls + 1
+                    transport.Send request
+            member _.SendMutation mutation = Error(Errors.Malformed(mutation.Request.Subject, "board-v2 tend reads never mutate"))
+            member _.RetryMutation effectId = Error(Errors.Malformed(effectId, "board-v2 tend reads never mutate")) }
+
+    // The enable file (design §8): `$XDG_CONFIG_HOME/fsgg/board-tend.json`, mode 0600. A file this process can
+    // read under mode 0600 is owned by its user (or the process is root). Missing or invalid: plan-only.
+    let private readEnable (configHome: string) : Result<V2TendWrite.Enable * string list, string> =
+        let path = Path.Combine(configHome, "fsgg", "board-tend.json")
+        if not (File.Exists path) then Error "no enable file"
+        elif File.GetAttributes(path).HasFlag FileAttributes.ReparsePoint then Error "the enable file is a symlink"
+        elif not (OperatingSystem.IsWindows()) && File.GetUnixFileMode path &&& privateModeBits <> enum<UnixFileMode> 0 then
+            Error "the enable file must be mode 0600"
+        else
+            // The contract amendment (fsgg:board-tend-contract/v1) lands in PR 6, which also wires its marker
+            // read; until then every contract-gated rule is dropped from the enable file.
+            V2TendWrite.parseEnable (File.ReadAllText path) false
+
+    // Read-only: reads Project 3 and native facts, derives the plan, writes it privately. With --apply and a
+    // valid enable file, it also writes under the writer lock through the guarded tend writer.
+    let private executeTend (deps: TendDependencies) (command: TendCommand) =
+        try
+            let parent = Path.GetDirectoryName command.PlanPath
+            if File.Exists command.PlanPath || Directory.Exists command.PlanPath then
+                eprintfn "fsgg-coord-engine: board-v2 tend refused: --plan-file must be a new path"
+                1
+            elif not (Directory.Exists parent) then
+                eprintfn "fsgg-coord-engine: board-v2 tend refused: the --plan-file directory %s does not exist" parent
+                1
+            elif not (OperatingSystem.IsWindows()) && File.GetUnixFileMode parent &&& privateModeBits <> enum<UnixFileMode> 0 then
+                // Checked before any read, so a run is never spent on a plan that cannot be written.
+                eprintfn "fsgg-coord-engine: board-v2 tend refused: the --plan-file directory %s must be private to its owner (mode 0700); it is %s" parent (File.GetUnixFileMode parent |> string)
+                1
+            else
+                let started = deps.Clock.GetTimestamp()
+                let observed = deps.Clock.GetUtcNow()
+                // Placeholders, wired before PR 5 and PR 8: the Root login (until the board-currency
+                // rootLogins parameter is read), an empty ledger (until the state directory) and no
+                // enrollment input (RM1 inert; P-READY reports cards as unenrolled).
+                let rootLogins = set [ "EHotwagner" ]
+                let inputs: V2TendReads.Inputs =
+                    { Owner = "FS-GG"; ProjectNumber = 3; RootLogins = rootLogins; ObservedAt = observed; Ledger = []; Enrolled = Map.empty }
+                let enable =
+                    if not command.Apply then None
+                    else
+                        match readEnable deps.ConfigHome with
+                        | Error reason ->
+                            eprintfn "fsgg-coord-engine: board-v2 tend: --apply ignored (%s); plan-only" reason
+                            None
+                        | Ok(enable, dropped) ->
+                            for message in dropped do eprintfn "fsgg-coord-engine: board-v2 tend: %s" message
+                            if enable.Apply.IsEmpty then
+                                eprintfn "fsgg-coord-engine: board-v2 tend: the enable file lists no rules; plan-only"
+                                None
+                            else Some enable
+                let lease =
+                    match enable with
+                    | None -> None
+                    | Some _ ->
+                        match deps.WriterLock |> Result.bind V2WriterLock.tryAcquire with
+                        | Ok lease -> Some lease
+                        | Error reason ->
+                            eprintfn "fsgg-coord-engine: board-v2 tend: lock-held or lock unavailable (%s); plan-only" reason
+                            None
+                try
+                    let writing = enable.IsSome && lease.IsSome
+                    let rules = if writing then enable.Value.Apply else command.Rules
+                    let context =
+                        if not writing then None
+                        else
+                            let closable = Collections.Generic.HashSet<string>()
+                            let run = observed.ToString("yyyyMMddTHHmmssZ") + "-" + Guid.NewGuid().ToString("N").Substring(0, 8)
+                            let settings = { V2TendWrite.defaultSettings tendProject rootLogins with MaxItemsPerRun = enable.Value.MaxItemsPerRun }
+                            Some({ Reads = V2TendReads.readOnly (tendBounded deps.Reads (3 * settings.MaxItemsPerRun + 200))
+                                   Send = V2TendWrite.allowlisted tendProject closable.Contains deps.SendOnce
+                                   Custody = V2TendWrite.Custody(Path.Combine(deps.StateHome, "fsgg", "board-tend"), run, deps.SyncDirectory)
+                                   Gate = V2TendWrite.GateCustody(Path.Combine(deps.StateHome, "fsgg", "board-gate"), deps.SyncDirectory)
+                                   Clock = deps.Clock
+                                   Pacer = V2TendWrite.Pacer(deps.Clock, deps.Wait, settings.MinimumMutationInterval)
+                                   Closable = closable
+                                   Settings = settings } : V2TendWrite.Context)
+                    // Under the lock, the gate's custody pass and the reconciler's own readback sweep run first.
+                    let gateOutcomes = context |> Option.map (fun c -> V2TendWrite.gatePass c (rules.Contains "GR")) |> Option.defaultValue []
+                    let ownUncertain, sweepOutcomes = context |> Option.map V2TendWrite.sweepOwn |> Option.defaultValue (Set.empty, [])
+                    match V2TendReads.readSnapshot (V2TendReads.readOnly (tendBounded deps.Reads (V2TendReads.readCeiling 500 + 24))) inputs with
+                    | Error message ->
+                        eprintfn "fsgg-coord-engine: board-v2 tend refused: %s" message
+                        3
+                    | Ok(snapshot, cost) ->
+                        let plan = V2Tend.derive (V2Tend.v1 rules) snapshot
+                        privateJson deps.SyncDirectory command.PlanPath (V2Tend.encodePlan plan + Environment.NewLine)
+                        let outcomes =
+                            match context with
+                            | None -> []
+                            | Some c ->
+                                let records, _ = c.Gate.Records()
+                                let gateUncertain, gateDeferred = V2TendWrite.gateHolds records
+                                let applied =
+                                    V2TendWrite.apply c
+                                        { Plan = plan; Snapshot = snapshot; OwnUncertain = ownUncertain; GateUncertain = gateUncertain; GateDeferred = gateDeferred }
+                                // Proposals to #4985 (design §6), when the enable file says so. The placeholder key is
+                                // the observer's BOARD_DRIFT_HMAC_KEY, held on fdev in a mode-0600 file.
+                                let proposed =
+                                    if not enable.Value.Propose then []
+                                    else
+                                        let keyPath = Path.Combine(deps.ConfigHome, "fsgg", "board-drift-hmac-key")
+                                        let key =
+                                            if not (File.Exists keyPath) || File.GetAttributes(keyPath).HasFlag FileAttributes.ReparsePoint then None
+                                            elif not (OperatingSystem.IsWindows()) && File.GetUnixFileMode keyPath &&& privateModeBits <> enum<UnixFileMode> 0 then None
+                                            else Some(Text.Encoding.UTF8.GetBytes((File.ReadAllText keyPath).TrimEnd('\r', '\n')))
+                                        V2TendPropose.run c deps.SyncDirectory (Path.Combine(deps.StateHome, "fsgg", "board-tend", "proposals.json")) key plan.Propose
+                                let all = gateOutcomes @ sweepOutcomes @ applied @ proposed
+                                privateJson deps.SyncDirectory (command.PlanPath + ".outcomes.json") (V2TendWrite.encodeOutcomes all + Environment.NewLine)
+                                all
+                        let count result = outcomes |> List.filter (fun (o: V2TendWrite.Outcome) -> o.Result = result) |> List.length
+                        let seconds = deps.Clock.GetElapsedTime(started).TotalSeconds
+                        printfn "board-v2 tend: %s; cards=%d apply=%d wouldApply=%d close=%d wouldClose=%d deferred=%d propose=%d refuse=%d; written=%d noop=%d refused=%d uncertain=%d; requests=%d graphqlPoints=%d rest=%d; seconds=%.1f"
+                            (if context.IsSome then "apply" else "plan-only")
+                            snapshot.Cards.Length plan.Apply.Length plan.WouldApply.Length plan.Close.Length plan.WouldClose.Length
+                            plan.Deferred.Length plan.Propose.Length plan.Refuse.Length (count "written") (count "noop") (count "refused") (count "uncertain")
+                            cost.Requests cost.GraphQlPoints cost.RestCalls seconds
+                        if count "uncertain" > 0 then 3 else 0
+                finally
+                    lease |> Option.iter (fun l -> l.Dispose())
+        with error ->
+            eprintfn "fsgg-coord-engine: board-v2 tend refused: %s" (error.GetType().Name)
+            1
+
+    let runTend (deps: TendDependencies) (arguments: string list) =
+        match tendSyntax arguments with
+        | Error message ->
+            eprintfn "fsgg-coord-engine: board-v2 tend refused: %s" message
+            1
+        | Ok command -> executeTend deps command
+
+    let private readOnlyDependencies (transport: IGitHubTransport) (clock: TimeProvider) : TendDependencies =
+        { Reads = transport
+          SendOnce = fun (request: Transport.Request) -> Error(Errors.Malformed(request.Subject, "no mutation sender"))
+          Clock = clock
+          Wait = ignore
+          WriterLock = Error "a plan-only run takes no writer lock"
+          ConfigHome = Path.Combine(Path.GetTempPath(), "fsgg-tend-no-config-" + Guid.NewGuid().ToString("N"))
+          StateHome = Path.Combine(Path.GetTempPath(), "fsgg-tend-no-state-" + Guid.NewGuid().ToString("N"))
+          SyncDirectory = syncMigrationDirectory }
+
+    let runTendWithTransport (transport: IGitHubTransport) (clock: TimeProvider) (arguments: string list) =
+        runTend (readOnlyDependencies transport clock) arguments
+
     let validateInvocation arguments =
         match arguments with
+        | "board-v2" :: "tend" :: rest -> Some(tendSyntax rest |> Result.map ignore)
         | "board-v2" :: ((command :: _) as rest) when command.StartsWith("migration-", StringComparison.Ordinal) ->
             Some(try migrationSyntax rest |> Result.map ignore with _ -> Error "invalid migration argument")
         | "board-v2" :: rest -> parseSyntax rest |> Result.map ignore |> Some
@@ -788,11 +1130,14 @@ module BoardV2Application =
 
     // Leave enough time for the existing 30 second transport timeout. Stop before dispatch,
     // without cancelling an in-flight writer; serialization is owned by the fixed job.
-    let private bounded (transport: IGitHubTransport) =
-        let elapsed = Diagnostics.Stopwatch.StartNew()
+    // The request ceiling and the deadline scale with the selected population (#5119).
+    let boundedWith (elapsed: unit -> TimeSpan) (binding: Binding) (transport: IGitHubTransport) =
+        let rows = binding.SelectedIssues.Count
+        let ceiling = V2Projection.refreshRequestCeiling rows
+        let deadline = TimeSpan.FromSeconds(V2Projection.refreshDeadlineSeconds rows)
         let mutable calls = 0
         let dispatch subject action =
-            if elapsed.Elapsed >= TimeSpan.FromSeconds 270.0 || calls >= 500 then Error(Errors.Malformed(subject, "bounded refresh deadline/request ceiling reached; coverage Unknown"))
+            if elapsed () >= deadline || calls >= ceiling then Error(Errors.Malformed(subject, "bounded refresh deadline/request ceiling reached; coverage Unknown"))
             else
                 calls <- calls + 1
                 action ()
@@ -801,15 +1146,18 @@ module BoardV2Application =
             member _.SendMutation mutation = dispatch mutation.Request.Subject (fun () -> transport.SendMutation mutation)
             member _.RetryMutation effectId = Error(Errors.Malformed(effectId, "fixed refresh cannot replay durable mutation recipes")) }
 
+    let private bounded (binding: Binding) (transport: IGitHubTransport) =
+        let clock = Diagnostics.Stopwatch.StartNew()
+        boundedWith (fun () -> clock.Elapsed) binding transport
+
     let private refuse message =
         eprintfn "fsgg-coord-engine: board-v2 refresh refused: %s" message
         1
-    let private execute (transport: IGitHubTransport) ((binding: Binding), previous, reportPath, _) =
+    let private execute (writerLock: WriterLock) (transport: IGitHubTransport) ((binding: Binding), previous, reportPath, _) =
         try
             let report =
-                let lockPath = Path.Combine(Path.GetTempPath(), "fsgg-v2-observation-" + binding.ProjectId + ".lock")
-                use lease = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
-                V2ProjectionSource.runFixed (bounded transport) binding previous
+                use lease = V2WriterLock.acquire (writerLock binding.ProjectId (V2WriterLock.observationLegacyName binding.ProjectId))
+                V2ProjectionSource.runFixed (bounded binding transport) binding previous
             let evidence = match box transport with :? V2ObservationTransport.IDispatchEvidence as evidence -> evidence.DispatchReceipts | _ -> []
             let report = { report with NativeDispatch = evidence; Cleanup = "Root-local project exclusive OS handle released; no distributed lease or background work" }
             let json = encodeReport report + Environment.NewLine
@@ -819,24 +1167,53 @@ module BoardV2Application =
         with error -> refuse (if isProgrammeBinding binding then "private refresh/report failed" else "refresh/report failed: " + error.Message)
     let private executeInspection transport (binding, previous, reportPath, context) =
         try
-            let report = V2ProjectionSource.inspectFixed (bounded transport) binding previous
+            let report = V2ProjectionSource.inspectFixed (bounded binding transport) binding previous
             let json = encodeInspectionWithContext report context DateTimeOffset.UtcNow + Environment.NewLine
             if isProgrammeBinding binding then privateJson syncMigrationDirectory reportPath json
             else File.WriteAllText(reportPath, json)
             if report.Evidence.PopulationGap.IsSome || report.MembershipGap.IsSome || (report.Items |> List.exists (fun item -> item.SourceCurrentness <> "Current" || item.PlanningGap.IsSome)) then 3 else 0
         with error -> refuse (if isProgrammeBinding binding then "private inspection/report failed" else "inspection/report failed: " + error.Message)
 
-    let runWithTransportAndInput transport (reader: TextReader) arguments =
+    let runWithTransportAndInput (lockDirectory: string) transport (reader: TextReader) arguments =
         match prepare reader arguments with
         | Error message -> refuse message
         | Ok input ->
             match arguments with
             | "inspect" :: _ -> executeInspection transport input
-            | _ -> execute transport input
-    let runWithTransport transport arguments = runWithTransportAndInput transport Console.In arguments
+            | _ -> execute (injectedWriterLock lockDirectory) transport input
+    let runWithTransport (lockDirectory: string) transport arguments = runWithTransportAndInput lockDirectory transport Console.In arguments
 
     let tryRun arguments =
         match arguments with
+        | "board-v2" :: "tend" :: rest ->
+            Some(
+                match tendSyntax rest with
+                | Error message ->
+                    eprintfn "fsgg-coord-engine: board-v2 tend refused: %s" message
+                    1
+                | Ok command ->
+                    let primary = Environment.GetEnvironmentVariable "GITHUB_TOKEN"
+                    let token = if String.IsNullOrWhiteSpace primary then Environment.GetEnvironmentVariable "GH_TOKEN" else primary
+                    if String.IsNullOrWhiteSpace token then
+                        eprintfn "fsgg-coord-engine: board-v2 tend refused: no GITHUB_TOKEN or GH_TOKEN"
+                        1
+                    else
+                        use transport = new HttpTransport(apiBaseFromEnv (), token)
+                        let home = Environment.GetFolderPath Environment.SpecialFolder.UserProfile
+                        let xdg (name: string) (fallback: string) =
+                            match Environment.GetEnvironmentVariable name with
+                            | value when not (String.IsNullOrWhiteSpace value) && Path.IsPathRooted value -> value
+                            | _ -> Path.Combine(home, fallback)
+                        runTend
+                            { Reads = transport
+                              SendOnce = (transport :> IProviderGitHubTransport).SendMutationOnce
+                              Clock = TimeProvider.System
+                              Wait = fun span -> Threading.Thread.Sleep span
+                              WriterLock = (try Ok(productionWriterLock tendProject V2WriterLock.migrationLegacyName) with error -> Error error.Message)
+                              ConfigHome = xdg "XDG_CONFIG_HOME" ".config"
+                              StateHome = xdg "XDG_STATE_HOME" (Path.Combine(".local", "state"))
+                              SyncDirectory = syncMigrationDirectory }
+                            rest)
         | "board-v2" :: ((command :: _) as rest) when command.StartsWith("migration-", StringComparison.Ordinal) ->
             Some(
                 try
@@ -849,7 +1226,7 @@ module BoardV2Application =
                         | Error _ -> 1
                         | Ok connection ->
                             use connection = connection
-                            executeMigration connection syncMigrationDirectory TimeProvider.System selected
+                            executeMigration productionWriterLock connection syncMigrationDirectory TimeProvider.System selected
                 with _ -> 1)
         | "board-v2" :: rest ->
             Some(match prepare Console.In rest with
@@ -867,5 +1244,5 @@ module BoardV2Application =
                      | Error error -> refuse (Errors.explain error)
                      | Ok(transport, lifetime) ->
                          use lifetime = lifetime
-                         match rest with "inspect" :: _ -> executeInspection transport input | _ -> execute transport input)
+                         match rest with "inspect" :: _ -> executeInspection transport input | _ -> execute productionWriterLock transport input)
         | _ -> None

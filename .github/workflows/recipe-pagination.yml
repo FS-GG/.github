@@ -55,6 +55,7 @@ on:
       - "scripts/check-recipe-pagination.py"
       - "tests/recipe-pagination/**"
       - ".github/workflows/recipe-pagination.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

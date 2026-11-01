@@ -7,6 +7,12 @@
 # findings and a non-zero exit. It also reads board-drift-observer.yml and asserts the credential split
 # (read App token in `board-drift-read`, `issues: write` only in `board-drift-report`) and that nothing in the workflow can
 # turn a failed read into a green "no drift".
+# Rule s (a watched workflow's cron stopped firing: the nightly main-health observer past 2 days, this
+# observer's own previous scheduled run past 2 hours) has a fresh, stale, never-ran, absent, disabled and
+# unreadable leg, and its fetch (scripts/board-drift-schedule-fetch.py) is driven through a stub `gh`.
+#
+# The same job also runs `tests/board-currency/run.sh`: the board-currency rule set (R1-R9, U) that runs in
+# the observer's read job and that the report merges into the one findings issue, with its mutation controls.
 #
 # No schedule: the subject is entirely git-tracked files in this repo, and the fixture uses a recording
 # `gh` stub (no token, no network). The `paths:` lists on pull_request and push are IDENTICAL and must
@@ -18,17 +24,29 @@ on:
     paths:
       - "scripts/board-drift-observer.py"
       - "scripts/board-drift-fetch.py"
+      - "scripts/board-drift-schedule-fetch.py"
       - "tests/board-drift-observer/**"
       - ".github/workflows/board-drift-observer.yml"
       - ".github/workflows/board-drift-observer-selftest.yml"
+      - "scripts/board-currency-rules.py"
+      - "scripts/board-currency-fetch.py"
+      - "tests/board-currency/**"
+      - "scripts/board-linkage.py"
+      - ".github/workflows/board-linkage.yml"
   push:
     branches: [main]
     paths:
       - "scripts/board-drift-observer.py"
       - "scripts/board-drift-fetch.py"
+      - "scripts/board-drift-schedule-fetch.py"
       - "tests/board-drift-observer/**"
       - ".github/workflows/board-drift-observer.yml"
       - ".github/workflows/board-drift-observer-selftest.yml"
+      - "scripts/board-currency-rules.py"
+      - "scripts/board-currency-fetch.py"
+      - "tests/board-currency/**"
+      - "scripts/board-linkage.py"
+      - ".github/workflows/board-linkage.yml"
   workflow_dispatch:
 
 permissions:
@@ -47,3 +65,6 @@ jobs:
       - uses: ./.github/actions/setup-policy-python
       - name: Run the board-drift fixture (no network)
         run: bash tests/board-drift-observer/run.sh
+      # Same light job, one more step (#4730 CI load): the board-currency rules' fixture and mutation controls.
+      - name: Run the board-currency fixture and mutation controls (no network)
+        run: bash tests/board-currency/run.sh

@@ -556,3 +556,22 @@ let ``a body that is not JSON is Malformed - never an empty fact set`` () =
     match facts transport board ref with
     | Error(Malformed _) -> ()
     | other -> failwith $"unreadable bytes are a failed read, not empty facts — got %A{other}"
+
+[<Fact>]
+let ``#5119 Done facts read an archived card's Done explicitly and no other Status`` () =
+    // Done retention archives only Done cards, so an archived card's Done is still the fact; any other Status on an
+    // archived card is not a live row and reads as no Status.
+    let body status archived =
+        responseWithProjectItems "CLOSED" "" "" noSubs
+            $"""{{"totalCount":1,"nodes":[{{"isArchived":{archived},"project":{{"number":12}},"status":{{"name":"{status}"}}}}]}}""" "null"
+    let statusOf b =
+        match facts (serving b) board ref with
+        | Ok f -> f.BoardStatus
+        | Error e -> failwith $"parse failed — got %A{e}"
+    Assert.Equal(Done, statusOf (body "Done" "true"))
+    Assert.Equal(NoStatus, statusOf (body "In progress" "true"))
+    Assert.Equal(InProgress, statusOf (body "In progress" "false"))
+    let unset archived =
+        responseWithProjectItems "CLOSED" "" "" noSubs
+            $"""{{"totalCount":1,"nodes":[{{"isArchived":{archived},"project":{{"number":12}},"status":null}}]}}""" "null"
+    Assert.Equal(NoStatus, statusOf (unset "true"))

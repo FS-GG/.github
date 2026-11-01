@@ -24,15 +24,15 @@ spec.loader.exec_module(read)
 
 
 def workflow_contract(text):
-    required = ["default: coherent-0113-absence", "- coherent-0113-absence", "- host-080-org-artifact",
+    required = ["default: coherent-successor-absence", "- coherent-successor-absence", "- host-090-org-artifact",
                 "contents: read\n  packages: read", "cancel-in-progress: false", "timeout-minutes: 5",
                 "persist-credentials: false", "python3 scripts/telemetry-host-published-org-read.py --check-selection",
                 "python3 tests/release-successor-candidate/run.py", "python3 tests/telemetry-host-published-org-read/run.py",
-                "if: inputs.observation == 'coherent-0113-absence' || inputs.observation == ''",
-                "if: inputs.observation == 'host-080-org-artifact'",
-                "if: inputs.observation == 'host-080-org-artifact' && steps.host-org.outcome == 'success'",
-                "name: telemetry-host080-org-read-${{ github.sha }}-${{ github.run_id }}",
-                "path: ${{ runner.temp }}/host080-org-read/", "if-no-files-found: error", "retention-days: 7"]
+                "if: inputs.observation == 'coherent-successor-absence' || inputs.observation == ''",
+                "if: inputs.observation == 'host-090-org-artifact'",
+                "if: inputs.observation == 'host-090-org-artifact' && steps.host-org.outcome == 'success'",
+                "name: telemetry-host090-org-read-${{ github.sha }}-${{ github.run_id }}",
+                "path: ${{ runner.temp }}/host090-org-read/", "if-no-files-found: error", "retention-days: 7"]
     for literal in required:
         if literal not in text:
             raise ValueError("workflow obligation: " + literal)
@@ -42,8 +42,8 @@ def workflow_contract(text):
                       "continue-on-error", "always()", "release-successor-publish.py", "dotnet", "gh release", "git push"]:
         if forbidden in text:
             raise ValueError("workflow effect or bypass")
-    default, host = text.split("      - name: Observe the published Host 0.8 org archive once", 1)
-    if "upload-artifact" in default or "--version 0.113.0 --predecessor 0.112.0" not in default:
+    default, host = text.split("      - name: Observe the published Host 0.9 org archive once", 1)
+    if "upload-artifact" in default or '--version "$version" --predecessor "$predecessor"' not in default:
         raise ValueError("default coherent branch changed")
     if text.index("--check-selection") > text.index("python3 tests/"):
         raise ValueError("selection ordering")
@@ -135,10 +135,10 @@ class ObservationTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name)
         self.host=read.verifier();package=self.root/'fixture.nupkg'
         with zipfile.ZipFile(package,'w') as z:
-            z.writestr('FS.GG.Telemetry.Host.nuspec','<package><metadata><id>FS.GG.Telemetry.Host</id><version>0.8.0</version></metadata></package>')
+            z.writestr('FS.GG.Telemetry.Host.nuspec','<package><metadata><id>FS.GG.Telemetry.Host</id><version>0.9.0</version></metadata></package>')
             z.writestr('tools/net10.0/linux-x64/FS.GG.Telemetry.Host.dll',b'fixture')
         (self.root/'lock.json').write_text('{}');(self.root/'assets').mkdir();(self.root/'assets/app.js').write_text('fixture')
-        manifest=self.host.build_manifest(SimpleNamespace(package=package,lock=self.root/'lock.json',assets=self.root/'assets',version='0.8.0',tag=read.TAG,source_sha=read.SOURCE))
+        manifest=self.host.build_manifest(SimpleNamespace(package=package,lock=self.root/'lock.json',assets=self.root/'assets',version='0.9.0',tag=read.TAG,source_sha=read.SOURCE))
         manifest_raw=self.host.canonical(manifest)+b'\n';(self.root/'manifest.json').write_bytes(manifest_raw)
         observation=self.host.verify_artifact(self.root/'manifest.json',package)
         journal={'schema':'fsgg.telemetry-host-release-journal/v1','manifestSha256':'sha256:'+read.sha(self.host.canonical(manifest)),
@@ -231,10 +231,10 @@ class ContextAndWorkflowTests(unittest.TestCase):
 
     def test_actual_workflow_and_causal_mutations(self):
         text=(ROOT/'.github/workflows/release-successor-feed-readiness.yml').read_text();workflow_contract(text)
-        replacements=[('packages: read','packages: write'),('default: coherent-0113-absence','default: host-080-org-artifact'),
+        replacements=[('packages: read','packages: write'),('default: coherent-successor-absence','default: host-090-org-artifact'),
                       ('--check-selection','--unchecked'),(" && steps.host-org.outcome == 'success'",''),
                       ('if-no-files-found: error','if-no-files-found: warn'),('tests/telemetry-host-published-org-read/run.py','other.py'),
-                      ("if: inputs.observation == 'host-080-org-artifact'\n",'if: always()\n')]
+                      ("if: inputs.observation == 'host-090-org-artifact'\n",'if: always()\n')]
         for old,new in replacements:
             with self.subTest(old=old),self.assertRaises(ValueError):workflow_contract(text.replace(old,new))
 

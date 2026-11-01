@@ -17,6 +17,7 @@ import tempfile
 import zipfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import release_route
 from release_successor_journal import CURRENT_RELEASE
 
 REPOSITORY_ID = 1269292704  # FS-GG/.github, independent of a caller-supplied slug
@@ -139,10 +140,14 @@ def extract_verified(
             )
             predecessor = json.loads((work / "previous-stable-channel.json").read_text())
             if version == CURRENT_RELEASE["version"]:
-                require(predecessor.get("version") == CURRENT_RELEASE["predecessor"]
-                        and predecessor.get("sourceSha") == CURRENT_RELEASE["predecessorSource"]
-                        and predecessor.get("contentId") == CURRENT_RELEASE["predecessorContentId"],
-                        "current candidate predecessor identity differs")
+                # Derived, not pinned (#5156): a well-formed promoted channel strictly older than the
+                # version. The publisher binds it only after reading its release and tag live.
+                try:
+                    identity = release_route.channel_identity((work / "previous-stable-channel.json").read_bytes())
+                    older = release_route.parts(identity["version"]) < release_route.parts(version)
+                except release_route.RouteRefused:
+                    older = False
+                require(older, "current candidate predecessor identity differs")
             require(
                 predecessor.get("contentId") == descriptor.get("previousStableContentId")
                 and predecessor.get("version") == descriptor.get("previousStableVersion"),

@@ -2134,3 +2134,95 @@ recovery constant are unchanged. The existing45-minute candidate, exact seven-me
 publish=false preflight and publish=true each need their own admission on the same immutable
 source and archive. Host`claude-local-transcript/1` admission needs a separately released Host
 built from at least`61526e94`; this coherent route does not change Host0.8.
+
+## Selected coordination CLI coherent114 source window — 2026-10-31
+
+Source0.114.0 was composed by [PR4905](https://github.com/FS-GG/.github/pull/4905) (merge`0123febd`)
+and now also carries [Delivery4940](https://github.com/FS-GG/.github/issues/4940) (`context-view`, PR4948)
+and [Delivery4941](https://github.com/FS-GG/.github/issues/4941) (batched `enrollment`, `route-preflight`, PR4950,
+PR4956, PR4968 and the programme row ceiling lift from100 to250, PR4980), under parent
+[Outcome4730](https://github.com/FS-GG/.github/issues/4730). This window rebinds only the release route.
+The genuine promoted predecessor is113, immutable source`79db622ff4a51498e22ae5820eeb2b470fc743c5`, content
+`sha256:14c8ba3f954347278a646bb0d227cbbea820845bf5596ad3d7e7fcaaac1ab908`
+([release421880935](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.113.0) stable-channel asset).
+Current source selects logical ref`refs/heads/fsgg/v2/journal/release/coord114-enrollment-context-20261031-01`
+and directory`state/releases/coord114-enrollment-context-20261031-01`. The closed coherent observation
+choice becomes`coherent-0114-absence`.
+
+This is reversible source composition, not namespace allocation, a candidate, a main hold, publication or
+installation. Consumed113 and every earlier journal, original attempt and recovery constant are unchanged. The
+existing45-minute candidate, exact seven-member archive,60-minute publisher, Authority-entry ceiling and quota
+floor contracts are unchanged. Candidate, publish=false preflight and publish=true each need their own admission
+on the same immutable source and archive.
+
+Operating constraints observed on the 0.113 and Host0.9 cuts and carried here. The candidate refuses unless
+`origin/main` still equals its pinned SHA, at its start and again before retaining the artifact. The publisher
+requires live`main` to equal its own pinned SHA at every intent, dispatch and settle, and the preflight pins the
+same way, so one continuous hold on`.github``main` from candidate dispatch until the journal is complete is the
+planned window. The candidate runs`FS.GG.Coord.Cli.Tests`, so`main` must be green on that suite at the pinned head.
+The publisher reads Authority`main` before journal genesis without retry; a refusal there happens before any
+effect and its recovery is a freshly admitted dispatch, never a reset. Installed adoption on fdev
+(`/opt/fdev/bin/update-fsgg-coord-cli`, which also runs at fdev startup) is a separate effect, timed with any
+running telemetry capture, and rolls back by repointing the retained`coord-0.113.0` directory. The 250-row
+population is readable only by0.114.0 and later.
+
+## Selected board reader coherent1141 source window — 2026-11-01
+
+Source0.114.1 was composed by [PR5110](https://github.com/FS-GG/.github/pull/5110) (merge`e7f954a7`) and carries
+the board reader and writer work released under programme decision6 of
+[Outcome4730](https://github.com/FS-GG/.github/issues/4730): the programme row ceiling of500
+(PR5122), fewer reads per row (PR5127), archived-card handling and the Archived health
+(PR5132, PR5154), batched refresh (PR5146), the shared writer lock with deferred transitions
+(PR5141), Refs-only Delivery linkage (PR5138) and plan-only `board-v2 tend` (PR5155). This window
+rebinds only the release route. The genuine promoted predecessor is0.114.0, immutable source
+`3c13e67f56de25041c6a5f9de85c54d178134956`, content
+`sha256:250a010e27ebcc43007ea72bbdf01fddbabc45c2a85feabde3268d095d91d01c`, promoted
+2026-10-31T15:54:06Z ([release430012073](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.114.0)
+stable-channel asset). Current source selects logical ref
+`refs/heads/fsgg/v2/journal/release/coord1141-board-reader-20261101-01` and directory
+`state/releases/coord1141-board-reader-20261101-01`. The closed coherent observation choice
+becomes`coherent-01141-absence`. Consumed0.114.0 journal`coord114-enrollment-context-20261031-01`
+is pinned as a refused prior journal.
+
+This is reversible source composition, not namespace allocation, a candidate, a main hold,
+publication or installation. Every earlier journal, original attempt and recovery constant is
+unchanged. The existing45-minute candidate, exact seven-member archive,60-minute publisher,
+Authority-entry ceiling and quota floor contracts are unchanged. Candidate, publish=false
+preflight and publish=true each need their own admission on the same immutable source and archive.
+The candidate and publisher pin the dispatch-time source and admit a later `main` only outside the
+release closure ([PR5111](https://github.com/FS-GG/.github/pull/5111)); the publisher re-reads
+Authority `main` until it is stable across a settlement burst
+([#5108](https://github.com/FS-GG/.github/issues/5108)). This is the first release to exercise both.
+A per-release rebind of this kind is to be replaced by deriving the route from the version bump
+([#5156](https://github.com/FS-GG/.github/issues/5156)). The row ceiling is500, so a population above
+250 rows is readable only by0.114.1 and later.
+
+## Derived coherent release route — 2026-11-01
+
+[#5156](https://github.com/FS-GG/.github/issues/5156) replaces the per-release rebind
+([PR5034](https://github.com/FS-GG/.github/pull/5034) for 0.114.0, [PR5157](https://github.com/FS-GG/.github/pull/5157)
+for 0.114.1) with derivation in `scripts/release_route.py`. A coherent release now needs only the version bump of
+`FsggCoherentSetVersion` in `Directory.Build.props`; no later window section is added here for it.
+
+- The version is `FsggCoherentSetVersion`. The candidate still cross-checks it against the CLI's MSBuild `Version`.
+- The predecessor is the newest promoted (non-draft, non-prerelease) `coherent-set/v*` release below the version.
+  The candidate downloads its `stable-channel.json`, and `release-saga.py predecessor` checks it against the commit
+  the predecessor's tag names (derived, no longer a literal). The publisher reads that release, asset and tag live
+  again and binds `CURRENT_RELEASE`'s predecessor only when the release is promoted, its uploaded asset has exactly
+  the candidate's channel bytes, and its tag names the channel's source. Until then any read of it refuses.
+- The journal namespace is unique per version: `coherent-set-v<version>`, logical ref
+  `refs/heads/fsgg/v2/journal/release/coherent-set-v<version>`, directory `state/releases/coherent-set-v<version>`.
+  The six hand-allocated journals 0.110.0 to 0.114.1 keep their names (`release_route.ALLOCATED`, immutable).
+- The feed-readiness choice is the version-free `coherent-successor-absence`. It observes the derived version
+  against the derived predecessor.
+
+The fail-closed checks are kept:
+- the version must be strictly greater than the predecessor, and no promoted coherent-set release may be newer;
+- the version's tag and release must be absent;
+- the predecessor's consumed journal is never the current journal: the name is unique per version, and the journal
+  refuses a current-version intent on any other ref.
+
+The pinning tests are now derivation tests with mutants. Main currently declares 0.114.1, which is already promoted,
+so every route refuses with "not older than" until the next bump. That bump is the proof: it needs no rebind PR.
+This is source composition only. It selects no candidate, preflight, publication or installation, and allocates no
+namespace.

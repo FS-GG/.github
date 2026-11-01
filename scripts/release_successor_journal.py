@@ -34,18 +34,37 @@ WRITE_READBACK_BACKOFF_SECONDS = (1.0, 2.0, 4.0)
 PATH = "release-state.json"
 SCHEMA = "fsgg.release-successor-journal/1"
 
-# One prospective root-selected source composition; no namespace allocation or effect authority.
-# Completed110/observer journal and frozen original cuts remain immutable.
-CURRENT_RELEASE = {"version": "0.113.0", "predecessor": "0.112.0",
-    "logicalRef": "refs/heads/fsgg/v2/journal/release/coord113-claude-usage-20261023-01",
-    "directory": "state/releases/coord113-claude-usage-20261023-01",
-    "predecessorSource": "d5af6a987e915bd0a1b572bcc09ad0d4b2e798b5",
-    "predecessorContentId": "sha256:1a6f0e3a80f1554819dc8c4185a35ab9fd9894c6b8d6ae97d85f4f3282259adb"}
+# The current release is derived from the version bump (#5156), never rebound per release: the version
+# is FsggCoherentSetVersion in Directory.Build.props and the journal namespace is unique per version
+# (release_route.journal_name). The predecessor is bound at run time from the authenticated candidate's
+# promoted stable channel, after the publisher reads that channel's release and tag live; reading it
+# before then refuses. No namespace allocation or effect authority. Completed earlier journals and
+# frozen original cuts remain immutable.
+class _RouteUnavailable(dict):
+    """The current release in a closure without the route (authority-state-import.py's pinned three-file
+    generator): every read refuses, so that closure can never act on the current release."""
+    def __missing__(self, key):
+        raise Refused("the current release route is unavailable in this source closure")
+
+
+try:
+    import release_route
+except ImportError:
+    CURRENT_RELEASE = _RouteUnavailable()
+else:
+    CURRENT_RELEASE = release_route.current_release()
 
 
 
 class Refused(RuntimeError):
     pass
+
+
+class JournalMainMoved(Refused):
+    """The physical journal ref moved between the opening and closing reads of one read().
+
+    Typed so a caller may re-read after the ref settles (#5108); nothing was validated or kept.
+    """
 
 
 class GitAPI(Protocol):
@@ -640,7 +659,7 @@ class ProtectedReleaseJournal:
             current = lineage[-1]
         second = self.api.get(path)
         if second.get("object", {}).get("sha") != physical:
-            raise Refused("journal head moved during read")
+            raise JournalMainMoved("journal head moved during read")
         if "continuation" in current and (not _claimed_state(current) or self.continuation_owner is None
                 or canonical(current["continuation"]["execution"]) != canonical(self.continuation_owner)):
             raise Refused("claimed .104 continuation is consumed by another invocation/profile")

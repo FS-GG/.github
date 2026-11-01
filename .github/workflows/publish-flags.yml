@@ -44,6 +44,7 @@ on:
   schedule:
     # Daily. The variable being unset out-of-band touches no file here — only a periodic run notices.
     - cron: "37 6 * * *"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

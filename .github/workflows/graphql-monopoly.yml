@@ -41,6 +41,8 @@ on:
       - "scripts/check-graphql-monopoly.py"
       - "scripts/check-graphql-boundary.py"
       - "scripts/board-drift-fetch.py"
+      - "scripts/board-currency-fetch.py"
+      - "scripts/board-linkage.py"
       - "scripts/projects-audit.sh"
       - "scripts/repos-audit.sh"
       - "scripts/coord-board-archive.py"
@@ -72,6 +74,8 @@ on:
       - "scripts/check-graphql-monopoly.py"
       - "scripts/check-graphql-boundary.py"
       - "scripts/board-drift-fetch.py"
+      - "scripts/board-currency-fetch.py"
+      - "scripts/board-linkage.py"
       - "scripts/projects-audit.sh"
       - "scripts/repos-audit.sh"
       - "scripts/coord-board-archive.py"
@@ -94,6 +98,7 @@ on:
       - "tests/graphql-monopoly/**"
       - "tests/FS.GG.Coord.GitHub.Tests/**"
       - ".github/workflows/graphql-monopoly.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

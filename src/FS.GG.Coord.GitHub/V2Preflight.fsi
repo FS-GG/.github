@@ -8,7 +8,8 @@ namespace FS.GG.Coord.GitHub
 ///
 /// The route registry and the stage set are closed. A route or stage with no registered checks yields
 /// `Unknown`, never `SupportedForNextStage`. No verdict, subject or evidence carries payload, nonce, private
-/// binding content or native identity other than public issue references and Project item ids.
+/// binding content or content node id. Subjects are issue references, counts and the missing-field list; the Project
+/// item id (`PVTI_...`) appears only for a non-issue item, which has no reference to name it by.
 module V2Preflight =
     open System
 
@@ -25,11 +26,19 @@ module V2Preflight =
         | RoutineDelivery
         | PublicationWriterRegistration
 
-    /// Closed stage set of the enrollment route: the next stage the operator is about to run.
+    /// Closed stage set: the next stage the operator is about to run. Each route registers only its own
+    /// stages; a route and stage that do not belong together have no checks and are `Unknown`.
     type Stage =
+        // ProgrammeEnrollmentSuccessor
         | PlanSuccessor
         | PrepareSuccessor
         | BindRuntime
+        // RoutineDelivery
+        | OpenPullRequest
+        | MergePullRequest
+        // PublicationWriterRegistration
+        | RegisterWriter
+        | RunWriter
 
     val routes: Route list
     val stages: Stage list
@@ -57,6 +66,27 @@ module V2Preflight =
         | MemoryHeadroom
         | ProjectAutoAdd
         | AdjacencyChurn
+        // BindRuntime observes the successor, not the predecessor
+        | SuccessorIntegrity
+        | SuccessorExtendsPredecessor
+        // RoutineDelivery
+        | BaseIsDefaultBranch
+        | RoutineBranch
+        | MarkerSingle
+        | MarkerHeadBound
+        | MarkerOperationAllowed
+        | ClosingLinkDeclared
+        | PullRequestOpen
+        | ChangesPresent
+        | SinglePullRequest
+        | BaseCurrent
+        // PublicationWriterRegistration
+        | WorkflowReadable
+        | WorkflowPublishes
+        | RegistryReadable
+        | NotYetRegistered
+        | WriterRegistered
+        | CoverageAudit
 
     val checkCode: check: Check -> string
 
@@ -73,11 +103,15 @@ module V2Preflight =
         | ProtocolRelease
         | ToolchainCache
         | HostCapacity
+        | SuccessorCustody
+        | PullRequestOwner
+        | WriterRegistry
 
     val supplierCode: supplier: Supplier -> string
 
     type Reason =
         | ConstructorDiffersFromMain
+        | ConstructorNotAncestorOfMain
         | PredecessorCommitmentMismatch
         | PredecessorNotSpliceable
         | RuntimeBindingDiffers
@@ -95,6 +129,22 @@ module V2Preflight =
         | BindingOverBound
         | LockedHashDiffersFromCache
         | InsufficientMemoryHeadroom
+        | SuccessorCommitmentMismatch
+        | SuccessorDoesNotExtendPredecessor
+        | PullRequestBaseNotDefault
+        | BranchNotRoutine
+        | MarkerMissingOrAmbiguous
+        | MarkerHeadDiffers
+        | OperationNotAllowed
+        | PullRequestAlreadyOpen
+        | PullRequestNotSingle
+        | WorkflowHasNoPublicationEffect
+        | WriterAlreadyRegistered
+        | WriterNotRegistered
+        | CoverageUnmet
+        | PullRequestNotOpen
+        | NoChangedPaths
+        | ClosingKeywordUndeclared
 
     val reasonCode: reason: Reason -> string
 
@@ -102,6 +152,7 @@ module V2Preflight =
     type Input =
         | SourceRevision
         | ProtectedMain
+        | ConstructorClosure
         | PredecessorPrivate
         | PredecessorPublic
         | RuntimeBinding
@@ -112,7 +163,20 @@ module V2Preflight =
         | LockedHash
         | CachedHash
         | CgroupMemory
+        | HostMemory
         | Registry
+        | PlanBlobFact
+        | SuccessorPrivate
+        | SuccessorMerge
+        | SuccessorPublic
+        | PullRequestFact
+        | OpenPullRequestFact
+        | BaseHead
+        | RoutineGate
+        | ClosingGate
+        | WorkflowText
+        | WriterRegistryText
+        | CoverageGate
         /// The planner itself, when it could not produce a successor to measure.
         | Planner
 
@@ -133,6 +197,17 @@ module V2Preflight =
         /// a sudden rise in bare unenrolled memberships matched the later refusal, whose code was coarse.
         | BareMembershipsObserved of count: int
         | NotRegistered
+        /// A native read was attempted and failed (distinct from a file that could not be read).
+        | ReadFailed
+        /// A 404 on a repository that may be private or invisible to the reader: absence is not established.
+        | NotVisible
+        /// The pull request's base is no longer the default branch head, so a routine event may race.
+        | BaseMoved
+        /// Closing keywords naming issues are present; they must be a declared fulfilment, which is not decidable here.
+        | ClosingLinkPresent of count: int
+        /// A maintained gate's bytes in the checkout differ from the trusted base's, so the checkout's gate cannot be trusted
+        /// to predict CI.
+        | GateModified
 
     type Gap = { Input: Input; Kind: GapKind }
 
@@ -176,6 +251,28 @@ module V2Preflight =
         /// Replayed from a file; it can be used for the planner's joins but not for "now".
         | Supplied
 
+    /// How the protected main revision was obtained.
+    type MainFreshness =
+        /// Read from the remote in this run.
+        | LiveMain
+        /// Asserted by the operator (`--main-revision`).
+        | AssertedMain
+        /// The checkout's local tracking ref; it may be stale.
+        | LocalTrackingRef
+
+    /// What the checkout says about the constructor's source revision and the intended protected main (#5113),
+    /// observed by `git` for exactly the pair named. It is evidence only for that pair.
+    type ConstructorContent =
+        { Built: string
+          Main: string
+          /// `Built` is an ancestor of `Main` (`git merge-base` of the two is `Built`).
+          BuiltIsAncestor: bool
+          /// Exact paths plus prefixes of the constructor closure derived at `Built` (`V2ConstructorClosure`).
+          ClosureEntries: int
+          ChangedOutsideClosure: int
+          /// Changed paths between the two commits that are inside the closure, including added paths that shadow it.
+          ChangedInsideClosure: int }
+
     type EnrollmentInputs =
         { Request: V2Enrollment.Request
           Facts: Observed<V2Enrollment.NativeFacts * FactsFreshness>
@@ -183,25 +280,47 @@ module V2Preflight =
           ConstructorRevision: Observed<string>
           /// The intended protected main revision.
           ProtectedMain: Observed<string>
+          /// How `ProtectedMain` was obtained. A differing revision from a local tracking ref is only `Unknown`.
+          ProtectedMainFreshness: MainFreshness
+          /// When the revisions differ, the content evidence for that exact pair. `ConstructorIdentity` is supported
+          /// for a differing live or asserted main only when `Main` descends from `Built` and no closure path changed;
+          /// a missing, unreadable or mismatched observation is `Unknown`, never support.
+          ConstructorContent: Observed<ConstructorContent>
           PredecessorPrivate: Observed<string>
           /// The public blob at the request's recorded predecessor merge.
           PredecessorPublic: Observed<string>
           RuntimeBinding: Observed<string>
+          /// BindRuntime's own inputs: the successor private binding, the merge that delivered it, and the
+          /// public blob at that merge.
+          SuccessorPrivate: Observed<string>
+          SuccessorMergeSha: Observed<string>
+          SuccessorPublic: Observed<string>
           InstalledReaderSha256: Observed<string>
           /// Artifact shas of installed readers whose plan grammar is known to equal the source grammar.
           KnownInstalledReaders: Set<string>
+          /// Artifact shas of installed readers known to accept more than the legacy 100 rows (the 250-row coherent
+          /// 0.114.0 line or later). A population of 101 to 250 is readable only by such a reader, or by one named in
+          /// `KnownCap500Readers`; the table is supplied and empty by default.
+          KnownLiftedCapReaders: Set<string>
+          /// Artifact shas of installed readers known to accept the 500-row ceiling (#5119). A population of 251 to 500 is
+          /// readable only by such a reader. A separate table, so a stale 250-row table can never admit 251 to 500 rows.
+          KnownCap500Readers: Set<string>
           /// FSharp.Core `contentHash` locked in the constructor's lock file.
           LockedFSharpCoreHash: Observed<string>
           /// FSharp.Core `contentHash` recorded in the package cache's `.nupkg.metadata`.
           CachedFSharpCoreHash: Observed<string>
           /// Smallest remaining bytes across the cgroup chain; `Known None` means no limit at all.
           MemoryHeadroomBytes: Observed<int64 option>
+          /// Host `MemAvailable`, consulted whenever no cgroup limit bounds the process.
+          HostMemAvailableBytes: Observed<int64>
           MinimumHeadroomBytes: int64
           /// Bound on the successor payload, in bytes. Production: `payloadLimitBytes`.
           PayloadLimitBytes: int
           /// Bound on the successor private binding document, in characters. Production: `bindingLimitBytes`.
           BindingLimitBytes: int
           ProjectItems: Observed<V2NativeResolve.ProjectItem list>
+          /// Repositories whose plan-document 404 may be invisibility rather than absence.
+          InvisibleRepositories: Set<string>
           Now: DateTimeOffset
           ChurnWindow: TimeSpan }
 
@@ -210,6 +329,68 @@ module V2Preflight =
 
     /// Same as `run` with the planner's grammar replaced, for causal controls only.
     val runWith: seams: V2Enrollment.Seams -> route: Route -> stage: Stage -> inputs: EnrollmentInputs -> Report
+
+    /// The pull request, or the candidate about to become one.
+    type RoutineCandidate =
+        { BaseRef: string
+          /// The base sha the pull request records; `None` before it is opened.
+          BaseSha: string option
+          HeadRef: string
+          HeadSha: string
+          /// The pull request state (`open`, `closed`); `None` before it is opened.
+          State: string option }
+
+    /// Result of the maintained routine-eligibility gate (`scripts/check-claim-generation.py` with a routine
+    /// head and the base-trusted policy). `Finding` carries the gate's own finding kind, e.g. `routine-ambiguous`.
+    type RoutineGateResult =
+        | Admitted
+        | GateFinding of kind: string
+
+    /// Result of the maintained closing-keyword gate (`scripts/check-closing-keywords.py`) over the title, the body
+    /// and the commit messages. Its grammar is not re-derived here.
+    type ClosingGateResult =
+        /// Exit 0, "this PR closes no issue".
+        | NoClosing
+        /// Exit 0, and the PR declares that it closes these references on a line of its own.
+        | DeclaredClosing of references: string list
+        /// Exit 1: a closing keyword next to a reference that is not declared. GitHub will close it on merge.
+        | UndeclaredClosing
+
+    type RoutineInputs =
+        { DefaultBranch: string
+          Candidate: Observed<RoutineCandidate>
+          /// Live head of the default branch.
+          LiveBaseSha: Observed<string>
+          /// Open pull requests whose head branch is the candidate's.
+          OpenPullRequests: Observed<int>
+          /// The maintained marker/branch/operation/changed-path gate. Marker grammar is not re-derived here.
+          RoutineGate: Observed<RoutineGateResult>
+          ClosingGate: Observed<ClosingGateResult> }
+
+    /// Result of the maintained coverage gate (`scripts/check-publication-writer-coverage.py --local`).
+    type CoverageAuditResult =
+        | Clean
+        | Unmet of count: int
+
+    type PublicationInputs =
+        { Repository: string
+          WorkflowPath: string
+          Workflow: Observed<string>
+          /// Text of `registry/publication-writers.json`.
+          Registry: Observed<string>
+          CoverageAudit: Observed<CoverageAuditResult> }
+
+    /// The explicit `Unknown(Registry/NotRegistered)` report for a route and stage that do not belong together.
+    val unregisteredReport: route: Route -> stage: Stage -> Report
+
+    /// Evaluate the routine-delivery route for `OpenPullRequest` or `MergePullRequest`. Total. The head branch is
+    /// matched with the gate's own pattern; every marker, operation, changed-path and closing-keyword verdict comes
+    /// from the maintained gates, whose results are inputs.
+    val runRoutine: stage: Stage -> inputs: RoutineInputs -> Report
+
+    /// Evaluate the publication-writer route for `RegisterWriter` or `RunWriter`. Total. The coverage gate
+    /// stays authoritative; this reports its result and the registration facts that decide the next stage.
+    val runPublication: stage: Stage -> inputs: PublicationInputs -> Report
 
     /// Smallest headroom over a cgroup chain of (`memory.max`, `memory.current`) file texts. A limit of
     /// `max` is unlimited; anything unparseable makes the whole observation unreadable.

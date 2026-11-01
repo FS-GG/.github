@@ -24,6 +24,12 @@ module BoardV2Application =
     /// or native acceptance. Errors never echo raw input. Current native joins remain mandatory.
     val parseIntegratorObservations:
         binding: V2Projection.Binding -> json: string -> Result<V2ProjectionSource.SelectionContext, string>
+    /// The bounded refresh/inspection transport: it stops before dispatch once the binding's scaled request ceiling
+    /// (`V2Projection.refreshRequestCeiling`) or deadline (`V2Projection.refreshDeadlineSeconds`) is reached, reporting
+    /// coverage Unknown, and never replays a durable mutation. `elapsed` is the invocation's own clock.
+    /// Both limits are scaled from inspect measurements; a programme refresh batches its reads to fit them (#5131).
+    val boundedWith:
+        elapsed: (unit -> System.TimeSpan) -> binding: V2Projection.Binding -> transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport -> FS.GG.Coord.GitHub.Transport.IGitHubTransport
     /// Emit an explicit report wire shape, including gaps and independent acceptance facts.
     val encodeReport: report: V2ProjectionSource.BatchReport -> string
     /// Encode structurally read-only inspection, human planning values, native PR facts and action-specific selection.
@@ -49,15 +55,18 @@ module BoardV2Application =
     /// V4 file acquisition is bounded on one opened handle; binding/report parents must be private and
     /// nonsymlink. Reports are exclusive0600 with the supported directory barrier, never raw payload/nonce.
     /// Missing runtime suppliers and relevant native gaps remain attributed Unknown, without blocking inspection.
+    /// `lockDirectory` holds the shared writer lock refresh takes; fixtures pass a private directory so no test
+    /// opens the production lock (#5126). Production (`tryRun`) uses `$XDG_RUNTIME_DIR/fsgg` (`V2WriterLock`).
     val runWithTransportAndInput:
-        transport: Transport.IGitHubTransport -> reader: System.IO.TextReader -> arguments: string list -> int
+        lockDirectory: string -> transport: Transport.IGitHubTransport -> reader: System.IO.TextReader -> arguments: string list -> int
     /// Fixed refresh or read-only inspect command against an injected transport, for offline fixtures.
-    val runWithTransport: transport: Transport.IGitHubTransport -> arguments: string list -> int
+    val runWithTransport: lockDirectory: string -> transport: Transport.IGitHubTransport -> arguments: string list -> int
     /// Trusted inert custody/time seam for the same actual migration caller. Production command
     /// composition always binds the real supported directory barrier and TimeProvider.System.
     /// A callback is test/provider infrastructure, never approval or a filesystem qualification claim.
+    /// `lockDirectory` holds the shared writer lock migration-apply takes, as for refresh.
     val runMigrationWithCustody:
-        connection: V2MigrationTransport.IConnection -> syncDirectory: (string -> unit) -> clock: System.TimeProvider -> arguments: string list -> int
+        lockDirectory: string -> connection: V2MigrationTransport.IConnection -> syncDirectory: (string -> unit) -> clock: System.TimeProvider -> arguments: string list -> int
     /// Actual packaged migration composition against an inert/provider connection.
     /// Commands (without the board-v2 prefix):
     /// migration-prepare --scope-file PATH --report-file NEW_PATH;
@@ -89,6 +98,29 @@ module BoardV2Application =
     /// fresh native preconditions. Private exclusive evidence precedes every send; retained invocations
     /// permit readback only. Owner/reference text is accountability, not authentication or a JSON grant.
     val runMigrationWithConnection:
-        connection: V2MigrationTransport.IConnection -> arguments: string list -> int
+        lockDirectory: string -> connection: V2MigrationTransport.IConnection -> arguments: string list -> int
+    /// `board-v2 tend --plan-file NEW [--rules R1,R2,...]` against an injected transport and
+    /// clock: plan-only and read-only (#5136 phase 2 PR 3). The default rules are the starting set W1h,T1f.
+    val runTendWithTransport: transport: Transport.IGitHubTransport -> clock: System.TimeProvider -> arguments: string list -> int
+
+    /// What `board-v2 tend` runs against: the read transport, the one-shot mutation sender (wrapped in the
+    /// tend allowlist), the clock and pacing wait, the writer-lock location, and the XDG
+    /// config and state homes holding the enable file and the custody directories.
+    type TendDependencies =
+        { Reads: Transport.IGitHubTransport
+          SendOnce: Transport.Request -> Errors.IoResult<Transport.Response>
+          Clock: System.TimeProvider
+          Wait: System.TimeSpan -> unit
+          /// The writer lock location; only the installed command resolves the production one.
+          WriterLock: Result<V2WriterLock.Location, string>
+          ConfigHome: string
+          StateHome: string
+          SyncDirectory: string -> unit }
+
+    /// `board-v2 tend --plan-file NEW [--rules ...]`, or `--plan-file NEW --apply` (#5136 phase 2 PR 4). With
+    /// --apply, writes happen only when the enable file is present, mode 0600 and lists rules, and only while
+    /// the writer lock is taken (LOCK_NB; a held lock gives a plan-only run). Contract-gated rules are dropped
+    /// until the contract amendment (PR 6). Outcomes are written beside the plan as `<plan>.outcomes.json`.
+    val runTend: deps: TendDependencies -> arguments: string list -> int
     /// Recognize board-v2 after validation; refresh composes the qualified writer, inspect only canonical reads.
     val tryRun: arguments: string list -> int option

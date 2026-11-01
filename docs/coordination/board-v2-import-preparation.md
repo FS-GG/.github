@@ -167,7 +167,7 @@ production writer qualification remains .3.
 | `.agents` and `.claude` driving/board/init skills | .4 prepares gated work-unified-roadmap, drive-board/normal/best and check-board organization inspection. work-roadmap/pnext-item retain routine/native delivery; work-board/init/generated product bindings remain .5–.6. Both tracked skill roots and manifest projections are kept coherent; no current adoption claimed. |
 | `NewSddWorkspace` / configuration / generated guidance | Product-specific owner/project/repository scope and portable commands belong to .5/.6 publication and installed adoption; generated defaults unchanged here. |
 | `coord-board-reconcile.yml` | Manual credential-free legacy diagnostic, no board writes. |
-| `coord-board-archive.yml` / `coord-board-archive.py` | Separate still-scheduled legacy Project 1 archive using its App. Retain exact scope. |
+| `coord-board-archive.yml` / `coord-board-archive.py` | Replaced by the Project 3 Done-retention archiver ([#5119](https://github.com/FS-GG/.github/issues/5119)): keep the newest 200 Done by close time, archive older ones. The workflow is a counts-only dry run until Root accepts the first real run. The Project 1 sweeper (30 days, 100 visible) was disabled and retired on 2026-10-31. |
 | `scripts/fsgg-coord` / shared metered transport | Default shared Projects route. The explicit user-authorized native one-shot exception below applies only to this .2 pilot; .3 retains production composition and qualification. |
 
 Only the selected .2 pilot is closed. The .3 adapter still needs actual automatic-writer composition,
@@ -442,6 +442,7 @@ implementation authority.
 | `plan-successor --request --native-facts --repository --template-output --payload-output` | closed request, read-only native facts, predecessor private pair, protected public blob at the merge sha | successor binding template and payload (private custody) |
 | `prepare-successor --request --template --payload --private-output --public-output --receipt-output` | request, template, payload, predecessor private pair | the successor pair and a closed non-secret `receipt.json` |
 | `bind-runtime --private-binding --repository --merge-sha --runtime-output` | successor private binding, public blob at the merge | runtime binding differing only in the 40 hex bytes of `populationRevision` |
+| `rebind-reader --installed-reader --known-readers --record-output [--runtime-binding --repository --runtime-output] [--scope --scope-output]` | runtime binding and the public blob at its `populationRevision`, and/or a migration scope; the executing reader | the same documents differing only in their reader identity, and a non-secret record ([#5120](https://github.com/FS-GG/.github/issues/5120), below) |
 | `render-carrier --receipt --output` | `receipt.json` only | fixed-template carrier document |
 
 The successor payload is the predecessor payload bytes before its closing `]}`, a comma, the appended rows and the
@@ -449,7 +450,7 @@ closing `]}`: a raw-byte splice, never a re-serialization, so the prefix is exac
 again independently after the pair exists (`prefixPreserved`, `headerPreserved`, `recomputedCommitment`). A
 Roadmap is generated only from `programmeIssue3008` or `protectedDoc{repo,path}` and must pass the installed
 reader's own plan grammar (`V2ProjectionSource.programmePlanBlobGrammar`, now shared by the reader), which refuses an
-Outcome issue URL before anything is constructed. The planner mirrors the installed 100-row ceiling and does not lift it.
+Outcome issue URL before anything is constructed. The programme row ceiling is one value, `V2Projection.maximumProgrammeRows`, shared by the reader and the planner (see "Row ceiling" below).
 
 Refusals print one closed code on stderr and never payload, nonce, path or input text: `DuplicateIssue`,
 `AlreadyEnrolled`, `IsPullRequest`, `NodeIdMismatch`, `NotProjectMember`, `RepositoryOutsideBinding`,
@@ -458,7 +459,7 @@ Refusals print one closed code on stderr and never payload, nonce, path or input
 `InputUnreadable` (an input file is absent, linked, oversize or unreadable), `CustodyUnavailable` (an output could not be
 created, synced or read back), `GitReadFailed` (the protected public blob could not be read through git; a blob that is read
 and does not authenticate stays `PredecessorCommitmentMismatch`), `NativeReadFailed` (a read-only GET failed or returned an
-unusable body) and `SuccessorNotRederived`. A `CreateNew` that loses a race is `OutputExists`, not a custody failure.
+unusable body), `SuccessorNotRederived` and, for `rebind-reader` ([#5120](https://github.com/FS-GG/.github/issues/5120)), `ReaderNotVerified` and `ReaderAlreadyBound`. A `CreateNew` that loses a race is `OutputExists`, not a custody failure.
 
 ## Supported-route preflight and online resolution ([#4941](https://github.com/FS-GG/.github/issues/4941), PR 2)
 
@@ -469,38 +470,161 @@ facts do not support as `NodeIdMismatch`, a changed prefix as `PrefixNotPreserve
 `SuccessorNotRederived`, all before any output exists.
 
 `resolve-issues --request --native-facts-output` is the online half of `plan-successor`. It is read-only by construction:
-the only effect is a `GET` of an `/orgs/` or `/repos/` path through the GitHub CLI with a fixed argument vector (`--method
-GET`, never a field, input or GraphQL endpoint). It reads the Project, its fields and every item, each request issue and
-each protected plan document on `main`, and writes the `fsgg.board-v2-native-facts/1` document the planner consumes. A clean
-404 on an issue is reported as partial visibility and refused by the planner; any other failed read is `NativeReadFailed` and
-writes nothing.
+the only effect is a `GET` through the GitHub CLI with a fixed argument vector (`--method GET`, never a field, input or
+GraphQL endpoint), and the path must be exactly one of ten allowlisted endpoints: the Project, its fields and its items; a
+repository, one issue, one pull request and its commits, the open pull requests and the `main` ref of a repository; and a
+document on `main`.
+A path segment is a name (`[A-Za-z0-9_.-]`, no `%`); only a whole `.` or `..` segment is a traversal, so a name like `a..b.md`
+is reachable. It reads the Project, its fields and every item, each request issue and each protected plan document on
+`main`, and writes the `fsgg.board-v2-native-facts/1` document the planner consumes. A clean
+404 on an issue is reported as partial visibility and refused by the planner; any other failed read, or a response over the
+32 MiB stream cap (the process is stopped, never buffered whole), is `NativeReadFailed` and writes nothing. A plan document
+that reads 404 is an absence only if the repository itself can be read; otherwise the repository is reported as hidden
+(outside the fixed facts document) and the preflight says `Unknown`, not `Unsupported`.
 
 `preflight --route --stage --request --repository (--online | --native-facts)` returns a typed verdict per registered check
 for the next stage of a closed route: `SupportedForNextStage` (with evidence), `Unsupported` (an exact reason and who can
 supply what is missing) or `Unknown` (an exact gap). The exit code is 0 only when every check is supported, 10 when any is
 unsupported and 11 when none is unsupported but any is unknown; unknown is never 0, and 2 stays a refusal to run. Registered
-routes are `ProgrammeEnrollmentSuccessor` (stages `PlanSuccessor`, `PrepareSuccessor`, `BindRuntime`),
-`RoutineDelivery` and `PublicationWriterRegistration`; the latter two have no checks yet and report `Unknown`.
+routes and their stages: `ProgrammeEnrollmentSuccessor` (`PlanSuccessor`, `PrepareSuccessor`, `BindRuntime`),
+`RoutineDelivery` (`OpenPullRequest`, `MergePullRequest`) and `PublicationWriterRegistration` (`RegisterWriter`,
+`RunWriter`). A route and stage that do not belong together report `Unknown` (`Registry/NotRegistered`), never supported.
+
+`BindRuntime` observes its own inputs (`--successor-private`, `--successor-merge-sha`, and the public blob at that merge read
+through `--repository`): the successor pair must authenticate against that blob (`SuccessorIntegrity`), extend the predecessor
+(`SuccessorExtendsPredecessor`), and carry plan references the installed grammar admits and that exist on `main` now, judged
+from the successor's own appended rows (a sha-pinned reference is immutable and says nothing about `main` now, so it is `Unknown`, not supported). Missing successor inputs are `Unknown`, never taken from the predecessor.
 
 | Check | Decided from | Unsupported when | Unknown when |
 |---|---|---|---|
-| `ConstructorIdentity` | running constructor source revision, intended protected main | they differ | either unreadable |
+| `ConstructorIdentity` | running constructor source revision, intended protected main (`--online`: the live head by GET; `--main-revision`: asserted; otherwise the local tracking ref, which may be stale), and, when they differ, the constructor closure read from `--repository` (#5113) | a differing live or asserted main does not descend from the constructor revision (`ConstructorNotAncestorOfMain`), or a path in the constructor closure changed between them (`ConstructorDiffersFromMain`, with the count) | either revision unreadable; the main is only the local tracking ref (a stale checkout can equal a stale ref, so a match proves nothing offline and the exit is never 0); or the closure evidence is unread (`ConstructorClosure/ReadFailed`, for example a checkout without both commits), underivable (`ConstructorClosure/Incomplete`) or for another pair |
 | `PredecessorIntegrity` | private pair, public blob at the recorded merge | the commitment differs, or the payload cannot be spliced | either unreadable |
-| `RuntimeBindingIntegrity` | runtime binding against the private pair | it differs in anything but `populationRevision`, or that is not the recorded merge | not supplied |
+| `RuntimeBindingIntegrity` | runtime binding against the private pair | it differs in anything but `populationRevision` and a reader identity (`artifactSha256`, `recipeRevision`) rebound by `rebind-reader`, or `populationRevision` is not the recorded merge | not supplied, or the reader identity was rebound to an artifact `--known-readers` does not list (`RuntimeBinding/NotInKnownTable`) |
 | `FactsComplete`, `IssueKind`, `IssueIdentity`, `ProjectMembership`, `RepositoryInBinding`, `NotAlreadyEnrolled`, `RoadmapConflict` | the planner's own per-row findings, all of them rather than the first | a row fails the check (the row is named) | facts partial or unobserved |
 | `PlanGrammar` | the installed plan grammar; the installed artifact sha against a known table | a plan reference is not admitted | the installed artifact is not in the known table |
-| `PlanBlob` | plan documents on `main` now | a document is absent | facts were supplied rather than read now |
-| `RowCap` | predecessor rows plus request rows against 100 | the total exceeds the cap | predecessor unreadable |
+| `PlanBlob` | plan documents on `main` now | a document is absent in a readable repository | facts were supplied rather than read now, or the repository may be invisible (`PlanBlob/NotVisible`) |
+| `RowCap` | predecessor rows plus request rows against 100 (readable by every reader), 250 (readable only by a reader named in `--known-lifted-cap-readers` or `--known-cap-500-readers`) and 500 (readable only by a reader named in `--known-cap-500-readers`) | the total exceeds 500 | above 100: the installed reader is unnamed, not in the applicable table, or that table is not supplied; or the predecessor is unreadable |
 | `PayloadBound`, `TemplateBound` | computed payload and private binding sizes against the installed reader bounds | either is exceeded | inputs unreadable |
 | `ToolchainLock` | locked FSharp.Core `contentHash` against the cache's `.nupkg.metadata` | they differ (the NU1403 risk) | either unreadable |
-| `MemoryHeadroom` | smallest remaining bytes over the process cgroup chain | below the minimum | cgroup unreadable |
-| `ProjectAutoAdd` | Project items not in the binding's enrolled set | never: no breaking condition is proven | any lacks Status, Track or Work level (each named with its missing fields), or items unobserved |
+| `MemoryHeadroom` | smallest remaining bytes over the process cgroup chain, and host `MemAvailable` (the smaller of the two; alone when no cgroup limit applies) | below the minimum | cgroup unreadable, or `MemAvailable` unreadable (a known cgroup limit does not bound the host) |
+| `ProjectAutoAdd` | Project items not in the binding's enrolled set; every enrolled node must be in the inventory | never: no breaking condition is proven | any lacks Status, Track or Work level (each named with its missing fields), an enrolled node is absent from the inventory, or items are unobserved |
 | `AdjacencyChurn` (`BindRuntime`) | unrelated item `updated_at` within the window | never | any unrelated update in the window |
 
 `ProjectAutoAdd` is never `Unsupported`: on 2026-10-30 the installed caller kept working with a bare unenrolled membership (and three legacy partial ones) present, so that such memberships break it is unproven; only a sudden rise in them matched the later refusal, whose code was coarse. They are reported as `Unknown` with each item and its missing fields, and the JSON finding carries a note saying so. No `Unsupported` verdict exists for a condition that is not proven.
 
+`RoutineDelivery` checks (`OpenPullRequest` on a candidate that is not yet a pull request, from the checkout's branch and head with `--title` and `--body-file` and the commits between `refs/remotes/origin/main` and `HEAD`; `MergePullRequest` on `--pr N`, with its commits read by GET). The marker, operation, changed-path and closing-keyword grammars are **not re-derived**: the preflight runs the maintained gates from the checkout and observes their results. `scripts/check-claim-generation.py` (a routine head, `--base-sha`, `--routine-policy-ref`) decides `MarkerSingle` (exactly one complete marker, no repeated field), `MarkerHeadBound`, `MarkerOperationAllowed` and `ChangesPresent`, in the gate's own order: a finding decides its check, earlier checks passed, later ones were not reached (`RoutineGate/NotEvaluated`); a gate that cannot run (rc other than a finding, a base the checkout does not hold) is `Unknown`. `scripts/check-closing-keywords.py` (title, body and commit messages) decides `ClosingLinkDeclared`: rc 1 (a closing keyword that is not declared on a line of its own) is `Unsupported`, rc 0 with a declared closing line is `Unknown` (whether it fulfils the issue is not decidable here), rc 0 with none is supported, and rc 3 or any failure is `Unknown`. `RoutineBranch` uses the gate's own pattern `^routine/[a-z0-9][a-z0-9._-]*$` and the gate is not run for a branch outside it. `SinglePullRequest` needs none open before opening and exactly one before merging. At merge only: `BaseIsDefaultBranch` and `PullRequestOpen` (at open there is no pull request, so both would be tautologies) and `BaseCurrent` (a recorded base that is not the live default branch head is `Unknown`, because that is the `routine-eligibility` race).
+
+`PublicationWriterRegistration` checks: `RegisterWriter` needs a readable workflow that carries a publication effect token (comment lines excluded) and is neither a registered writer nor exempt in this repository; `RunWriter` needs it to be a registered writer and the maintained `scripts/check-publication-writer-coverage.py --local` to report zero unmet. That script stays the authority: its result is observed, not re-derived.
+
 The toolchain check compares the lock file with `.nupkg.metadata`, not with the cache's `.nupkg.sha512`, which is a
 different digest of the same package and would report a healthy cache as mismatched. The known-reader table is supplied
 (`--known-readers`, one sha256 per line) and is empty by default, so the installed grammar is `Unknown` until a verified
-installed artifact is listed. The intended protected main defaults to the checkout's local `refs/remotes/origin/main`, so fetch first or pass `--main-revision`. The preflight grants no authority, performs no mutation and prints no payload, nonce, private
-binding content or node id; engine registration and lifting the row cap remain later deliveries of the same issue.
+installed artifact is listed. A live or asserted main that has moved past the installed constructor is supported only by content: `git merge-base` must show it descends from the constructor revision, and no path of the constructor closure (`src/FS.GG.Coord.GitHub/V2ConstructorClosure.fsi`: the three hosts' compiled project graphs, their ancestor `Directory.*` files and the root build configuration, with an added file at the root or beside an exact closure path counted as a change) may differ between them. `--repository` must hold both commits. Without `--online` or `--main-revision` the intended main is the checkout's local `refs/remotes/origin/main`, which may be stale. The preflight grants no authority, performs no mutation and prints no payload, nonce, private
+binding content or content node id (`I_...`); it prints issue references, and the Project item id (`PVTI_...`) only for a
+non-issue item, which has no reference. Engine registration and lifting the row cap remain later deliveries of the same issue.
+
+## Row ceiling, gate trust and the engine surface ([#4941](https://github.com/FS-GG/.github/issues/4941), PR 4)
+
+**Row ceiling.** The programme population ceiling was 100 rows and is now 250, as the coordinated reader and engine release the
+design called for. It is one constant, `V2Projection.maximumProgrammeRows`, enforced by the reader for both the private payload
+rows and the binding's selected issues, and used by the planner and the preflight, so the three cannot disagree. The byte bounds
+(128 KiB payload, 256 KiB binding) are unchanged and still refuse fat rows long before 250 (the current 93 rows are about 17 KiB).
+A reader older than this release refuses more than 100 rows, so the preflight treats 101 to 250 as readable only by a reader named
+in the supplied `--known-lifted-cap-readers` table (empty by default: `Unknown`), and treats more than 250 as unsupported. The
+choice of 250 is a bound chosen for headroom, not derived from the design; it is a single constant if Root wants another.
+
+**500 rows and the scaled request ceiling ([#5119](https://github.com/FS-GG/.github/issues/5119)).** The user limited the
+Coordination board and its readers to 500 items, so `maximumProgrammeRows` is now 500. Coherent 0.114.0 readers refuse more than
+250 (`previousProgrammeRowCap`), so the preflight keeps two tables. 101 to 250 rows need a reader in either
+`--known-lifted-cap-readers` or `--known-cap-500-readers`. 251 to 500 rows need a reader in `--known-cap-500-readers`, so a stale
+250-row table can never admit them. More than 500 rows are unsupported. The byte bounds are unchanged. The cohort-90 binding measured
+37,938 payload bytes and 62,651 binding bytes at 207 rows, which projects to about 92 KiB and 150 KiB at 500.
+
+The CLI's bounded transport, shared by `inspect` and `refresh`, had a flat 500-send ceiling and a 270-second deadline. The
+207-row cohort-90 inspection exhausted it, with 2,502 reads and all 207 rows `Unknown`. Three changes cut the inspection reads
+per row:
+- A programme binding reads each issue's blockers in the native observation GraphQL query (`blockedBy`, with the REST reader's checks), not a separate REST `dependencies/blocked_by` read. That read was two unbatched sends per row.
+- A binding-5 successor reads Work level in its planning membership query, not a separate `selected work classification` read.
+- Inspection batches alias 25 reads per send instead of 10.
+
+The fixture inspection now takes 81 sends at 207 rows and 175 at 500, down from 635 and 1,517. The live read-only run of the
+207-row binding was retained on 2026-10-31 at 18:31Z. It completed in 120.1 seconds for 87 GraphQL points and 19 REST reads, with
+205 of 207 sources Current, no membership or population gap, and zero mutation attempts. The private run directory and its
+counts-only summary are kept by the #5119 owner. The ceiling is now `V2Projection.refreshRequestCeiling`: 64 sends plus 2 per
+selected row, never below 500 (1,064 at 500 rows). The deadline is `V2Projection.refreshDeadlineSeconds`: 60 seconds plus 0.7 per
+selected row, never below 270 (410 at 500 rows).
+
+Both values are derived from inspect measurements. A programme `refresh` now batches its reads the same way
+([#5131](https://github.com/FS-GG/.github/issues/5131)). Phase 1 runs every row's one-shot writer over the inspection acquisition
+with writes unavailable. That decides every Verified no-op, stale, archived or unreadable row from aliased reads. A Verified
+no-op's second source check is then confirmed by a separate batched phase with fresh reads; a changed revision refuses the no-op
+and retains the project value. Phase 2 reruns the one-shot writer, unbatched, only for the rows that reached a write: each keeps
+its own fresh preimage reads, one send and independent readback, and an uncertain send is never resent. Fixture sends at 207
+already-Verified rows fall from 1,864 to 42, and at 40 rows with 10 writes from 371 to 114. Legacy bindings keep the unbatched
+path. The
+complete-membership read refuses a board whose `totalCount` exceeds `maximumBoardItems` (500) on its first page, rather than paging
+up to the limit.
+
+**Archived enrolled cards ([#5119](https://github.com/FS-GG/.github/issues/5119)).** Done retention archives older Done
+cards. An issue's `projectItems` include an archived card, but the project `items` connection excludes it. Before this change,
+an archived enrolled card read as a normal planning row and silently vanished from `memberships`. The planning membership read
+now carries `isArchived`, and inspection cross-checks every selected row against the complete membership:
+- An archived card absent from `memberships` becomes an explicit `archived: true` membership, and its item carries the
+  discrepancy "Board card is archived (Done retention); the enrolled row is retained, with no automatic retirement". No
+  manifest retirement is needed.
+- Any other disagreement is a `membership cross-check` gap: an unarchived card missing from `memberships`, or an archived card
+  still listed in it.
+- An archived row's health is `Archived`, never `Verified`, and it does not count toward `verified`. Action selection
+  treats it as needs-decision.
+- A row whose planning read failed has no archive fact and is not cross-checked. Its planning gap already makes it `Unknown`
+  and unselectable.
+- The one-shot Observation writer refuses an archived card with an explicit 409 before any write, and `refresh` reports
+  that row as `Archived`, not `Stale`.
+- `scripts/board_v2_native_results.py` accepts the optional `archived` key and refuses `archived: null`. An archived membership
+  must be enrolled and carry that discrepancy, and its item must be `Archived` with the same discrepancy. An item claiming
+  either without an archived membership refuses. An older validator refuses every 0.114.1 inspection, so qualify 0.114.1 with
+  a validator that includes this change.
+
+**Gate trust.** The routine gates (`check-claim-generation.py` with `lib/gate.py`, and `check-closing-keywords.py`) run from the
+exact base commit's blobs (`git show <base>:<path>`), the way `routine-eligibility.yml` does, never from the checkout, so a pull
+request that edits a gate cannot predict its own pass; if the base does not hold them the result is `Unknown`. The publication
+coverage gate audits the checkout's own workflows from its own location and cannot be run from base blobs, so it is observed only
+when the checkout's gate bytes equal the trusted base's (`refs/remotes/origin/main`) and is otherwise `Unknown`
+(`CoverageAudit/GateModified`, or `/Unreadable` with no trusted ref).
+
+**Engine surface.** The commands are registered in the coordination engine as the roots `enrollment` (`plan`, `prepare`,
+`bind-runtime`, `rebind-reader`, `render-carrier`, `resolve-issues`) and `route-preflight`, reaching the installed tool through the `fsgg-coord` shim, which execs the engine (`fsgg-coord-engine enrollment ...` and
+`fsgg-coord-engine route-preflight ...`). Both are dispatch arms ahead of the typed handler table, like `context-view`, and are
+not in the command catalogue; the V1 writer census classifies both in `outOfCatalogueRoots` as `writes: never` (they create only new owner-only local files, read GitHub by `GET`, and run the base-blob gates as subprocesses).
+`preflight` is not a root because the engine already answers a skill `preflight` root. The constructor identity in a receipt is now
+the `FS.GG.Coord.GitHub` assembly (revision and sha256) that both surfaces share, not the `BoardV2Import` executable.
+
+## Reader identity rebind after a coherent upgrade ([#5120](https://github.com/FS-GG/.github/issues/5120))
+
+`enrollment plan` copies the predecessor's reader identity into the successor, and `bind-runtime` may change only
+`populationRevision`, so after a coherent upgrade the runtime binding still names the previous reader and the installed
+reader refuses it ("selected binding does not match the loaded adapter assembly SHA-256"). On 2026-10-31 Root rebound
+cohort 90 by hand. The engine's `rebind-reader` enrollment verb is the designed stage for that step:
+
+1. It reads the executing reader: the `FS.GG.Coord.GitHub` assembly's sha256 and the revision embedded in its informational
+   version. It refuses `ReaderNotVerified` unless `--installed-reader` hashes to the same sha256 and the verified-reader table
+   `--known-readers` (one sha256 per line, the table `route-preflight` uses) lists it.
+2. With `--runtime-binding`, the binding must be a programme binding that authenticates against the public blob at its own
+   `populationRevision`, read through `--repository`, before and after. Only `artifactSha256` (to the adapter sha256) and
+   `recipeRevision` (to the embedded revision) change.
+3. With `--scope`, the document must have exactly the migration-scope key set. `sourceRevision`, `artifactSha256` and
+   `cliArtifactSha256` change to the executing revision, the adapter and the engine CLI. Only the engine can do this, as the
+   host whose identity the scope names, and only when the CLI's embedded revision equals the adapter's. The `BoardV2Import`
+   tool refuses a scope with `ReaderNotVerified`.
+4. Each value is replaced in place, so every other byte is carried over. The splice refuses unless each old value is the
+   top-level value, its `"name": "old"` occurrence is unique in the text, the new value is a 40- or 64-hex identity, and
+   the two documents are equal with the named fields removed. Every input is left in place. The outputs are new owner-only
+   files, and a supplied target that is already bound is written as an identical copy. If every target is already bound,
+   the stage writes nothing and refuses `ReaderAlreadyBound`.
+5. It writes a record (`fsgg.board-v2-reader-rebind/1`): the reader revision, artifact and installed sha256, then for each
+   target the source and output sha256 and the field diff. It carries no payload, nonce or node id.
+
+Replayed over cohort 90's `runtime-binding207.json` with Root's two values, the splice reproduces the hand-rebound file byte
+for byte (sha256 `eba7a946…f9a5`). The next cohort's `route-preflight` accepts the rebound runtime binding beside the
+predecessor private pair, which still names the old reader, but only when `--known-readers` lists the rebound artifact
+(`RuntimeBindingIntegrity`). The stage grants no native write and changes no other field.

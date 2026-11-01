@@ -14,7 +14,8 @@ import time
 from release_successor_execution import Refused, advance_effects
 from release_successor_journal import ProtectedReleaseJournal, REPOSITORY as JOURNAL_REPOSITORY
 from release_successor_provider import GitHubAPI, NotFound, sanitized_dispatch_diagnostic
-from telemetry_host_successor_admission import HostAdmission, ordinary_route
+import release_source_closure
+from telemetry_host_successor_admission import CANDIDATE_CLOSURE, HostAdmission, ordinary_route
 from telemetry_host_successor_execution import effects
 from telemetry_host_successor_provider import HostProvider
 
@@ -77,7 +78,14 @@ def main() -> int:
         require(artifact.get("id") == args.candidate_artifact_id, "candidate artifact API identity differs")
         candidate_source = run.get("head_sha")
         require(isinstance(candidate_source, str) and len(candidate_source) == 40, "candidate source malformed")
-        require(candidate_source == publisher_sha, "current Host 0.9 publication requires exact current main candidate")
+        if candidate_source != publisher_sha:
+            # The journal intent below still binds the exact candidate source. A later publisher
+            # source is admitted only as its descendant with an unchanged Host closure (#5107).
+            try:
+                release_source_closure.verify_local(CANDIDATE_CLOSURE, candidate_source, publisher_sha)
+            except release_source_closure.ClosureRefused as error:
+                raise Refused(f"current Host 0.9 publication requires exact current main candidate "
+                              f"or an ancestor with an unchanged Host closure: {error}") from None
         require(artifact.get("digest") == "sha256:" + args.candidate_archive_sha256, "artifact digest differs")
         artifact_json = args.workdir / "artifact.json"
         run_json = args.workdir / "run.json"
@@ -103,22 +111,24 @@ def main() -> int:
         route = ordinary_route()
         admission = route.ProtectedPublisherAdmission(admission, ledger_api, REF)
         journal = ProtectedReleaseJournal(ledger_api, REF, main_directory=True)
-        fresh, physical = route.classify_journal_destination(ledger_api, REF)
+        # A settlement burst inside a check window is re-read once main settles (#5108); a changed
+        # destination or journal state, or a main that never settles, still refuses.
+        budget = route.AuthorityRereadBudget()  # One bounded settle budget for this publisher run.
+        fresh, physical = route.stable_journal_destination(ledger_api, REF, budget)
         if fresh:
             require(admission.authorize(content_id, "journal", "intent", content_id), "Host journal admission denied")
             for effect in ordered:
                 observation = provider.observe(effect)
                 require(observation.state == "absent", f"{effect.identity}: preexisting or unreadable effect")
-            require(route.authority_main(ledger_api) == physical, "Authority main moved before Host genesis")
+            physical = route.require_stable_destination(ledger_api, REF, fresh, physical,
+                                                        "Authority main moved before Host genesis", budget)
             if args.preflight_only:
                 print("Host successor preflight passed; no journal, tag, feed or release changed.")
                 return 0
             require(admission.authorize(content_id, "journal", "intent", content_id), "Host genesis protection changed")
             journal.initialize(intent)
         else:
-            require(route.authority_main(ledger_api) == physical, "Authority main moved before Host recovery")
-            journal.read()
-            require(route.authority_main(ledger_api) == physical, "Authority main moved during Host recovery")
+            route.read_journal_at_stable_main(journal, ledger_api, physical, "Host recovery", budget)
             require(not args.preflight_only, "preflight requires unused Host journal and version")
         journal.validate_intent(intent)
         deadline = time.monotonic() + 45 * 60

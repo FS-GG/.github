@@ -1362,6 +1362,73 @@ if [ "$kit_receivers" = "audio,game,governance,net,rendering,sdd,templates," ]; 
   ok "require-context's real target set for coordination-kit is the SEVEN receivers #1587 names"
 else bad "the coordination-kit receiver set is not the seven #1587 must arm" "declared: $kit_receivers"; fi
 
+# --- the required-context sweep has its own roster word (Refs #4730) ---------------------------------
+# required-context-coherence.yml used to take its subject list from `receives: contract-coherence`. SDD,
+# Rendering, Templates and Game retired that caller on 2026-09-26; keeping the word would have kept a
+# false claim, and removing it would have silently dropped four repos from the sweep. The sweep now has
+# `required-context-sweep`, so removing a caller can never shrink the set of repos whose protection is
+# checked. These legs pin exactly that, from the REAL roster and the REAL workflow.
+sweep="$(bash "$REPOS_SH" list --receives required-context-sweep --field id | sort | tr '\n' ',')"
+if [ "$sweep" = "audio,game,governance,net,rendering,sdd,templates," ]; then
+  ok "the required-context sweep covers all SEVEN framework repos, including the four that retired their contract-coherence caller"
+else bad "the sweep's subject list is not the seven framework repos" "declared: $sweep"; fi
+cc="$(bash "$REPOS_SH" list --receives contract-coherence --field id | sort | tr '\n' ',')"
+if [ "$cc" = "audio,governance,net," ]; then
+  ok "contract-coherence is claimed only by the three repos that still call the gate"
+else bad "contract-coherence claims a repo that retired its caller (or drops one that has it)" "declared: $cc"; fi
+kit="$(bash "$REPOS_SH" list --receives coordination-kit --field id | sort | tr '\n' ',')"
+if [ "$sweep" = "$kit" ]; then ok "every coordination-kit receiver is swept (the sweep cannot lag the kit fabric)"
+else bad "a kit receiver is outside the sweep" "sweep=$sweep kit=$kit"; fi
+if grep -qF 'list --receives required-context-sweep --field full' "$REPO_ROOT/.github/workflows/required-context-coherence.yml" \
+   && ! grep -qE 'list --receives contract-coherence' "$REPO_ROOT/.github/workflows/required-context-coherence.yml"; then
+  ok "required-context-coherence.yml builds its matrix from required-context-sweep, not contract-coherence"
+else bad "the sweep workflow is wired to the wrong roster word"; fi
+# The word must have a capability row: a legal-but-undetectable word is the #628 hole.
+norow="$WORK/sweep-no-row.yml"
+python3 - "$REPO_ROOT/registry/repos.yml" "$norow" <<'PY'
+import re, sys
+t = open(sys.argv[1]).read()
+a = t.index("  - id: required-context-sweep\n")
+b = t.index("\n\n", a)
+open(sys.argv[2], "w").write(t[:a] + t[b + 1:])
+PY
+relock "$norow"
+expect_fail "a roster that says required-context-sweep without its capability row is refused" 1 "required-context-sweep" "$norow"
+# Dropping a repo from the sweep is visible: a mutant roster without Game's word no longer lists it.
+nogame="$WORK/sweep-no-game.yml"
+sed -E '/id: game,/ s/, required-context-sweep//' "$REPO_ROOT/registry/repos.yml" > "$nogame"; relock "$nogame"
+nogame_ids="$(bash "$REPOS_SH" list --registry "$nogame" --receives required-context-sweep --field id 2>/dev/null || true)"
+if ! grep -qx game <<<"$nogame_ids"; then
+  ok "mutant: Game without the word is absent from the sweep list (the pin above would catch it)"
+else bad "mutant roster still lists Game"; fi
+
+# --- listeners-without-sender: a reviewed claim, validated like a dispatch edge (Refs #4730) -----------
+lws_ok="$WORK/lws-ok.yml"; { cat "$BASE"; printf 'listeners-without-sender:\n  - target: FS-GG/FS.GG.SDD\n    event-type: some-event\n    reason: sender not wired yet\n'; } > "$lws_ok"; relock "$lws_ok"
+expect_pass "a well-formed listeners-without-sender claim validates" "$lws_ok"
+lws_noreason="$WORK/lws-noreason.yml"; { cat "$BASE"; printf 'listeners-without-sender:\n  - target: FS-GG/FS.GG.SDD\n    event-type: some-event\n'; } > "$lws_noreason"; relock "$lws_noreason"
+expect_fail "a claim with no reason is refused" 1 "listeners-without-sender row must be an object with non-empty string target, event-type and reason" "$lws_noreason"
+lws_unrostered="$WORK/lws-unrostered.yml"; { cat "$BASE"; printf 'listeners-without-sender:\n  - target: FS-GG/Nobody\n    event-type: some-event\n    reason: x\n'; } > "$lws_unrostered"; relock "$lws_unrostered"
+expect_fail "a claim whose target is not rostered is refused" 1 "listeners-without-sender target 'FS-GG/Nobody' is not rostered" "$lws_unrostered"
+# The real roster carries the Templates -> SDD decision as a claim, and no longer as an edge.
+if bash "$REPOS_SH" validate >/dev/null 2>&1 \
+   && grep -q 'event-type: composition-registry-updated' "$REPO_ROOT/registry/repos.yml" \
+   && ! grep -qE '^  - \{ producer: FS-GG/FS\.GG\.Templates, target: FS-GG/FS\.GG\.SDD' "$REPO_ROOT/registry/repos.yml"; then
+  ok "the real roster records composition-registry-updated as a senderless listener, not as a declared Templates -> SDD edge"
+else bad "the Templates -> SDD edge decision is not reflected in the real roster"; fi
+
+# --- dependency-automation-pause: a recorded decision, validated (Refs #4730) ------------------------
+pause_ok="$WORK/pause-ok.yml"; { cat "$BASE"; printf 'dependency-automation-pause:\n  authority: FS-GG/.github#4334\n  owner: Root\n  reason: paused for cleanup\n'; } > "$pause_ok"; relock "$pause_ok"
+expect_pass "a well-formed dependency-automation-pause record validates" "$pause_ok"
+pause_bad="$WORK/pause-bad.yml"; { cat "$BASE"; printf 'dependency-automation-pause:\n  authority: FS-GG/.github#4334\n'; } > "$pause_bad"; relock "$pause_bad"
+expect_fail "a pause record without owner and reason is refused" 1 "'dependency-automation-pause' must be an object with non-empty string authority, owner and reason" "$pause_bad"
+# The real roster's record must agree with the real preset: both halves, or the audit reports a finding.
+if bash "$REPOS_SH" validate >/dev/null 2>&1 \
+   && [ "$(jq -r '.enabled' "$REPO_ROOT/default.json")" = "false" ] \
+   && grep -q '^dependency-automation-pause:' "$REPO_ROOT/registry/repos.yml" \
+   && grep -q 'authority: FS-GG/.github#4334' "$REPO_ROOT/registry/repos.yml"; then
+  ok "the real roster records the pause default.json enforces (#4334): preset disabled AND record present"
+else bad "the real preset and the real pause record disagree (lift the pause: delete the record in the same change)"; fi
+
 echo "repos-registry fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-registry fixture FAILED"; exit 1; }
 echo "repos-registry fixture — OK"

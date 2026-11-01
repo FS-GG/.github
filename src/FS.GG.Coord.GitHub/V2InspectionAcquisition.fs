@@ -72,6 +72,10 @@ module internal V2InspectionAcquisition =
                 else None
         | _ -> None
 
+    // Fixed internally authored reads aliased into one provider request. It was 10; 25 cuts the round trips of a
+    // 500-row inspection by 2.5x within the 270-second deadline (#5119). Each read is a small single-issue query.
+    let batchSize = 25
+
     let private acquire (transport: IGitHubTransport) (requests: Request list) =
         if requests.Length = 1 then [requests.Head, transport.Send (requests.Head)]
         else
@@ -155,7 +159,7 @@ module internal V2InspectionAcquisition =
                 let discovered = pending |> Seq.toList
                 let graphql, rest = discovered |> List.partition (fun request -> compose 0 request |> Option.isSome)
                 for request in rest do responses.[request] <- transport.Send request
-                for batch in graphql |> List.chunkBySize 10 do
+                for batch in graphql |> List.chunkBySize batchSize do
                     for request, result in acquire transport batch do responses.[request] <- result
                 collect (round + 1)
         collect 0

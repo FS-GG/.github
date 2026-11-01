@@ -1,0 +1,354 @@
+{
+ "custody": {
+  "acceptedInstalledManifestEqualsInstallManifest": true,
+  "acceptedInstalledManifestSha256": "c0ff55ff0d395498b27b629f97d79e611203c3ef653b19796f8f179771be54e3",
+  "files": {
+   "SOURCE-PINS.json": {
+    "custodyName": "SOURCE-PINS.json",
+    "imported": false,
+    "reason": "duplicates this manifest for the imported files; recorded by hash",
+    "role": "pin list: binds 24 custody files to their sha256 and installed destination; all 24 match the files in custody (checked 2026-10-30)",
+    "sha256": "2e6fef4408900f4e879d975386c7cd4cd27077d1a7d67c8f4036f799a138ef2d",
+    "size": 7257
+   },
+   "learn-install-r8.py": {
+    "custodyName": "learn-install-r8.py",
+    "imported": false,
+    "reason": "embeds private Home source paths (/home/<operator>/.local/state/... bundle directories) and the operator account name in 12 places; not published. A redacted import is possible with the recorded-redaction rule if a reviewer needs the text",
+    "role": "C1 r8b installer; its sha256 is the script of the journal add set operator-r4 (the last install run), not the journal installScriptSha256",
+    "sha256": "8d16d02ac663a509c24a78fb15018b8795ad9ab72adebb5e0c04e39f43e23c38",
+    "size": 28884
+   },
+   "spec/learn4745-finite-profile-spec-v11r2.md": {
+    "custodyName": "spec/learn4745-finite-profile-spec-v11r2.md",
+    "imported": false,
+    "reason": "not imported here; already referenced by hash in the Atlas record learn/home-finite-host-profile",
+    "role": "governing spec rev 11 r2 (ec0a031d...), pinned by the operator and finalizer docstrings",
+    "sha256": "ec0a031df68e287a304d638e33f8976b508431bdc99be010bf2dc4bc00043e73",
+    "size": 51882
+   }
+  },
+  "installScripts": {
+   "2437ab0fba50e3c44d6d3c5bbe3489717a537ee88aa7c3e12940fed296821d43": "journal add set operator-r3; source NOT in custody",
+   "7f4dd9008aa9fd02e727c845cd71aa18e56d0528f60d19979fad58b7ec88530f": "journal add set operator; source NOT in custody",
+   "8d16d02ac663a509c24a78fb15018b8795ad9ab72adebb5e0c04e39f43e23c38": "learn-install-r8.py (C1 r8b); script of journal add set operator-r4; source in custody",
+   "972f843594da0c844eda71fcdef457ef76bbdd238625ec2a3fc5b189d664e974": "journal add set r4-build; source NOT in custody",
+   "b9792a077ab7e84c50463ff4b471cdfc0855407abd85d94a9f44bb871d4c9e37": "journal installScriptSha256: the script that created the journal (first --install); source NOT in custody (not among the 24 pins)"
+  },
+  "location": "fdev private custody: ~/.local/state/v3-storage/learn-finite-profile-source-20261023/Containers/learn-qualification/finite-profile/",
+  "pinsChecked": 24,
+  "pinsMismatched": 0,
+  "sourcePinsRef": "https://github.com/FS-GG/.github/issues/4650#issuecomment-6362358351"
+ },
+ "files": {
+  "/etc/fsgg/learn/seccomp-8bd52f8d.json": {
+   "imported": true,
+   "mode": "0o644",
+   "redactions": [],
+   "repoPath": "etc/seccomp-8bd52f8d.json",
+   "repoSha256": "8bd52f8d249b79693751ceba153038d6b4fb7b507e6ab16133a0cb207ca1e835",
+   "repoSize": 13361,
+   "sha256": "8bd52f8d249b79693751ceba153038d6b4fb7b507e6ab16133a0cb207ca1e835"
+  },
+  "/etc/systemd/system/user-30034.slice.d/learn-limits.conf": {
+   "imported": true,
+   "mode": "0o644",
+   "redactions": [],
+   "repoPath": "etc/learn-limits.conf",
+   "repoSha256": "d6f4f58de4261b6b2ae5f6330c4849dca731fb9750fcefa282457e715748991a",
+   "repoSize": 372,
+   "sha256": "d6f4f58de4261b6b2ae5f6330c4849dca731fb9750fcefa282457e715748991a"
+  },
+  "/usr/local/libexec/fsgg-learn/learn-build-reader-r4.py": {
+   "imported": true,
+   "mode": "0o755",
+   "redactions": [],
+   "repoPath": "libexec/learn-build-reader-r4.py",
+   "repoSha256": "c3227cfce13575b55cb94dafdc1bc58e5554d1c7582a6b9904b0f7ee69ffeedd",
+   "repoSize": 5331,
+   "sha256": "c3227cfce13575b55cb94dafdc1bc58e5554d1c7582a6b9904b0f7ee69ffeedd"
+  },
+  "/usr/local/libexec/fsgg-learn/learn-build-reader.py": {
+   "imported": false,
+   "mode": "0o755",
+   "reason": "superseded revision; operator r5, finalizer r4 and builder r4 are the pinned current set",
+   "sha256": "6ee16257214c04d5ef9278046558ad7e9c7666f8679424964c55e149273c84f7"
+  },
+  "/usr/local/libexec/fsgg-learn/learn-finalizer-r3.py": {
+   "imported": false,
+   "mode": "0o755",
+   "reason": "superseded revision; operator r5, finalizer r4 and builder r4 are the pinned current set",
+   "sha256": "5db5e604ed51daf5957bc9a6ef8be954da810a96077c269b8f5faea3e9aff251"
+  },
+  "/usr/local/libexec/fsgg-learn/learn-finalizer-r4.py": {
+   "imported": true,
+   "mode": "0o755",
+   "redactions": [],
+   "repoPath": "libexec/learn-finalizer-r4.py",
+   "repoSha256": "7f875245504434580b2c1ff97bce25393d5506e383bef3aaf964504b37c651af",
+   "repoSize": 30758,
+   "sha256": "7f875245504434580b2c1ff97bce25393d5506e383bef3aaf964504b37c651af"
+  },
+  "/usr/local/libexec/fsgg-learn/learn-finalizer.py": {
+   "imported": false,
+   "mode": "0o755",
+   "reason": "superseded revision; operator r5, finalizer r4 and builder r4 are the pinned current set",
+   "sha256": "3296e60993180d2d0385284002940f53339dc9f53062e49aff58e3a520c89191"
+  },
+  "/usr/local/libexec/fsgg-learn/learn-operator-r4.py": {
+   "imported": false,
+   "mode": "0o755",
+   "reason": "superseded revision; operator r5, finalizer r4 and builder r4 are the pinned current set",
+   "sha256": "1376d2a4502d74dc989fc6d473a9a5eb58e420c387d63a36f799aa68b7c031b5"
+  },
+  "/usr/local/libexec/fsgg-learn/learn-operator-r5.py": {
+   "imported": true,
+   "mode": "0o755",
+   "redactions": [],
+   "repoPath": "libexec/learn-operator-r5.py",
+   "repoSha256": "318edb4e25b2f470ce3e2c4c20c19ed67762ab3ea60f3a19d2ed7916a9b9df68",
+   "repoSize": 28561,
+   "sha256": "318edb4e25b2f470ce3e2c4c20c19ed67762ab3ea60f3a19d2ed7916a9b9df68"
+  },
+  "/usr/local/libexec/fsgg-learn/learn-operator.py": {
+   "imported": false,
+   "mode": "0o755",
+   "reason": "superseded revision; operator r5, finalizer r4 and builder r4 are the pinned current set",
+   "sha256": "40ac14110f9eb8c0b162d3c95322bdbb34611604f557e0b629c410527c1239f3"
+  },
+  "/usr/local/libexec/fsgg-learn/learn-retirement-ack.py": {
+   "imported": true,
+   "mode": "0o755",
+   "redactions": [],
+   "repoPath": "libexec/learn-retirement-ack.py",
+   "repoSha256": "aadd55b1be4114dbdd518443ebbae476280173de2702504ac2aef31851e4e31c",
+   "repoSize": 3572,
+   "sha256": "aadd55b1be4114dbdd518443ebbae476280173de2702504ac2aef31851e4e31c"
+  },
+  "/usr/local/libexec/fsgg-learn/reader-image-r4/Containerfile": {
+   "imported": true,
+   "mode": "0o644",
+   "redactions": [],
+   "repoPath": "libexec/reader-image-r4/Containerfile",
+   "repoSha256": "563d8b2697aeaa5d88ec808ae1e686904abbaaf2ad54ca60caa0fd5b5a7e81e2",
+   "repoSize": 2288,
+   "sha256": "563d8b2697aeaa5d88ec808ae1e686904abbaaf2ad54ca60caa0fd5b5a7e81e2"
+  },
+  "/usr/local/libexec/fsgg-learn/reader-image-r4/learn-dotnet-shim.sh": {
+   "imported": true,
+   "mode": "0o644",
+   "redactions": [],
+   "repoPath": "libexec/reader-image-r4/learn-dotnet-shim.sh",
+   "repoSha256": "5c9f981744d195cf1c4ea48b6a448b901eda7db53e8458baf6ddc5dce8dc2fcf",
+   "repoSize": 282,
+   "sha256": "5c9f981744d195cf1c4ea48b6a448b901eda7db53e8458baf6ddc5dce8dc2fcf"
+  },
+  "/usr/local/libexec/fsgg-learn/reader-image-r4/learn-entrypoint.sh": {
+   "imported": true,
+   "mode": "0o644",
+   "redactions": [],
+   "repoPath": "libexec/reader-image-r4/learn-entrypoint.sh",
+   "repoSha256": "915197d1f53b95d2569a3145f5c36a091efaa3628eef82183f569f658c37be20",
+   "repoSize": 2275,
+   "sha256": "915197d1f53b95d2569a3145f5c36a091efaa3628eef82183f569f658c37be20"
+  },
+  "/usr/local/libexec/fsgg-learn/reader-image-r4/learn-probe": {
+   "builtFrom": [
+    "learn-probe.c",
+    "learn-build-probe.sh"
+   ],
+   "imported": false,
+   "mode": "0o644",
+   "reason": "static binary (772112 bytes), not imported; built from source/learn-probe.c by source/learn-build-probe.sh (both imported). The recipe records compiler and libc versions and the binary hash, but no rebuild was run here, so rebuild reproducibility is not claimed. The admitted artifact 66f8254e... is identified by sha256 only; the image build reads it from the installed context.",
+   "sha256": "66f8254ec7abf6469a3dd354f3846dbc557fd19762ca8189c484bc03557fb303"
+  },
+  "/usr/local/libexec/fsgg-learn/reader-image-r4/learn-slot.sh": {
+   "imported": true,
+   "mode": "0o644",
+   "redactions": [],
+   "repoPath": "libexec/reader-image-r4/learn-slot.sh",
+   "repoSha256": "b0f25037e1d35ff7c7223906b2a7c2e34328f35098a3d830a3689675a396a034",
+   "repoSize": 1083,
+   "sha256": "b0f25037e1d35ff7c7223906b2a7c2e34328f35098a3d830a3689675a396a034"
+  },
+  "/usr/local/libexec/fsgg-learn/reader-image/Containerfile": {
+   "imported": false,
+   "mode": "0o644",
+   "reason": "superseded reader image r1 context; not part of the current profile (reader image r4 is pinned by operator r5)",
+   "sha256": "ecdbe02af25dc6c08646f694dd03b04c35463ab27108513ac8e87386fe1f0b73"
+  },
+  "/usr/local/libexec/fsgg-learn/reader-image/learn-dotnet-shim.sh": {
+   "imported": false,
+   "mode": "0o644",
+   "reason": "superseded reader image r1 context file; same bytes as the reader image r4 file of the same name, which is imported",
+   "sameBytesAs": "/usr/local/libexec/fsgg-learn/reader-image-r4/learn-dotnet-shim.sh",
+   "sha256": "5c9f981744d195cf1c4ea48b6a448b901eda7db53e8458baf6ddc5dce8dc2fcf"
+  },
+  "/usr/local/libexec/fsgg-learn/reader-image/learn-entrypoint.sh": {
+   "imported": false,
+   "mode": "0o644",
+   "reason": "superseded reader image r1 context file; same bytes as the reader image r4 file of the same name, which is imported",
+   "sameBytesAs": "/usr/local/libexec/fsgg-learn/reader-image-r4/learn-entrypoint.sh",
+   "sha256": "915197d1f53b95d2569a3145f5c36a091efaa3628eef82183f569f658c37be20"
+  },
+  "/usr/local/libexec/fsgg-learn/reader-image/learn-slot.sh": {
+   "imported": false,
+   "mode": "0o644",
+   "reason": "superseded reader image r1 context file; same bytes as the reader image r4 file of the same name, which is imported",
+   "sameBytesAs": "/usr/local/libexec/fsgg-learn/reader-image-r4/learn-slot.sh",
+   "sha256": "b0f25037e1d35ff7c7223906b2a7c2e34328f35098a3d830a3689675a396a034"
+  }
+ },
+ "importedUtc": "2026-10-30",
+ "installManifestSha256": "c0ff55ff0d395498b27b629f97d79e611203c3ef653b19796f8f179771be54e3",
+ "installScriptSha256": "b9792a077ab7e84c50463ff4b471cdfc0855407abd85d94a9f44bb871d4c9e37",
+ "journalSchema": "home-learn-install-journal/1",
+ "refs": "FS-GG/.github#4647; #4745 closure gap 1",
+ "scan": {
+  "allowlist": [
+   {
+    "file": "learn-finalizer-r4.py",
+    "match": "user@30034.service",
+    "why": "systemd unit name (user@<uid>.service) that matches the email pattern; not an address"
+   },
+   {
+    "file": "learn-build-probe.sh",
+    "match": "eugen",
+    "why": "operator account name in a comment (\"Runs as eugen\"); the same name is public in the #4647 issue body (\"Home operator/eugen\")"
+   },
+   {
+    "file": "learn-build-probe.sh",
+    "match": "Runs as eugen",
+    "why": "same comment as above, matched by the person-context class"
+   },
+   {
+    "file": "learn-build-reader-r4.py",
+    "match": "localhost",
+    "why": "the podman local image namespace in the tag localhost/learn-reader:r4, not a host"
+   },
+   {
+    "file": "learn-finalizer-r4.py",
+    "match": "0::",
+    "why": "the cgroup v2 line prefix \"0::\" read from /proc/self/cgroup, not an IPv6 address"
+   },
+   {
+    "file": "learn-operator-r5.py",
+    "match": "0::",
+    "why": "the cgroup v2 line prefix \"0::\" read from /proc/self/cgroup, not an IPv6 address"
+   }
+  ],
+  "classesNote": "Classes: token, bearer, private-key, secret-assignment, email, ipv4, ipv6, mac, uuid, url, hostname, home-path, ssh-key, mention, person-context, and the person names above. A name, a private path or a codename has no reliable pattern, so every imported file also needs a manual read recorded here.",
+  "manualRead": [
+   {
+    "date": "2026-10-30",
+    "file": "etc/learn-limits.conf",
+    "reader": "independent review of #4997 at 372012f5 (publication-safety verdict)",
+    "sha256": "d6f4f58de4261b6b2ae5f6330c4849dca731fb9750fcefa282457e715748991a"
+   },
+   {
+    "date": "2026-10-30",
+    "file": "etc/seccomp-8bd52f8d.json",
+    "reader": "independent review of #4997 at 372012f5 (publication-safety verdict)",
+    "sha256": "8bd52f8d249b79693751ceba153038d6b4fb7b507e6ab16133a0cb207ca1e835"
+   },
+   {
+    "date": "2026-10-30",
+    "file": "libexec/learn-build-reader-r4.py",
+    "reader": "independent review of #4997 at 372012f5 (publication-safety verdict)",
+    "sha256": "c3227cfce13575b55cb94dafdc1bc58e5554d1c7582a6b9904b0f7ee69ffeedd"
+   },
+   {
+    "date": "2026-10-30",
+    "file": "libexec/learn-finalizer-r4.py",
+    "reader": "independent review of #4997 at 372012f5 (publication-safety verdict)",
+    "sha256": "7f875245504434580b2c1ff97bce25393d5506e383bef3aaf964504b37c651af"
+   },
+   {
+    "date": "2026-10-30",
+    "file": "libexec/learn-operator-r5.py",
+    "reader": "independent review of #4997 at 372012f5 (publication-safety verdict)",
+    "sha256": "318edb4e25b2f470ce3e2c4c20c19ed67762ab3ea60f3a19d2ed7916a9b9df68"
+   },
+   {
+    "date": "2026-10-30",
+    "file": "libexec/learn-retirement-ack.py",
+    "reader": "independent review of #4997 at 372012f5 (publication-safety verdict)",
+    "sha256": "aadd55b1be4114dbdd518443ebbae476280173de2702504ac2aef31851e4e31c"
+   },
+   {
+    "date": "2026-10-30",
+    "file": "libexec/reader-image-r4/Containerfile",
+    "reader": "independent review of #4997 at 372012f5 (publication-safety verdict)",
+    "sha256": "563d8b2697aeaa5d88ec808ae1e686904abbaaf2ad54ca60caa0fd5b5a7e81e2"
+   },
+   {
+    "date": "2026-10-30",
+    "file": "libexec/reader-image-r4/learn-dotnet-shim.sh",
+    "reader": "independent review of #4997 at 372012f5 (publication-safety verdict)",
+    "sha256": "5c9f981744d195cf1c4ea48b6a448b901eda7db53e8458baf6ddc5dce8dc2fcf"
+   },
+   {
+    "date": "2026-10-30",
+    "file": "libexec/reader-image-r4/learn-entrypoint.sh",
+    "reader": "independent review of #4997 at 372012f5 (publication-safety verdict)",
+    "sha256": "915197d1f53b95d2569a3145f5c36a091efaa3628eef82183f569f658c37be20"
+   },
+   {
+    "date": "2026-10-30",
+    "file": "libexec/reader-image-r4/learn-slot.sh",
+    "reader": "independent review of #4997 at 372012f5 (publication-safety verdict)",
+    "sha256": "b0f25037e1d35ff7c7223906b2a7c2e34328f35098a3d830a3689675a396a034"
+   },
+   {
+    "date": "2026-10-30",
+    "file": "source/learn-build-probe.sh",
+    "reader": "worker, full read of the file",
+    "sha256": "ac69adf0e51882452f5a4885e1be694707ad124371c13314ee38bdb6a2cdb068"
+   },
+   {
+    "date": "2026-10-30",
+    "file": "source/learn-probe.c",
+    "reader": "worker, full read of the file",
+    "sha256": "2aec965b2d22d56995d3c28883b8a031e4e89e034e4f16954f11f945694ea779"
+   }
+  ],
+  "manualReadNote": "Readers are self-asserted: a record states who claims to have read the bytes; it is not an authenticated identity or an independent attestation.",
+  "method": "verify_baseline.py SCAN classes over every imported file, plus a recorded manual read of the same bytes",
+  "personNames": [
+   "eugen",
+   "ehotwagner",
+   "hotwagner"
+  ],
+  "personNamesPolicy": "personNames is published with this manifest, so it may only hold names that are already public (here: an account name that appears in the public #4647 issue body). Never add a name to catch it.",
+  "urlAllowPrefixes": [
+   "https://github.com/FS-GG/"
+  ]
+ },
+ "schema": "fsgg.learn-finite-profile.baseline/1",
+ "sources": {
+  "learn-build-probe.sh": {
+   "builds": "/usr/local/libexec/fsgg-learn/reader-image-r4/learn-probe",
+   "custodyName": "learn-build-probe.sh",
+   "imported": true,
+   "redactions": [],
+   "repoPath": "source/learn-build-probe.sh",
+   "repoSha256": "ac69adf0e51882452f5a4885e1be694707ad124371c13314ee38bdb6a2cdb068",
+   "repoSize": 868,
+   "role": "build recipe of the probe: gcc -static, SOURCE_DATE_EPOCH=0, build-id none; prints source and binary hashes",
+   "sha256": "ac69adf0e51882452f5a4885e1be694707ad124371c13314ee38bdb6a2cdb068",
+   "size": 868
+  },
+  "learn-probe.c": {
+   "builds": "/usr/local/libexec/fsgg-learn/reader-image-r4/learn-probe",
+   "custodyName": "learn-probe.c",
+   "imported": true,
+   "redactions": [],
+   "repoPath": "source/learn-probe.c",
+   "repoSha256": "2aec965b2d22d56995d3c28883b8a031e4e89e034e4f16954f11f945694ea779",
+   "repoSize": 1663,
+   "role": "C source of the static socket probe (spec rev 10 section 4); input of learn-build-probe.sh",
+   "sha256": "2aec965b2d22d56995d3c28883b8a031e4e89e034e4f16954f11f945694ea779",
+   "size": 1663
+  }
+ }
+}

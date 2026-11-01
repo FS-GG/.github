@@ -11,7 +11,10 @@ read. It issues:
     refused when that cap is reached, plus one `repos/{repo}` read per PR repository the board does not
     already tell us the visibility of (a failed read is "unknown", never a fetch failure);
   * one REST comments read per card that could carry a finding (every card except a Done, closed one
-    with all its fields), since that card's last Status change.
+    with all its fields), since that card's last Status change, and only when the card's issue or PR changed
+    at or after that time (#5119). A new comment bumps its issue's `updatedAt`, so an issue last updated
+    before `since` has no comment created since then, and the rules read only comments created after the
+    Status change. On 2026-10-31 this skipped 127 of 151 hourly reads with no comment lost.
 
 The snapshot holds private-repository titles and PR bodies. It lives only in a private scratch
 directory and is never uploaded or printed; the observer publishes placeholders for anything private
@@ -181,6 +184,26 @@ def normalize_item(node: dict) -> dict:
     return item
 
 
+def _time(value: object) -> dt.datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else None
+
+
+def quiet_since(item: dict, since: str) -> bool:
+    """True only when the card's issue/PR was provably last updated strictly before `since` (#5119).
+
+    Creating a comment updates its issue's `updatedAt`, so no comment was created at or after `since`, and the
+    comment read can be skipped as an empty result. Anything unreadable or unparseable is not quiet: read.
+    """
+    updated, cutoff = _time(item.get("contentUpdatedAt")), _time(since)
+    return updated is not None and cutoff is not None and updated < cutoff
+
+
 def repo_visibility(repo: str) -> bool | None:
     """True when private, False when public, None when it cannot be told (treated as private)."""
     try:
@@ -267,6 +290,8 @@ def main(argv: list[str] | None = None) -> int:
             if finished and item.get("track") and item.get("workLevel"):
                 continue
             since = item.get("statusUpdatedAt") or item.get("itemUpdatedAt") or fallback
+            if quiet_since(item, since):
+                continue  # no comment created since `since`: the read would return none the rules use
             item["comments"] = fetch_comments(item["repo"], item["number"], since)
     except FetchError as exc:
         print(f"board-drift-fetch: FAILED (no snapshot written): {exc}", file=sys.stderr)

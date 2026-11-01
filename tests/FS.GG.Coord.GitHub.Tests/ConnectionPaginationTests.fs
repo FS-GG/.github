@@ -565,3 +565,27 @@ let ``.github#2535 the window extractor does not credit a connection that droppe
     // silently approving a connection with no guard behind it.
     let reverted = "        \"query { projectItems(first: 20) { nodes { id } } }\""
     Assert.Empty(Sources.windowsOf reverted "projectItems")
+
+// ---- #5119: an archived card on our board is refused explicitly by every per-issue read ----------------
+
+[<Fact>]
+let ``#5119 every per-issue projectItems read refuses an archived card on our board`` () =
+    // Issue-side `projectItems` include archived cards by default; board scans do not. Done retention archives Done
+    // cards, so a v1 writer that reached one must refuse it, not write an invisible card or `item-add` it back.
+    let archive (node: string) = node.Replace("{\"project\"", "{\"isArchived\":true,\"project\"").Replace("{\"id\":\"PVTI_ours\",", "{\"id\":\"PVTI_ours\",\"isArchived\":true,")
+    let refused label result =
+        match result with
+        | Error(Http(409, message)) -> Assert.Equal(Board.archivedCardRefusal, message)
+        | other -> failwith $"%s{label}: an archived card must be refused explicitly — got %A{other}"
+    refused "itemId" (itemId (serving (projectItemsPage [ archive (itemIdNode 12 "PVTI_ours") ] (total 1))) board "FS-GG" ".github" 2535)
+    refused "itemStatus" (itemStatus (serving (projectItemsPage [ archive (statusNode 12 "Done") ] (total 1))) board "FS-GG" ".github" 2535)
+    refused "itemBlockedBy" (itemBlockedBy (serving (projectItemsPage [ archive (blockedByNode 12 "FS-GG/.github#1") ] (total 1))) board "FS-GG" ".github" 2535)
+    let observationNode = "{\"updatedAt\":\"2026-10-31T00:00:00Z\",\"isArchived\":true,\"project\":{\"number\":12},\"fieldValueByName\":{\"text\":\"FS-GG/.github#1\"}}"
+    refused "itemBlockedByObservation" (itemBlockedByObservation (serving (projectItemsPage [ observationNode ] (total 1))) board "FS-GG" ".github" 2535)
+    // An archived card on ANOTHER board is not ours and changes nothing; an unarchived card on ours still reads.
+    match itemId (serving (projectItemsPage [ archive (itemIdNode 999 "PVTI_elsewhere"); itemIdNode 12 "PVTI_ours" ] (total 2))) board "FS-GG" ".github" 2535 with
+    | Ok(Some id) -> Assert.Equal("PVTI_ours", id)
+    | other -> failwith $"an unarchived card on our board is still found — got %A{other}"
+    match itemStatus (serving (projectItemsPage [ statusNode 12 "In progress" |> fun n -> n.Replace("{\"project\"", "{\"isArchived\":false,\"project\"") ] (total 1))) board "FS-GG" ".github" 2535 with
+    | Ok(Some status) -> Assert.Equal(FS.GG.Coord.Types.BoardStatus.InProgress, status)
+    | other -> failwith $"isArchived false reads as before — got %A{other}"

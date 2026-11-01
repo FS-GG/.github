@@ -17,6 +17,8 @@ on:
       - "docs/coordination/board-v2-import-manifest.json"
       - "docs/coordination/board-v2-import-preparation.md"
       - "tests/board-v2-import/**"
+      - "tests/coord-reader-rebind-mutation/**"
+      - "src/FS.GG.Coord.Cli/EnrollmentApplication.fs"
       - ".github/workflows/board-v2-import-preflight.yml"
   push:
     branches: [main]
@@ -33,11 +35,22 @@ on:
       - "docs/coordination/board-v2-import-manifest.json"
       - "docs/coordination/board-v2-import-preparation.md"
       - "tests/board-v2-import/**"
+      - "tests/coord-reader-rebind-mutation/**"
+      - "src/FS.GG.Coord.Cli/EnrollmentApplication.fs"
       - ".github/workflows/board-v2-import-preflight.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# PR-keyed concurrency (#4730 CI-load): a newer run for the same pull request cancels the superseded
+# one, so a push or body edit no longer leaves the old head's run to finish and hold a runner. Any
+# other event keys on `github.run_id`, which is unique to the run: GitHub discards an older PENDING run
+# in a shared group even without cancel-in-progress, so a key that two events can share (the branch ref
+# for pushes, or the commit sha for dispatches and issue events at one commit) would drop a run.
+concurrency:
+  group: board-v2-import-preflight-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   fixture:
@@ -54,3 +67,7 @@ jobs:
         run: python3 tools/board-v2-import.py docs/coordination/board-v2-import-manifest.json
       - name: Exercise legacy and private programme preparation controls
         run: python3 tests/board-v2-import/run.py
+      # The #5120 reader-rebind mutation legs mutate the rebind stage by exact source text. This checks, in seconds, that
+      # every leg still matches; it runs no mutation. The sweep: scripts/gate-mutate.py --specs tests/coord-reader-rebind-mutation/specs.yml
+      - name: Reader-rebind mutation matrix is runnable
+        run: bash tests/coord-reader-rebind-mutation/run.sh

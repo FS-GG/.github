@@ -18,10 +18,18 @@ require 'contents: read' "$WORKFLOW"
 require 'name: routine-eligibility' "$WORKFLOW"
 require 'if: github.event.pull_request.base.ref == github.event.repository.default_branch' "$WORKFLOW"
 require 'test "$BASE_REF" = "$DEFAULT_BRANCH"' "$WORKFLOW"
-require 'test "$observed_base" = "$BASE_SHA"' "$WORKFLOW"
+require 'test "$observed_base" != "$BASE_SHA"' "$WORKFLOW"
+require 'merge-base --is-ancestor "$BASE_SHA" "$observed_base"' "$WORKFLOW"
+require 'merge-base --is-ancestor "$HEAD_SHA" "$observed_base"' "$WORKFLOW"
 require 'test "$observed_head" = "$HEAD_SHA"' "$WORKFLOW"
-require 'show "$BASE_SHA:scripts/check-routine-eligibility-envelope.py"' "$WORKFLOW"
-require 'show "$BASE_SHA:scripts/check-claim-generation.py"' "$WORKFLOW"
+require 'show "$observed_base:scripts/check-routine-eligibility-envelope.py"' "$WORKFLOW"
+require 'show "$observed_base:scripts/check-claim-generation.py"' "$WORKFLOW"
+require 'show "$observed_base:scripts/lib/gate.py"' "$WORKFLOW"
+# The event base is only a monotonic floor: no executable may be loaded from it.
+if grep -qF 'show "$BASE_SHA:' "$WORKFLOW"; then
+  echo "workflow loads executable bytes from the (possibly stale) event base" >&2
+  exit 1
+fi
 require 'refs/pull/${PR_NUMBER}/head:refs/remotes/origin/routine-head' "$WORKFLOW"
 require 'pull_request:' "$SELFTEST"
 require 'name: routine-eligibility-fixture' "$SELFTEST"
@@ -128,7 +136,7 @@ expect_failure target-ref 'is not default branch' "${bad[@]}"
 bad=("${args[@]}"); bad[11]=not-a-sha
 expect_failure base-shape 'base SHA is not exact' "${bad[@]}"
 bad=("${args[@]}"); bad[11]="$head"
-expect_failure base-binding 'fetched base does not equal' "${bad[@]}"
+expect_failure base-binding 'is not an ancestor of live base' "${bad[@]}"
 bad=("${args[@]}"); bad[17]="$base"
 expect_failure head-binding 'fetched head does not equal' "${bad[@]}"
 bad=("${args[@]}"); bad[13]=feature/not-routine
@@ -190,3 +198,6 @@ sys.exit(subprocess.call([os.environ['REAL_GIT'],*args]))
         assert ('BASE-TRUSTED' in visible)==(mode in ('good','public'))
 print('routine-eligibility: actual private-fetch shell confines credentials and refuses missing/fetch/drift cases')
 PYFETCH
+
+# The moved-base race: real workflow shell, real shallow transport, real envelope and validator.
+python3 "$ROOT/tests/routine-eligibility/moved_base.py"

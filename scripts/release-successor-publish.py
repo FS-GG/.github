@@ -22,18 +22,20 @@ import sys
 import time
 import zipfile
 
+import release_route
+import release_source_closure
 from release_successor_admission import SingleOperatorAdmission, publisher_context_authorized
 from release_successor_execution import Refused, advance, ordered_effects, full_transition
 from release_successor_journal import (ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical,
     ReleaseSuspension, ALLOWED_SUCCESSOR, CURRENT_RELEASE, SUSPENDED_REF, SUSPENSION_PATH, strict_suspension,
-    SUSPENSION_SCHEMA, SUSPENDED_ORIGINAL, SUSPENSION_DECISION)
+    SUSPENSION_SCHEMA, SUSPENDED_ORIGINAL, SUSPENSION_DECISION, JournalMainMoved)
 from release_successor_provider import (GitHubAPI, MetadataRequestBudget, INSTALL_METADATA_REQUEST_CEILING, LiveProvider, NotFound, sanitized_dispatch_diagnostic,
                                        VerifiedOriginalTagTransport, approved_original_tag_transport,
                                        AUTH_PROTOCOL, AUTH_PROFILE, decode_auth_frame, validate_auth_binding, validate_auth_payload)
 
 REPOSITORY = "FS-GG/.github"
+CANDIDATE_CLOSURE = "coherent-set"
 SUCCESSOR_VERSION = CURRENT_RELEASE["version"]
-SUCCESSOR_PREDECESSOR = CURRENT_RELEASE["predecessor"]
 SUCCESSOR_REF = CURRENT_RELEASE["logicalRef"]
 ORIGINAL_SUCCESSOR_VERSION = "0.102.0"
 ORIGINAL_SUCCESSOR_PREDECESSOR = "0.101.0"
@@ -326,7 +328,9 @@ def selected_release_binding(args):
         return (ORIGINAL_SUCCESSOR_VERSION, ORIGINAL_SUCCESSOR_PREDECESSOR, ORIGINAL_SUCCESSOR_REF)
     historical = any(getattr(args, flag, False) for flag in
                      ("recovery_checkpoint", "repeat_original_nuget_kit_intent", "recover_original_runtime_intent"))
-    return ("0.101.0", "0.100.0", REF) if historical else (SUCCESSOR_VERSION, SUCCESSOR_PREDECESSOR, SUCCESSOR_REF)
+    # The current predecessor is derived, not pinned (#5156): None until bind_current_predecessor() binds
+    # the authenticated candidate's promoted channel; every later comparison reads the bound value.
+    return ("0.101.0", "0.100.0", REF) if historical else (SUCCESSOR_VERSION, CURRENT_RELEASE.get("predecessor"), SUCCESSOR_REF)
 
 
 def require(condition: bool, reason: str) -> None:
@@ -651,6 +655,103 @@ def authority_main(api):
     return obj["sha"]
 
 
+# The Authority settlement writer lands bursts of about four commits roughly eight seconds
+# apart (#5108). A main read that differs only because such a burst landed inside a check
+# window is re-read until two reads AUTHORITY_SETTLE_SECONDS apart agree. The protected
+# conclusion (destination absence before genesis, or the exact journal state at recovery)
+# is then re-derived at the settled head and must be unchanged: a changed conclusion is
+# real divergence and refuses. Waiting is bounded per publisher run, not per check: one
+# AuthorityRereadBudget allows at most AUTHORITY_REREAD_BUDGET_SECONDS of sleeps in total
+# (10 waits of 15 s), after which a still-moving main refuses as before.
+AUTHORITY_SETTLE_SECONDS = 15
+AUTHORITY_SETTLE_ATTEMPTS = 8
+AUTHORITY_REREAD_ATTEMPTS = 3
+AUTHORITY_REREAD_BUDGET_SECONDS = 150
+
+
+class AuthorityMainMoved(Refused):
+    """Authority main moved inside one read-only classification sandwich; safe to re-read."""
+
+
+class AuthorityRereadBudget:
+    """One publisher run's total settle wait. Shared by every re-read in that run."""
+
+    def __init__(self, seconds=None, *, sleep=None):
+        self.remaining = AUTHORITY_REREAD_BUDGET_SECONDS if seconds is None else seconds
+        self._sleep = sleep
+        self.waits = 0
+
+    def wait(self, seconds):
+        require(self.remaining >= seconds, "Authority main did not settle within the publisher's bounded re-read budget")
+        self.remaining -= seconds
+        self.waits += 1
+        (time.sleep if self._sleep is None else self._sleep)(seconds)
+
+
+def settled_authority_main(api, budget, *, seconds=None, attempts=None):
+    """Return an Authority main head unchanged across two reads `seconds` apart, or refuse."""
+    seconds = AUTHORITY_SETTLE_SECONDS if seconds is None else seconds
+    attempts = AUTHORITY_SETTLE_ATTEMPTS if attempts is None else attempts
+    previous = authority_main(api)
+    for _ in range(attempts):
+        budget.wait(seconds)
+        current = authority_main(api)
+        if current == previous:
+            return current
+        previous = current
+    raise Refused("Authority main did not settle within the bounded re-read window")
+
+
+def stable_journal_destination(api, logical_ref, budget):
+    """Classify the destination inside its main sandwich, re-classifying at a settled main on drift."""
+    for attempt in range(AUTHORITY_REREAD_ATTEMPTS):
+        if attempt:
+            settled_authority_main(api, budget)
+        try:
+            return classify_journal_destination(api, logical_ref)
+        except AuthorityMainMoved:
+            continue
+    raise Refused("Authority main moved during destination classification after bounded re-reads")
+
+
+def require_stable_destination(api, logical_ref, fresh, physical, detail, budget):
+    """Return a head at which the classified destination still holds; refuse real divergence."""
+    if authority_main(api) == physical:
+        return physical
+    settled_authority_main(api, budget)
+    again, head = stable_journal_destination(api, logical_ref, budget)
+    require(again == fresh, f"{detail}: Authority journal destination changed")
+    return head
+
+
+def read_journal_at_stable_main(journal, api, physical, detail, budget):
+    """Read the journal inside a main sandwich; an unrelated main move is re-read once settled.
+
+    A move between the outer reads, or inside journal.read() itself (its typed
+    JournalMainMoved), is re-read at a settled head. The physical head itself may differ from
+    the classification head `physical` (unrelated Authority writes), but the journal's
+    selected logical head must not: every accepted read must bind the logical journal head
+    that existed at classification, and every re-read the exact same state. Any other
+    journal is real divergence after genesis and refuses.
+    """
+    require(getattr(journal, "main_directory", False) is True, "stable journal re-read requires main-directory storage")
+    baseline = journal._main_head(physical)
+    expected = None
+    for attempt in range(AUTHORITY_REREAD_ATTEMPTS):
+        opening = authority_main(api) if attempt == 0 else settled_authority_main(api, budget)
+        try:
+            state = journal.read()
+        except JournalMainMoved:
+            continue
+        observed = journal._observed
+        require(observed is not None and observed.head == baseline and (expected is None or state == expected),
+                f"Authority journal changed during {detail}")
+        expected = state
+        if authority_main(api) == opening:
+            return opening
+    raise Refused(f"Authority main moved during {detail} after bounded re-reads")
+
+
 def classify_journal_destination(api, logical_ref):
     """Return (fresh, physical head); nested read failures never mean absence."""
     prefix = "refs/heads/fsgg/v2/journal/release/"
@@ -703,8 +804,19 @@ def classify_journal_destination(api, logical_ref):
         pass
     else:
         raise Refused("selected legacy release journal still exists; separate disposition required")
-    require(authority_main(api) == physical, "Authority main moved during destination classification")
+    if authority_main(api) != physical:
+        raise AuthorityMainMoved("Authority main moved during destination classification")
     return not present, physical
+
+
+def candidate_closure_admitted(candidate_source, publisher_sha):
+    """Local Git proof that the publisher source descends from the candidate outside its closure."""
+    try:
+        release_source_closure.verify_local(CANDIDATE_CLOSURE, candidate_source, publisher_sha)
+    except release_source_closure.ClosureRefused as error:
+        print(f"Release successor candidate closure refused: {error}", file=sys.stderr)
+        return False
+    return True
 
 
 def prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
@@ -716,13 +828,18 @@ def prepare_release_journal(journal, ledger_api, admission, provider, api, manif
     if original_0103_selection is not None:
         require(not recovery_checkpoint, "original .103 selection conflicts with recovery checkpoint")
         validate_original_0103_seam(original_0103_selection, manifest, intent, candidate_source, publisher_sha, journal.ref)
-    fresh, physical = classify_journal_destination(ledger_api, journal.ref)
+    budget = AuthorityRereadBudget()  # One bounded settle budget for this publisher run.
+    fresh, physical = stable_journal_destination(ledger_api, journal.ref, budget)
     require(not original_tag_recovery or (original_0103_selection is not None and not fresh),
             "original tag recovery requires the existing original journal; no genesis")
     if fresh:
         require(not recovery_checkpoint, "recovery checkpoint requires the existing original journal")
-        require(candidate_source == publisher_sha or original_0103_selection is not None,
-                "fresh publication requires candidate and publisher source to match")
+        # The journal intent still binds the exact candidate source; a later publisher source is
+        # admitted only as a descendant with an unchanged release closure (#5107).
+        require(candidate_source == publisher_sha or original_0103_selection is not None
+                or candidate_closure_admitted(candidate_source, publisher_sha),
+                "fresh publication requires candidate and publisher source to match "
+                "or the candidate to be an ancestor with an unchanged release closure")
         try:
             api.get(f"repos/FS-GG/.github/git/ref/tags/coherent-set/v{manifest['descriptor']['version']}")
         except NotFound:
@@ -731,16 +848,15 @@ def prepare_release_journal(journal, ledger_api, admission, provider, api, manif
             raise Refused("successor tag already exists outside the protected journal")
         require(provider._release() is None, "successor release already exists outside the protected journal")
         uniqueness()
-        require(authority_main(ledger_api) == physical, "Authority main moved before journal preparation")
+        physical = require_stable_destination(ledger_api, journal.ref, fresh, physical,
+                                              "Authority main moved before journal preparation", budget)
         require(admission.authorize(manifest["contentId"], "journal", "intent", manifest["contentId"]),
                 "release journal initialization admission denied")
         if preflight_only:
             return True
         journal.initialize(intent)
     else:
-        require(authority_main(ledger_api) == physical, "Authority main moved before journal recovery")
-        journal.read()
-        require(authority_main(ledger_api) == physical, "Authority main moved during journal recovery")
+        read_journal_at_stable_main(journal, ledger_api, physical, "journal recovery", budget)
         require(not preflight_only or original_tag_recovery,
                 "preflight requires an unused release journal and version")
         if candidate_source != publisher_sha:
@@ -1900,6 +2016,43 @@ def run_original_runtime_recovery(manifest, journal, admission, provider, ledger
     return "checkpoint"  # Still26/intent: no final read, settlement or later effect.
 
 
+def bind_current_predecessor(api, raw: bytes, version: str) -> dict:
+    """Bind CURRENT_RELEASE's predecessor from the candidate's promoted channel, read live (#5156).
+
+    The candidate derived this channel on protected main from the newest promoted coherent-set release
+    below the version and checked it against that release's tag. The publisher does not trust that
+    derivation: it reads the same release and tag again and binds only when the release is promoted
+    (not a draft or prerelease), carries exactly these channel bytes as its uploaded `stable-channel.json`,
+    and its tag names the channel's source commit.
+    """
+    try:
+        identity = release_route.channel_identity(raw)
+    except release_route.RouteRefused as error:
+        raise Refused(f"current accepted predecessor channel is malformed: {error}") from None
+    require(release_route.parts(identity["version"]) < release_route.parts(version),
+            "current accepted predecessor is not strictly older than the version")
+    tag = release_route.TAG_PREFIX + identity["version"]
+    release = api.get(f"repos/{REPOSITORY}/releases/tags/{tag}")
+    require(isinstance(release, dict) and release.get("tag_name") == tag and release.get("draft") is False
+            and release.get("prerelease") is False and isinstance(release.get("id"), int),
+            "current accepted predecessor release is not promoted")
+    assets = api.get(f"repos/{REPOSITORY}/releases/{release['id']}/assets?per_page=100")
+    channel = [row for row in assets if isinstance(row, dict) and row.get("name") == "stable-channel.json"] \
+        if isinstance(assets, list) else []
+    require(len(channel) == 1 and channel[0].get("state") == "uploaded" and channel[0].get("size") == len(raw)
+            and channel[0].get("digest") == "sha256:" + hashlib.sha256(raw).hexdigest(),
+            "current accepted predecessor channel differs from its promoted release asset")
+    ref = api.get(f"repos/{REPOSITORY}/git/ref/tags/{tag}")
+    obj = ref.get("object", {}) if isinstance(ref, dict) else {}
+    require(obj.get("type") == "commit" and obj.get("sha") == identity["sourceSha"],
+            "current accepted predecessor tag does not name the channel's source")
+    try:
+        CURRENT_RELEASE.bind(identity)
+    except release_route.RouteRefused as error:
+        raise Refused(str(error)) from None
+    return identity
+
+
 def execute_publisher(args, report):
     version, predecessor, selected_ref = selected_release_binding(args)
     continuation = bool(getattr(args, "continue_original_0104_checkpoint", False))
@@ -2021,12 +2174,13 @@ def execute_publisher(args, report):
     manifest = json.loads(manifest_bytes)
     require(manifest["descriptor"]["version"] == version, "publisher version differs")
     if selected_ref == CURRENT_RELEASE["logicalRef"]:
-        require(manifest["descriptor"].get("previousStableVersion") == predecessor, "publisher predecessor differs")
-        previous = json.loads((candidate / "previous-stable-channel.json").read_bytes())
-        require(previous.get("version") == CURRENT_RELEASE["predecessor"]
-                and previous.get("sourceSha") == CURRENT_RELEASE["predecessorSource"]
-                and previous.get("contentId") == CURRENT_RELEASE["predecessorContentId"]
-                and manifest["descriptor"].get("previousStableContentId") == CURRENT_RELEASE["predecessorContentId"],
+        report["stage"] = "predecessor-binding"
+        identity = bind_current_predecessor(api, (candidate / "previous-stable-channel.json").read_bytes(), version)
+        predecessor = identity["version"]
+        require(manifest["descriptor"].get("previousStableVersion") == identity["version"] == CURRENT_RELEASE["predecessor"],
+                "publisher predecessor differs")
+        require(manifest["descriptor"].get("previousStableContentId") == identity["contentId"]
+                == CURRENT_RELEASE["predecessorContentId"],
                 "current accepted predecessor identity differs")
     if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery:
         require(candidate_source == RECOVERY_CANDIDATE["sourceSha"]

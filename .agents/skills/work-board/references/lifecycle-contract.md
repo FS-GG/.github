@@ -48,7 +48,8 @@ including undecomposed installed, participant, recovery or publication requireme
 independently meaningful scoped result with the same six-field owning issue contract. Native parent/
 sub-issue links represent decomposition, not action authority. Do not turn every acceptance clause or
 old completed submilestone into a card, mechanically decompose the current membership, or invent a
-retrospective Done backlog. Materialize only the next useful bounded delivery when needed, keeping the
+retrospective Done backlog. Materialize each bounded delivery when it is dispatched or when its Outcome is
+shaped ([filing rules](#file-the-delivery-issue-at-dispatch)), keeping the
 original issue IDs, owner, PR/head, attempt and operation history. Shared prerequisites have one owner.
 
 For the selected organization successor, Work level is one explicit SINGLE_SELECT field with exactly
@@ -59,9 +60,10 @@ repurposing, seventh body field or runtime classification fallback is permitted.
 product binding3/schema1 retain their actual qualified behavior until explicit successor adoption;
 reading these instructions neither creates the field nor changes enrollment, binding or installed selector.
 
-Only explicitly enrolled Delivery nodes may be selected by the new model. Outcome nodes are never
+Only explicitly enrolled Delivery nodes, or unenrolled ones Root has admitted pending batch enrollment,
+may be selected by the new model. Outcome nodes are never
 implementation assignments; missing/conflicting classification refuses that selection. A linked but
-unenrolled child remains visible and unschedulable. Preserve the complete membership population and
+unenrolled child remains visible and unschedulable unless so admitted. Preserve the complete membership population and
 known/Unknown reservations. A blocked parent/sibling is not an automatic prerequisite for a disjoint
 child; relevant native/plan/action prerequisites still bind. Incomplete parent child coverage withholds
 parent rollup, not a child's independently complete action facts. Missing/null/partial/truncated or changed
@@ -73,8 +75,8 @@ Reconcile closure against the actual scoped promise and evidence. Read-only insp
 when, Blocked on, Acceptance evidence and native state reason/date; it does not interpret arbitrary prose
 as accepted work. A merged source PR cannot establish installed acceptance. Native completed differs from
 not planned, and stale Done/closed disagreement remains a discrepancy to resolve. The accountable owner
-records accepted scope/date/evidence, closes the exact native issue with the correct reason and updates
-Status only through the authorized native route, then reconciles parent remaining assertions. Preserve
+records accepted scope/date/evidence; the exact native issue is closed with the correct reason (a
+Delivery per rule 3 below, by Root's acceptance) and Status updated only through the authorized native route, then reconciles parent remaining assertions. Preserve
 partial effects and original identity after interruption; resume only the remaining independently read-back
 effect. Never use legacy Done.rollUpParents or automatically climb/close parents. All children closed,
 healthy inspection, deferred work or successful Observation refresh cannot satisfy missing parent scope.
@@ -89,6 +91,37 @@ conflicting existing values and retains originals after uncertainty. New enrollm
 normal authenticated private binding/protected commitment pair, not a child link or view filter. Publication,
 actual installed instruction discovery, selected caller qualification, field/enrollment/view migration and
 native consumer acceptance remain separate required joins before activating this successor.
+
+## File the Delivery issue at dispatch
+
+The board falls behind when work runs under an Outcome with no Delivery of its own. These rules keep
+it current; they add no ledger, packet or actor, and they do not enroll, schedule or grant Ready.
+
+1. **No dispatch without a Delivery issue.** Admit a dispatch only once its native Delivery issue
+   exists; an existing Delivery issue already linked under its Outcome satisfies this. The issue is a
+   native sub-issue of its Outcome, and its body gives only the owner, Done when, the intended Work
+   level (Delivery), Track and Status, and `Refs` links. The PR `Refs` that Delivery, never the
+   Outcome, and never uses a closing keyword. Urgent or Outcome-less work files its Delivery first
+   under the standing Outcome #5097 [OPS-MAINT], with a one-line body (owner, Done when, `Refs`).
+   There is no bypass.
+2. **Shaping an Outcome files its remaining work.** When an Outcome is shaped or re-shaped, its
+   remaining acceptance is filed as open Deliveries, each under rule 1. "All sub-issues closed" never
+   stands in for "Outcome done": Outcome Done requires Root acceptance, which is closing the Outcome.
+3. **Closing a Delivery.** Root, or a Root-delegated acceptance, closes an accepted Delivery with a
+   comment citing its merge commits and recorded verdicts, or "Unknown: no recorded independent
+   verdict" where none exists. With the project workflow "Item closed" to Done on, closing is the Done
+   transition; with it off, the closer also writes Done through the guarded Status helper. Read the
+   state first: `gh api graphql -f query='{organization(login:"FS-GG"){projectV2(number:3){workflows(first:20){nodes{number name enabled}}}}}'`.
+4. **Enrollment.** Each clearing pass enrolls its new Delivery issues in batches through the #4941
+   planner once the 250-row cap is installed. Until then they remain native sub-issues, visible and
+   unschedulable unless Root explicitly admits one as unenrolled pending batch enrollment. Root records an
+   admission as a Root comment on the Delivery issue whose body is exactly
+   `<!-- fsgg:root-admit-unenrolled/v1 -->`, and dispatches it outside inspection's selection, whose
+   candidate set covers enrolled nodes only. Their bodies already carry the Work level, Track and
+   Status the batch will use.
+5. **Auto-add stays off.** Keep the project workflow "Auto-add sub-issues to project" disabled and read
+   it back before and after any bulk sub-issue linking. Unattended cards break `migration-prepare`
+   and `inspect`, and enrollment is not a child link.
 
 ## Recover ownership and unavailable history
 
@@ -279,6 +312,17 @@ for confirmation alone. Required CI and ADR-0084 coherent validation still run. 
 reported separately; required pending/failed checks block their dependent delivery or effect.
 Read [delivery reliability](delivery-reliability.md) for recurring qualification failures.
 
+Fixtures and release controls (the gates, pins and checks that decide whether a release may proceed)
+derive time and versions from observed state: they must not hard-code a wall-clock date, a published
+version or tag, or ambient environment such as `XDG_*` config or an interpreter constant
+(#4993, #5007, FS.GG.Coordination#1092, #5018, #5032). Each uses an injected clock, a value derived from
+observed state (for example, select a version above the existing tags), an isolated fixture or sandbox,
+or a value normalised per interpreter. A pin declared as the control's subject and checked against its
+authoritative source (kit and CLI pins, frozen routes, the consumed-operation controls) is not a
+hard-code, and a literal date or version is fine as test input under an injected clock. The author
+confirms this and names the clock, source or sandbox for each such fixture in the PR body; the reviewer
+checks it.
+
 Use `tools/pr-lane-admission.py` for stable campaign/chain, exact pushed head and normal metadata.
 Keep one open PR per coherent chain and at most two managed PRs per repository across campaigns.
 Preserve metadata through canonical body/head updates. Assemble compatible source/version/Atlas edits
@@ -298,10 +342,12 @@ For hosted waits use bounded `--watch-checks --watch-seconds N` (1–600), retai
 artifacts, and count watcher children. Unchanged polls need no model turn; watchers never deliver.
 Delegated workers and Root wait only through a bounded deterministic route: that watcher, `gh run watch`
 under a timeout, or a deterministic `until` condition with a hard deadline; never a model-driven polling loop
-with an iteration cap. An expired wait is not the awaited condition: an effect that depends on a condition
-proceeds only on that observed condition, never on a timer or iteration limit expiring. Keep scratch files
-and PR/comment body files in a per-session or per-task private `mktemp -d` directory, never at fixed
-filenames in a shared scratchpad; read a body file back before `gh pr edit --body-file` or posting it.
+with an iteration cap. Keep at most one armed watcher per awaited condition and cancel superseded or
+duplicate waiters before reporting; a completed timer that adds no new information produces no report.
+An expired wait is not the awaited condition: an effect that depends on a condition proceeds only on that
+observed condition, never on a timer or iteration limit expiring. Keep scratch files and PR/comment body
+files in a per-session or per-task private `mktemp -d` directory, never at fixed filenames in a shared
+scratchpad; read a body file back before `gh pr edit --body-file` or posting it.
 Apply the [diagnostic execution policy](https://github.com/FS-GG/.github/blob/main/docs/coordination/diagnostic-execution.md)
 within original budgets, retaining independent failure collection, actual values and cleanup/reporting outcomes.
 

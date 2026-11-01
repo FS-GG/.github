@@ -1,0 +1,61 @@
+# Gates for the LEARN pod image source (deployment/learn-finite-profile/pod-image), Refs #4647.
+#
+# Runs the role entrypoint under /bin/sh with its paths in a temporary directory (the learn-pod-status/1 contract), executes the Containerfile's RUN step in a
+# sandbox against fixtures, and drives the builder's context verification, tool-tree extraction, runtime parsing and image gates against a fake podman. It builds no
+# image and starts no container. run.py needs no network; the last three steps download the public producer CLI archive and run it with dotnet.
+#
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
+name: learn-pod-image-selftest
+
+on:
+  pull_request:
+    paths:
+      - "deployment/learn-finite-profile/pod-image/**"
+      - "tests/learn-pod-image/**"
+      - ".github/workflows/learn-pod-image-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deployment/learn-finite-profile/pod-image/**"
+      - "tests/learn-pod-image/**"
+      - ".github/workflows/learn-pod-image-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR-keyed concurrency (#4730 CI-load): a newer run for the same pull request cancels the superseded
+# one, so a push or body edit no longer leaves the old head's run to finish and hold a runner. Any
+# other event keys on `github.run_id`, which is unique to the run: GitHub discards an older PENDING run
+# in a shared group even without cancel-in-progress, so a key that two events can share (the branch ref
+# for pushes, or the commit sha for dispatches and issue events at one commit) would drop a run.
+concurrency:
+  group: learn-pod-image-selftest-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the pod image gates
+        run: python3 tests/learn-pod-image/run.py
+
+      # The producer CLI is a framework-dependent .NET tool. Run it from a copy-only layout with `dotnet` and nothing else (tests/learn-pod-image/run_cli.py): the
+      # first pin, a 78 KB apphost, could not have run in the image. The archive is the public asset of release coherent-set/v0.113.0, checked against its pin by the test.
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Download the pinned producer CLI archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download coherent-set/v0.113.0 --repo FS-GG/.github --pattern FS.GG.Coord.Cli.0.113.0.nupkg --dir "$RUNNER_TEMP"
+
+      - name: Run the producer CLI from a copy-only tree
+        env:
+          LEARN_CLI_NUPKG: ${{ runner.temp }}/FS.GG.Coord.Cli.0.113.0.nupkg
+        run: python3 tests/learn-pod-image/run_cli.py

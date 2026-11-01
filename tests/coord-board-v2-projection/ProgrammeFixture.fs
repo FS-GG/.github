@@ -91,6 +91,23 @@ module ProgrammeFixture =
     // Wire-level batching adapter for inert fixtures. It expands each actual aliased
     // request into the existing independent native routes, preserving their fault injection.
     // The outer Recorder still counts one provider request, not these semantic subqueries.
+    /// The native observation's folded `blockedBy` connection (#5119): empty by default.
+    let noBlockers = {| totalCount = 0; nodes = ([]: obj list) |}
+
+    /// Replace the folded `blockedBy` connection of a native observation response with these blocker nodes
+    /// (`id`, `number`, `updatedAt`, `state`, `url`, `repository.nameWithOwner`), as the REST blocked_by fixture once did.
+    let withBlockers (blockers: obj list) (request: Transport.Request) (result: Errors.IoResult<Transport.Response>) =
+        if not (request.Subject.EndsWith("native observation", StringComparison.Ordinal)) then result
+        else
+            result |> Result.map (fun response ->
+                let root = Text.Json.Nodes.JsonNode.Parse response.Body
+                root.["data"].["repository"].["issue"].["blockedBy"] <- JsonSerializer.SerializeToNode {| totalCount = blockers.Length; nodes = blockers |}
+                { response with Body = root.ToJsonString() })
+
+    /// One FS-GG blocker node in the GraphQL `blockedBy` shape.
+    let blocker (number: int) (nodeId: string) (updatedAt: string) (state: string) : obj =
+        box {| id = nodeId; number = number; updatedAt = updatedAt; state = state; url = $"https://github.com/FS-GG/.github/issues/{number}"; repository = {| nameWithOwner = "FS-GG/.github" |} |}
+
     let private recorder (route: Fake.Route) =
         let dispatch (request: Transport.Request) =
             match request.Body with
@@ -118,8 +135,8 @@ module ProgrammeFixture =
                         if selection.Contains("issueCreationPolicy") then text "owner" + "/" + text "name" + " repository policy"
                         elif selection.Contains("author{") || selection.Contains("author {") then text "owner" + "/" + text "name" + "#" + string number + " intake identity"
                         elif selection.Contains("subIssues(") then "selected native work hierarchy"
-                        elif selection.Contains("workLevel:") then "selected work classification"
                         elif ownVariables |> List.exists (fun (name, _) -> name = "projectOwner") then "bound V2 successor planning memberships"
+                        elif selection.Contains("workLevel:") then "selected work classification"
                         elif selection.Contains("currentExpression") then "protected recipe " + String.replicate 40 "e" + ":" + (text "currentExpression").Substring(5)
                         elif selection.Contains("object(expression:") || selection.Contains("qualifiedName:") then "enrolled native owning plan"
                         elif selection.Contains("updatedAt state") then text "owner" + "/" + text "repo" + "#" + string number + " native observation"
@@ -175,7 +192,7 @@ module ProgrammeFixture =
                            headRefOid = head; updatedAt = revision; repository = {| nameWithOwner = "FS-GG/.github" |} |}
                     wire ({| repository = {| nameWithOwner = "FS-GG/.github"; pullRequest = native |} |})
                 | Query(document, _) when document.Contains("issue(number:") && document.Contains("updatedAt state") ->
-                    wire ({| repository = {| nameWithOwner = "FS-GG/.github"; issue = {| id = "I_outcome"; number = 4634; updatedAt = revision; state = "OPEN"; url = "https://github.com/FS-GG/.github/issues/4634"; body = ownerBody; repository = {| nameWithOwner = "FS-GG/.github" |} |} |} |})
+                    wire ({| repository = {| nameWithOwner = "FS-GG/.github"; issue = {| id = "I_outcome"; number = 4634; updatedAt = revision; state = "OPEN"; url = "https://github.com/FS-GG/.github/issues/4634"; body = ownerBody; repository = {| nameWithOwner = "FS-GG/.github" |}; blockedBy = noBlockers |} |} |})
                 | NoBody when request.Path.EndsWith("/dependencies/blocked_by", StringComparison.Ordinal) -> response "[]"
                 | Query(document, _) when document.Contains("organization(login:") && not (document.Contains("projectV2")) -> wire ({| organization = {| id = "O_kgDOEYAWYw"; login = "FS-GG" |} |})
                 | Query(document, _) when document.Contains("projectV2(number:") ->
@@ -184,7 +201,7 @@ module ProgrammeFixture =
                     wire ({| organization = {| login = "FS-GG"; projectV2 = {| id = project; number = 3; title = "Coordination V2"; fields = connection [ select "Status" value.Status; box {| id = "roadmap"; name = "Roadmap"; dataType = "TEXT" |}; select "Track" value.Track; select "Observation" value.Observation ] |} |} |})
                 | Query(document, _) when document.Contains("items(first: 50") ->
                     wire ({| node = {| id = project; items = connection [ {| id = "PVTI_current"; content = {| __typename = "Issue"; id = "I_outcome"; number = 4634; repository = {| nameWithOwner = "FS-GG/.github" |} |} |}; {| id = "PVTI_extra"; content = {| __typename = "Issue"; id = "I_extra"; number = 5000; repository = {| nameWithOwner = "FS-GG/.github" |} |} |} ] |} |})
-                | Query(document, _) when document.Contains("projectItems(first:") -> wire ({| repository = {| nameWithOwner = "FS-GG/.github"; issue = {| id = "I_outcome"; number = 4634; projectItems = connection [ {| id = "PVTI_current"; project = {| id = project |}; content = content |} ] |} |} |})
+                | Query(document, _) when document.Contains("projectItems(first:") -> wire ({| repository = {| nameWithOwner = "FS-GG/.github"; issue = {| id = "I_outcome"; number = 4634; projectItems = connection [ {| id = "PVTI_current"; isArchived = false; project = {| id = project |}; content = content |} ] |} |} |})
                 | Query(_, _) when request.Subject = "fresh V2 Observation dispatch identity" ->
                     wire ({| node = {| id = "PVTI_current"; project = {| id = project |}; content = content |} |})
                 | Query(document, _) when document.Contains("fieldValueByName(name: \"Observation\")") && not (document.Contains("status: fieldValueByName")) ->
@@ -230,7 +247,7 @@ module ProgrammeFixture =
                                              issue = {| id = id; number = issue.Number; updatedAt = revision; state = "OPEN";
                                                         url = $"https://github.com/{repository}/issues/{issue.Number}";
                                                         body = ownerBody.Replace("https://github.com/FS-GG/.github/pull/42", "None");
-                                                        repository = {| nameWithOwner = repository |} |} |} |})
+                                                        repository = {| nameWithOwner = repository |}; blockedBy = noBlockers |} |} |})
                 | Transport.Query(document, variables) when document.Contains("issueCreationPolicy") ->
                     let repository = variables |> List.pick (function "name", Transport.VString name -> Some name | _ -> None)
                     wire ({| repository = {| id = "synthetic-repository-" + repository; issueCreationPolicy = "COLLABORATORS_ONLY";
@@ -252,7 +269,7 @@ module ProgrammeFixture =
                     let content = {| id = id; number = issue.Number; repository = {| nameWithOwner = repository |} |}
                     wire ({| repository = {| nameWithOwner = repository;
                                              issue = {| id = id; number = issue.Number;
-                                                        projectItems = connection [ {| id = "synthetic-member-" + id; project = {| id = project |}; content = content |} ] |} |} |})
+                                                        projectItems = connection [ {| id = "synthetic-member-" + id; isArchived = false; project = {| id = project |}; content = content |} ] |} |} |})
                 | Transport.Query(document, variables) when document.Contains("status: fieldValueByName") ->
                     let id, issue, roadmap = current variables |> Option.get
                     let select fieldId name option =
@@ -373,9 +390,10 @@ module ProgrammeFixture =
                     let select fieldId name option =
                         {| __typename = "ProjectV2ItemFieldSingleSelectValue"; name = name; optionId = option; field = {| id = fieldId |} |}
                     let memberItem =
-                        {| id = "synthetic-member-" + id; project = {| id = project |}
+                        {| id = "synthetic-member-" + id; isArchived = false; project = {| id = project |}
                            content = {| id = id; number = issue.Number; repository = {| nameWithOwner = repository |} |}
                            status = select "status" "Blocked" "Blocked"; track = select "track" "Active delivery" "active"
+                           workLevel = (match level with Some name -> box (select "work-level" name selected.WorkLevel.Value.Options[name]) | None -> null)
                            observation = select "observation" "Unknown" "unknown"
                            roadmap = {| __typename = "ProjectV2ItemFieldTextValue"; text = roadmap; field = {| id = "roadmap" |} |} |}
                     wire {| organization = {| id = selected.OrganizationId; login = selected.Owner |}

@@ -1,0 +1,481 @@
+{
+ "schema": "fsgg.board-tend-linkage-corpus/1",
+ "note": "Shared by V2TendReadsTests (F#) and tests/board-currency (scripts/board-currency-rules.py linkage_of). expect is the Delivery reference or the failure reason: the first U failure when there is one (no verdict wins), else the first failure. A card may carry unreadable or type; a case may set anonymousUnreadable (the board holds an unreadable card with no identity).",
+ "cases": [
+  {
+   "name": "strict",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1, #10"
+   },
+   "expect": "FS-GG/x#1"
+  },
+  {
+   "name": "outcome only",
+   "cards": {
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #10"
+   },
+   "expect": "no-delivery"
+  },
+  {
+   "name": "two deliveries",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#2": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1\nRefs #2"
+   },
+   "expect": "multiple-deliveries"
+  },
+  {
+   "name": "no parent outcome",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1"
+   },
+   "expect": "no-parent-outcome"
+  },
+  {
+   "name": "closed delivery, open PR",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "CLOSED",
+     "status": "Done",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1"
+   },
+   "expect": "delivery-closed"
+  },
+  {
+   "name": "done delivery, open PR",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "Done",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1"
+   },
+   "expect": "delivery-done"
+  },
+  {
+   "name": "merged PR to closed delivery",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "CLOSED",
+     "status": "Done",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "MERGED",
+    "body": "Closes #1"
+   },
+   "expect": "FS-GG/x#1"
+  },
+  {
+   "name": "reference in code",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "`Refs #1`\n```\nRefs #1\n```"
+   },
+   "expect": "no-delivery"
+  },
+  {
+   "name": "cross-repository delivery",
+   "cards": {
+    "FS-GG/y#5": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs FS-GG/y#5"
+   },
+   "expect": "FS-GG/y#5"
+  },
+  {
+   "name": "lower-case owner and repository",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs fs-gg/x#1"
+   },
+   "expect": "FS-GG/x#1"
+  },
+  {
+   "name": "leading zero in the number",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #01"
+   },
+   "expect": "FS-GG/x#1"
+  },
+  {
+   "name": "one issue named twice in different case",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1 and FS-GG/X#001"
+   },
+   "expect": "FS-GG/x#1"
+  },
+  {
+   "name": "anonymous unreadable card and an off-board reference",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1, #77"
+   },
+   "expect": "r1-reference-unreadable",
+   "anonymousUnreadable": true
+  },
+  {
+   "name": "anonymous unreadable card, every reference on the board",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1"
+   },
+   "expect": "FS-GG/x#1",
+   "anonymousUnreadable": true
+  },
+  {
+   "name": "referenced card unreadable",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    },
+    "FS-GG/x#2": {
+     "unreadable": true
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1, #2"
+   },
+   "expect": "r1-reference-unreadable"
+  },
+  {
+   "name": "parent card unreadable",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "unreadable": true
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1"
+   },
+   "expect": "r1-parent-unreadable"
+  },
+  {
+   "name": "pull-request card is never a Delivery",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10",
+     "type": "PullRequest"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1"
+   },
+   "expect": "no-delivery"
+  },
+  {
+   "name": "lone CR ends a code span",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "`x\rRefs #1`"
+   },
+   "expect": "FS-GG/x#1"
+  },
+  {
+   "name": "CRLF line endings",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "In progress",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "workLevel": "Outcome",
+     "state": "OPEN",
+     "status": "In progress"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Summary\r\nRefs #1\r\n"
+   },
+   "expect": "FS-GG/x#1"
+  },
+  {
+   "name": "closed delivery with an unreadable parent: Unknown wins",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "CLOSED",
+     "status": "Done",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "unreadable": true
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1"
+   },
+   "expect": "r1-parent-unreadable"
+  },
+  {
+   "name": "done delivery whose parent is missing beside an anonymous unreadable card: Unknown wins",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "Done",
+     "parent": "FS-GG/x#11"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1"
+   },
+   "expect": "r1-parent-unreadable",
+   "anonymousUnreadable": true
+  }
+ ]
+}

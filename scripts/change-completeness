@@ -123,7 +123,7 @@ PY_CLOSURE
 v2_changed="$(cat "$WORK/v2-impact")"
 
 engine_changed=false
-if grep -Eq '^(src/FS\.GG\.(Coord|Telemetry)\.|tests/FS\.GG\.(Coord|Telemetry)\.|tests/(m6-decision-cutover|delivery-leading-line|coord-engine-|review-critic-succession-wire|change-completeness|change-risk-compatibility)/|scripts/(fsgg-coord|fsgg-coord-guards\.sh|record-board-fixture\.py|read-trx-count\.py|change-completeness)|Directory\.(Build|Packages)|dist/dotnet/Directory\.Build\.props|global\.json|\.github/workflows/coord-engine\.yml)' "$PATHS"; then
+if grep -Eq '^(src/FS\.GG\.(Coord|Telemetry)\.|tests/FS\.GG\.(Coord|Telemetry)\.|tests/(m6-decision-cutover|delivery-leading-line|coord-engine-|review-critic-succession-wire|change-completeness|change-risk-compatibility)/|scripts/(fsgg-coord|fsgg-coord-guards\.sh|record-board-fixture\.py|read-trx-count\.py|change-completeness)|Directory\.(Build|Packages)|dist/dotnet/Directory\.Build\.props|global\.json|\.github/workflows/coord-engine\.yml|\.github/workflows/routine-eligibility\.yml|\.fsgg/telemetry-ci-attribution\.json)' "$PATHS"; then
   engine_changed=true
 fi
 [ -z "$OUTPUT_FILE" ] || printf 'engine_changed=%s\n' "$engine_changed" >>"$OUTPUT_FILE"

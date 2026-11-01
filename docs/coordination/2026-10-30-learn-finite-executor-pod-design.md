@@ -100,18 +100,53 @@ runtimeconfig sets `System.GC.Server: true`, so `recv` and `host` run with `DOTN
 The Host and Runner payloads are self-contained single-file applications and need no installed runtime. The Telemetry
 Host 0.8.0 (`FS.GG.Telemetry.Host.0.8.0.nupkg`, sha `44273495…ba89`, release `telemetry-host/v0.8.0`, store schema 14) is
 framework-dependent. Its `runtimeconfig.json` requires `Microsoft.NETCore.App` and `Microsoft.AspNetCore.App` 10.0.0
-with `rollForward: Major`, and its release manifest lists both as prerequisites. The build runs with `--network=none`,
-so the runtimes come from one of two pinned sources, never from a build-time download:
+with `rollForward: Major`, and its release manifest lists both as prerequisites. The build runs with `--network=none`, so
+no runtime is downloaded at build time.
 
-1. **The base image's `/usr/share/dotnet`.** It was copied into `20a6df20` from a .NET SDK tree, which normally contains
-   both shared runtimes. This is unverified. The builder asserts, as a build step that fails the build, that
-   `shared/Microsoft.NETCore.App/10.*` and `shared/Microsoft.AspNetCore.App/10.*` exist and records their versions.
-2. **A hash-pinned runtime archive in the context**, used only if (1) fails: the official ASP.NET Core 10.0 Linux x64
-   runtime archive, which contains both, acquired once as its own admitted acquisition with its published checksum
-   recorded, and extracted into the image.
+**Settled (read-only check as `fsgg-learn-qual`, 2026-10-30).** The base image `20a6df20` ships, under
+`/usr/share/dotnet/shared`, `Microsoft.NETCore.App` **10.0.12** and `Microsoft.AspNetCore.App` **10.0.12**, with SDK
+10.0.401. Both satisfy the 10.0.0 requirement, so the runtimes come from the base image and no runtime archive is acquired.
+The builder still asserts, as a build step that fails the build, that
+`shared/Microsoft.NETCore.App/10.*` and `shared/Microsoft.AspNetCore.App/10.*` exist with a version at or above the
+`runtimeconfig.json` minimum, and records the versions it found. The self-contained Host and Runner bundle runtime
+10.0.11; that is independent of the shared runtimes.
 
-Which source is used is decided by the builder assertion, not by judgement at run time. The producer CLI has the same
-requirement and the same sources.
+**Producer CLI.** The producer is `fsgg-coord-engine` from NuGet `FS.GG.Coord.Cli`, promoted as `coherent-set/v0.113.0`. It is a
+framework-dependent .NET tool, not a self-contained executable. The public asset `FS.GG.Coord.Cli.0.113.0.nupkg` (sha256
+`100f0879…9789`) holds the tool tree `tools/net10.0/any/`: 82 files, about 69 MB, `fsgg-coord-engine.dll` with its dependencies, and a
+`runtimeconfig.json` that needs `Microsoft.NETCore.App` 10.0.0 with `rollForward: Major`. An earlier revision of this section pinned
+the 78 KB apphost `5e517e8d…ff725` that the tool installer generates under `~/.local/bin`; it needs `.store/…/fsgg-coord-engine.dll`
+beside it and cannot run alone. The build context pins the archive and a tree list (the same way as the Host), the builder extracts the
+tree member by member, and the image runs it as `dotnet /opt/fsgg/producer/fsgg-coord-engine.dll …` with the base's shared runtime, the
+same 10.0.12 that satisfies the Host. `tests/learn-pod-image/run_cli.py` runs the pinned tree from a copy-only layout. That the base
+image's own runtime runs it is not yet shown: the first build and the pod harness are the check.
+
+**Receiver version.** The live fsgg-store runs the same Telemetry Host 0.8.0 payload: its `installed-payload.json` records
+the nupkg sha256 `44273495…ba89` and source `74cbd6f0…`, equal to the release asset and manifest. The pod receiver and the
+live receiver therefore match by package identity.
+
+**How `feed` replays** (design, qualified later inside the pod harness). `feed` creates a fresh per-run remote association
+with `telemetry workspace activate-remote` and replays with `telemetry workspace drain`. `drain` sends the `*.ready` files at
+the top of the spool directory (at most 129) in name order after `drain-cursor`, with a 30 s deadline, and counts a batch as
+processed only when its receipt is `applied`, `rejected` or `expired`. Only `passive-prospective-0106-20261018/spool` holds
+drainable batches: three `fsgg.telemetry.envelope/1` files, all workspace `utel-persistent-20261018`, producer
+`codex-persistent-20261018`, stream `native-persistent-20261018`. `passive-home-canonical-v1/spool` has no `*.ready` file
+(two earlier-send receipts under `outcomes/`, a `producer.json` and a `drain-cursor`); it is sealed and hashed as
+**read-only comparison evidence and never replayed**.
+
+**Per-run credentials and TLS** (design). The maintained template is
+`deployment/telemetry-collector/qualify_host_state.py`. A generator step creates, in tmpfs and for this run only:
+
+- an ephemeral server certificate (PFX and password file) authenticating `localhost`, and its CA;
+- a CSPRNG secret for the one principal the replay needs, enrolled in a `fsgg.telemetry.host-config/2` with
+  `Role: native-collector` for that single workspace, producer and stream identity (Root's decision);
+- the store initialised with `init --root` and the principal enrolled with `enroll-producer --secret-file`.
+
+The client endpoint is `https://localhost:<port>` (the contract only requires an absolute `https` URI). `feed` and `host`
+trust the per-run CA through `SSL_CERT_FILE`, and read the credential from the environment variable
+`FSGG_TELEMETRY_CREDENTIAL_<REF>` filled from a tmpfs file. Retirement checks that the credential tmpfs is gone.
+
+The Host, Runner, receiver and producer CLI are all pinned by sha256 in the build context.
 
 ## 3. Isolation and limits
 
@@ -184,7 +219,8 @@ re-hashes every file at launch and after the run.
 source identity is the sha256 of the canonical list of the two source subtree paths and, for each file in M1, relative
 path, size, sha256 and `mtime_ns`. The same retained source therefore cannot be claimed twice by re-sealing it.
 
-The claim is written by a root-only writer (`learn-claim.py`, `O_CREAT|O_EXCL|O_NOFOLLOW`) through the writable source
+The claim is written by the root-only seal and claim tool (`deployment/learn-finite-profile/seal/learn_seal_claim.py claim`,
+delivered in #5000; `O_CREAT|O_EXCL|O_NOFOLLOW`) through the writable source
 path `/srv/bulk/services/usr-local-libexec-fsgg-learn/claims/<source-identity>.claim`, root:root 0644, containing the op
 id, the source identity, the sealed manifest sha256 and the UTC time. The in-VM bind is read-only, so the operator and
 the pod containers can only read it.
@@ -194,24 +230,46 @@ the pod containers can only read it.
 1. `--precheck-only` runs every gate that reads no input: operator and image pins, ack gate, admission file, slice,
    sweep, headroom, pod precheck (network, caps, uid map, seccomp, tmpfs owners). It never mounts or hashes the snapshot.
 2. Root reads that result, writes the claim, then starts `--run`. `--run` re-evaluates the gates, requires a claim that
-   names its own op id, and only then creates the `input-read` marker (`O_EXCL`, in the op's custody directory) and
-   verifies and mounts the snapshot.
+   names its own op id, and only then creates the `input-read` marker and verifies and mounts the snapshot.
+
+**Who owns what on disk.** The **custody directory** `~/.local/state/learn-custody/<op-id>/` is owned by the **finalizer**,
+which creates it with `exist_ok=False`; the operator refuses a run whose custody directory already exists, so nothing else
+creates inside it. The **`input-read` marker** is owned by the **pod operator**: it creates
+`~/.local/state/learn-input/<op-id>/input-read` (directory 0700, `O_EXCL`) immediately before the first read or mount of the
+input and only after verifying the claim. The marker is deliberately outside the custody directory. The finalizer records
+whether it exists; the claim tooling only reads it.
+
+**Contract the claim tooling relies on** (for the pod operator and finalizer r5 PRs). The pod operator creates the marker
+before the first read or mount of the input; sets `gates.inputMounted` in its RESULT before it mounts, so a run that dies
+during the mount cannot show `false`; and emits an integer `exitCode`, `runNonceSha256`, `operatorSha256`, `mode`, `opId`,
+schema `home-learn-pod-operator/1` and a `containers` list with `mounts[].destination`. The finalizer records `opId`,
+`inputRead`, `containersStartedWithInput`, the same `runNonceSha256` and its own `finalizerSha256`. Void is fail-closed (a
+missing field blocks it). Supersede needs positive evidence of consumption (the marker, `inputRead` true, or a non-empty
+`containersStartedWithInput`), and a `--run` that created the marker or mounted `/in` and failed early can only be superseded,
+on a Root decision. Root may add `--operator-exit-code`, its own capture of the operator's exit status, which must match the
+RESULT.
 
 **Void and abort.**
 
-- *Voided:* the claim exists, the op failed or was aborted, and the `input-read` marker does not exist and no container
-  was ever started with `/in`. Root runs `learn-claim.py --void --op-id <id>`, which renames the claim to
-  `<source-identity>.claim.voided-<op-id>` (kept, never deleted) after Root checks the operator RESULT. The source can
-  then be claimed again.
+- *Voided:* the claim exists, the op failed or was aborted, and all of these hold: the `input-read` marker does not exist;
+  the operator RESULT is from a `--run` (a `--precheck-only` result is not evidence about a run) with a non-zero exit code,
+  the input unmounted and no container with `/in`; the finalizer record says `inputRead` false and no container started with
+  the input, carries the RESULT's run nonce, and carries the same operator and finalizer pins as the admission; and the call
+  carries a Root corroboration reference. Root runs `learn_seal_claim.py void`, which renames the claim to
+  `<source-identity>.claim.voided-<op-id>` (kept, never deleted). The source can then be claimed again, and the next claim
+  continues the generation.
 - *Consumed:* the `input-read` marker exists. The claim stands whatever happens next, including a failed run. A later run
   on the same source needs a new explicit Root decision and a new claim after the consumed one is recorded as superseded.
 - A second claim attempt on the same source fails with `EEXIST`. A second op with a new id finds a claim naming another
   op and refuses.
 
 **The claim is cooperative.** `developer` has full sudo and can edit or delete any root-owned file, including claims,
-acks and the sealed snapshot. The claim detects mistakes and defends against a compromise of `fsgg-learn-qual` or of
-a run's containers. It does not defend against Root. The install journal and evidence record the claim's hash so a
-change is visible afterwards.
+acks and the sealed snapshot. The claim detects mistakes; it does not defend against Root. A void is **attested by artifacts
+the operator account writes** (the RESULT, the finalizer record and the marker): the tool makes them consistent with each
+other and with the admission but does not authenticate them, so only Root's independent corroboration strengthens a void, and
+the claim tooling does not detect a compromised `fsgg-learn-qual`. Decision and corroboration references are GitHub comment
+URLs that the tool format-checks and does not verify; Root verifies the comment. The install journal and evidence record the
+claim's hash so a change is visible afterwards.
 
 **No replay, original clocks.** The `feed` container gets the snapshot at `/in` (read-only, `nosuid,nodev,noexec`) and
 copies it into `/work/spool` preserving mtimes. The copy is verified against the sealed manifest, and only the copy is
@@ -425,19 +483,47 @@ Main deployment, and the telemetry drain schedule.
 
 ## 14. Unknowns, by what they block
 
-| # | Unknown | Blocks |
-|---|---|---|
-| 1 | Exact file list of the two `spool/` subtrees (the boundary is settled; the list comes from M1 at seal) | seal and claim |
-| 2 | Producer CLI package and version, and whether Telemetry Host 0.8.0 matches the receiver fsgg-store runs | build |
-| 3 | Seccomp applicability to PostgreSQL and the .NET apps (untested; the precheck fails closed) | run |
-| 4 | Finalizer r5 archiving one `/out/<role>/` per container from live containers; needs a spike | build |
-| 5 | Fixture assignment as Host input: settled by Root, results labelled fixture | settled |
-| 6 | First pull from the registry (allowed by the VMM filter per Atlas `environment/fdev-kvm-vm`, not yet exercised) | run |
-| 7 | Home harness r3b source and C1 install script `b9792a07…` are not in fdev, so r6 re-pinning and journal writes are manual | run |
-| 8 | Per-run credentials and mTLS for `host serve` and the receiver, generated inside the pod, are not yet specified | build |
-| 9 | Whether the quiesce proof in section 4 is sufficient, and whether the drain timer touches these subtrees at all | seal and claim |
-| 10 | Whether the base image `20a6df20` carries both shared .NET runtimes (section 2.3); decided by the builder assertion | build |
-| 11 | Root's choice between the loop-mounted volume and the watchdog fallback (section 6) | run |
-| 12 | Root's confirmation that r6 includes the exclusion change (section 10) | r6 review |
+Updated 2026-10-30 after the build-blocker investigation and Root's decisions on
+[#4647](https://github.com/FS-GG/.github/issues/4647#issuecomment-6534175822) and on #4988
+([6534030404](https://github.com/FS-GG/.github/pull/4988#issuecomment-6534030404)).
 
-Blocks *build*: 2, 4, 8, 10. Blocks *seal and claim*: 1, 9. Blocks *run*: 3, 6, 7, 11.
+| # | Unknown | Status | Blocks |
+|---|---|---|---|
+| 1 | Exact file list of the two `spool/` subtrees (the boundary is settled; the list comes from M1 at seal) | open | seal and claim |
+| 2 | Producer CLI package and version; receiver version | **designed** (section 2.3): `fsgg-coord-engine` 0.113.0, receiver identical to live fsgg-store. Wire compatibility of CLI 0.113.0 with Host 0.8.0 is a pod-harness spike | spike in the pod harness |
+| 3 | Seccomp applicability to PostgreSQL and the .NET apps (untested; the precheck fails closed) | open | run |
+| 4 | Finalizer r5 archiving one `/out/<role>/` per container from live containers | **designed**: finalizer r4 already pauses a container and archives `/proc/<pid>/root/out` with `podman unshare tar`; r5 repeats it per role, and a checkpoint handshake (the recovery driver requests, the finalizer archives and acknowledges, then the driver acts) preserves pre-restart evidence. Pausing and archiving inside a pod is a pod-harness spike | spike in the pod harness |
+| 5 | Fixture assignment as Host input | **settled**: results are labelled fixture | settled |
+| 6 | First pull from the registry (the registry token and manifest fetch worked from fdev; the pull itself is not exercised) | open | run |
+| 7 | Home harness r3b source and the install scripts | **partly resolved**: the C1 r8b installer (`8d16d02a…`) is in custody and recorded by hash; the journal creator `b9792a07…` and the three earlier add-set scripts are not in custody; the harness r3b source is still absent | run |
+| 8 | Per-run credentials and mTLS | **designed** (section 2.3), following `qualify_host_state.py`. Whether a Generic credential works in host-config/2 for the Host outbox is a pod-harness spike | spike in the pod harness |
+| 9 | Whether the quiesce proof in section 4 is sufficient, and whether the drain timer touches these subtrees at all | open | seal and claim |
+| 10 | Whether the base image `20a6df20` carries both shared .NET runtimes | **settled**: both are 10.0.12 (section 2.3) | settled |
+| 11 | Loop-mounted volume or watchdog fallback | **settled** by Root: the fixed 1 GiB ext4 loop image is the enforced quota for `/pgdata` and `/recv`, root-mounted in the VM (cooperative under the VM-only zone ruling), checked by the finalizer with `statvfs`; the `podman unshare` watchdog is dropped | settled |
+| 12 | r6 includes the exclusion change | **settled** by Root: r6 adds `learn-pod-*` to its sweep, so pod and reader exclusion is enforced; it is part of r6's scoped re-qualification | settled |
+
+### 14.1 Decisions that bind the source PRs
+
+From Root's [comment 6534175822](https://github.com/FS-GG/.github/issues/4647#issuecomment-6534175822) and the carry-forward
+list on [6534100763](https://github.com/FS-GG/.github/issues/4647#issuecomment-6534100763):
+
+- The grant role is `native-collector`, for the single identity of the three drainable batches.
+- The code lives in `FS-GG/.github` under `deployment/learn-finite-profile/`, tests under `tests/learn-finite-profile/`. The
+  admitted installed bytes are published first as a verified baseline, after a secrets and identifier scan.
+- PR sequence: baseline, ack writer r2, operator r6, seal and claim (parallel to the ack writer and operator), image and role
+  entrypoint, finalizer r5, pod operator with recovery driver and credential generator.
+- The recovery driver is named with its authority and readback custody, and pre-restart evidence is captured before any
+  restart wipes a role's tmpfs.
+- The `pg` container's terminal evidence is specified, and it is stopped with SIGINT (fast shutdown), not TERM.
+- The pod operator has a loop-volume precheck (mounted, fresh, 1 GiB, `nosuid,nodev,noexec`, correct ownership), with a
+  matching refusal in section 7 and a per-op create and mount step in section 11.
+- The admission file is written through `/srv/bulk/services/...`, not the read-only bind.
+- The SIGKILL case is described as restart reconciliation, not orphan detection, because the containers share no PID
+  namespace.
+- Voiding a claim needs corroboration beyond the `input-read` marker (an operator RESULT showing no container started with
+  `/in`, plus finalizer evidence); it proves "never mounted", not "never read". A consumed claim is superseded by a
+  generation+1 claim, because a fresh claim at the same name hits `EEXIST`.
+- A successful remount read-only or unmount of the loop volume is authoritative for disposal; `cgroup.procs` stays the
+  finalizer-side proxy.
+
+Blocks *build* (open): none; the remaining items are pod-harness spikes. Blocks *seal and claim*: 1, 9. Blocks *run*: 3, 6, 7.

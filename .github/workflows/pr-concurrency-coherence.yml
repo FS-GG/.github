@@ -1,0 +1,174 @@
+# pr-concurrency-coherence — the PR workflows named in scripts/check-pr-concurrency.py keep the PR-keyed
+# `concurrency` that stops superseded heads and body edits from holding runners (.github#4730).
+#
+# Gate and fixture are both offline and credential-free. The gate reads the governed workflows' YAML and
+# evaluates their declared group / cancel expressions against GitHub's group semantics, including that a
+# body edit never cancels a head run for the same head (#5159); the fixture mutates every governed
+# workflow and demands each mutant be refused for the reason that mutation introduces.
+#
+# THE `paths:` FILTERS ARE PART OF THE GATE and are IDENTICAL on the pull_request and push triggers
+# (check-paths-coherence.py). They name the governed workflow files individually rather than
+# `.github/workflows/**` so an unrelated workflow edit does not buy an extra run on an already
+# over-subscribed runner pool.
+name: pr-concurrency-coherence
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-pr-concurrency.py"
+      - "tests/pr-concurrency/**"
+      - ".github/workflows/pr-concurrency-coherence.yml"
+      - ".github/workflows/architecture-map.yml"
+      - ".github/workflows/atlas.yml"
+      - ".github/workflows/board-paths-live-selftest.yml"
+      - ".github/workflows/board-linkage.yml"
+      - ".github/workflows/board-v2-import-preflight.yml"
+      - ".github/workflows/c3-audio-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/c3-coordination-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/c3-game-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/c3-governance-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/c3-net-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/c3-rendering-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/closing-keywords.yml"
+      - ".github/workflows/coherence.yml"
+      - ".github/workflows/coord-report-selftest.yml"
+      - ".github/workflows/coordination-sync-selftest.yml"
+      - ".github/workflows/cross-repo-request-predicate.yml"
+      - ".github/workflows/dispatch-preflight-selftest.yml"
+      - ".github/workflows/feed-autofix.yml"
+      - ".github/workflows/fsc-progress-evidence.yml"
+      - ".github/workflows/fsgg-claim-fence.yml"
+      - ".github/workflows/fsgg-dispatch-broker-selftest.yml"
+      - ".github/workflows/generator-list.yml"
+      - ".github/workflows/gs2-09-7-receiver-observer-probe-selftest.yml"
+      - ".github/workflows/kit-package-selftest.yml"
+      - ".github/workflows/landed-revert-guard.yml"
+      - ".github/workflows/learn-finite-profile-selftest.yml"
+      - ".github/workflows/learn-pod-operator-selftest.yml"
+      - ".github/workflows/learn-seal-claim-selftest.yml"
+      - ".github/workflows/lock-range-coherence-selftest.yml"
+      - ".github/workflows/lockfile-cold-selftest.yml"
+      - ".github/workflows/new-sdd-workspace-selftest.yml"
+      - ".github/workflows/observed-command-report-selftest.yml"
+      - ".github/workflows/org-permission-policy.yml"
+      - ".github/workflows/org-policy.yml"
+      - ".github/workflows/parity-fixtures.yml"
+      - ".github/workflows/project-field-options.yml"
+      - ".github/workflows/protected-intake-preflight-selftest.yml"
+      - ".github/workflows/provisioned-podman-source.yml"
+      - ".github/workflows/recipe-followup.yml"
+      - ".github/workflows/recipe-landable.yml"
+      - ".github/workflows/registry-changelog.yml"
+      - ".github/workflows/release-saga-tooling.yml"
+      - ".github/workflows/release-tag-anchors-selftest.yml"
+      - ".github/workflows/repos-audit-selftest.yml"
+      - ".github/workflows/repos-registry-selftest.yml"
+      - ".github/workflows/rest-budget-preflight-selftest.yml"
+      - ".github/workflows/reusable-job-id-coherence.yml"
+      - ".github/workflows/routine-eligibility.yml"
+      - ".github/workflows/routine-eligibility-selftest.yml"
+      - ".github/workflows/skill-quality.yml"
+      - ".github/workflows/skill-registry-autofix.yml"
+      - ".github/workflows/skill-registry-coherence.yml"
+      - ".github/workflows/skill-roots-selfcheck.yml"
+      - ".github/workflows/skill-union-selftest.yml"
+      - ".github/workflows/skill-view.yml"
+      - ".github/workflows/skill-view-parity.yml"
+      - ".github/workflows/skillmirror-redrive.yml"
+      - ".github/workflows/surface-impact-selftest.yml"
+      - ".github/workflows/sync-build-config-selftest.yml"
+      - ".github/workflows/telemetry-git-safety.yml"
+      - ".github/workflows/touch-set-drift.yml"
+      - ".github/workflows/touch-set-drift-selftest.yml"
+      - ".github/workflows/usage-census-selftest.yml"
+      - ".github/workflows/work-programme.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-pr-concurrency.py"
+      - "tests/pr-concurrency/**"
+      - ".github/workflows/pr-concurrency-coherence.yml"
+      - ".github/workflows/architecture-map.yml"
+      - ".github/workflows/atlas.yml"
+      - ".github/workflows/board-paths-live-selftest.yml"
+      - ".github/workflows/board-linkage.yml"
+      - ".github/workflows/board-v2-import-preflight.yml"
+      - ".github/workflows/c3-audio-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/c3-coordination-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/c3-game-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/c3-governance-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/c3-net-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/c3-rendering-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/closing-keywords.yml"
+      - ".github/workflows/coherence.yml"
+      - ".github/workflows/coord-report-selftest.yml"
+      - ".github/workflows/coordination-sync-selftest.yml"
+      - ".github/workflows/cross-repo-request-predicate.yml"
+      - ".github/workflows/dispatch-preflight-selftest.yml"
+      - ".github/workflows/feed-autofix.yml"
+      - ".github/workflows/fsc-progress-evidence.yml"
+      - ".github/workflows/fsgg-claim-fence.yml"
+      - ".github/workflows/fsgg-dispatch-broker-selftest.yml"
+      - ".github/workflows/generator-list.yml"
+      - ".github/workflows/gs2-09-7-receiver-observer-probe-selftest.yml"
+      - ".github/workflows/kit-package-selftest.yml"
+      - ".github/workflows/landed-revert-guard.yml"
+      - ".github/workflows/learn-finite-profile-selftest.yml"
+      - ".github/workflows/learn-pod-operator-selftest.yml"
+      - ".github/workflows/learn-seal-claim-selftest.yml"
+      - ".github/workflows/lock-range-coherence-selftest.yml"
+      - ".github/workflows/lockfile-cold-selftest.yml"
+      - ".github/workflows/new-sdd-workspace-selftest.yml"
+      - ".github/workflows/observed-command-report-selftest.yml"
+      - ".github/workflows/org-permission-policy.yml"
+      - ".github/workflows/org-policy.yml"
+      - ".github/workflows/parity-fixtures.yml"
+      - ".github/workflows/project-field-options.yml"
+      - ".github/workflows/protected-intake-preflight-selftest.yml"
+      - ".github/workflows/provisioned-podman-source.yml"
+      - ".github/workflows/recipe-followup.yml"
+      - ".github/workflows/recipe-landable.yml"
+      - ".github/workflows/registry-changelog.yml"
+      - ".github/workflows/release-saga-tooling.yml"
+      - ".github/workflows/release-tag-anchors-selftest.yml"
+      - ".github/workflows/repos-audit-selftest.yml"
+      - ".github/workflows/repos-registry-selftest.yml"
+      - ".github/workflows/rest-budget-preflight-selftest.yml"
+      - ".github/workflows/reusable-job-id-coherence.yml"
+      - ".github/workflows/routine-eligibility.yml"
+      - ".github/workflows/routine-eligibility-selftest.yml"
+      - ".github/workflows/skill-quality.yml"
+      - ".github/workflows/skill-registry-autofix.yml"
+      - ".github/workflows/skill-registry-coherence.yml"
+      - ".github/workflows/skill-roots-selfcheck.yml"
+      - ".github/workflows/skill-union-selftest.yml"
+      - ".github/workflows/skill-view.yml"
+      - ".github/workflows/skill-view-parity.yml"
+      - ".github/workflows/skillmirror-redrive.yml"
+      - ".github/workflows/surface-impact-selftest.yml"
+      - ".github/workflows/sync-build-config-selftest.yml"
+      - ".github/workflows/telemetry-git-safety.yml"
+      - ".github/workflows/touch-set-drift.yml"
+      - ".github/workflows/touch-set-drift-selftest.yml"
+      - ".github/workflows/usage-census-selftest.yml"
+      - ".github/workflows/work-programme.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-concurrency-coherence-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pr-concurrency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the pr-concurrency fixture (no network)
+        run: bash tests/pr-concurrency/run.sh
+      - name: Assert the governed workflows declare PR-keyed concurrency
+        run: python scripts/check-pr-concurrency.py --root .

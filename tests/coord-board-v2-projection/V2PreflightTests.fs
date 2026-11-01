@@ -29,25 +29,42 @@ module V2PreflightTests =
         node.["populationRevision"] <- JsonValue.Create population
         node.ToJsonString()
 
+    let private successorMerge = String.replicate 40 "5"
+
+    /// The successor pair a prepared cohort would deliver, and the public blob at its merge.
+    let private successorPair (privateJson: string) (publicJson: string) =
+        let built = plan privateJson publicJson request facts |> get
+        V2Projection.prepareProgrammeBinding built.TemplateJson built.Payload (fun () -> Array.create 32 9uy) |> getIo
+
     /// Healthy inputs over a real predecessor pair. Every control below changes one thing.
     let private healthy (count: int) : EnrollmentInputs =
         let privateJson, publicJson, _ = predecessor count ""
+        let successorPrivate, successorPublic = if count <= 497 then successorPair privateJson publicJson else privateJson, publicJson
         { Request = request
           Facts = Known(facts, Live)
           ConstructorRevision = Known main
           ProtectedMain = Known main
+          ProtectedMainFreshness = LiveMain
+          ConstructorContent = NotObserved NotEvaluated
           PredecessorPrivate = Known privateJson
           PredecessorPublic = Known publicJson
           RuntimeBinding = Known(runtimeOf privateJson mergeSha)
+          SuccessorPrivate = Known successorPrivate
+          SuccessorMergeSha = Known successorMerge
+          SuccessorPublic = Known successorPublic
           InstalledReaderSha256 = Known reader
           KnownInstalledReaders = Set.ofList [ reader ]
+          KnownLiftedCapReaders = Set.ofList [ reader ]
+          KnownCap500Readers = Set.ofList [ reader ]
           LockedFSharpCoreHash = Known hash
           CachedFSharpCoreHash = Known hash
           MemoryHeadroomBytes = Known(Some 4294967296L)
+          HostMemAvailableBytes = Known 8589934592L
           MinimumHeadroomBytes = 1073741824L
           PayloadLimitBytes = payloadLimitBytes
           BindingLimitBytes = bindingLimitBytes
           ProjectItems = Known(enrolledItems count)
+          InvisibleRepositories = Set.empty
           Now = now
           ChurnWindow = TimeSpan.FromMinutes 10.0 }
 
@@ -78,7 +95,7 @@ module V2PreflightTests =
 
     [<Fact>]
     let ``healthy inputs support every registered check of every enrolled stage and exit 0`` () =
-        for stage in stages do
+        for stage in [ PlanSuccessor; PrepareSuccessor; BindRuntime ] do
             let report = run ProgrammeEnrollmentSuccessor stage (healthy 5)
             Assert.Equal<Check list>(checksFor ProgrammeEnrollmentSuccessor stage, report.Findings |> List.map _.Check)
             for finding in report.Findings do
@@ -104,20 +121,33 @@ module V2PreflightTests =
         Assert.NotEqual(0, exitCode (overallOf []))
 
     [<Fact>]
-    let ``routes without registered checks are an explicit unknown, never supported`` () =
+    let ``a route and stage that do not belong together are an explicit unknown, never supported`` () =
         Assert.Equal(3, routes.Length)
-        for route in [ RoutineDelivery; PublicationWriterRegistration ] do
+        let enrollment = [ PlanSuccessor; PrepareSuccessor; BindRuntime ]
+        let routine = [ OpenPullRequest; MergePullRequest ]
+        let publication = [ RegisterWriter; RunWriter ]
+        let belongs route stage =
+            match route with
+            | ProgrammeEnrollmentSuccessor -> List.contains stage enrollment
+            | RoutineDelivery -> List.contains stage routine
+            | PublicationWriterRegistration -> List.contains stage publication
+        let mutable pairs = 0
+        for route in routes do
             for stage in stages do
-                Assert.Empty(checksFor route stage)
-                let report = run route stage (healthy 5)
-                Assert.Equal<Check list>([ RouteRegistry ], report.Findings |> List.map _.Check)
-                Assert.Equal(Unknown { Input = Registry; Kind = NotRegistered }, verdictOf report RouteRegistry)
-                Assert.Equal((AnyUnknown, 11), (report.Overall, exitCode report.Overall))
+                pairs <- pairs + 1
+                // Registered exactly where they belong together.
+                Assert.Equal(belongs route stage, not (checksFor route stage).IsEmpty)
+                if not (belongs route stage) then
+                    let report = run route stage (healthy 5)
+                    Assert.Equal<Check list>([ RouteRegistry ], report.Findings |> List.map _.Check)
+                    Assert.Equal(Unknown { Input = Registry; Kind = NotRegistered }, verdictOf report RouteRegistry)
+                    Assert.Equal((AnyUnknown, 11), (report.Overall, exitCode report.Overall))
+        Assert.Equal(21, pairs)
 
     [<Fact>]
     let ``codes are the closed printable case names`` () =
         Assert.Equal(3, (routes |> List.map routeCode |> Set.ofList).Count)
-        Assert.Equal(3, (stages |> List.map stageCode |> Set.ofList).Count)
+        Assert.Equal(7, (stages |> List.map stageCode |> Set.ofList).Count)
         Assert.Equal("ProjectAutoAdd", checkCode ProjectAutoAdd)
         Assert.Equal("Root", supplierCode Root)
         Assert.Equal("InstalledReader/NotInKnownTable", gapCode { Input = InstalledReader; Kind = NotInKnownTable })
@@ -130,7 +160,12 @@ module V2PreflightTests =
     let ``constructor identity: a different source revision is unsupported and an unreadable one is unknown`` () =
         let healthyReport = runPlan (healthy 5)
         Assert.True(isSupported (verdictOf healthyReport ConstructorIdentity))
-        expectUnsupported ConstructorIdentity ConstructorDiffersFromMain ConstructorBuild (runPlan { healthy 5 with ConstructorRevision = Known(String.replicate 40 "2") })
+        // A different revision with no content evidence decides nothing (#5113); with a changed closure it is unsupported.
+        let built = String.replicate 40 "2"
+        expectUnknown ConstructorIdentity ConstructorClosure NotEvaluated (runPlan { healthy 5 with ConstructorRevision = Known built })
+        let changed = { Built = built; Main = main; BuiltIsAncestor = true; ClosureEntries = 40; ChangedOutsideClosure = 0; ChangedInsideClosure = 1 }
+        expectUnsupported ConstructorIdentity ConstructorDiffersFromMain ConstructorBuild
+            (runPlan { healthy 5 with ConstructorRevision = Known built; ConstructorContent = Known changed })
         expectUnknown ConstructorIdentity SourceRevision Unreadable (runPlan { healthy 5 with ConstructorRevision = NotObserved Unreadable })
         expectUnknown ConstructorIdentity ProtectedMain NotSupplied (runPlan { healthy 5 with ProtectedMain = NotObserved NotSupplied })
 
@@ -163,6 +198,34 @@ module V2PreflightTests =
         expectUnsupported RuntimeBindingIntegrity RuntimeBindingDiffers PredecessorCustody (runPlan { healthy 5 with RuntimeBinding = Known(runtimeOf privateJson (String.replicate 40 "3")) })
         expectUnknown RuntimeBindingIntegrity RuntimeBinding NotSupplied (runPlan { healthy 5 with RuntimeBinding = NotObserved NotSupplied })
         expectUnsupported RuntimeBindingIntegrity RuntimeBindingDiffers PredecessorCustody (runPlan { healthy 5 with RuntimeBinding = Known "{" })
+
+    [<Fact>]
+    let ``runtime binding may also carry a reader identity rebound to a verified installed reader, and nothing else`` () =
+        // #5120: rebind-reader changes artifactSha256 and recipeRevision after a coherent upgrade; the next cohort's
+        // predecessor private pair still names the old reader.
+        let privateJson, _, _ = predecessor 5 ""
+        let rebound (artifact: string) (recipe: string) =
+            let node = JsonNode.Parse(runtimeOf privateJson mergeSha)
+            node.["artifactSha256"] <- JsonValue.Create artifact
+            node.["recipeRevision"] <- JsonValue.Create recipe
+            node
+        let upgraded = rebound reader (String.replicate 40 "7")
+        match verdictOf (runPlan { healthy 5 with RuntimeBinding = Known(upgraded.ToJsonString()) }) RuntimeBindingIntegrity with
+        | SupportedForNextStage evidence -> Assert.Contains("rebound to a verified installed reader", evidence)
+        | other -> failwithf "%A" other
+        // Causal: the same rebind to a reader the verified table does not list is never support.
+        expectUnknown RuntimeBindingIntegrity RuntimeBinding NotInKnownTable
+            (runPlan { healthy 5 with RuntimeBinding = Known(upgraded.ToJsonString()); KnownInstalledReaders = Set.empty })
+        expectUnknown RuntimeBindingIntegrity RuntimeBinding NotInKnownTable
+            (runPlan { healthy 5 with RuntimeBinding = Known((rebound (String.replicate 64 "f") (String.replicate 40 "7")).ToJsonString()) })
+        // A rebind does not open any other field: one more change is still a difference.
+        let drifted = rebound reader (String.replicate 40 "7")
+        drifted.["projectNumber"] <- JsonValue.Create 4
+        expectUnsupported RuntimeBindingIntegrity RuntimeBindingDiffers PredecessorCustody (runPlan { healthy 5 with RuntimeBinding = Known(drifted.ToJsonString()) })
+        // Nor does it excuse a population revision that is not the recorded merge.
+        let moved = rebound reader (String.replicate 40 "7")
+        moved.["populationRevision"] <- JsonValue.Create(String.replicate 40 "3")
+        expectUnsupported RuntimeBindingIntegrity RuntimeBindingDiffers PredecessorCustody (runPlan { healthy 5 with RuntimeBinding = Known(moved.ToJsonString()) })
 
     // ---- per-row checks, one negative control each ----
 
@@ -257,12 +320,33 @@ module V2PreflightTests =
     // ---- row cap and size bounds ----
 
     [<Fact>]
-    let ``row cap boundary: 98 plus 2 is supported and 99 plus 2 is unsupported with the counts named`` () =
-        let ok = runPlan (healthy 98)
-        Assert.Equal(SupportedForNextStage "98+2<=100", verdictOf ok RowCap)
-        let over = runPlan (healthy 99)
+    let ``row cap: the legacy ceiling needs no reader, the lifted range needs a known reader, the new ceiling is a refusal`` () =
+        // At the legacy ceiling every reader reads the successor.
+        let legacy = runPlan { healthy 98 with InstalledReaderSha256 = NotObserved NotSupplied; KnownLiftedCapReaders = Set.empty; KnownCap500Readers = Set.empty }
+        Assert.True(isSupported (verdictOf legacy RowCap))
+        Assert.StartsWith("98+2<=100", (match verdictOf legacy RowCap with SupportedForNextStage e -> e | _ -> ""))
+        // 99+2 = 101 is above it: supported only by a reader named in the lifted-cap table.
+        let beyond = healthy 99
+        let other = Set.ofList [ String.replicate 64 "c" ]
+        Assert.StartsWith("99+2<=250", (match verdictOf (runPlan beyond) RowCap with SupportedForNextStage e -> e | other -> failwithf "%A" other))
+        // Up to 250 a reader in either table carries the ceiling.
+        Assert.True(isSupported (verdictOf (runPlan { beyond with KnownCap500Readers = Set.empty }) RowCap))
+        Assert.True(isSupported (verdictOf (runPlan { beyond with KnownLiftedCapReaders = Set.empty }) RowCap))
+        expectUnknown RowCap KnownReaderTable NotSupplied (runPlan { beyond with KnownLiftedCapReaders = Set.empty; KnownCap500Readers = Set.empty })
+        expectUnknown RowCap InstalledReader NotInKnownTable (runPlan { beyond with KnownLiftedCapReaders = other; KnownCap500Readers = other })
+        expectUnknown RowCap InstalledReader NotSupplied (runPlan { beyond with InstalledReaderSha256 = NotObserved NotSupplied })
+        // 248+2 = 250 is the 0.114.0 ceiling; 249+2 = 251 is above it and needs a reader in the 500-row table (#5119):
+        // a stale 250-row table alone never admits it.
+        Assert.StartsWith("248+2<=250", (match verdictOf (runPlan { healthy 248 with KnownCap500Readers = Set.empty }) RowCap with SupportedForNextStage e -> e | other -> failwithf "%A" other))
+        let above250 = healthy 249
+        Assert.StartsWith("249+2<=500", (match verdictOf (runPlan above250) RowCap with SupportedForNextStage e -> e | other -> failwithf "%A" other))
+        expectUnknown RowCap KnownReaderTable NotSupplied (runPlan { above250 with KnownCap500Readers = Set.empty })
+        expectUnknown RowCap InstalledReader NotInKnownTable (runPlan { above250 with KnownCap500Readers = other })
+        // The new ceiling: 498+2 = 500 passes, 499+2 = 501 is unsupported with the counts named.
+        Assert.StartsWith("498+2<=500", (match verdictOf (runPlan (healthy 498)) RowCap with SupportedForNextStage e -> e | other -> failwithf "%A" other))
+        let over = runPlan (healthy 499)
         expectUnsupported RowCap RowCapExceeded ProtocolRelease over
-        Assert.Equal<string list>([ "99+2>100" ], (finding over RowCap).Subjects)
+        Assert.Equal<string list>([ "499+2>500" ], (finding over RowCap).Subjects)
         expectUnknown RowCap PredecessorPrivate Unreadable (runPlan { healthy 98 with PredecessorPrivate = NotObserved Unreadable })
 
     [<Fact>]

@@ -606,3 +606,361 @@ mutations:
     anchor:
       pattern: 'touch-set-drift fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
       produced_by: tests/touch-set-drift/run.sh
+
+
+  # ---------------------------------------------------------------------------------------------
+  # 25. landed-reverts-selftest.yml -- new (#4730), so "never red" is not yet a measurement
+  # ---------------------------------------------------------------------------------------------
+  # scripts/check-landed-reverts.py refuses a merge that silently reverts recently landed work. Each leg
+  # breaks one decisive predicate and leaves the file runnable, so the fixture reaches its tally and
+  # reports failed assertions. The fixture replays the real #4977 incident, so these legs need full
+  # history; tests/landed-reverts/run.py fails (never skips) without it.
+  - id: landed-reverts/edit-credit-removed
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      reverted = dropped[credit:]
+    replace: |-
+      reverted = dropped
+    breaks: >-
+      the EDIT/REVERT distinction collapses: new text no longer offsets any dropped landed line, so every honest rewrite of a recently landed file is refused and the guard is switched off in practice
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/credit-all-or-nothing-again
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      reverted = dropped[credit:]
+    replace: |-
+      reverted = dropped[(len(dropped) if fresh else 0):]
+    breaks: >-
+      one new line anywhere in the file exonerates every dropped line in it again (the all-or-nothing rule), so a stale restore with one co-edit, or a deletion with a `# removed` comment, hides a hundred dropped lines
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/declaration-ignored
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      if commit in d.commits and (d.scope is None or glob_match(d.scope, path)):
+    replace: |-
+      if False:
+    breaks: >-
+      a `fsgg:declared-revert` marker stops covering any dropped line, so a deliberate, named revert can never pass
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/declaration-covers-everything
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      if commit in d.commits and (d.scope is None or glob_match(d.scope, path)):
+    replace: |-
+      if True:
+    breaks: >-
+      ANY declaration, even one naming an unrelated commit, covers every dropped line, so the marker becomes a bypass instead of a statement of what is reverted
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/declaration-scope-ignored
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      if commit in d.commits and (d.scope is None or glob_match(d.scope, path)):
+    replace: |-
+      if commit in d.commits:
+    breaks: >-
+      a path scope on a declaration (`#PR:glob`) is no longer honoured, so naming a commit for one file silently covers every other file that commit touched
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/lookback-ignored
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+          floor = window_floor(repo, point, lookback, lookback_days)
+    replace: |-
+          floor = point
+    breaks: >-
+      recent history is measured from the branch point itself, so work that landed one commit before it (the #4977 shape: the stale tree sat on #4968's own squash) is invisible and the real incident passes
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/day-window-ignored
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+          if recent:
+    replace: |-
+          if False:
+    breaks: >-
+      the window is only the last N commits, so a stale tree older than N commits on a busy day goes unseen although the work landed hours before the branch point
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/history-cap-silent
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+          if len(shas) > CAPS["history-versions"]:
+    replace: |-
+          if False:
+    breaks: >-
+      the per-file history cap is no longer enforced, so a file with more versions than the check was sized for is read without the no-verdict the cap exists to give
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/resurrection-undetected
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+          back = [e for e in result if e.status == "A" and e.new_path in gone and e.new_mode != "160000"]
+    replace: |-
+          back = []
+    breaks: >-
+      a file the window deleted and a stale tree brings back is never examined, so resurrecting retired code passes
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/allowlist-read-from-head
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      load_allowlist(args.repo, base, args.allowlist)
+    replace: |-
+      load_allowlist(args.repo, args.head, args.allowlist)
+    breaks: >-
+      the allowlist is read from the PR head instead of the base, so a PR can add a glob that exempts the very files it reverts
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/glob-crosses-slash
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      return j < len(seg) and fnmatch.fnmatchcase(seg[j], pat[i]) and walk(i + 1, j + 1)
+    replace: |-
+      return fnmatch.fnmatchcase(path, pattern)
+    breaks: >-
+      `*` matches across `/`, so an allowlist or scope entry written for one directory exempts every directory below it
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/wildcard-only-allowlist-accepted
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      if all(set(part) <= {"*", "?"} for part in glob.split("/")):
+    replace: |-
+      if False:
+    breaks: >-
+      an allowlist glob made only of wildcards is read as an allowlist instead of refused as an override, so one entry exempts every file
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/move-counted-as-revert
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+                  if lost[key] > 0:
+    replace: |-
+                  if True:
+    breaks: >-
+      text that still occurs in the file after the PR (a cut and paste, a reorder) is counted as dropped, so moving code refuses the PR
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/squash-result-is-head-tree
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+          tree = squash_result(repo, base, head)
+    replace: |-
+          tree = git(repo, "rev-parse", f"{head}^{{tree}}").stdout.decode().strip()
+    breaks: >-
+      the merge result is taken to be the head tree rather than the three-way merge, so every PR that is merely behind the base reads as reverting everything that landed since it branched
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/shallow-clone-passes
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+          if text(git(repo, "rev-parse", "--is-shallow-repository")).strip() != "false":
+    replace: |-
+          if False:
+    breaks: >-
+      a shallow clone is no longer refused, so history the check cannot see reads as history with nothing to find (#266)
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/conflict-passes
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+              raise GateError("head does not merge cleanly into base (conflicts); update the branch first")
+    replace: |-
+              return text(done).split("\n", 1)[0].strip()
+    breaks: >-
+      a head that conflicts with the base is judged on its conflicted tree instead of being reported as no verdict
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/refusal-bound-unreachable
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      REFUSE_LINES = 30 
+    replace: |-
+      REFUSE_LINES = 10**9 
+    breaks: >-
+      no number of undeclared dropped lines reaches the refusal bound, so the check only ever warns and the 2,500-line incident merges
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/cross-hunk-credit-lost
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      plus_all.extend(h.plus)
+    replace: |-
+      plus_all.extend(h.plus if h.old_count else [])
+    breaks: >-
+      new lines added in a hunk of their own no longer offset lines dropped elsewhere in the same file, so an honest refactor that moves a section's replacement to another place in the file is refused again
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/mirrors-counted-separately
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      key = (f.blob, f.kind, tuple(f.lines), f.weight) if f.blob else (f.path,)
+    replace: |-
+      key = (f.path,)
+    breaks: >-
+      the same dropped lines in byte-identical skill roots are counted once per root, so one honest skill edit is triple-counted toward the bound
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/scoped-marker-unscoped
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      tokens += [f"{commit[:12]}:{safe(p)}" for p in files]
+    replace: |-
+      tokens += [commit[:12]]
+    breaks: >-
+      the refusal prints the broad commit-only marker instead of the scoped one, steering authors toward a declaration that covers every file the commit touched
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/workflow-runs-head-script
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: .github/workflows/landed-revert-guard.yml
+    find: |-
+      python3 "$work/tool/check-landed-reverts.py"
+    replace: |-
+      python3 scripts/check-landed-reverts.py
+    breaks: >-
+      the job runs the PR head's copy of the script instead of the base's, so a PR that edits the script is judged by its own edit
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/workflow-edited-trigger-dropped
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: .github/workflows/landed-revert-guard.yml
+    find: |-
+      types: [opened, synchronize, reopened, edited]
+    replace: |-
+      types: [opened, synchronize, reopened]
+    breaks: >-
+      a declaration added to the PR body no longer re-runs the job, so a refusal cannot be cleared by editing the body
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/workflow-body-not-passed
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: .github/workflows/landed-revert-guard.yml
+    find: |-
+      --body-file "$work/body.md" 
+    replace: |-
+      
+    breaks: >-
+      the PR body is no longer handed to the script, so a body declaration is ignored and every declared revert is refused
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/credit-warning-silenced
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      if raw >= result.refuse_lines:
+    replace: |-
+      if False:
+    breaks: >-
+      a PR whose dropped lines are offset by new lines elsewhere in the file down to under the refusal bound no longer warns that 30 or more were dropped before credit, so the credit hides the size of the drop again
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py
+
+  - id: landed-reverts/raw-count-equals-net
+    gate: landed-reverts-selftest.yml
+    command: ["bash", "tests/landed-reverts/run.sh"]
+    target: scripts/check-landed-reverts.py
+    find: |-
+      groups[key] = max(groups.get(key, 0), f.raw_uncovered)
+    replace: |-
+      groups[key] = max(groups.get(key, 0), f.uncovered_lines)
+    breaks: >-
+      the count before credit is computed from the net count, so the raw figure printed and used for the warning is always the credited one
+    anchor:
+      pattern: 'landed-reverts fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/landed-reverts/run.py

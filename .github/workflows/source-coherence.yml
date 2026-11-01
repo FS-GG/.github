@@ -68,6 +68,7 @@ on:
     # Daily, offset from feed-coherence (06:17), permission-coherence (06:29) and pin-coherence
     # (06:43) so one upstream outage does not red them all at once.
     - cron: "53 6 * * *"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

@@ -1012,6 +1012,89 @@ module V2Migration =
                     if final <> initial then invalid "project/principal changed during complete snapshot collection"
                     else Ok snapshot))
 
+    // ---- item-scoped planning initialization (#5123) ----
+
+    type ItemObservation =
+        | ItemEffect of Item
+        | ItemPending
+
+    let private itemDocument =
+        valuesDocument
+            .Replace("query($id:ID!,$after:String)", "query($id:ID!)")
+            .Replace("... on ProjectV2Item{id fieldValues(first:50,after:$after)",
+                     "... on ProjectV2Item{id updatedAt isArchived content{__typename ... on Issue{id number repository{nameWithOwner}} ... on PullRequest{id number repository{nameWithOwner}} ... on DraftIssue{id}} fieldValues(first:50)")
+
+    let collectItem (transport: IGitHubTransport) (itemId: string) : IoResult<Item> =
+        GraphQl.read transport (query itemDocument [ "id", VId itemId ]) (fun data ->
+            match decode (fun () -> rootNode data) with
+            | Error error -> Error error
+            | Ok node ->
+                item node |> Result.bind (fun observed ->
+                    if observed.Id <> itemId then invalid "item read returned a different identity"
+                    else decode (fun () -> observed, node.GetProperty("fieldValues").Clone())))
+        |> Result.bind (fun (observed, first) ->
+            drainCached (Some first) transport itemId "fieldValues" valuesDocument (fun (value: ItemValue) -> value.Id) value
+            |> Result.map (fun values -> { observed with Values = values }))
+
+    let private sortedValues (values: ItemValue list) = values |> List.sortBy (fun (value: ItemValue) -> value.Id)
+
+    let sameItem (expected: Item) (actual: Item) =
+        { expected with Values = sortedValues expected.Values } = { actual with Values = sortedValues actual.Values }
+
+    let itemTransition (before: Item) (after: Item) (change: Change) : IoResult<ItemObservation> =
+        match change with
+        | InitializePlanningValue(issueId, itemId, fieldId, desired) ->
+            let identity (item: Item) = item.Id, item.ContentId, item.ContentKind, item.Repository, item.Number, item.Archived
+            if before.Id <> itemId || before.ContentId <> issueId || identity before <> identity after then
+                invalid "item identity differs across the item-scoped effect"
+            elif before.Values |> List.exists (fun (value: ItemValue) -> value.FieldId = fieldId) then
+                invalid "the selected planning value was not absent before the effect"
+            else
+                let others = after.Values |> List.filter (fun (value: ItemValue) -> value.FieldId <> fieldId)
+                match after.Values |> List.filter (fun (value: ItemValue) -> value.FieldId = fieldId) with
+                | [ initialized ] when samePlanningValue desired initialized && sortedValues others = sortedValues before.Values ->
+                    Ok(ItemEffect after)
+                | [] when sortedValues after.Values = sortedValues before.Values -> Ok ItemPending
+                | _ -> invalid "item readback differs beyond the one exact effect; preserve original intent and stop writes for reconciliation"
+        | _ -> invalid "only planning-value initialization is item-scoped"
+
+    let validateGroup (scope: Scope) (before: Snapshot) (after: Snapshot) (applied: Change list) : IoResult<unit> =
+        match prepare scope before with
+        | Error error -> Error error
+        | Ok prepared when applied.IsEmpty || applied |> List.exists (fun change -> not (List.contains change prepared.Changes)) ->
+            invalid "a group effect is absent from its base delta"
+        | Ok _ ->
+            let targets =
+                applied |> List.choose (function
+                    | InitializePlanningValue(issueId, itemId, fieldId, desired) -> Some(issueId, itemId, fieldId, desired)
+                    | _ -> None)
+            if targets.Length <> applied.Length then invalid "only planning-value initialization is grouped"
+            elif (targets |> List.map (fun (_, itemId, fieldId, _) -> itemId, fieldId) |> List.distinct |> List.length) <> targets.Length then
+                invalid "a group initializes one value twice"
+            else
+                let present =
+                    targets |> List.forall (fun (issueId, itemId, fieldId, desired) ->
+                        match after.Items |> List.filter (fun (item: Item) -> item.Id = itemId && item.ContentId = issueId) with
+                        | [ item ] ->
+                            match item.Values |> List.filter (fun (value: ItemValue) -> value.FieldId = fieldId) with
+                            | [ initialized ] -> samePlanningValue desired initialized
+                            | _ -> false
+                        | _ -> false)
+                let touched = targets |> List.map (fun (_, itemId, _, _) -> itemId) |> Set.ofList
+                let initialized = targets |> List.map (fun (_, itemId, fieldId, _) -> itemId, fieldId) |> Set.ofList
+                // Only the group's own values and their items' timestamps may differ from the base.
+                let items: Item list =
+                    after.Items |> List.map (fun (item: Item) ->
+                        match before.Items |> List.tryFind (fun (original: Item) -> original.Id = item.Id) with
+                        | Some original when touched.Contains item.Id ->
+                            { item with
+                                UpdatedAt = original.UpdatedAt
+                                Values = item.Values |> List.filter (fun (value: ItemValue) -> not (initialized.Contains(item.Id, value.FieldId))) }
+                        | _ -> item)
+                let normalized: Snapshot = { after with ObservedAt = before.ObservedAt; UpdatedAt = before.UpdatedAt; Items = items }
+                if present && snapshotTokens normalized = snapshotTokens before then Ok()
+                else invalid "group readback differs beyond its exact effects; preserve original intent and stop writes for reconciliation"
+
     let snapshotDigest (snapshot: Snapshot) = hash (snapshotTokens snapshot)
     let encodeReadback (scope: Scope) (snapshot: Snapshot) =
         let root =

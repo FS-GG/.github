@@ -43,6 +43,11 @@ module V2ProjectionSource =
           PopulationGap: IoError option
           Cleanup: string }
 
+    // The discrepancy an inspection reports for an enrolled row whose board card is archived (#5119); documented in the .fsi.
+    let archivedCardDiscrepancy = "Board card is archived (Done retention); the enrolled row is retained, with no automatic retirement"
+    // The health of an archived enrolled row (#5119): distinct from Verified, Stale and Unknown; documented in the .fsi.
+    let archivedHealth = "Archived"
+
     let private query document variables subject : Transport.Request =
         { Method = "POST"; Path = "graphql"; Query = []; Body = Query(document, variables)
           Budget = GraphQl; IfNoneMatch = None; Subject = subject }
@@ -277,6 +282,67 @@ module V2ProjectionSource =
             | :? UriFormatException
             | :? ArgumentException -> Error(Malformed(subject, "unreadable native dependency snapshot"))
 
+    // Programme bindings read the native issue and its blockers in ONE GraphQL query (#5119). The separate REST
+    // `dependencies/blocked_by` read was two sends per row per inspection (initial plus final barrier), about two thirds
+    // of all sends, and REST reads are never batched. The blocker checks are the REST reader's, applied to the GraphQL
+    // shape: an FS-GG issue (never a pull request: `blockedBy` yields issues only), exact canonical URL, node identity,
+    // revision and OPEN/CLOSED state, and fewer than 50 blockers with a matching totalCount, or completeness is unknown.
+    let private readProgrammeIssueDetails (transport: IGitHubTransport) (binding: Binding) (issue: IssueRef) =
+        let subject = $"{issue.Owner}/{issue.Repository}#{issue.Number} native observation"
+        let blockersSubject = $"{issue.Owner}/{issue.Repository}#{issue.Number} native blocked_by"
+        let document = "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { nameWithOwner issue(number: $number) { id number updatedAt state url body repository { nameWithOwner } blockedBy(first: 50) { totalCount nodes { id number updatedAt state url repository { nameWithOwner } } } } } rateLimit { cost remaining } }"
+        GraphQl.read transport (query document [ "owner", VString issue.Owner; "repo", VString issue.Repository; "number", VNumber(double issue.Number) ] subject) (fun data ->
+            let repository = data.GetProperty "repository"
+            let native = repository.GetProperty "issue"
+            let expected = $"{issue.Owner}/{issue.Repository}"
+            let nodeId = native.GetProperty("id").GetString()
+            let updated = native.GetProperty("updatedAt").GetString()
+            let state = native.GetProperty("state").GetString()
+            match DateTimeOffset.TryParse updated with
+            | true, _ when repository.GetProperty("nameWithOwner").GetString() = expected
+                           && native.GetProperty("repository").GetProperty("nameWithOwner").GetString() = expected
+                           && native.GetProperty("number").GetInt32() = issue.Number
+                           && not (String.IsNullOrWhiteSpace nodeId)
+                           && (state = "OPEN" || state = "CLOSED")
+                           && native.GetProperty("body").ValueKind = JsonValueKind.String
+                           && native.GetProperty("url").GetString() = $"https://github.com/{expected}/issues/{issue.Number}" ->
+                let observation: NativeObservation =
+                    { Issue = issue; NodeId = nodeId; UpdatedAt = updated; State = state; Url = native.GetProperty("url").GetString()
+                      BodySha256 = native.GetProperty("body").GetString() |> System.Text.Encoding.UTF8.GetBytes |> System.Security.Cryptography.SHA256.HashData |> Convert.ToHexStringLower }
+                let blockers =
+                    try
+                        let connection = native.GetProperty "blockedBy"
+                        let nodes = connection.GetProperty "nodes"
+                        let total = connection.GetProperty("totalCount").GetInt32()
+                        if connection.ValueKind <> JsonValueKind.Object || nodes.ValueKind <> JsonValueKind.Array then Error(Malformed(blockersSubject, "unreadable native dependency snapshot"))
+                        elif total >= 50 || nodes.GetArrayLength() >= 50 then Error(Malformed(blockersSubject, "native dependency bound reached; completeness unknown"))
+                        elif total <> nodes.GetArrayLength() then Error(Malformed(blockersSubject, "native dependency snapshot incomplete or denied"))
+                        else
+                            let parsed = nodes.EnumerateArray() |> Seq.map (fun node ->
+                                let parts = node.GetProperty("repository").GetProperty("nameWithOwner").GetString().Split('/')
+                                let number = node.GetProperty("number").GetInt32()
+                                let url = node.GetProperty("url").GetString()
+                                if parts.Length <> 2 || parts[0] <> (if binding.BindingVersion = 3 then binding.Owner else "FS-GG") || String.IsNullOrWhiteSpace parts[1]
+                                   || url <> $"https://github.com/{parts[0]}/{parts[1]}/issues/{number}"
+                                   || (binding.BindingVersion = 3 && not (binding.Repositories.Contains $"{parts[0]}/{parts[1]}")) then
+                                    Error(Malformed(blockersSubject, "native blocker identity is not an FS-GG issue"))
+                                else
+                                    let blocker: NativeObservation =
+                                        { Issue = { Owner = parts[0]; Repository = parts[1]; Number = number }
+                                          NodeId = node.GetProperty("id").GetString(); UpdatedAt = node.GetProperty("updatedAt").GetString()
+                                          State = node.GetProperty("state").GetString(); Url = url; BodySha256 = "" }
+                                    if number <= 0 || String.IsNullOrWhiteSpace blocker.NodeId || not (fst (DateTimeOffset.TryParse blocker.UpdatedAt))
+                                       || (blocker.State <> "OPEN" && blocker.State <> "CLOSED") then Error(Malformed(blockersSubject, "native blocker node identity missing/mismatched"))
+                                    else Ok blocker) |> Seq.toList
+                            match parsed |> List.tryPick (function Error error -> Some error | _ -> None) with
+                            | Some error -> Error error
+                            | None -> Ok(parsed |> List.choose (function Ok blocker -> Some blocker | _ -> None))
+                    with
+                    | :? Collections.Generic.KeyNotFoundException
+                    | :? InvalidOperationException -> Error(Malformed(blockersSubject, "unreadable native dependency snapshot"))
+                Ok(observation, native.GetProperty("body").GetString(), blockers)
+            | _ -> Error(Malformed(subject, "native identity or revision is unreadable/mismatched")))
+
     // The single hard-coded programme issue URL admitted as an owning plan (see readPlan).
     let programmePlanIssueUrl = "https://github.com/FS-GG/.github/issues/3008"
 
@@ -452,10 +518,13 @@ module V2ProjectionSource =
         let mutable currentDeliverable = None
         let mutable deliverables = []
         let mutable deliverableGap = Some "Native issue body was not collected"
+        let details =
+            if isProgrammeBinding binding then readProgrammeIssueDetails transport binding row.Issue |> Result.map (fun (observation, body, blockers) -> observation, body, Some blockers)
+            else readIssueDetails transport row.Issue |> Result.map (fun (observation, body) -> observation, body, None)
         let verification =
-            match readIssueDetails transport row.Issue with
+            match details with
             | Error error -> Error error
-            | Ok(observation, body) ->
+            | Ok(observation, body, folded) ->
                 owner <- ownerField binding body
                 let declaration, references, gap = deliverableField binding body
                 currentDeliverable <- declaration
@@ -465,7 +534,7 @@ module V2ProjectionSource =
                 if observation.NodeId <> row.NodeId then Ok(Refused "native issue node identity changed")
                 elif not (isProgrammeBinding binding) && (observation.UpdatedAt <> row.UpdatedAt || observation.State <> "OPEN") then Ok(Stale None)
                 else
-                    match readBlockedBy transport binding row.Issue with
+                    match (match folded with Some blockers -> blockers | None -> readBlockedBy transport binding row.Issue) with
                     | Error error -> Error error
                     | Ok observed ->
                         dependencies <- observed
@@ -512,7 +581,15 @@ module V2ProjectionSource =
             match readProtectedBlob transport binding binding.PopulationRevision populationPath |> Result.bind (fun (text, current, blob) -> selectedPopulation binding text |> Result.map (fun selected -> selected, current, blob)) with
             | Error error -> failed error
             | Ok(selected, protectedRevision, populationBlob) ->
-                let items = selected |> List.map (fun row ->
+                let historicalOf (row: Selected) =
+                    previous |> Option.bind (fun batch ->
+                        if batch.ProjectId <> binding.ProjectId then None
+                        else batch.Items |> List.tryFind (fun item -> item.Issue = row.Issue) |> Option.bind (fun item -> item.LastVerified))
+                // `deferSecond` (batched phase 1 only): the writer's second source check returns the first check's result
+                // instead of re-reading, and the first revision is returned so the caller can confirm a Verified no-op
+                // with a fresh, separately acquired read. A row that reaches a write is rerun unbatched, so its second
+                // check is always a real fresh read before the send.
+                let refreshRowWith (transport: IGitHubTransport) (deferSecond: bool) (row: Selected) : ItemReport * string option =
                     let mutable native = None
                     let mutable dependencies = []
                     let mutable dependenciesComplete = false
@@ -525,7 +602,15 @@ module V2ProjectionSource =
                             member _.SendMutation intent = mutations <- mutations + 1; transport.SendMutation intent
                             member _.RetryMutation effectId = mutations <- mutations + 1; transport.RetryMutation effectId }
                     let mutable sourceChecks = 0
-                    let verifier: SourceVerifier = fun _ ->
+                    let mutable first: IoResult<SourceVerification> option = None
+                    let mutable deferred = None
+                    let verifier: SourceVerifier = fun issue ->
+                      match first with
+                      | Some value when deferSecond ->
+                        sourceChecks <- sourceChecks + 1
+                        deferred <- (match value with Ok(Current revision) -> Some revision | _ -> None)
+                        value
+                      | _ ->
                         let populationCurrent =
                             if sourceChecks = 0 then Ok()
                             else readProtectedBlob counted binding binding.PopulationRevision populationPath |> Result.bind (fun (_, _, blob) ->
@@ -539,21 +624,78 @@ module V2ProjectionSource =
                             dependencies <- collection.Dependencies
                             dependenciesComplete <- collection.DependenciesComplete
                             plan <- collection.Plan
+                            if first.IsNone then first <- Some collection.Verification
                             collection.Verification
                     let result = runOneShot verifier counted binding { Issue = row.Issue; ExpectedNodeId = row.NodeId }
                     let projection = match result with Ok report -> Some report | _ -> None
-                    let historical = previous |> Option.bind (fun batch ->
-                        if batch.ProjectId <> binding.ProjectId then None
-                        else batch.Items |> List.tryFind (fun item -> item.Issue = row.Issue) |> Option.bind (fun item -> item.LastVerified))
+                    let historical = historicalOf row
                     { Issue = row.Issue; Native = native; DependencyObservations = dependencies; DependencyReadComplete = dependenciesComplete; PlanObservation = plan
                       Delivery = "Unknown: no source-delivery acceptance reader selected"
                       Publication = "Unknown: no publication acceptance reader selected"
                       NativeAcceptance = "Unknown: no operation acceptance reader selected"
-                      Health = match result with Ok _ -> "Verified" | Error(Http(409, _)) -> "Stale" | _ -> "Unknown"
+                      Health =
+                        match result with
+                        | Ok _ -> "Verified"
+                        | Error(Http(409, message)) when message = V2Projection.archivedCardWriteRefusal -> archivedHealth
+                        | Error(Http(409, _)) -> "Stale"
+                        | _ -> "Unknown"
                       Reads = reads; MutationAttempts = mutations
                       MembershipPages = projection |> Option.map (fun report -> report.ProjectReads - (if report.Mutations = 0 then 3 else 4))
                       Projection = projection; Gap = match result with Error error -> Some error | _ -> None
-                      LastVerified = projection |> Option.orElse historical })
+                      LastVerified = projection |> Option.orElse historical },
+                    (match result with Ok report when report.Mutations = 0 -> deferred | _ -> None)
+                let refreshRow transport row = refreshRowWith transport false row |> fst
+                // A programme refresh reads in batches, like inspect (#5131). Phase 1 evaluates every row's one-shot
+                // writer over V2InspectionAcquisition with writes unavailable: a row that is already Verified, Stale,
+                // archived or unreadable is decided there from reads alone, 25 aliased reads per send. A row whose
+                // evaluation reached the write is not written in phase 1; phase 2 reruns the one-shot writer for that
+                // row alone on the real transport, so every write keeps its own fresh preimage reads, its one send
+                // and its independent readback. A Verified no-op row's second source check is not served from phase 1's
+                // shared responses: a separate batched confirmation phase re-reads the population and the row's source
+                // freshly and refuses the no-op (409, retaining the project value) if the revision changed. Legacy
+                // bindings keep the unbatched per-row path.
+                let items =
+                    if not (isProgrammeBinding binding) then selected |> List.map (refreshRow transport)
+                    else
+                        let deferred = Collections.Generic.HashSet<string>()
+                        let evaluated: (ItemReport * string option) list =
+                            V2InspectionAcquisition.run transport (fun phase ->
+                                deferred.Clear()
+                                selected |> List.map (fun row ->
+                                    let readOnly =
+                                        { new IGitHubTransport with
+                                            member _.Send request = phase.Send request
+                                            member _.SendMutation _ =
+                                                deferred.Add row.NodeId |> ignore
+                                                Error(Malformed("batched refresh", "write deferred to the per-row one-shot writer"))
+                                            member _.RetryMutation effectId = Error(Malformed(effectId, "batched refresh cannot replay")) }
+                                    refreshRowWith readOnly true row))
+                        // Confirm every Verified no-op with a fresh second source check, batched in its own phase.
+                        let pending = List.zip selected evaluated |> List.choose (fun (row, (_, revision)) -> if deferred.Contains row.NodeId then None else revision |> Option.map (fun value -> row.NodeId, value)) |> Map.ofList
+                        let confirmations =
+                            if pending.IsEmpty then Map.empty
+                            else
+                                V2InspectionAcquisition.run transport (fun phase ->
+                                    selected |> List.choose (fun row ->
+                                        pending |> Map.tryFind row.NodeId |> Option.map (fun revision ->
+                                            let check =
+                                                readProtectedBlob phase binding binding.PopulationRevision populationPath
+                                                |> Result.bind (fun (_, _, blob) -> if blob = populationBlob then Ok() else Error(Malformed("reviewed population", "population changed before Verified no-op")))
+                                                |> Result.bind (fun () ->
+                                                    match (collectSource phase binding row).Verification with
+                                                    | Ok(Current fresh) when fresh = revision -> Ok()
+                                                    | Error error -> Error error
+                                                    | Ok _ -> Error(Http(409, "source changed before Verified no-op; retaining current project value")))
+                                            row.NodeId, check))
+                                    |> Map.ofList)
+                        List.map2 (fun (row: Selected) (item: ItemReport, _) ->
+                            if deferred.Contains row.NodeId then refreshRow transport row
+                            else
+                                match Map.tryFind row.NodeId confirmations with
+                                | Some(Error error) ->
+                                    { item with Health = (match error with Http(409, _) -> "Stale" | _ -> "Unknown"); Projection = None; MembershipPages = None
+                                                Gap = Some error; LastVerified = historicalOf row }
+                                | _ -> item) selected evaluated
                 { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision; ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256; NativeDispatch = []; ProtectedInputs = protectedEnrollmentInputs binding protectedRevision populationBlob; Selected = Some selected.Length
                   Attempted = items.Length; Verified = items |> List.filter (fun item -> item.Health = "Verified") |> List.length
                   Items = items; PopulationGap = None; Cleanup = "No resources, claims or background work created" }
@@ -877,6 +1019,10 @@ module V2ProjectionSource =
         | Some expected, Some intent, Some field ->
             try
                 let classification =
+                  match intent.WorkLevel with
+                  // Read with the planning membership in the same query (#5119); identity and option checks already applied.
+                  | Some observed -> Ok observed
+                  | None ->
                     let document = "query($itemId: ID!) { node(id: $itemId) { ... on ProjectV2Item { id project { id } content { ... on Issue { id } } workLevel: fieldValueByName(name: \"Work level\") { __typename ... on ProjectV2ItemFieldSingleSelectValue { name optionId field { ... on ProjectV2SingleSelectField { id } } } } } } rateLimit { cost remaining } }"
                     GraphQl.read transport (query document ["itemId", VId intent.ItemId] "selected work classification") (fun data ->
                         let node = data.GetProperty "node"
@@ -989,6 +1135,43 @@ module V2ProjectionSource =
                             WorkItem = item.WorkItem |> Option.map (fun facts -> {facts with Complete = false; Sha256 = None; Gap = Some gap})
                             Evidence = {item.Evidence with Health = "Unknown"; Gap = Some(Malformed("native hierarchy consistency", gap))} })
 
+
+    // Cross-check every selected row's planning membership against the complete project membership (#5119). An issue's
+    // `projectItems` include an archived card while the project `items` connection excludes it, so before this an
+    // archived enrolled card read as a normal planning row and silently vanished from `memberships`. Now:
+    // - an archived planning card absent from `memberships` becomes an explicit `Archived = true` membership and its
+    //   item carries `archivedCardDiscrepancy`;
+    // - an unarchived planning card absent from `memberships`, or an archived one present in it, is an inconsistency
+    //   reported as a membership gap, never a silent missing row.
+    let private reconcileArchivedMemberships (binding: Binding) (selected: Selected list) (items: InspectionItem list) (members: Membership list) (membershipGap: IoError option) =
+        if not (isProgrammeBinding binding) || membershipGap.IsSome then items, members, None
+        else
+            let listed = members |> List.map _.ContentId |> Set.ofList
+            let rows = List.zip selected items
+            let archived =
+                rows |> List.choose (fun (row, item) ->
+                    match item.Planning with
+                    | Some planning when planning.Archived && not (listed.Contains row.NodeId) ->
+                        Some { ItemId = planning.ItemId; ContentId = row.NodeId; Kind = "Issue"; Issue = Some row.Issue; Enrolled = true; Archived = true }
+                    | _ -> None)
+            let inconsistent =
+                rows |> List.filter (fun (row, item) ->
+                    match item.Planning with
+                    | Some planning -> planning.Archived = listed.Contains row.NodeId
+                    | None -> false)
+            let archivedIds = archived |> List.map _.ContentId |> Set.ofList
+            // An archived row is never Verified and never counts toward `Verified`: it carries its own health and the
+            // discrepancy, and selectActions treats it as needs-decision. A row whose planning read failed has no
+            // archive fact and is not cross-checked here; its planning gap already makes it Unknown and unselectable.
+            let items = items |> List.map (fun item ->
+                if archivedIds.Contains item.ExpectedNodeId then
+                    { item with Discrepancies = item.Discrepancies @ [ archivedCardDiscrepancy ]; Evidence = { item.Evidence with Health = archivedHealth } }
+                else item)
+            let gap =
+                if inconsistent.IsEmpty then None
+                else Some(Malformed("membership cross-check", $"%d{inconsistent.Length} enrolled row(s) disagree between the issue membership and the complete project membership; reconcile before selection"))
+            items, members @ archived, gap
+
     let private inspectWithAcquisition batched (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let reads = inspectionReads transport binding
         let intakeObservedAt = DateTimeOffset.UtcNow
@@ -1092,7 +1275,9 @@ module V2ProjectionSource =
                         | Ok(text, _, finalBlob) when finalBlob = blob && Result.isOk (programmePopulation binding text) -> membershipGap
                         | _ -> Some(Malformed("programme enrollment", "final-enrollment-currentness-unavailable-or-changed"))
                 let items = if binding.BindingVersion = 5 then reconcileHierarchy items else items
-                { Binding = binding; Memberships = members; MembershipGap = membershipGap; NativeIntegrator = integration
+                let items, members, crossCheckGap = reconcileArchivedMemberships binding selected items members membershipGap
+                let enrollmentGap = match enrollmentGap with Some _ -> enrollmentGap | None -> crossCheckGap
+                { Binding = binding; Memberships = members; MembershipGap = (match membershipGap with Some _ -> membershipGap | None -> crossCheckGap); NativeIntegrator = integration
                   Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) (protectedEnrollmentInputs binding current blob) enrollmentGap; Items = items }
 
     let inspectFixed transport binding previous = inspectWithAcquisition true transport binding previous
@@ -1217,6 +1402,8 @@ module V2ProjectionSource =
                     result "unknown" [ "Current issue/dependency/plan/planning read is unavailable or changed" ]
                 elif report.Binding.BindingVersion = 5 && (item.WorkItem |> Option.forall (fun facts -> not facts.Complete || facts.Sha256.IsNone || facts.WorkLevel = "Unknown")) then
                     result "unknown" [ "Explicit Work level and complete current native hierarchy/classification are required" ]
+                elif item.Discrepancies |> List.contains archivedCardDiscrepancy then
+                    result "needs-decision" [ "Board card is archived (Done retention); unarchive or retire the enrolled row before any action" ]
                 elif report.Binding.BindingVersion = 5 && (item.WorkItem |> Option.exists (fun facts -> facts.WorkLevel = "Outcome")) then
                     result "needs-decision" [ "Outcome nodes retain accountable acceptance; select an explicitly enrolled Delivery node instead" ]
                 elif item.Owner |> Option.forall String.IsNullOrWhiteSpace then

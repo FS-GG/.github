@@ -31,13 +31,15 @@
 # grant, decided 2026-07-17), so a per-receiver-scoped installation token can. This workflow mints one
 # per repo, exactly as coordination-propagate / feed-autofix do.
 #
-# WHY THE ROSTER, AND WHY `contract-coherence`. The subject set is read from registry/repos.yml — no
-# hardcoded targets (ADR-0019). `contract-coherence` is the receives capability that means "this repo
-# participates in the cross-repo contract fabric", and a reusable workflow's job ids ARE a cross-repo
-# contract (a fourth coupling across `workflow_call`, alongside its `permissions:` (#478) and secrets
-# (#482)). It also happens to enumerate exactly the six framework repos the dispatch App is installed
-# on — the only repos it can mint a token for at all. `.github` (role: authority) is not a receiver:
-# it OWNS the callee side, and the App is not installed on it, so it is not a subject here.
+# WHY THE ROSTER, AND WHY `required-context-sweep`. The subject set is read from registry/repos.yml — no
+# hardcoded targets (ADR-0019). `required-context-sweep` is the receives capability that means "the
+# authority sweeps this repo's branch protection", and it enumerates the framework repos the dispatch
+# App is installed on — the only repos it can mint a token for at all. It used to borrow
+# `contract-coherence`, which also means "this repo calls the reusable contract-coherence gate"; when
+# SDD, Rendering, Templates and Game retired that caller (2026-09-26) the borrowed word either went
+# stale or would have dropped them from this sweep, so the sweep has a word of its own (Refs #4730).
+# `.github` (role: authority) is not a subject: it OWNS the callee side, and the App is not installed
+# on it.
 #
 # NO OFFLINE FIXTURE HERE, DELIBERATELY — like coordination-propagate, this workflow needs the App and
 # a live protection read, so it cannot be exercised in a hermetic fixture. The SCRIPT it drives is
@@ -97,12 +99,12 @@ jobs:
           ONE: ${{ inputs.repo }}
         run: |
           set -euo pipefail
-          roster() { bash scripts/repos.sh list --receives contract-coherence --field full; }
+          roster() { bash scripts/repos.sh list --receives required-context-sweep --field full; }
           if [ -n "${ONE:-}" ]; then
-            # A targeted re-check. Validate it is actually a rostered contract-coherence receiver, so a
+            # A targeted re-check. Validate it is actually a rostered required-context-sweep repo, so a
             # dispatch typo fails here loudly instead of minting a token for a repo we do not verify.
             if ! roster | grep -qxF "$ONE"; then
-              echo "::error::'$ONE' is not a contract-coherence receiver in registry/repos.yml." >&2
+              echo "::error::'$ONE' is not a required-context-sweep repo in registry/repos.yml." >&2
               echo "::error::Roster receivers:" >&2
               roster | sed 's/^/::error::  /' >&2
               exit 1
@@ -115,7 +117,7 @@ jobs:
           # cannot drift between the targeted and whole-roster paths.
           repos="$(printf '%s\n' "$subjects" \
             | jq -R -s -c 'split("\n") | map(select(length>0)) | map({full:., owner:(split("/")[0]), name:(split("/")[1])})')"
-          [ "$repos" != "[]" ] || { echo "::error::roster names no contract-coherence receivers." >&2; exit 1; }
+          [ "$repos" != "[]" ] || { echo "::error::roster names no required-context-sweep repos." >&2; exit 1; }
           echo "repos=$repos" >> "$GITHUB_OUTPUT"
           echo "required-context subjects: $repos"
 

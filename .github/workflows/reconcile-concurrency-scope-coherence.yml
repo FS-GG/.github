@@ -17,6 +17,7 @@ on:
       - "scripts/check-reconcile-concurrency-scope.py"
       - "tests/reconcile-concurrency-scope/**"
       - ".github/workflows/reconcile-concurrency-scope-coherence.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

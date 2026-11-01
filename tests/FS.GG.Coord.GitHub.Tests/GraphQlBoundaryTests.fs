@@ -113,6 +113,38 @@ let ``empty continuing page and explicit item limit both fail closed`` () =
     | Error(Malformed(_, detail)) -> Assert.Contains("item limit", detail)
     | other -> failwith $"expected explicit-limit refusal, got %A{other}"
 
+[<Fact>]
+let ``a connection reporting more than the item limit is refused on its first page`` () =
+    // #5119: a board above 500 items is refused deterministically, not paged up to the limit first.
+    let mutable fetches = 0
+    let fetch (cursor: string option) =
+        fetches <- fetches + 1
+        let start = match cursor with Some value -> int value | None -> 0
+        let nodes = [ for index in start .. start + 99 -> $"{{\"id\":\"n{index}\"}}" ] |> String.concat ","
+        page "over" $"""{{"data":{{"connection":{{"totalCount":501,"nodes":[{nodes}],"pageInfo":{{"hasNextPage":true,"endCursor":"{start + 100}"}}}}}}}}"""
+
+    match GraphQl.drain "over" "fixture connection" { MaxPages = 10; MaxItems = 500 } fetch with
+    | Error(Malformed(_, detail)) -> Assert.Contains("reports 501 items, above the explicit 500-item limit", detail)
+    | other -> failwith $"expected first-page limit refusal, got %A{other}"
+
+    Assert.Equal(1, fetches)
+
+    // At the limit the same connection drains completely.
+    let mutable served = 0
+    let exact (cursor: string option) =
+        served <- served + 1
+        let start = match cursor with Some value -> int value | None -> 0
+        let nodes = [ for index in start .. start + 99 -> $"{{\"id\":\"n{index}\"}}" ] |> String.concat ","
+        let more = start + 100 < 500
+        let next = if more then $"\"{start + 100}\"" else "null"
+        page "exact" $"""{{"data":{{"connection":{{"totalCount":500,"nodes":[{nodes}],"pageInfo":{{"hasNextPage":{(if more then "true" else "false")},"endCursor":{next}}}}}}}}}"""
+
+    match GraphQl.drain "exact" "fixture connection" { MaxPages = 10; MaxItems = 500 } exact with
+    | Ok items -> Assert.Equal(500, items.Length)
+    | other -> failwith $"expected a complete 500-item drain, got %A{other}"
+
+    Assert.Equal(5, served)
+
 let private response body =
     Ok
         {
