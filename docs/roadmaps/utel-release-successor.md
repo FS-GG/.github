@@ -2226,3 +2226,20 @@ The pinning tests are now derivation tests with mutants. Main currently declares
 so every route refuses with "not older than" until the next bump. That bump is the proof: it needs no rebind PR.
 This is source composition only. It selects no candidate, preflight, publication or installation, and allocates no
 namespace.
+
+### Completion gate: registry reconciliation ([#5216](https://github.com/FS-GG/.github/issues/5216))
+
+A coherent release is complete only when the registry names it. The publisher's last effect is promotion. It writes no
+`.github` source, so `feed` (`check-feed-coherence`) turns red on `main` at promotion. 0.114.0 to 0.114.3 and Host 0.9.0
+were all declared complete without the flip, and `feed` stayed red for every `.github` PR until #5216.
+
+- **After promotion,** the release owner opens one routine PR. It advances the `coord-engine` row's `version`,
+  `package-version` and `package-tag`, and the canonical pin in `dist/dotnet/.config/dotnet-tools.json`, to the
+  promoted version. It also prepends the `registry/CHANGELOG.md` entry, runs `scripts/prepare-registry --write` and
+  rehashes the census rows that its checks name. A Host release does the same for its `telemetry-host` row.
+- **The completion record** cites the merged PR and `feed` green on `main`. Until then, the release window stays open.
+- **Precondition for the next candidate:** `feed` green on `main`, so an unreconciled predecessor stops the next cut.
+
+The flip stays a separate PR, after publication, by design. The publisher holds `main` stable through publication and
+has no `.github` write credential. GS2-08.9 retired automatic registry repair (`feed-autofix` is audit-only), and a
+verification step inside the publisher would be red by construction until the flip merges.

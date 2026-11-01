@@ -1,5 +1,33 @@
 # Registry changelog
 
+## 2026-11-01 — reconcile published coherent 0.114.3 and Telemetry Host 0.9.0 (FS-GG/.github#5216)
+
+Flip `coord-engine` `version`, `package-version` and `package-tag` to **0.114.3** (`coherent-set/v0.114.3`), and
+`telemetry-host` `package-version` and `package-tag` to **0.9.0** (`telemetry-host/v0.9.0`). `check-feed-coherence`
+had reported both rows BEHIND both feeds since the 0.114.0 and Host 0.9.0 publications. The canonical tool manifest
+`dist/dotnet/.config/dotnet-tools.json` moves from 0.113.0 to 0.114.3 for the same reason (`pin`).
+
+- **Coherent 0.114.0–0.114.3**, each promoted at generation 33 with all 16 effects verified:
+
+  | Version | Release | Source | Content |
+  |---|---|---|---|
+  | 0.114.0 | [430012073](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.114.0) | `3c13e67f` | `250a010e…` |
+  | 0.114.1 | [430365711](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.114.1) | `6eca8110` | `976a8119…` |
+  | 0.114.2 | [430588993](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.114.2) | `55a24ab6` | `0dc22a6f…` |
+  | 0.114.3 | [430687648](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.114.3) | `5019a9d2` | `44983f15…` |
+
+  - **0.114.3 runs:** candidate [41319921688](https://github.com/FS-GG/.github/actions/runs/41319921688) and preflight [41320825657](https://github.com/FS-GG/.github/actions/runs/41320825657).
+  - Publisher [41323457223](https://github.com/FS-GG/.github/actions/runs/41323457223) was refused at generation 7 with "main journal moved before CAS PATCH", before any write.
+  - Forward [41324407814](https://github.com/FS-GG/.github/actions/runs/41324407814) stopped at the generation-14 Kit visibility checkpoint, and forward [41326431346](https://github.com/FS-GG/.github/actions/runs/41326431346) completed the publication.
+  - The release-manifest asset is `c9c22fe2…` and stable-channel is `854b3801…`.
+  - nuget.org payloads equal the candidate archives except for `.signature.p7s`. Org-feed acceptance binds the hosted journal receipts, and a local org read stays Unknown (403).
+  - Evidence: FS-GG/.github#5171 issuecomment-6561159541, and for 0.114.2 FS-GG/.github#5136 issuecomment-6559495462.
+- **Telemetry Host 0.9.0:** original publisher [41146774302](https://github.com/FS-GG/.github/actions/runs/41146774302) published it from candidate [41139922319](https://github.com/FS-GG/.github/actions/runs/41139922319). Source `77871510`, [release429603937](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.9.0), content `ed30feaf…`.
+  - The org feed was independently observed by [41173830958](https://github.com/FS-GG/.github/actions/runs/41173830958).
+  - Accepted under FS-GG/.github#5038 and #4638 issuecomment-6536376090.
+
+This is metadata only: no repack. Installed adoption stays separate evidence.
+
 ## 2026-11-01 — reconcile published FS.GG.Game 0.19.0 (FS-GG/FS.GG.Game#753)
 
 Flip `game-sim-core`, `game-scene-adapter`, `game-physics-box2d` and `game-render-browser` `version` and `package-version` to **0.19.0**. Root accepted the release. The tag `v0.19.0` points at FS.GG.Game main `9848c8d4a398669977bfc5f7d116f86d7424eb3d`, which carries #778 (Babylon orthographic 2D, the conformance kit's `pixels` section, CSS-scaled canvas picks), #781 (release route: listing wait, readback evidence kept first) and #782 (version, `CHANGELOG.md`, `PackageReleaseNotes`).
@@ -289,6 +317,8 @@ review M4). The typed validator (`fsgg-sdd registry validate`) never saw that co
 no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
+
+- **2026-11-01** — COHERENT 0.114.3 AND HOST 0.9.0 PUBLICATION RECONCILED (github; FS-GG/.github#5216): flip coord-engine version/package-version/package-tag to 0.114.3 (coherent-set/v0.114.3, release430687648, source5019a9d2) and telemetry-host package-version/package-tag to 0.9.0 (telemetry-host/v0.9.0, release429603937, source77871510); advance the canonical engine pin to 0.114.3. Both rows had been BEHIND both feeds since 0.114.0 and Host 0.9.0. No repack.
 
 - **2026-11-01** — - **2026-11-01** — GAME 0.19.0 PUBLICATION RECONCILED (game; FS-GG/FS.GG.Game#753, FS-GG/.github#5179): flip game-sim-core, game-scene-adapter, game-physics-box2d and game-render-browser version/package-version 0.18.0 -> 0.19.0. Tag v0.19.0 -> 9848c8d4; admission 41347737212; publisher 41347937908 pushed both feeds, passed hosted both-feed readback with retained evidence (org byte-identical to custody) and the listing wait, then failed only its last step (public browser consumer NU1102 from a cached version list; fix FS.GG.Game#785); nuget.org independently re-read and the public browser consumer passed on an independent clean-cache run. See the dated section above.
 

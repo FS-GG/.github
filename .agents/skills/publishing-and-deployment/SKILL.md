@@ -35,8 +35,8 @@ Registry release inventory: 19 package-bearing contracts across 9 producers; 16 
 | `game` | `game-render-browser` | `0.19.0` | `0.19.0` | `game:0.19.0` | FS.GG.Game.Render.Browser package — Fable browser host for renderer selection: RendererDriver, SvgSurface, RetainedSvgSurface, PixiSurface and BabylonSurface over the shared FS.GG.UI.Scene, the canvas SceneInteraction input host, BrowserRenderers and BrowserConformance; npm @babylonjs/core 9.33.1 and pixi.js 8.22.0 |
 | `audio` | `fs-gg-audio` | `0.6.0` | `0.6.0` | `audio:0.6.0` | FS.GG.Audio.Core/.Host/.Engine/.Elmish/.WebBrowser public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge + browser Web Audio host |
 | `net` | `fs-gg-net` | `0.6.0` | `0.6.0` | `net:0.6.0` | FS.GG.Net.Core/.WebSocket/.WebSocket.Server/.Protobuf/.Grpc/.Elmish public .fsi surfaces — ITransport/IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho + WebSocket client/server transport + Google.Protobuf/protobuf-net codecs + gRPC lifecycle bridge + Elmish Cmd/Sub |
-| `github` | `coord-engine` | `0.113.0` | `0.113.0` | `github:0.113.0` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
-| `github` | `telemetry-host` | `0.9.0` | `0.8.0` | `github:0.8.0` | optional Linux x64 FS.GG.Telemetry.Host dotnet tool — authenticated workspace-scoped ingestion, private dashboard, protected native capture and bounded learning export; independently versioned from the github coordination coherent set |
+| `github` | `coord-engine` | `0.114.3` | `0.114.3` | `github:0.114.3` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
+| `github` | `telemetry-host` | `0.9.0` | `0.9.0` | `github:0.9.0` | optional Linux x64 FS.GG.Telemetry.Host dotnet tool — authenticated workspace-scoped ingestion, private dashboard, protected native capture and bounded learning export; independently versioned from the github coordination coherent set |
 | `github` | `new-sdd-workspace` | `0.23.1` | `0.23.1` | `github:0.23.1` | the `new-sdd-workspace` scaffolder CLI (package FS.GG.NewSddWorkspace) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider (ADR-0016); shipped as a dotnet tool |
 | `templates` | `fs-gg-workspace-template` | `0.20.1` | `0.20.1` | `templates:0.20.1` | FS.GG.Workspace.Template package, twelve template configurations and eleven `dotnet new` selectors: workspace-provider identities — `fs-gg-console` (provider `console` — minimal F# executable, no npm lane, ADR-0072 §2); `fs-gg-web` (provider `web` — F# ASP.NET Core + plain TypeScript/Vite website, ADR-0071 §3); `fs-gg-fable-game` (provider `fable-game` — F# ASP.NET Core + Fable/Elmish game client, SignalR for connection-oriented real-time traffic + plain HTTP endpoints with explicit versioned DTOs for typed request/response per ADR-0073, consuming the published `fs-gg-game-core-fable-lockstep-v1` profile per ADR-0069); `fs-gg-fable-bindings` (provider `fable-bindings` — Fable interop library over an exactly pinned npm package/declaration closure, ADR-0072 §3, first proved by the unreleased EHotwagner/babylonjsBindings reference) — plus `fs-gg-governance`, the separately registered pre-existing governance overlay template folded into this package at the same rename; `fs-gg-project-knowledge` and `fs-gg-python` are also already packaged; 0.20.0 adds the four distinct executable CLI workspace providers `fs-gg-typescript-cli`, `fs-gg-javascript-cli`, `fs-gg-rust-cli` and `fs-gg-go-cli` (Templates#441). The current and legacy fable-game configurations share one selector.  |
 | `game` | `game-skills` | `0.9.0` | `0.9.0` | `game:0.9.0` | FS.GG.Game.Skills 0.9.0 package — owner-sourced game, Fable, replay and rules guidance with schema-v2 per-file digests and workspace bundle predicates; embedded by the SDD 1.8 receiver |
@@ -136,8 +136,9 @@ do not qualify consumers. Run the existing changelog check and update the releas
 that the project actually uses. Static source checks do not establish CLR evaluation; require
 separately admitted execution or current hosted CI.
 
-1. Qualify and merge the selected successor source. Dispatch `release-successor-candidate.yml`
-   on current `main` once. Authenticate the successful first-attempt run and its original seven-file
+1. Qualify and merge the selected successor source. Precondition: `feed` (`check-feed-coherence`)
+   is green on `main`, so the previous release has been reconciled (step 4). Dispatch
+   `release-successor-candidate.yml` on current `main` once. Authenticate the successful first-attempt run and its original seven-file
    Actions archive: three packages, manifest, predecessor channel and two standalone qualification files.
 2. Hold `main` stable through candidate qualification, preflight and first publication. Dispatch
    `release-successor-publish.yml` on that same SHA with `candidate_run_id`, `candidate_artifact_id`,
@@ -149,6 +150,16 @@ separately admitted execution or current hosted CI.
    After journal initialization, forward recovery uses the original archive and the existing admission
    and journal rules. Unknown or conflicting effects remain incomplete; never reset the journal,
    repack, replace published bytes or blindly retry an unresolved write.
+4. **Reconcile the registry before the release counts as complete** (publish-before-flip, FR-007).
+   The publisher writes no `.github` source, so `feed` goes red on `main` at promotion and stays red
+   until this step's PR merges. Open one PR that advances the `coord-engine` row's `version`,
+   `package-version` and `package-tag`, and the canonical pin in `dist/dotnet/.config/dotnet-tools.json`,
+   to the promoted version. In that PR, prepend the `registry/CHANGELOG.md` entry, run
+   `scripts/prepare-registry --write`, and rehash the census rows that its checks name.
+   The release's completion record cites that merged PR and `feed` green on `main`. Until then the
+   release window stays open, and step 1's precondition stops the next candidate. An independently
+   versioned Telemetry Host release follows the same gate for its `telemetry-host` row.
+   0.114.0–0.114.3 and Host 0.9.0 skipped it and left `feed` red (.github#5216).
 
 The workflow retains its existing single-operator and environment restrictions. Source merge, a
 successful preflight and published/installed readback are separate milestones.
