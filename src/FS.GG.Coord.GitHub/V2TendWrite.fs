@@ -1045,6 +1045,49 @@ module V2TendWrite =
     // Rules whose enablement needs the contract amendment (`fsgg:board-tend-contract/v1`, design §12 PR 6).
     let contractGated = set [ "S1"; "S3"; "S3b"; "S4"; "S9"; "S9r"; "O1"; "E1"; "C1"; "W1d"; "T1d" ]
 
+    // ---- the contract amendment (design §8, §12 PR 6; #5174) ----
+
+    /// Whether the installed lifecycle contract carries the board-tend amendment.
+    type ContractAmendment =
+        | Amended
+        | NotAmended of reason: string
+
+    /// The version this engine understands. A different version is a different contract, not a newer yes.
+    let contractMarkerVersion = "v1"
+
+    let private markerLine = Regex(@"^\s*<!--\s*fsgg:board-tend-contract/(\S*?)\s*-->\s*$")
+    let private fenceLine = Regex(@"^\s*(```|~~~)")
+
+    // Marker versions the document declares, one per marker on a line of its own outside any code fence. A
+    // marker quoted in prose, in backticks or in a fenced example does not declare the amendment.
+    let markerVersions (text: string) : string list =
+        let mutable fenced = false
+        [ for line in text.Replace("\r\n", "\n").Split '\n' do
+            if fenceLine.IsMatch line then fenced <- not fenced
+            elif not fenced then
+                let m = markerLine.Match line
+                if m.Success then yield m.Groups.[1].Value ]
+
+    /// Judge the installed contract documents (the runtime mirrors that exist, each with its read result).
+    /// Amended only when at least one exists, every one reads, and every one declares the marker with exactly
+    /// the supported version; anything else is NotAmended with the reason, so a gated rule stays refused.
+    let contractAmendment (documents: (string * Result<string, string>) list) : ContractAmendment =
+        if documents.IsEmpty then NotAmended "no installed lifecycle-contract.md was found"
+        else
+            let verdicts =
+                documents
+                |> List.map (fun (label, read) ->
+                    match read with
+                    | Error reason -> Some(label + " could not be read: " + reason)
+                    | Ok text ->
+                        match markerVersions text with
+                        | [] -> Some(label + " carries no fsgg:board-tend-contract marker")
+                        | versions when versions |> List.forall (fun v -> v = contractMarkerVersion) -> None
+                        | versions -> Some(label + " declares fsgg:board-tend-contract/" + String.Join(",", versions |> List.distinct) + ", not /" + contractMarkerVersion))
+            match verdicts |> List.choose id with
+            | [] -> Amended
+            | reasons -> NotAmended(String.Join("; ", reasons))
+
     // Rules the enable file may name: every Apply rule and gate replay.
     let enableable = Set.add "GR" V2Tend.applyRules
 
