@@ -1,4 +1,6 @@
-# Gates for the LEARN pod operator gate layer (deployment/learn-finite-profile/pod-operator), Refs #4647.
+# Gates for the LEARN pod operator (deployment/learn-finite-profile/pod-operator), Refs #4647: the gate layer r1 (run.py) and the start r2
+# (run_r2.py: plan invariants, the step runner and probe under /bin/sh, the loop-volume and container prechecks, the units, the recovery driver in a
+# fake pod world with a fake finalizer, and the credential generator with the real openssl in a temporary directory).
 #
 # Drives main() through its gates with injected dependencies against temporary fixtures: the shared lock, symmetric exclusion, custody, the
 # acknowledgement gate, the admission reader (vectors A01 to A18 against the original and the verbatim copy), the claim verification, the nonce, and
@@ -14,6 +16,8 @@ on:
       - "deployment/learn-finite-profile/pod-operator/**"
       - "deployment/learn-finite-profile/seal/**"
       - "deployment/learn-finite-profile/operator/**"
+      - "deployment/learn-finite-profile/finalizer/**"
+      - "deployment/learn-finite-profile/baseline/etc/**"
       - "tests/learn-pod-operator/**"
       - ".github/workflows/learn-pod-operator-selftest.yml"
   push:
@@ -22,6 +26,8 @@ on:
       - "deployment/learn-finite-profile/pod-operator/**"
       - "deployment/learn-finite-profile/seal/**"
       - "deployment/learn-finite-profile/operator/**"
+      - "deployment/learn-finite-profile/finalizer/**"
+      - "deployment/learn-finite-profile/baseline/etc/**"
       - "tests/learn-pod-operator/**"
       - ".github/workflows/learn-pod-operator-selftest.yml"
   workflow_dispatch:
@@ -45,5 +51,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Run the pod operator gate-layer gates
+      - name: Run the pod operator gate-layer gates (r1)
         run: python3 tests/learn-pod-operator/run.py
+
+      - name: Run the pod operator start, driver and credential gates (r2)
+        run: python3 tests/learn-pod-operator/run_r2.py

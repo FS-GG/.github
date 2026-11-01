@@ -3,7 +3,7 @@
 
 Drives verify_baseline.py through its real entry points against the shipped baseline and against synthetic
 trees that each break one rule. stdlib only, offline, no credential. Prints its own assertion count."""
-import copy, hashlib, importlib.util, json, os, shutil, sys, tempfile
+import copy, hashlib, importlib.util, json, os, re, shutil, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROFILE = os.path.join(os.path.dirname(os.path.dirname(HERE)), 'deployment', 'learn-finite-profile')
@@ -289,5 +289,30 @@ with tempfile.TemporaryDirectory() as tmp:
     errs = []
     vb.check_manifest_shape(bad, errs)
     check(has(errs, 'malformed redaction record'), 'a malformed redaction record is refused')
+
+
+# 7. Pod operator r2 and its README are published source: scan them with the same classes and person list, and explain every match.
+R2_FILES = ('pod-operator/learn-pod-operator-r2.py', 'pod-operator/README.md')
+R2_EXPLAINED = {
+    ('ipv4', '127.0.0.1'): 'the pod-internal loopback address PostgreSQL listens on',
+    ('ipv6', '0::'): 'the cgroup v2 line prefix read from /proc/<pid>/cgroup',
+    ('hostname', 'localhost'): 'the name the per-run TLS certificate authenticates inside the pod',
+    ('url', 'https://localhost:{RECV_PORT}'): 'the in-pod receiver endpoint template',
+    ('secret-assignment', 'Password='): 'the connection-string template; the value is generated at run time and never in the source',
+    ('person-context', 'operator described'): 'the role word "operator" before a common word (r1 text)',
+    ('person-context', 'operator r6.'): 'the role word "operator" before a revision',
+    ('person-context', 'operator: gate'): 'the role word "operator" in the README title',
+}
+m7 = manifest(PROFILE)
+for rel in R2_FILES:
+    text = open(os.path.join(PROFILE, rel)).read()
+    found = vb.scan_text(rel, text, set(), persons=m7['scan']['personNames'], url_prefixes=m7['scan']['urlAllowPrefixes'])
+    unexplained = sorted({(c, h) for c, _, h in found} - set(R2_EXPLAINED))
+    check(unexplained == [], f'{rel}: every identifier-scan match is explained: {unexplained}')
+    check(not any(c in ('person', 'home-path', 'email', 'private-key', 'token', 'bearer', 'ssh-key', 'mention') for c, _, _ in found), f'{rel}: no person, account path, mention or credential')
+    check(not re.search(r'\bsudo(ers)?\b', text, re.I) and '`developer`' not in text, f'{rel}: no sudo configuration and no account name (the redaction rules)')
+for planted, cls in (('see /home/someone/.ssh', 'home-path'), ('written for ' + (m7['scan']['personNames'] or ['zed'])[0], 'person')):
+    found = vb.scan_text('x', planted, set(), persons=m7['scan']['personNames'] or ['zed'], url_prefixes=m7['scan']['urlAllowPrefixes'])
+    check(any(c == cls for c, _, _ in found), f'causal control: a planted {cls} in the same scan is found')
 
 print(f'learn-finite-profile: {n} assertions passed')
