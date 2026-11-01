@@ -204,6 +204,12 @@ PY
 recv r15
 expect "a payload digest absent from the history clone is exit 2" 2 python3 "$TOOL" check "$R" --payload "$T/foreign" --history "$SRC"
 has "the unrelated history is named as the reason" "not a revision in the history clone"
+# N1: a full, non-shallow repo that never touched the five paths must not pass as history either.
+UNREL="$T/unrelated"; mkdir -p "$UNREL"; git -C "$UNREL" init -q -b main; echo hi > "$UNREL/README.md"; git -C "$UNREL" add -A; git -C "$UNREL" "${git_env[@]}" commit -q -m one
+[ "$(git -C "$UNREL" rev-parse --is-shallow-repository)" = false ] && ok "the unrelated history is a full repo" || bad "the unrelated history is a full repo"
+expect "an unrelated full history with no closure revisions is exit 2" 2 python3 "$TOOL" check "$R" --payload "$PL" --history "$UNREL"
+has "unrelated history named as the reason" "not a revision in the history clone"
+expect "an unrelated history is exit 2 even with --allow-shallow" 2 python3 "$TOOL" check "$R" --payload "$PL" --history "$UNREL" --allow-shallow
 
 # The real tree: the Drivers workspace inventory lists the five closure paths (among its other entries).
 python3 - "$ROOT" <<'PY' && ok "workspace-inventory.json lists the five closure paths among its entries" || bad "workspace-inventory.json lists the five closure paths among its entries"

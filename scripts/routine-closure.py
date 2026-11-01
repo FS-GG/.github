@@ -334,7 +334,7 @@ def do_check(args: argparse.Namespace) -> int:
     current = {sha(data): path for path, (data, _) in files.items()}
     old_all, complete = historical_digests(Path(args.history) if args.history else source_root(args))
     missing_revision = [p for d, p in ((sha(data), path) for path, (data, _) in files.items()) if d not in old_all]
-    if old_all and missing_revision:
+    if missing_revision:
         for line in drift:
             print(line)
         fail("canonical digest of " + ", ".join(missing_revision) + " is not a revision in the history clone; "
