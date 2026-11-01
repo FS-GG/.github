@@ -10,6 +10,8 @@ on:
       - tools/routine-delivery.py
       - tools/pr-lane-admission.py
       - tests/routine-eligibility/**
+      - scripts/routine-closure.py
+      - tests/routine-closure/**
 
 permissions:
   contents: read
@@ -32,3 +34,5 @@ jobs:
       - uses: actions/checkout@v7
       - name: Exercise the unprivileged security fixture
         run: bash tests/routine-eligibility/run.sh
+      - name: Exercise the receiver closure applier and drift check (.github#5202)
+        run: bash tests/routine-closure/run.sh
