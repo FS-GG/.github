@@ -516,7 +516,7 @@ below.
 - **`.github`.**
   - The registry rows of §7 are added. The four skill rows are reconciled to owner Game.
   - The capture rule enters the pnext-item and work-board closure contracts (#5226).
-  - `docs/architecture.md` is reconciled after the roster row lands, because a component is added.
+  - `docs/architecture.md` records FS.GG.Algorithms as a decided, not-yet-created bottom layer. Its full row is reconciled after the roster row lands.
   - This record's Atlas pointer is `platform/algorithms-capability`.
 - **Cost accepted.** A new repository adds one more release line and one more SDD embed, and pack
   updates reach workspaces only through an SDD release that pins the new skills package. The
