@@ -952,7 +952,10 @@ class TendLinkageConformance(unittest.TestCase):
                 pr = dict(case["pr"])
                 failures, delivery = R.linkage_of(pr, R.RefIndex(cards).get,
                                                   anonymous_unreadable=case.get("anonymousUnreadable", False))
-                got = failures[0][1] if failures else R.ref_key(delivery_repo(delivery, cards), delivery_number(delivery, cards))
+                # A U failure means no verdict and wins over an R1 failure, as board-linkage and the gate read it.
+                unknown = [reason for rule, reason in failures if rule == "U"]
+                got = (unknown[0] if unknown else failures[0][1]) if failures else \
+                    R.ref_key(delivery_repo(delivery, cards), delivery_number(delivery, cards))
                 self.assertEqual(got, case["expect"])
 
 

@@ -1,6 +1,6 @@
 {
  "schema": "fsgg.board-tend-linkage-corpus/1",
- "note": "Shared by V2TendReadsTests (F#) and tests/board-currency (scripts/board-currency-rules.py linkage_of). expect is the Delivery reference or the failure reason (the first failure). A card may carry unreadable or type; a case may set anonymousUnreadable (the board holds an unreadable card with no identity).",
+ "note": "Shared by V2TendReadsTests (F#) and tests/board-currency (scripts/board-currency-rules.py linkage_of). expect is the Delivery reference or the failure reason: the first U failure when there is one (no verdict wins), else the first failure. A card may carry unreadable or type; a case may set anonymousUnreadable (the board holds an unreadable card with no identity).",
  "cases": [
   {
    "name": "strict",
@@ -436,6 +436,46 @@
     "body": "Summary\r\nRefs #1\r\n"
    },
    "expect": "FS-GG/x#1"
+  },
+  {
+   "name": "closed delivery with an unreadable parent: Unknown wins",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "CLOSED",
+     "status": "Done",
+     "parent": "FS-GG/x#10"
+    },
+    "FS-GG/x#10": {
+     "unreadable": true
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1"
+   },
+   "expect": "r1-parent-unreadable"
+  },
+  {
+   "name": "done delivery whose parent is missing beside an anonymous unreadable card: Unknown wins",
+   "cards": {
+    "FS-GG/x#1": {
+     "workLevel": "Delivery",
+     "state": "OPEN",
+     "status": "Done",
+     "parent": "FS-GG/x#11"
+    }
+   },
+   "pr": {
+    "repo": "FS-GG/x",
+    "number": 100,
+    "state": "OPEN",
+    "body": "Refs #1"
+   },
+   "expect": "r1-parent-unreadable",
+   "anonymousUnreadable": true
   }
  ]
 }

@@ -12,7 +12,12 @@ export TMPDIR="$PRIVATE_TMP"
 trap 'rm -rf "$PRIVATE_TMP"' EXIT
 
 LOG="$PRIVATE_TMP/test.log"
-dotnet test "$ROOT/tests/coord-board-v2-projection/coord-board-v2-projection.fsproj" -c Release --nologo --filter "FullyQualifiedName~V2Tend" >"$LOG" 2>&1
+# `leg.sh` runs the V2Tend tests (derivation, reads, writer); `leg.sh cli` runs the tend CLI tests in cli-join.
+if [ "${1:-}" = "cli" ]; then
+  dotnet test "$ROOT/tests/coord-board-v2-cli-join/coord-board-v2-cli-join.fsproj" -c Release --nologo --filter "FullyQualifiedName~TendApplication" >"$LOG" 2>&1
+else
+  dotnet test "$ROOT/tests/coord-board-v2-projection/coord-board-v2-projection.fsproj" -c Release --nologo --filter "FullyQualifiedName~V2Tend" >"$LOG" 2>&1
+fi
 SUMMARY="$(grep -Eo 'Failed: +[0-9]+, Passed: +[0-9]+' "$LOG" | tail -1)"
 if [ -z "$SUMMARY" ]; then
   echo "board-tend leg: NOT MEASURED — no test summary (build failure or host death)"

@@ -747,18 +747,21 @@ module BoardV2Application =
 
     // ---- board-v2 tend, plan-only (#5136 phase 2 PR 3) ----
 
-    type private TendCommand = { PlanPath: string; Rules: Set<string> }
+    type private TendCommand = { PlanPath: string; Rules: Set<string>; Apply: bool }
 
     let private tendSyntax (arguments: string list) =
         let rec flags (values: Map<string, string>) = function
             | [] -> Ok values
+            | "--apply" :: rest when not (values.ContainsKey "--apply") -> flags (values.Add("--apply", "")) rest
             | ("--plan-file" | "--rules") as flag :: value :: rest when not (values.ContainsKey flag) && not (value.StartsWith("--", StringComparison.Ordinal)) ->
                 flags (values.Add(flag, value)) rest
-            | _ -> Error "board-v2 tend takes --plan-file NEW [--rules R1,R2,...]"
+            | _ -> Error "board-v2 tend takes --plan-file NEW [--rules R1,R2,...] or --plan-file NEW --apply"
         flags Map.empty arguments
         |> Result.bind (fun values ->
             match values.TryFind "--plan-file" with
             | None -> Error "board-v2 tend needs --plan-file"
+            | Some _ when values.ContainsKey "--apply" && values.ContainsKey "--rules" ->
+                Error "board-v2 tend --apply takes its rules from the enable file, never from --rules"
             | Some plan ->
                 let rules =
                     values.TryFind "--rules"
@@ -766,64 +769,164 @@ module BoardV2Application =
                     |> Option.defaultValue (set [ "W1h"; "T1f" ])
                 let unknown = rules - V2Tend.applyRules
                 if not unknown.IsEmpty then Error("unknown tend rules: " + String.Join(",", unknown))
-                else Ok { PlanPath = Path.GetFullPath plan; Rules = rules })
+                else Ok { PlanPath = Path.GetFullPath plan; Rules = rules; Apply = values.ContainsKey "--apply" })
 
-    // Read-only: reads Project 3 and native facts, derives the plan, writes it privately. Never writes the board.
-    let private executeTend (transport: IGitHubTransport) (clock: TimeProvider) (command: TendCommand) =
+    type TendDependencies =
+        { Reads: IGitHubTransport
+          SendOnce: Transport.Request -> Errors.IoResult<Transport.Response>
+          Clock: TimeProvider
+          Wait: TimeSpan -> unit
+          WriterLock: Result<V2WriterLock.Location, string>
+          ConfigHome: string
+          StateHome: string
+          SyncDirectory: string -> unit }
+
+    let private tendProject = "PVT_kwDOEYAWY84Bldpa"
+    let private privateModeBits =
+        UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute
+
+    let private tendBounded (transport: IGitHubTransport) (ceiling: int) =
+        let mutable calls = 0
+        { new IGitHubTransport with
+            member _.Send request =
+                if calls >= ceiling then Error(Errors.Malformed(request.Subject, "tend read ceiling reached; coverage Unknown"))
+                else
+                    calls <- calls + 1
+                    transport.Send request
+            member _.SendMutation mutation = Error(Errors.Malformed(mutation.Request.Subject, "board-v2 tend reads never mutate"))
+            member _.RetryMutation effectId = Error(Errors.Malformed(effectId, "board-v2 tend reads never mutate")) }
+
+    // The enable file (design §8): `$XDG_CONFIG_HOME/fsgg/board-tend.json`, mode 0600. A file this process can
+    // read under mode 0600 is owned by its user (or the process is root). Missing or invalid: plan-only.
+    let private readEnable (configHome: string) : Result<V2TendWrite.Enable * string list, string> =
+        let path = Path.Combine(configHome, "fsgg", "board-tend.json")
+        if not (File.Exists path) then Error "no enable file"
+        elif File.GetAttributes(path).HasFlag FileAttributes.ReparsePoint then Error "the enable file is a symlink"
+        elif not (OperatingSystem.IsWindows()) && File.GetUnixFileMode path &&& privateModeBits <> enum<UnixFileMode> 0 then
+            Error "the enable file must be mode 0600"
+        else
+            // The contract amendment (fsgg:board-tend-contract/v1) lands in PR 6, which also wires its marker
+            // read; until then every contract-gated rule is dropped from the enable file.
+            V2TendWrite.parseEnable (File.ReadAllText path) false
+
+    // Read-only: reads Project 3 and native facts, derives the plan, writes it privately. With --apply and a
+    // valid enable file, it also writes under the writer lock through the guarded tend writer.
+    let private executeTend (deps: TendDependencies) (command: TendCommand) =
         try
             let parent = Path.GetDirectoryName command.PlanPath
-            let others = UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute
             if File.Exists command.PlanPath || Directory.Exists command.PlanPath then
                 eprintfn "fsgg-coord-engine: board-v2 tend refused: --plan-file must be a new path"
                 1
             elif not (Directory.Exists parent) then
                 eprintfn "fsgg-coord-engine: board-v2 tend refused: the --plan-file directory %s does not exist" parent
                 1
-            elif not (OperatingSystem.IsWindows()) && File.GetUnixFileMode parent &&& others <> enum<UnixFileMode> 0 then
+            elif not (OperatingSystem.IsWindows()) && File.GetUnixFileMode parent &&& privateModeBits <> enum<UnixFileMode> 0 then
                 // Checked before any read, so a run is never spent on a plan that cannot be written.
                 eprintfn "fsgg-coord-engine: board-v2 tend refused: the --plan-file directory %s must be private to its owner (mode 0700); it is %s" parent (File.GetUnixFileMode parent |> string)
                 1
             else
-                let started = clock.GetTimestamp()
-                let observed = clock.GetUtcNow()
-                let ceiling = V2TendReads.readCeiling 500 + 24
-                let mutable calls = 0
-                let bounded =
-                    { new IGitHubTransport with
-                        member _.Send request =
-                            if calls >= ceiling then Error(Errors.Malformed(request.Subject, "tend read ceiling reached; coverage Unknown"))
-                            else
-                                calls <- calls + 1
-                                transport.Send request
-                        member _.SendMutation mutation = Error(Errors.Malformed(mutation.Request.Subject, "board-v2 tend is read-only"))
-                        member _.RetryMutation effectId = Error(Errors.Malformed(effectId, "board-v2 tend is read-only")) }
+                let started = deps.Clock.GetTimestamp()
+                let observed = deps.Clock.GetUtcNow()
                 // Placeholders, wired before PR 5 and PR 8: the Root login (until the board-currency
                 // rootLogins parameter is read), an empty ledger (until the state directory) and no
                 // enrollment input (RM1 inert; P-READY reports cards as unenrolled).
+                let rootLogins = set [ "EHotwagner" ]
                 let inputs: V2TendReads.Inputs =
-                    { Owner = "FS-GG"; ProjectNumber = 3; RootLogins = set [ "EHotwagner" ]; ObservedAt = observed; Ledger = []; Enrolled = Map.empty }
-                match V2TendReads.readSnapshot (V2TendReads.readOnly bounded) inputs with
-                | Error message ->
-                    eprintfn "fsgg-coord-engine: board-v2 tend refused: %s" message
-                    3
-                | Ok(snapshot, cost) ->
-                    let plan = V2Tend.derive (V2Tend.v1 command.Rules) snapshot
-                    privateJson syncMigrationDirectory command.PlanPath (V2Tend.encodePlan plan + Environment.NewLine)
-                    let seconds = clock.GetElapsedTime(started).TotalSeconds
-                    printfn "board-v2 tend: plan-only; cards=%d apply=%d wouldApply=%d close=%d wouldClose=%d deferred=%d propose=%d refuse=%d; requests=%d graphqlPoints=%d rest=%d; seconds=%.1f"
-                        snapshot.Cards.Length plan.Apply.Length plan.WouldApply.Length plan.Close.Length plan.WouldClose.Length
-                        plan.Deferred.Length plan.Propose.Length plan.Refuse.Length cost.Requests cost.GraphQlPoints cost.RestCalls seconds
-                    0
+                    { Owner = "FS-GG"; ProjectNumber = 3; RootLogins = rootLogins; ObservedAt = observed; Ledger = []; Enrolled = Map.empty }
+                let enable =
+                    if not command.Apply then None
+                    else
+                        match readEnable deps.ConfigHome with
+                        | Error reason ->
+                            eprintfn "fsgg-coord-engine: board-v2 tend: --apply ignored (%s); plan-only" reason
+                            None
+                        | Ok(enable, dropped) ->
+                            for message in dropped do eprintfn "fsgg-coord-engine: board-v2 tend: %s" message
+                            if enable.Apply.IsEmpty then
+                                eprintfn "fsgg-coord-engine: board-v2 tend: the enable file lists no rules; plan-only"
+                                None
+                            else Some enable
+                let lease =
+                    match enable with
+                    | None -> None
+                    | Some _ ->
+                        match deps.WriterLock |> Result.bind V2WriterLock.tryAcquire with
+                        | Ok lease -> Some lease
+                        | Error reason ->
+                            eprintfn "fsgg-coord-engine: board-v2 tend: lock-held or lock unavailable (%s); plan-only" reason
+                            None
+                try
+                    let writing = enable.IsSome && lease.IsSome
+                    let rules = if writing then enable.Value.Apply else command.Rules
+                    let context =
+                        if not writing then None
+                        else
+                            let closable = Collections.Generic.HashSet<string>()
+                            let run = observed.ToString("yyyyMMddTHHmmssZ") + "-" + Guid.NewGuid().ToString("N").Substring(0, 8)
+                            let settings = { V2TendWrite.defaultSettings tendProject rootLogins with MaxItemsPerRun = enable.Value.MaxItemsPerRun }
+                            Some({ Reads = V2TendReads.readOnly (tendBounded deps.Reads (3 * settings.MaxItemsPerRun + 200))
+                                   Send = V2TendWrite.allowlisted tendProject closable.Contains deps.SendOnce
+                                   Custody = V2TendWrite.Custody(Path.Combine(deps.StateHome, "fsgg", "board-tend"), run, deps.SyncDirectory)
+                                   Gate = V2TendWrite.GateCustody(Path.Combine(deps.StateHome, "fsgg", "board-gate"), deps.SyncDirectory)
+                                   Clock = deps.Clock
+                                   Pacer = V2TendWrite.Pacer(deps.Clock, deps.Wait, settings.MinimumMutationInterval)
+                                   Closable = closable
+                                   Settings = settings } : V2TendWrite.Context)
+                    // Under the lock, the gate's custody pass and the reconciler's own readback sweep run first.
+                    let gateOutcomes = context |> Option.map (fun c -> V2TendWrite.gatePass c (rules.Contains "GR")) |> Option.defaultValue []
+                    let ownUncertain, sweepOutcomes = context |> Option.map V2TendWrite.sweepOwn |> Option.defaultValue (Set.empty, [])
+                    match V2TendReads.readSnapshot (V2TendReads.readOnly (tendBounded deps.Reads (V2TendReads.readCeiling 500 + 24))) inputs with
+                    | Error message ->
+                        eprintfn "fsgg-coord-engine: board-v2 tend refused: %s" message
+                        3
+                    | Ok(snapshot, cost) ->
+                        let plan = V2Tend.derive (V2Tend.v1 rules) snapshot
+                        privateJson deps.SyncDirectory command.PlanPath (V2Tend.encodePlan plan + Environment.NewLine)
+                        let outcomes =
+                            match context with
+                            | None -> []
+                            | Some c ->
+                                let records, _ = c.Gate.Records()
+                                let gateUncertain, gateDeferred = V2TendWrite.gateHolds records
+                                let applied =
+                                    V2TendWrite.apply c
+                                        { Plan = plan; Snapshot = snapshot; OwnUncertain = ownUncertain; GateUncertain = gateUncertain; GateDeferred = gateDeferred }
+                                let all = gateOutcomes @ sweepOutcomes @ applied
+                                privateJson deps.SyncDirectory (command.PlanPath + ".outcomes.json") (V2TendWrite.encodeOutcomes all + Environment.NewLine)
+                                all
+                        let count result = outcomes |> List.filter (fun (o: V2TendWrite.Outcome) -> o.Result = result) |> List.length
+                        let seconds = deps.Clock.GetElapsedTime(started).TotalSeconds
+                        printfn "board-v2 tend: %s; cards=%d apply=%d wouldApply=%d close=%d wouldClose=%d deferred=%d propose=%d refuse=%d; written=%d noop=%d refused=%d uncertain=%d; requests=%d graphqlPoints=%d rest=%d; seconds=%.1f"
+                            (if context.IsSome then "apply" else "plan-only")
+                            snapshot.Cards.Length plan.Apply.Length plan.WouldApply.Length plan.Close.Length plan.WouldClose.Length
+                            plan.Deferred.Length plan.Propose.Length plan.Refuse.Length (count "written") (count "noop") (count "refused") (count "uncertain")
+                            cost.Requests cost.GraphQlPoints cost.RestCalls seconds
+                        if count "uncertain" > 0 then 3 else 0
+                finally
+                    lease |> Option.iter (fun l -> l.Dispose())
         with error ->
             eprintfn "fsgg-coord-engine: board-v2 tend refused: %s" (error.GetType().Name)
             1
 
-    let runTendWithTransport (transport: IGitHubTransport) (clock: TimeProvider) (arguments: string list) =
+    let runTend (deps: TendDependencies) (arguments: string list) =
         match tendSyntax arguments with
         | Error message ->
             eprintfn "fsgg-coord-engine: board-v2 tend refused: %s" message
             1
-        | Ok command -> executeTend transport clock command
+        | Ok command -> executeTend deps command
+
+    let private readOnlyDependencies (transport: IGitHubTransport) (clock: TimeProvider) : TendDependencies =
+        { Reads = transport
+          SendOnce = fun (request: Transport.Request) -> Error(Errors.Malformed(request.Subject, "no mutation sender"))
+          Clock = clock
+          Wait = ignore
+          WriterLock = Error "a plan-only run takes no writer lock"
+          ConfigHome = Path.Combine(Path.GetTempPath(), "fsgg-tend-no-config-" + Guid.NewGuid().ToString("N"))
+          StateHome = Path.Combine(Path.GetTempPath(), "fsgg-tend-no-state-" + Guid.NewGuid().ToString("N"))
+          SyncDirectory = syncMigrationDirectory }
+
+    let runTendWithTransport (transport: IGitHubTransport) (clock: TimeProvider) (arguments: string list) =
+        runTend (readOnlyDependencies transport clock) arguments
 
     let validateInvocation arguments =
         match arguments with
@@ -954,7 +1057,21 @@ module BoardV2Application =
                         1
                     else
                         use transport = new HttpTransport(apiBaseFromEnv (), token)
-                        executeTend transport TimeProvider.System command)
+                        let home = Environment.GetFolderPath Environment.SpecialFolder.UserProfile
+                        let xdg (name: string) (fallback: string) =
+                            match Environment.GetEnvironmentVariable name with
+                            | value when not (String.IsNullOrWhiteSpace value) && Path.IsPathRooted value -> value
+                            | _ -> Path.Combine(home, fallback)
+                        runTend
+                            { Reads = transport
+                              SendOnce = (transport :> IProviderGitHubTransport).SendMutationOnce
+                              Clock = TimeProvider.System
+                              Wait = fun span -> Threading.Thread.Sleep span
+                              WriterLock = (try Ok(productionWriterLock tendProject V2WriterLock.migrationLegacyName) with error -> Error error.Message)
+                              ConfigHome = xdg "XDG_CONFIG_HOME" ".config"
+                              StateHome = xdg "XDG_STATE_HOME" (Path.Combine(".local", "state"))
+                              SyncDirectory = syncMigrationDirectory }
+                            rest)
         | "board-v2" :: ((command :: _) as rest) when command.StartsWith("migration-", StringComparison.Ordinal) ->
             Some(
                 try

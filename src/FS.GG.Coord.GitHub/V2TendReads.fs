@@ -31,22 +31,27 @@ module V2TendReads =
 
     let readCeiling (rows: int) = 8 + (rows + 49) / 50 + (rows + 24) / 25
 
-    // The kinds of a GraphQL document's top-level definitions ("query", "mutation", "subscription",
-    // "fragment"; a bare selection set is a query), or None when the document cannot be read that far:
-    // comments, strings and block strings are skipped, and braces and parentheses must balance.
-    let operationKinds (document: string) : string list option =
-        let text = if isNull document then "" else document
+    type Operation = { Kind: string; RootFields: string list }
+
+    type Document = { Operations: Operation list; HasStringLiteral: bool }
+
+    type private Token =
+        | Name of string
+        | Punct of char
+        | Spread
+        | StringToken
+
+    // Lex a GraphQL document: comments and commas are skipped; strings and block strings become one token.
+    let private lex (text: string) : Token list option =
         let n = text.Length
-        let kinds = Collections.Generic.List<string>()
+        let tokens = Collections.Generic.List<Token>()
         let mutable i = 0
-        let mutable braces = 0
-        let mutable parens = 0
-        let mutable between = true
         let mutable ok = true
         while ok && i < n do
             let c = text.[i]
             if c = '#' then
                 while i < n && text.[i] <> '\n' && text.[i] <> '\r' do i <- i + 1
+            elif Char.IsWhiteSpace c || c = ',' || c = '\uFEFF' then i <- i + 1
             elif c = '"' then
                 if i + 2 < n && text.[i + 1] = '"' && text.[i + 2] = '"' then
                     let mutable j = i + 3
@@ -55,7 +60,10 @@ module V2TendReads =
                         if text.[j] = '\\' && j + 3 < n && text.[j + 1] = '"' && text.[j + 2] = '"' && text.[j + 3] = '"' then j <- j + 4
                         elif text.[j] = '"' && text.[j + 1] = '"' && text.[j + 2] = '"' then closed <- true
                         else j <- j + 1
-                    if closed then i <- j + 3 else ok <- false
+                    if closed then
+                        tokens.Add StringToken
+                        i <- j + 3
+                    else ok <- false
                 else
                     let mutable j = i + 1
                     let mutable closed = false
@@ -65,36 +73,141 @@ module V2TendReads =
                         | '"' -> closed <- true
                         | '\n' | '\r' -> ok <- false
                         | _ -> j <- j + 1
-                    if closed then i <- j + 1 else ok <- false
-            elif c = '{' then
-                if braces = 0 && parens = 0 && between then
-                    kinds.Add "query"
-                    between <- false
-                braces <- braces + 1
-                i <- i + 1
-            elif c = '}' then
-                braces <- braces - 1
-                if braces < 0 then ok <- false
-                elif braces = 0 && parens = 0 then between <- true
-                i <- i + 1
-            elif c = '(' then
-                parens <- parens + 1
-                i <- i + 1
-            elif c = ')' then
-                parens <- parens - 1
-                if parens < 0 then ok <- false
-                i <- i + 1
+                    if closed then
+                        tokens.Add StringToken
+                        i <- j + 1
+                    else ok <- false
+            elif c = '.' then
+                if i + 2 < n && text.[i + 1] = '.' && text.[i + 2] = '.' then
+                    tokens.Add Spread
+                    i <- i + 3
+                else ok <- false
             elif Char.IsLetter c || c = '_' then
                 let start = i
                 while i < n && (Char.IsLetterOrDigit text.[i] || text.[i] = '_') do i <- i + 1
-                if braces = 0 && parens = 0 && between then
-                    match text.Substring(start, i - start) with
-                    | "query" | "mutation" | "subscription" | "fragment" as kind ->
-                        kinds.Add kind
-                        between <- false
+                tokens.Add(Name(text.Substring(start, i - start)))
+            elif "{}()[]:=!$@&|-+".IndexOf c >= 0 || Char.IsDigit c then
+                tokens.Add(Punct c)
+                i <- i + 1
+            else ok <- false
+        if ok then Some(List.ofSeq tokens) else None
+
+    // Skip one balanced group that starts at `index` with `opening`; the index after its closing token.
+    let private skipGroup (tokens: Token[]) (index: int) (opening: char) (closing: char) =
+        let mutable depth = 0
+        let mutable i = index
+        let mutable fin = -1
+        while fin < 0 && i < tokens.Length do
+            match tokens.[i] with
+            | Punct c when c = opening -> depth <- depth + 1
+            | Punct c when c = closing ->
+                depth <- depth - 1
+                if depth = 0 then fin <- i + 1
+            | _ -> ()
+            i <- i + 1
+        fin
+
+    // The root fields of one selection set starting at `index` (a `{`): field names after any alias, `...`
+    // for a fragment spread or inline fragment. Returns the fields and the index after the closing `}`.
+    let private rootSelection (tokens: Token[]) (index: int) : (string list * int) option =
+        let fields = Collections.Generic.List<string>()
+        let mutable i = index + 1
+        let mutable fin = -1
+        let mutable ok = true
+        let skipArgumentsAndDirectives () =
+            let mutable go = true
+            while ok && go && i < tokens.Length do
+                match tokens.[i] with
+                | Punct '(' ->
+                    let next = skipGroup tokens i '(' ')'
+                    if next < 0 then ok <- false else i <- next
+                | Punct '@' when i + 1 < tokens.Length ->
+                    match tokens.[i + 1] with
+                    | Name _ -> i <- i + 2
                     | _ -> ok <- false
-            else i <- i + 1
-        if ok && braces = 0 && parens = 0 && between && kinds.Count > 0 then Some(List.ofSeq kinds) else None
+                | _ -> go <- false
+        while ok && fin < 0 && i < tokens.Length do
+            match tokens.[i] with
+            | Punct '}' -> fin <- i + 1
+            | Spread ->
+                fields.Add "..."
+                i <- i + 1
+                // `...Name` or `... on Type` with directives and a selection set
+                match (if i < tokens.Length then Some tokens.[i] else None) with
+                | Some(Name "on") -> i <- i + 2
+                | Some(Name _) -> i <- i + 1
+                | _ -> ()
+                skipArgumentsAndDirectives ()
+                match (if i < tokens.Length then Some tokens.[i] else None) with
+                | Some(Punct '{') ->
+                    let next = skipGroup tokens i '{' '}'
+                    if next < 0 then ok <- false else i <- next
+                | _ -> ()
+            | Name first ->
+                let field =
+                    if i + 2 < tokens.Length && tokens.[i + 1] = Punct ':' then
+                        match tokens.[i + 2] with
+                        | Name real ->
+                            i <- i + 3
+                            Some real
+                        | _ -> None
+                    else
+                        i <- i + 1
+                        Some first
+                match field with
+                | None -> ok <- false
+                | Some name ->
+                    fields.Add name
+                    skipArgumentsAndDirectives ()
+                    match (if i < tokens.Length then Some tokens.[i] else None) with
+                    | Some(Punct '{') ->
+                        let next = skipGroup tokens i '{' '}'
+                        if next < 0 then ok <- false else i <- next
+                    | _ -> ()
+            | _ -> ok <- false
+        if ok && fin > 0 then Some(List.ofSeq fields, fin) else None
+
+    let parseDocument (document: string) : Document option =
+        match lex (if isNull document then "" else document) with
+        | None -> None
+        | Some list ->
+            let tokens = Array.ofList list
+            let operations = Collections.Generic.List<Operation>()
+            let mutable i = 0
+            let mutable ok = true
+            while ok && i < tokens.Length do
+                let kind, start =
+                    match tokens.[i] with
+                    | Punct '{' -> Some "query", i
+                    | Name("query" | "mutation" | "subscription" | "fragment" as kind) ->
+                        // Skip the name, variable definitions and directives up to the selection set.
+                        let mutable j = i + 1
+                        let mutable found = -1
+                        while found < 0 && j < tokens.Length do
+                            match tokens.[j] with
+                            | Punct '{' -> found <- j
+                            | Punct '(' ->
+                                let next = skipGroup tokens j '(' ')'
+                                if next < 0 then j <- tokens.Length else j <- next
+                            | Punct '}' -> j <- tokens.Length
+                            | _ -> j <- j + 1
+                        (if found < 0 then None else Some kind), found
+                    | _ -> None, -1
+                match kind with
+                | None -> ok <- false
+                | Some kind ->
+                    match rootSelection tokens start with
+                    | None -> ok <- false
+                    | Some(fields, next) ->
+                        operations.Add { Kind = kind; RootFields = fields }
+                        i <- next
+            if ok && operations.Count > 0 then
+                Some { Operations = List.ofSeq operations; HasStringLiteral = list |> List.contains StringToken }
+            else None
+
+    // The kinds of a GraphQL document's top-level definitions; None when the document does not parse.
+    let operationKinds (document: string) : string list option =
+        parseDocument document |> Option.map (fun d -> d.Operations |> List.map (fun o -> o.Kind))
 
     let private maximumItems = 500
 
@@ -172,17 +285,20 @@ module V2TendReads =
             match deliveries with
             | [] -> Unlinked "no-delivery"
             | [ delivery, card ] ->
-                if prOpen && not card.Open then Unlinked "delivery-closed"
+                // linkage_of() lists every failure; a `U` failure means no verdict, so Unknown is preferred over
+                // an R1 failure when both apply (as board-linkage and the merge gate read the list).
+                let parentUnknown =
+                    match card.Parent |> Option.map find with
+                    | Some(Some p) -> p.Unreadable
+                    | Some None -> anonymousUnreadable
+                    | None -> false
+                if parentUnknown then Unknown "r1-parent-unreadable"
+                elif prOpen && not card.Open then Unlinked "delivery-closed"
                 elif prOpen && card.Status = Some V2Tend.Done then Unlinked "delivery-done"
                 else
-                    match card.Parent with
-                    | None -> Unlinked "no-parent-outcome"
-                    | Some parent ->
-                        match find parent with
-                        | Some p when p.Unreadable -> Unknown "r1-parent-unreadable"
-                        | None when anonymousUnreadable -> Unknown "r1-parent-unreadable"
-                        | Some p when p.WorkLevel = Some V2Tend.Outcome -> Linked delivery
-                        | _ -> Unlinked "no-parent-outcome"
+                    match card.Parent |> Option.bind find with
+                    | Some p when p.WorkLevel = Some V2Tend.Outcome -> Linked delivery
+                    | _ -> Unlinked "no-parent-outcome"
             | _ -> Unlinked "multiple-deliveries"
 
     let bodySections (body: string) =
