@@ -2013,6 +2013,59 @@ def default_board_custody_root() -> pathlib.Path:
     return pathlib.Path(state) / "fsgg" / "board-gate"
 
 
+# The post-merge board-tend trigger (board-reconciler design §8, #5136 PR 8). After a confirmed merge the gate
+# writes a `pending-post-merge` marker in the reconciler's state directory and then starts the fdev user unit
+# without waiting. The marker is what keeps a run from being swallowed: the unit's wrapper runs whenever it finds
+# the marker, ignoring its timer-run minimum interval, and clears it only after a run that started after it was
+# written. Best effort: nothing here can raise or change the merge outcome.
+BOARD_TEND_UNIT = "fsgg-board-tend.service"
+BOARD_TEND_MARKER = "pending-post-merge"
+BOARD_TEND_START_TIMEOUT_SECONDS = 30
+
+
+def default_board_tend_state_root() -> pathlib.Path:
+    state = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
+    return pathlib.Path(state) / "fsgg" / "board-tend"
+
+
+def board_tend_post_merge(state_root: pathlib.Path | None = None, run: Callable[..., Any] = subprocess.run) -> str:
+    """Write the marker, then `systemctl --user start --no-block fsgg-board-tend.service`. Returns a fixed word:
+    started, start-failed, marker-failed or marker-failed+start-failed. Never raises."""
+    outcome = "started"
+    try:
+        root = state_root if state_root is not None else default_board_tend_state_root()
+        root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=root, prefix=f".{BOARD_TEND_MARKER}.")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(datetime.now(timezone.utc).isoformat().replace("+00:00", "Z") + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp, root / BOARD_TEND_MARKER)  # a new inode each time: the unit tells markers apart by identity
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+        directory = os.open(root, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    except Exception:
+        outcome = "marker-failed"
+    try:
+        done = run(["systemctl", "--user", "start", "--no-block", BOARD_TEND_UNIT], capture_output=True, text=True,
+                   timeout=BOARD_TEND_START_TIMEOUT_SECONDS, check=False)
+        started = done.returncode == 0
+    except Exception:
+        started = False
+    if started:
+        return outcome
+    return "start-failed" if outcome == "started" else "marker-failed+start-failed"
+
+
 def board_origin_is_github(url: str) -> bool:
     """True only for FS-GG/.github on github.com: https://github.com/FS-GG/.github[.git][/] (no userinfo, port,
     query or fragment), ssh://git@github.com/FS-GG/.github[.git] or git@github.com:FS-GG/.github[.git].
@@ -2575,6 +2628,7 @@ def summarize(
     board_custody: BoardCustody | None = None,
     board_lock: BoardWriterLock | None = None,
     delivery_marker: str = "advisory",
+    board_tend_trigger: Callable[[], str] | None = None,
 ) -> tuple[int, Summary]:
     if board_gate not in BOARD_GATE_MODES:
         raise RuntimeError("board gate mode is not advisory or enforce")
@@ -2787,6 +2841,13 @@ def summarize(
             board["boardTransition"] = board_transition(
                 api, board_rules, repo, before.get("body"), gate.delivery, board_gate, pr_number, board_custody,
                 board_lock, outcome_time_of(merged_pr))
+        # Then, for every confirmed merge and only in enforce mode, ask the fdev reconciler for one more run. It
+        # is announced on stderr, not in the result, so the result schema is unchanged.
+        if board_tend_trigger is not None:
+            try:
+                print(f"fsgg routine board tend trigger: {board_tend_trigger()}", file=sys.stderr)
+            except Exception:
+                print("fsgg routine board tend trigger: start-failed", file=sys.stderr)
 
     request = merge_effect_request(
         repo, pr_number, expected_head, base_ref, base_sha, merge_method,
@@ -3289,6 +3350,7 @@ def main(argv: list[str]) -> int:
             board_custody=(BoardCustody(pathlib.Path(args.board_gate_custody) if args.board_gate_custody
                                         else default_board_custody_root()) if args.board_gate == "enforce" else None),
             board_lock=board_lock_from_args(args),
+            board_tend_trigger=(board_tend_post_merge if args.board_gate == "enforce" else None),
         )
     except (RuntimeError, AmbiguousWrite) as error:
         code = 3

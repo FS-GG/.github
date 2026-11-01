@@ -1,0 +1,11 @@
+# Rendered by deployment/fdev-board-tend/install.py from fsgg-board-tend-daily.timer.in (Refs FS-GG/.github#5136).
+[Unit]
+Description=Daily FS-GG board-v2 tend observation record
+
+[Timer]
+OnCalendar=*-*-* 00:30:00 UTC
+Persistent=true
+Unit=fsgg-board-tend-daily.service
+
+[Install]
+WantedBy=timers.target

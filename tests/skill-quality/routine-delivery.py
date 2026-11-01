@@ -12,6 +12,7 @@ import subprocess
 import copy
 import tempfile
 import shutil
+import stat
 from types import SimpleNamespace
 import sys
 import unittest
@@ -4386,6 +4387,121 @@ class BoardWriterLockReplayTests(unittest.TestCase):
         self.assertEqual((self.state(7), self.state(1)), ("verified", "verified"))
         self.assertIn("fsgg routine board replay: verified=1", log.getvalue())
         self.assertNotIn("#901", log.getvalue())
+
+
+class BoardTendTriggerTests(unittest.TestCase):
+    """The post-merge board-tend trigger (board-reconciler design §8, #5136 PR 8): a `pending-post-merge` marker,
+    then `systemctl --user start --no-block fsgg-board-tend.service`, enforce mode only, never able to change
+    the merge outcome."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.state = pathlib.Path(tmp.name) / "board-tend"
+
+    def trigger(self, returncode=0, error=None):
+        calls = []
+
+        def run(command, **kwargs):
+            calls.append((command, kwargs))
+            if error is not None:
+                raise error
+            return SimpleNamespace(returncode=returncode)
+        return calls, run
+
+    def test_marker_is_written_before_the_unit_starts_and_start_is_non_blocking(self):
+        seen = []
+        calls, run = self.trigger()
+
+        def ordered(command, **kwargs):
+            seen.append((self.state / MODULE.BOARD_TEND_MARKER).is_file())
+            return run(command, **kwargs)
+        self.assertEqual(MODULE.board_tend_post_merge(self.state, ordered), "started")
+        self.assertEqual(seen, [True], "the marker must exist before the start")
+        self.assertEqual(calls[0][0], ["systemctl", "--user", "start", "--no-block", "fsgg-board-tend.service"])
+        self.assertLessEqual(calls[0][1]["timeout"], 30)
+        self.assertEqual(stat.S_IMODE(os.stat(self.state).st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE(os.stat(self.state / MODULE.BOARD_TEND_MARKER).st_mode), 0o600)
+        self.assertEqual([p.name for p in self.state.iterdir()], [MODULE.BOARD_TEND_MARKER], "no temp file is left behind")
+
+    def test_every_merge_writes_a_new_marker_identity(self):
+        _, run = self.trigger()
+        MODULE.board_tend_post_merge(self.state, run)
+        first = os.stat(self.state / MODULE.BOARD_TEND_MARKER)
+        MODULE.board_tend_post_merge(self.state, run)
+        second = os.stat(self.state / MODULE.BOARD_TEND_MARKER)
+        self.assertNotEqual((first.st_ino, first.st_mtime_ns), (second.st_ino, second.st_mtime_ns))
+
+    def test_failures_are_reported_never_raised(self):
+        for name, (returncode, error), expected in (
+                ("nonzero", (5, None), "start-failed"),
+                ("no systemctl", (0, FileNotFoundError("systemctl")), "start-failed"),
+                ("timeout", (0, subprocess.TimeoutExpired("systemctl", 30)), "start-failed")):
+            with self.subTest(name):
+                _, run = self.trigger(returncode, error)
+                self.assertEqual(MODULE.board_tend_post_merge(self.state, run), expected)
+        blocker = self.state.parent / "blocked"
+        blocker.write_text("a file where the state directory must be", encoding="utf-8")
+        calls, run = self.trigger()
+        self.assertEqual(MODULE.board_tend_post_merge(blocker / "board-tend", run), "marker-failed")
+        self.assertEqual(len(calls), 1, "a marker failure still asks the unit to run")
+        _, run = self.trigger(5)
+        self.assertEqual(MODULE.board_tend_post_merge(blocker / "board-tend", run), "marker-failed+start-failed")
+
+    def test_default_state_root_follows_xdg_state_home(self):
+        with mock.patch.dict(os.environ, {"XDG_STATE_HOME": "/state"}, clear=True):
+            self.assertEqual(MODULE.default_board_tend_state_root(), pathlib.Path("/state/fsgg/board-tend"))
+
+    def test_unit_name_matches_the_deployed_template(self):
+        self.assertTrue((ROOT / "deployment/fdev-board-tend" / (MODULE.BOARD_TEND_UNIT + ".in")).is_file())
+        runner = (ROOT / "deployment/fdev-board-tend/fsgg-board-tend-run.py").read_text(encoding="utf-8")
+        self.assertIn(f'"{MODULE.BOARD_TEND_MARKER}"', runner)
+
+    # ---- through the gate ----
+
+    def gate(self, mode, trigger, *, refs=("Refs #900", "Refs #800")):
+        merge = "Refs #900" in refs
+        body = board_body(*refs)
+        pr = board_routine_pr(body)
+        before = board_item("In progress")
+        api = BoardApi([pr, pr, merged()] if merge else [pr, pr], [{"merged": True, "sha": MERGE}] if merge else [],
+                       body=body, items=[before, before, board_item("In review")])
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        directory = pathlib.Path(tmp.name)
+        lock = MODULE.BoardWriterLock(MODULE.board_writer_lock_paths(directory / "lock", directory / "legacy"), wait=0)
+        with contextlib.redirect_stderr(io.StringIO()) as log, mock.patch.object(MODULE, "board_enforce_allowed", return_value=True):
+            code, result = MODULE.summarize(
+                api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD, merge_method="squash",
+                publication_required=False, apply=True, board_gate=mode, board_rules_loader=lambda: BOARD_RULES,
+                board_custody=MODULE.BoardCustody(directory / "custody") if mode == "enforce" else None,
+                board_lock=lock if mode == "enforce" else None, board_tend_trigger=trigger)
+        return code, result, log.getvalue()
+
+    def test_enforce_merge_triggers_exactly_once_and_reports_on_stderr_only(self):
+        fired = []
+        code, result, log = self.gate("enforce", lambda: fired.append(1) or "started")
+        self.assertEqual((code, result.outcome, result.boardTransition), (0, "delivered", "written"))
+        self.assertEqual(fired, [1])
+        self.assertIn("fsgg routine board tend trigger: started", log)
+        self.assertNotIn("tend", json.dumps(asdict(result)), "the result schema is unchanged")
+
+    def test_no_trigger_when_the_gate_refuses_before_any_merge(self):
+        fired = []
+        code, result, _ = self.gate("enforce", lambda: fired.append(1) or "started", refs=("Refs #800",))
+        self.assertEqual((code, result.outcome, result.attempts), (2, "refused", 0))
+        self.assertEqual(fired, [])
+
+    def test_a_raising_trigger_cannot_change_the_merge_outcome(self):
+        def broken():
+            raise OSError("no session bus")
+        code, result, log = self.gate("enforce", broken)
+        self.assertEqual((code, result.outcome, result.codeDelivery, result.boardTransition), (0, "delivered", "delivered", "written"))
+        self.assertIn("fsgg routine board tend trigger: start-failed", log)
+
+    def test_command_line_wires_the_trigger_to_enforce_only(self):
+        source = pathlib.Path(MODULE.__file__).read_text(encoding="utf-8")
+        self.assertIn('board_tend_trigger=(board_tend_post_merge if args.board_gate == "enforce" else None)', source)
 
 
 if __name__ == "__main__":

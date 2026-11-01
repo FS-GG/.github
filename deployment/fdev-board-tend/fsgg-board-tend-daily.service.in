@@ -1,0 +1,13 @@
+# Rendered by deployment/fdev-board-tend/install.py from fsgg-board-tend-daily.service.in (Refs FS-GG/.github#5136).
+# Local and read-only: summarises yesterday's plan-only runs into the private daily record. It posts nothing.
+[Unit]
+Description=FS-GG board-v2 tend daily observation record (Refs FS-GG/.github#5136)
+
+[Service]
+Type=oneshot
+WorkingDirectory=@WORKDIR@
+Environment=XDG_STATE_HOME=%h/.local/state
+UMask=0077
+NoNewPrivileges=yes
+TimeoutStartSec=120
+ExecStart=/usr/bin/python3 -I @LIBEXEC@/fsgg-board-tend-run.py summarize --date yesterday

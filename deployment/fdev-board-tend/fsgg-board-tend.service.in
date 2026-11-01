@@ -1,0 +1,31 @@
+# Rendered by deployment/fdev-board-tend/install.py from fsgg-board-tend.service.in (Refs FS-GG/.github#5136, §12 PR 8).
+# Do not edit the installed copy; change the template and run `install.py units --force` again.
+[Unit]
+Description=FS-GG board-v2 tend, @MODE@ (Refs FS-GG/.github#5136)
+Documentation=https://github.com/FS-GG/.github/blob/main/docs/coordination/board-tend-fdev-units.md
+
+[Service]
+# exec, not oneshot: RuntimeMaxSec does not apply to a oneshot service.
+Type=exec
+# A fixed directory that is not a git checkout. FSGG_KIT_ROOT below is the pin; if it were ever unset the engine
+# would fall back to this directory's git toplevel, find none and keep every contract-gated rule refused.
+WorkingDirectory=@WORKDIR@
+# The installed kit root the engine reads fsgg:board-tend-contract/v1 under (#5188 F1). It is populated from the
+# same release as the engine below (install.py kit-root) and is never a checkout.
+Environment=FSGG_KIT_ROOT=@KIT_ROOT@
+# The shared Project 3 writer lock is flock(2) on %t/fsgg/board-writer-PVT_kwDOEYAWY84Bldpa.lock (LOCK_NB, taken by
+# the engine only under --apply). Pin where %t points and keep the directory across runs.
+Environment=XDG_RUNTIME_DIR=%t
+Environment=XDG_CONFIG_HOME=%h/.config
+Environment=XDG_STATE_HOME=%h/.local/state
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=DOTNET_NOLOGO=1
+RuntimeDirectory=fsgg
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+# Everything the run writes is private: 0700 directories under %h/.local/state/fsgg/board-tend-out.
+UMask=0077
+NoNewPrivileges=yes
+# Deliberately no PrivateTmp: during the transition the writers also take the legacy lock at the literal /tmp path.
+RuntimeMaxSec=@RUNTIME_MAX@
+ExecStart=/usr/bin/python3 -I @LIBEXEC@/fsgg-board-tend-run.py run --mode @MODE@ --engine-path @ENGINE@ --credentials @CREDENTIALS@ --workdir @WORKDIR@
