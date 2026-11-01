@@ -1,7 +1,7 @@
-# Mutation legs for board-v2 tend (FS-GG/.github#5136 phase 2 PRs 2-5; design §3, §5, §6, §8, §10).
-# Each leg reverts ONE guard in V2Tend.fs, V2TendReads.fs, V2TendWrite.fs, V2TendPropose.fs or the tend CLI and requires the V2Tend
-# tests (derivation, reads, writer; `leg.sh`) or the tend CLI tests (`leg.sh cli`) to fail.
-#
+# Mutation legs for board-v2 tend and its shared write discipline (FS-GG/.github#5136 phase 2 PRs 2-5, #5123; design §3, §5, §6, §8, §10).
+# Each leg reverts ONE guard in V2Tend.fs, V2TendReads.fs, V2TendWrite.fs, V2TendPropose.fs, V2Migration.fs or the board-v2 CLI and requires the V2Tend
+# tests (derivation, reads, writer; `leg.sh`), the tend CLI tests (`leg.sh cli`) or the migration-apply tests
+# (`leg.sh migration`) to fail.
 #     TMPDIR=<private> scripts/gate-mutate.py --specs tests/coord-board-tend-mutation/specs.yml
 #
 # On demand (each leg rebuilds and runs the V2Tend tests); tests/coord-board-tend-mutation/run.sh checks on every
@@ -960,6 +960,104 @@ mutations:
                   grouped
     breaks: >-
       a child listed before its parent is deferred, so O1 needs a second run
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: M1/item-precondition
+    gate: "each item-scoped effect re-reads its item and refuses a change"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh", "migration"]
+    target: src/FS.GG.Coord.Cli/BoardV2Application.fs
+    find: |-
+      if not (V2Migration.sameItem expectedItem observedItem) then Error "determining-facts-changed-before-effect"
+    replace: |-
+      if false then Error "determining-facts-changed-before-effect"
+    breaks: >-
+      an item a person changed since the group's base read is written
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: M2/item-readback-exact
+    gate: "an item readback may move only the selected value"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh", "migration"]
+    target: src/FS.GG.Coord.GitHub/V2Migration.fs
+    find: |-
+      | [ initialized ] when samePlanningValue desired initialized && sortedValues others = sortedValues before.Values ->
+    replace: |-
+      | [ initialized ] when samePlanningValue desired initialized ->
+    breaks: >-
+      a readback showing a concurrent change on the item is accepted as the effect
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: M3/group-readback-exact
+    gate: "the group's complete readback may differ only by the group's effects"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh", "migration"]
+    target: src/FS.GG.Coord.GitHub/V2Migration.fs
+    find: |-
+      if present && snapshotTokens normalized = snapshotTokens before then Ok()
+    replace: |-
+      if present then Ok()
+    breaks: >-
+      a determining fact that changed during the group goes unnoticed
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: M4/effect-budget
+    gate: "max-effects stops the invocation"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh", "migration"]
+    target: src/FS.GG.Coord.Cli/BoardV2Application.fs
+    find: |-
+      | _ when sent >= maxEffects ->
+    replace: |-
+      | _ when false ->
+    breaks: >-
+      an invocation sends past its effect budget
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: M5/group-within-budget
+    gate: "a group never exceeds the remaining effect budget"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh", "migration"]
+    target: src/FS.GG.Coord.Cli/BoardV2Application.fs
+    find: |-
+      List.truncate (min migrationPlanningGroupSize (maxEffects - sent))
+    replace: |-
+      List.truncate migrationPlanningGroupSize
+    breaks: >-
+      a group runs past the effect budget
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: M6/group-size
+    gate: "a group holds at most 25 initializations between complete reads"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh", "migration"]
+    target: src/FS.GG.Coord.Cli/BoardV2Application.fs
+    find: |-
+      let private migrationPlanningGroupSize = 25
+    replace: |-
+      let private migrationPlanningGroupSize = 1000
+    breaks: >-
+      a long run of initializations goes without any complete read
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: W28/uncertain-in-run
+    gate: "a field write uncertain in this run skips the item's close in the same run"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      | None when uncertainNow.Contains closure.ItemId ->
+    replace: |-
+      | None when false ->
+    breaks: >-
+      a Delivery is closed in the same run as an uncertain field write on its card
     anchor:
       pattern: 'board-tend leg: \d+ passed, \d+ failed'
       produced_by: tests/coord-board-tend-mutation/leg.sh

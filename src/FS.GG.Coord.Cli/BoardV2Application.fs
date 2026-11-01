@@ -300,7 +300,7 @@ module BoardV2Application =
 
     type private MigrationCommand =
         | MigrationPrepare of scopePath: string * reportPath: string
-        | MigrationApply of preparedPath: string * expectedSha256: string * accountableOwner: string * selectionReference: string * windowUntil: DateTimeOffset
+        | MigrationApply of preparedPath: string * expectedSha256: string * accountableOwner: string * selectionReference: string * windowUntil: DateTimeOffset * maxEffects: int
         | MigrationReadback of preparedPath: string
 
     let private migrationSyntax (arguments: string list) : Result<MigrationCommand, string> =
@@ -318,7 +318,8 @@ module BoardV2Application =
                 match command with
                 | "migration-prepare" when exact [ "--scope-file"; "--report-file" ] -> Ok(MigrationPrepare(path "--scope-file", path "--report-file"))
                 | "migration-readback" when exact [ "--prepared-file" ] -> Ok(MigrationReadback(path "--prepared-file"))
-                | "migration-apply" when exact [ "--prepared-file"; "--prepared-sha256"; "--accountable-owner"; "--selection-reference"; "--planning-window-until" ] ->
+                | "migration-apply" when exact [ "--prepared-file"; "--prepared-sha256"; "--accountable-owner"; "--selection-reference"; "--planning-window-until" ]
+                                         || exact [ "--prepared-file"; "--prepared-sha256"; "--accountable-owner"; "--selection-reference"; "--planning-window-until"; "--max-effects" ] ->
                     let sha = values["--prepared-sha256"]
                     let owner = values["--accountable-owner"]
                     let reference = values["--selection-reference"]
@@ -328,7 +329,15 @@ module BoardV2Application =
                        || String.IsNullOrWhiteSpace reference || reference.Length > 2048 || (reference |> Seq.exists Char.IsControl)
                        || not (DateTimeOffset.TryParse(values["--planning-window-until"], Globalization.CultureInfo.InvariantCulture, Globalization.DateTimeStyles.None, &expiry)) then
                         Error "migration requires exact prepared digest, accountable selection and bounded planning window"
-                    else Ok(MigrationApply(path "--prepared-file", sha.ToLowerInvariant(), owner, reference, expiry))
+                    else
+                        // Effects per invocation (#5123): at most 500, the invocation's request ceiling.
+                        match values.TryFind "--max-effects" with
+                        | None -> Ok(MigrationApply(path "--prepared-file", sha.ToLowerInvariant(), owner, reference, expiry, 500))
+                        | Some text ->
+                            match Int32.TryParse(text, Globalization.NumberStyles.None, Globalization.CultureInfo.InvariantCulture) with
+                            | true, count when count >= 1 && count <= 500 ->
+                                Ok(MigrationApply(path "--prepared-file", sha.ToLowerInvariant(), owner, reference, expiry, count))
+                            | _ -> Error "--max-effects must be a whole number from 1 to 500"
                 | _ -> Error "unsupported migration command or argument; no effects admitted")
         | [] -> Error "missing migration command"
 
@@ -407,6 +416,8 @@ module BoardV2Application =
            || revision adapter <> Some scope.SourceRevision || revision cli <> Some scope.SourceRevision then
             Error "selected source/adapter/CLI identity differs from the actual executing assemblies"
         else Ok()
+    // Planning-value initializations per group between complete reads (#5123).
+    let private migrationPlanningGroupSize = 25
     let private migrationFresh (connection: V2MigrationTransport.IConnection) (scope: V2Migration.Scope) =
         V2Migration.collect connection.Reads scope |> Result.bind (V2Migration.prepare scope)
     let private migrationStable (connection: V2MigrationTransport.IConnection) (scope: V2Migration.Scope) =
@@ -522,7 +533,7 @@ module BoardV2Application =
                     prepareStage <- "prepared-report-write"
                     privateJson reportPath (V2Migration.encodePrepared ({ prepared with PreparedPath = Some reportPath }))
                     0)
-            | MigrationApply(preparedPath, expectedHash, owner, selection, windowUntil) ->
+            | MigrationApply(preparedPath, expectedHash, owner, selection, windowUntil, maxEffects) ->
                 let raw = privateRead (4L * 1024L * 1024L) preparedPath
                 if migrationDigest raw <> expectedHash then Error "selected-prepared-byte-digest-differs"
                 else
@@ -560,7 +571,9 @@ module BoardV2Application =
                                        cliArtifactSha256 = scope.CliArtifactSha256;
                                        planningWindowUntil = windowUntil;
                                        requestCeiling = 500;
-                                       secondsCeiling = 270 |}
+                                       secondsCeiling = 270;
+                                       maxEffects = maxEffects;
+                                       planningGroupSize = migrationPlanningGroupSize |}
                                 privateJson (Path.Combine(directory, "invocation.json")) (JsonSerializer.Serialize(invocationMetadata))
                                 migrationStable connection scope |> Result.mapError migrationErrorClass
                                 |> Result.bind (fun fresh ->
@@ -568,10 +581,108 @@ module BoardV2Application =
                                     elif not fresh.Snapshot.CanUpdate then Error "native-project-update-capability-absent"
                                     else
                                         let admission: MigrationAdmission = { Prepared = { fresh with PreparedPath = Some boundPath }; Directory = directory; WindowUntil = windowUntil }
-                                        let rec effects (sequence: int) (expected: V2Migration.Prepared) =
+                                        // #5123: consecutive planning-value initializations run as one bounded group from one
+                                        // complete base read. Each effect re-reads only its item before its send and reads only
+                                        // its item back (at most 8 item reads); the group ends with one complete read that must
+                                        // show exactly the group's effects. Every custody file of the single-effect path is kept.
+                                        let encodeItem (item: V2Migration.Item) =
+                                            JsonSerializer.Serialize(
+                                                {| schema = "fs.gg.board-v2.migration-item/1"; id = item.Id; contentId = item.ContentId; contentKind = item.ContentKind
+                                                   repository = Option.toObj item.Repository; number = Option.toNullable item.Number; updatedAt = item.UpdatedAt
+                                                   archived = item.Archived
+                                                   values = item.Values |> List.map (fun (value: V2Migration.ItemValue) -> {| id = value.Id; fieldId = value.FieldId; kind = value.Kind; value = value.Value |}) |})
+                                        let isPlanning = function V2Migration.InitializePlanningValue _ -> true | _ -> false
+                                        let planningGroup (start: int) (groupBase: V2Migration.Prepared) (group: V2Migration.Change list) : Result<int * V2Migration.Change list, string> =
+                                            let items = Collections.Generic.Dictionary<string, V2Migration.Item>()
+                                            for item in groupBase.Snapshot.Items do items.[item.Id] <- item
+                                            let rec next (sequence: int) (applied: V2Migration.Change list) (remaining: V2Migration.Change list) =
+                                                match remaining with
+                                                | [] -> Ok(sequence, List.rev applied)
+                                                | _ when clock.GetUtcNow() >= admission.WindowUntil ->
+                                                    if applied.IsEmpty then Error "planning-window-expired" else Ok(sequence, List.rev applied)
+                                                | change :: rest ->
+                                                    let itemId = match change with V2Migration.InitializePlanningValue(_, itemId, _, _) -> itemId | _ -> ""
+                                                    match items.TryGetValue itemId with
+                                                    | false, _ -> Error "group-item-absent-from-base"
+                                                    | true, expectedItem ->
+                                                        V2Migration.collectItem connection.Reads itemId |> Result.mapError migrationErrorClass
+                                                        |> Result.bind (fun observedItem ->
+                                                            if not (V2Migration.sameItem expectedItem observedItem) then Error "determining-facts-changed-before-effect"
+                                                            else
+                                                                V2Migration.request groupBase change |> Result.mapError migrationErrorClass
+                                                                |> Result.bind (fun request ->
+                                                                    let prefix = Path.Combine(directory, sequence.ToString("D3", Globalization.CultureInfo.InvariantCulture))
+                                                                    let exact = match request.Body with Json json -> json | _ -> invalidOp "typed JSON request expected"
+                                                                    privateJson (prefix + "-precondition.json") (V2Migration.encodePrepared groupBase)
+                                                                    privateJson (prefix + "-item-precondition.json") (encodeItem observedItem)
+                                                                    if clock.GetUtcNow() >= admission.WindowUntil then invalidOp "planning window expired before send"
+                                                                    privateJson (prefix + "-intent.json") exact
+                                                                    let intentMetadata =
+                                                                        {| method = request.Method;
+                                                                           path = request.Path;
+                                                                           budget = "GraphQl";
+                                                                           requestSha256 = migrationDigest (Transport.canonicalMutationBytes request);
+                                                                           bodySha256 = migrationDigest (utf8.GetBytes exact);
+                                                                           bodyBytes = utf8.GetByteCount exact;
+                                                                           originalPreparedSha256 = expectedHash;
+                                                                           sequence = sequence;
+                                                                           itemScoped = true |}
+                                                                    privateJson (prefix + "-intent-metadata.json") (JsonSerializer.Serialize(intentMetadata))
+                                                                    // Once this durable intent exists, every later exception remains uncertain.
+                                                                    if clock.GetUtcNow() >= admission.WindowUntil then invalidOp "planning window expired after custody before dispatch"
+                                                                    let outcome = connection.Dispatch(groupBase, change, admission.WindowUntil)
+                                                                    let accepted =
+                                                                        match outcome with
+                                                                        | Ok response ->
+                                                                            privateJson (prefix + "-response.json") response.Body
+                                                                            let receiptMetadata =
+                                                                                {| httpStatus = response.Status;
+                                                                                   responseSha256 = migrationDigest (utf8.GetBytes response.Body);
+                                                                                   responseBytes = utf8.GetByteCount response.Body |}
+                                                                            privateJson (prefix + "-receipt.json") (JsonSerializer.Serialize(receiptMetadata))
+                                                                            migrationResponse change request response
+                                                                        | Error error ->
+                                                                            let errorMetadata =
+                                                                                {| state = "Unknown";
+                                                                                   errorClass = migrationErrorClass error;
+                                                                                   reason = migrationFailureReason error |}
+                                                                            privateJson (prefix + "-error.json") (JsonSerializer.Serialize(errorMetadata))
+                                                                            Error error
+                                                                    let rec observe (attempt: int) : Result<unit, string> =
+                                                                        if clock.GetUtcNow() >= admission.WindowUntil || connection.RemainingTime <= TimeSpan.Zero then Error "Unknown-after-possible-send-observation-window-expired"
+                                                                        else
+                                                                            match V2Migration.collectItem (connection.ObservationReads admission.WindowUntil) itemId with
+                                                                            | Error _ -> Error "Unknown-after-possible-send-readback-unavailable"
+                                                                            | Ok after ->
+                                                                                let observationPrefix =
+                                                                                    if attempt = 1 then prefix
+                                                                                    else prefix + "-visibility-" + attempt.ToString("D3", Globalization.CultureInfo.InvariantCulture)
+                                                                                privateJson (observationPrefix + "-native-readback.json") (encodeItem after)
+                                                                                match accepted with
+                                                                                | Error _ -> Error "Unknown-original-outcome-retained-readback-only"
+                                                                                | Ok returnedId when returnedId <> itemId -> Error "Unknown-original-outcome-retained-readback-only"
+                                                                                | Ok _ ->
+                                                                                    match V2Migration.itemTransition observedItem after change with
+                                                                                    | Ok(V2Migration.ItemEffect settled) ->
+                                                                                        items.[itemId] <- settled
+                                                                                        Ok()
+                                                                                    | Ok V2Migration.ItemPending when attempt < 7 ->
+                                                                                        let delay = TimeSpan.FromSeconds([| 1.0; 1.0; 2.0; 4.0; 8.0; 14.0 |].[attempt - 1])
+                                                                                        if min (admission.WindowUntil - clock.GetUtcNow()) connection.RemainingTime <= delay then
+                                                                                            Error "Unknown-after-possible-send-observation-window-expired"
+                                                                                        else
+                                                                                            System.Threading.Tasks.Task.Delay(delay, clock, System.Threading.CancellationToken.None).GetAwaiter().GetResult()
+                                                                                            observe (attempt + 1)
+                                                                                    | Ok V2Migration.ItemPending -> Error "Unknown-visibility-observation-exhausted-original-intent-retained"
+                                                                                    | Error _ -> Error "Unknown-original-outcome-retained-readback-only"
+                                                                    observe 1 |> Result.bind (fun () -> next (sequence + 1) (change :: applied) rest)))
+                                            next start [] group
+                                        let rec effects (sequence: int) (sent: int) (expected: V2Migration.Prepared) (observedFirst: V2Migration.Prepared option) =
                                             if clock.GetUtcNow() >= admission.WindowUntil then Error "planning-window-expired"
                                             else
-                                                migrationFresh connection expected.Scope |> Result.mapError migrationErrorClass
+                                                (match observedFirst with
+                                                 | Some observed -> Ok observed
+                                                 | None -> migrationFresh connection expected.Scope |> Result.mapError migrationErrorClass)
                                                 |> Result.bind (fun observed ->
                                                     let current = { observed with PreparedPath = expected.PreparedPath }
                                                     if current.Digest <> expected.Digest then Error "determining-facts-changed-before-effect"
@@ -580,6 +691,26 @@ module BoardV2Application =
                                                         | [] ->
                                                             privateJson (Path.Combine(directory, "completed.json")) (V2Migration.encodePrepared current)
                                                             Ok 0
+                                                        | _ when sent >= maxEffects ->
+                                                            // The budget stops before any further send; a new preparation continues the work.
+                                                            privateJson (Path.Combine(directory, "effect-budget.json"))
+                                                                (JsonSerializer.Serialize({| sent = sent; maxEffects = maxEffects; remaining = current.Changes.Length; next = "re-prepare to continue" |}))
+                                                            Error "effect-budget-reached-reprepare-to-continue"
+                                                        | (V2Migration.InitializePlanningValue _ :: _) as changes ->
+                                                            let group = changes |> List.takeWhile isPlanning |> List.truncate (min migrationPlanningGroupSize (maxEffects - sent))
+                                                            planningGroup sequence current group
+                                                            |> Result.bind (fun (nextSequence, applied) ->
+                                                                migrationFresh connection current.Scope |> Result.mapError migrationErrorClass
+                                                                |> Result.mapError (fun _ -> "Unknown-after-group-complete-readback-unavailable")
+                                                                |> Result.bind (fun fresh ->
+                                                                    let groupPrefix = Path.Combine(directory, (nextSequence - 1).ToString("D3", Globalization.CultureInfo.InvariantCulture) + "-group")
+                                                                    privateJson (groupPrefix + "-native-readback.json") (V2Migration.encodeReadback current.Scope fresh.Snapshot)
+                                                                    match V2Migration.validateGroup current.Scope current.Snapshot fresh.Snapshot applied with
+                                                                    | Error _ -> Error "Unknown-group-readback-differs-original-intent-retained"
+                                                                    | Ok() ->
+                                                                        let settled = { fresh with PreparedPath = current.PreparedPath }
+                                                                        privateJson (groupPrefix + "-readback.json") (V2Migration.encodePrepared settled)
+                                                                        effects nextSequence (sent + applied.Length) settled (Some settled)))
                                                         | change :: _ ->
                                                             V2Migration.request current change |> Result.mapError migrationErrorClass
                                                             |> Result.bind (fun request ->
@@ -659,8 +790,8 @@ module BoardV2Application =
                                                                                             observe (attempt + 1)
                                                                                     | Ok V2Migration.PendingVisibility -> Error "Unknown-visibility-observation-exhausted-original-intent-retained"
                                                                                     | Error _ -> Error "Unknown-original-outcome-retained-readback-only"
-                                                                observe 1 |> Result.bind (effects (sequence + 1))))
-                                        effects 1 admission.Prepared)))
+                                                                observe 1 |> Result.bind (fun next -> effects (sequence + 1) (sent + 1) next None)))
+                                        effects 1 0 admission.Prepared None)))
             | MigrationReadback preparedPath ->
                 let original = Path.Combine(preparedPath + ".invocation", "prepared.json")
                 let raw = privateRead (4L * 1024L * 1024L) original
@@ -700,7 +831,7 @@ module BoardV2Application =
                            failedAt = clock.GetUtcNow() |}
                     privateJson (migrationPrepareFailurePath reportPath) (JsonSerializer.Serialize(failureMetadata))
                 with _ -> () // The exit code and stderr remain; no retry or rewrite follows.
-            | MigrationApply(preparedPath, _, _, _, _) ->
+            | MigrationApply(preparedPath, _, _, _, _, _) ->
                 let directory = preparedPath + ".invocation"
                 if ownsInvocation && Directory.Exists directory then
                     try

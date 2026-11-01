@@ -378,6 +378,22 @@ let ``an uncertain close is never resent, and the item's field writes are refuse
     finally Directory.Delete(root, true)
 
 [<Fact>]
+let ``a field write that comes back uncertain skips the item's close in the same run`` () =
+    let root = temporary ()
+    try
+        let board = closureBoard ()
+        board.LoseResponse <- true
+        let effects = [ effect "T1f:d" "PVTI_d" "FS-GG/x#20" V2Tend.TrackField None "Follow-up" [ "T1f" ] [] ]
+        let outcomes = run (harness "run1" root board) (plan effects [ closure ]) (snapshotOf board [])
+        Assert.Equal<(string * string * string) list>(
+            [ "fields", "uncertain", "send: " + "response lost after the send"; "close", "refused", "uncertain-custody" ] |> List.map (fun (k, r, _) -> k, r, ""),
+            outcomes |> List.map (fun o -> o.Kind, o.Result, ""))
+        Assert.Equal("uncertain-custody", (List.last outcomes).Detail)
+        Assert.Equal(1, board.Mutations.Length)
+        Assert.True(board.Items.["PVTI_d"].Open)
+    finally Directory.Delete(root, true)
+
+[<Fact>]
 let ``items are applied in dependency order, so a child listed first still converges in one run`` () =
     let root = temporary ()
     try
