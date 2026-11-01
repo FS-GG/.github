@@ -624,6 +624,7 @@ The contracts that hold the system together:
 | `audio-skills` | Audio | the independently versioned `FS.GG.Audio.Skills` owner package and its browser-audio guidance | SDD scaffold materializer |
 | `game-sim-core` | Game | the `FS.GG.Game.Core` package (BCL-only sim bottom layer, `$(FsGgGameVersion)` axis) | Rendering (template `game`/`sample-pack`), Templates (`fs-gg-fable-game` lockstep profile) |
 | `game-scene-adapter` | Game | the `FS.GG.Game.Render` package (projects sim state onto `FS.GG.UI.Scene` drawables — the one edge back down) | Rendering |
+| `game-render-browser` | Game | the `FS.GG.Game.Render.Browser` Fable package (browser host for renderer selection: SVG, retained SVG, Pixi and Babylon surfaces, driver and conformance; depends on `FS.GG.Game.Render` at the same version and reaches up to `FS.GG.UI.Scene`/`FS.GG.UI.Scene.SvgBrowser`) | none yet (FS.GG.Templates#834 pending) |
 | `fs-gg-audio` | Audio | the `FS.GG.Audio.Core`/`.Host`/`.Engine`/`.Elmish` packages (BCL-only audio bottom layer, `$(FsGgAudioVersion)` axis) | Rendering (template `game`/`sample-pack`, gated) |
 | `keyboard-input` | Rendering | the `FS.GG.UI.KeyboardInput` `Keymap` surface (value type + rebind + `Keymap.resolve`/conflict diagnostics; ships in the fs-gg-ui coherent set @ `0.5.0`, [ADR-0028](adr/0028-keyboard-input-config-mechanism-policy-boundary.md)) | Game (`FS.GG.Game.Render` default command→key keymap) |
 | `shared-build-config` | **.github** | Versioned `FS.GG.Kit` package and receiver materialization/verification ([ADR-0062](adr/0062-versioned-kit-package-replaces-byte-copy-sync.md)) | Receivers declaring the build-config capability |
@@ -656,10 +657,11 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | `governance-config` | FS.GG.Governance | `0.3.0` | `0.3.0` |
 | `governance-reference-gate-set` | FS.GG.Governance | `1.8.0` | `1.8.0` |
 | `fs-gg-ui-template` | FS.GG.Rendering | `0.32.4` | `0.32.4` |
-| `game-sim-core` | FS.GG.Game | `0.17.0` | `0.17.0` |
+| `game-sim-core` | FS.GG.Game | `0.18.0` | `0.18.0` |
 | `wasm-shared-runtime` | FS.GG.Game | `0.7.0` | `0.7.0` |
-| `game-physics-box2d` | FS.GG.Game | `0.17.0` | `0.17.0` |
-| `game-scene-adapter` | FS.GG.Game | `0.17.0` | `0.17.0` |
+| `game-physics-box2d` | FS.GG.Game | `0.18.0` | `0.18.0` |
+| `game-scene-adapter` | FS.GG.Game | `0.18.0` | `0.18.0` |
+| `game-render-browser` | FS.GG.Game | `0.18.0` | `0.18.0` |
 | `fs-gg-audio` | FS.GG.Audio | `0.6.0` | `0.6.0` |
 | `fs-gg-net` | FS.GG.Net | `0.6.0` | `0.6.0` |
 | `coord-engine` | FS-GG/.github | `0.113.0` | `0.113.0` |
@@ -689,7 +691,7 @@ channel in FS.GG.Rendering#238, alongside `game-sim-core`@`0.2.0`; [ADR-0024](ad
 [.github#238](https://github.com/FS-GG/.github/issues/238)): Rendering's template `game`/`sample-pack`
 profiles reach *up* to two BCL-only bottom layers that are siblings of Rendering and themselves reach
 up to nothing (`FS.GG.Game.Core` on the `$(FsGgGameVersion)` axis; `FS.GG.Audio.*` on
-`$(FsGgAudioVersion)`). **Game → Rendering** now runs over two contracts back down: `game-scene-adapter` (`FS.GG.Game.Render` projects sim state onto `FS.GG.UI.Scene` drawables) and — since [.github#365](https://github.com/FS-GG/.github/issues/365) / [ADR-0028](adr/0028-keyboard-input-config-mechanism-policy-boundary.md) — `keyboard-input` (`FS.GG.Game.Render`'s default command→key keymap consumes `FS.GG.UI.KeyboardInput`'s `Keymap` surface @ `0.5.0`; [FS.GG.Game#109](https://github.com/FS-GG/FS.GG.Game/issues/109)). A
+`$(FsGgAudioVersion)`). **Game → Rendering** now runs over three contracts back down: `game-scene-adapter` (`FS.GG.Game.Render` projects sim state onto `FS.GG.UI.Scene` drawables), `game-render-browser` (since 0.18.0, FS.GG.Game#745: `FS.GG.Game.Render.Browser` presents that Scene through the retained `FS.GG.UI.Scene.SvgBrowser` surface and the Pixi/Babylon canvases) and — since [.github#365](https://github.com/FS-GG/.github/issues/365) / [ADR-0028](adr/0028-keyboard-input-config-mechanism-policy-boundary.md) — `keyboard-input` (`FS.GG.Game.Render`'s default command→key keymap consumes `FS.GG.UI.KeyboardInput`'s `Keymap` surface @ `0.5.0`; [FS.GG.Game#109](https://github.com/FS-GG/FS.GG.Game/issues/109)). A
 scaffolded product receives all of these through the template, so Templates consumes them
 transitively — there is no `templates → game` or `templates → audio` edge.
 
