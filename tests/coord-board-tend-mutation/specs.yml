@@ -477,9 +477,9 @@ mutations:
     command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
     target: src/FS.GG.Coord.GitHub/V2TendReads.fs
     find: |-
-      if count > maximumItems then failwithf "board holds %d items, over the %d-item limit" count maximumItems
+      { MaxPages = (maximumItems + 49) / 50; MaxItems = maximumItems }
     replace: |-
-      if false then failwithf "board holds %d items, over the %d-item limit" count maximumItems
+      { MaxPages = (maximumItems + 49) / 50; MaxItems = 100000 }
     breaks: >-
       the reader pages past the 500-item limit (#5119)
     anchor:

@@ -184,56 +184,54 @@ module V2TendReads =
     let readSnapshot (transport: IGitHubTransport) (inputs: Inputs) : Result<V2Tend.Snapshot * Cost, string> =
         let mutable requests = 0
         let mutable points = 0
-        let send (req: Request) (decode: JsonElement -> 'a) : Result<'a, string> =
+        // One counted GraphQL request; the decoder runs only after GraphQl.decode proved the envelope complete.
+        let sendIo (req: Request) (decode: JsonElement -> IoResult<'a>) : IoResult<'a> =
             requests <- requests + 1
             match transport.Send req with
-            | Error error -> Error(req.Subject + ": " + Errors.explain error)
+            | Error error -> Error error
             | Ok response ->
-                match GraphQl.decode req.Subject response.Body (fun data ->
-                        match obj data "rateLimit" with
-                        | Some rate -> points <- points + rate.GetProperty("cost").GetInt32()
-                        | None -> ()
-                        Ok(decode data)) with
-                | Ok value -> Ok value
-                | Error error -> Error(req.Subject + ": " + Errors.explain error)
+                GraphQl.decode req.Subject response.Body (fun data ->
+                    match obj data "rateLimit" with
+                    | Some rate -> points <- points + rate.GetProperty("cost").GetInt32()
+                    | None -> ()
+                    decode data)
+        let send (req: Request) (decode: JsonElement -> 'a) : Result<'a, string> =
+            sendIo req (fun data -> Ok(decode data)) |> Result.mapError (fun error -> req.Subject + ": " + Errors.explain error)
+        let orFail (subject: string) (result: IoResult<'a>) =
+            match result with
+            | Ok value -> value
+            | Error error -> failwith (subject + ": " + Errors.explain error)
         try
-            // (A) board items
-            let items = Collections.Generic.List<JsonElement>()
-            let mutable cursor: string option = None
-            let mutable more = true
-            let mutable total = -1
-            while more do
-                let variables =
-                    [ "owner", VString inputs.Owner; "number", VNumber(double inputs.ProjectNumber) ]
-                    @ (match cursor with Some c -> [ "cursor", VString c ] | None -> [])
-                match send (request itemsDocument variables "tend board items") (fun data ->
-                        let page = data.GetProperty("organization").GetProperty("projectV2").GetProperty("items")
-                        page.GetProperty("totalCount").GetInt32(), page.GetProperty("pageInfo"), [ for n in page.GetProperty("nodes").EnumerateArray() -> n.Clone() ]) with
-                | Error e -> failwith e
-                | Ok(count, info, nodes) ->
-                    if count > maximumItems then failwithf "board holds %d items, over the %d-item limit" count maximumItems
-                    total <- count
-                    items.AddRange nodes
-                    more <- info.GetProperty("hasNextPage").GetBoolean()
-                    cursor <- str info "endCursor"
-                    if more && cursor.IsNone then failwith "board page says hasNextPage without an endCursor"
-                    if items.Count > maximumItems then failwith "board pages exceed the item limit"
-            if items.Count <> total then failwith "board item count differs from totalCount"
-            // (B) open pull requests in the organization
-            let openPrs = Collections.Generic.List<Pr>()
-            let mutable prCursor: string option = None
-            let mutable prMore = true
-            while prMore do
-                let variables = [ "q", VString(sprintf "org:%s is:pr is:open" inputs.Owner) ] @ (match prCursor with Some c -> [ "cursor", VString c ] | None -> [])
-                match send (request searchDocument variables "tend open pull requests") (fun data ->
+            // (A) board items, paged through the typed boundary: a board reporting more than 500 items is refused
+            // on its first page (#5119), and a final count that disagrees with totalCount is refused.
+            let itemsSubject = "tend board items"
+            let items =
+                GraphQl.drain itemsSubject "the board items" { MaxPages = (maximumItems + 49) / 50; MaxItems = maximumItems } (fun cursor ->
+                    let variables =
+                        [ "owner", VString inputs.Owner; "number", VNumber(double inputs.ProjectNumber) ]
+                        @ (match cursor with Some c -> [ "cursor", VString c ] | None -> [])
+                    sendIo (request itemsDocument variables itemsSubject) (fun data ->
+                        GraphQl.page itemsSubject "the board items" (fun (node: JsonElement) -> defaultArg (str node "id") "")
+                            (fun node -> Ok(node.Clone()))
+                            (data.GetProperty("organization").GetProperty("projectV2").GetProperty("items"))))
+                |> orFail itemsSubject
+            // (B) open pull requests in the organization (the search API reads at most 1000 results)
+            let searchSubject = "tend open pull requests"
+            let openPrs =
+                GraphQl.drain searchSubject "the open pull requests" { MaxPages = 10; MaxItems = 1000 } (fun cursor ->
+                    let variables = [ "q", VString(sprintf "org:%s is:pr is:open" inputs.Owner) ] @ (match cursor with Some c -> [ "cursor", VString c ] | None -> [])
+                    sendIo (request searchDocument variables searchSubject) (fun data ->
                         let search = data.GetProperty "search"
-                        search.GetProperty("issueCount").GetInt32(), search.GetProperty("pageInfo"), [ for n in search.GetProperty("nodes").EnumerateArray() -> decodePr n ]) with
-                | Error e -> failwith e
-                | Ok(count, info, prs) ->
-                    if count > 1000 then failwith "more than 1000 open pull requests: the search cannot be read completely"
-                    openPrs.AddRange(List.choose id prs)
-                    prMore <- info.GetProperty("hasNextPage").GetBoolean()
-                    prCursor <- str info "endCursor"
+                        if search.GetProperty("issueCount").GetInt32() > 1000 then
+                            Error(Malformed(searchSubject, "more than 1000 open pull requests: the search cannot be read completely"))
+                        else
+                            GraphQl.page searchSubject "the open pull requests" (fun (pr: Pr) -> sprintf "%s#%d" pr.Repo pr.Number)
+                                (fun node ->
+                                    match decodePr node with
+                                    | Some pr -> Ok pr
+                                    | None -> Error(Malformed(searchSubject, "a pull request node omitted its repository or number")))
+                                search))
+                |> orFail searchSubject
             // Decode cards (without PRs yet).
             let cardOf (node: JsonElement) =
                 let itemId = node.GetProperty("id").GetString()
