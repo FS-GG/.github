@@ -38,7 +38,9 @@
 # on a plan without branch protection cannot arm it at all (the check is then advisory).
 #
 # A repository whose Actions policy requires full-SHA pins (sha_pinning_required) cannot call `@main`; it
-# pins the commit of this file and rebinds the pin when the rule changes.
+# pins the commit of this file and rebinds the pin when the rule changes. Such a policy also refuses a called
+# workflow that uses an unpinned action, which is why the checkout below (and the kit job's, kept identical)
+# is pinned to a commit (FS.GG.Native.Qualification: the first caller run was a startup failure).
 #
 # `permissions: pull-requests: read` is declared here because a private repository's pull request is not
 # readable with `contents: read` alone, and without the live read a re-run after an edit would replay the
@@ -66,7 +68,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Fetch the hub's closing-keyword rule at this workflow's own commit
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: FS-GG/.github
           ref: ${{ github.job_workflow_sha }}
