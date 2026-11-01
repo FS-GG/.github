@@ -9,6 +9,7 @@ module EnrollmentApplication =
         [ "plan", "plan-successor"
           "prepare", "prepare-successor"
           "bind-runtime", "bind-runtime"
+          "rebind-reader", "rebind-reader"
           "render-carrier", "render-carrier"
           "resolve-issues", "resolve-issues" ]
 
@@ -18,6 +19,8 @@ module EnrollmentApplication =
             "fsgg-coord enrollment prepare --request F --native-facts F --repository DIR --template F --payload F"
             "                              --private-output NEW --public-output NEW --receipt-output NEW"
             "fsgg-coord enrollment bind-runtime --private-binding F --repository DIR --merge-sha SHA --runtime-output NEW"
+            "fsgg-coord enrollment rebind-reader --installed-reader DLL --known-readers F --record-output NEW"
+            "                              [--runtime-binding F --repository DIR --runtime-output NEW] [--scope F --scope-output NEW]"
             "fsgg-coord enrollment render-carrier --receipt F --output NEW"
             "fsgg-coord enrollment resolve-issues --request F --native-facts-output NEW        (read-only GETs)"
             "fsgg-coord route-preflight --route ROUTE --stage STAGE --repository DIR [--online | --native-facts F] ..."
@@ -33,7 +36,8 @@ module EnrollmentApplication =
             Some 0
         | "enrollment" :: verb :: rest ->
             match List.tryFind (fun (name, _) -> name = verb) enrollmentVerbs with
-            | Some(_, command) -> Some(V2EnrollmentCommands.run command (Array.ofList (command :: rest)))
+            // Hosted by this engine assembly, the CLI identity a migration scope names (rebind-reader).
+            | Some(_, command) -> Some(V2EnrollmentCommands.runHosted (System.Reflection.Assembly.GetExecutingAssembly()) command (Array.ofList (command :: rest)))
             | None ->
                 eprintfn "board-v2 successor refused: MalformedInput"
                 Some 2

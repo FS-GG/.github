@@ -17,6 +17,8 @@ on:
       - "docs/coordination/board-v2-import-manifest.json"
       - "docs/coordination/board-v2-import-preparation.md"
       - "tests/board-v2-import/**"
+      - "tests/coord-reader-rebind-mutation/**"
+      - "src/FS.GG.Coord.Cli/EnrollmentApplication.fs"
       - ".github/workflows/board-v2-import-preflight.yml"
   push:
     branches: [main]
@@ -33,6 +35,8 @@ on:
       - "docs/coordination/board-v2-import-manifest.json"
       - "docs/coordination/board-v2-import-preparation.md"
       - "tests/board-v2-import/**"
+      - "tests/coord-reader-rebind-mutation/**"
+      - "src/FS.GG.Coord.Cli/EnrollmentApplication.fs"
       - ".github/workflows/board-v2-import-preflight.yml"
   workflow_dispatch:
 
@@ -63,3 +67,7 @@ jobs:
         run: python3 tools/board-v2-import.py docs/coordination/board-v2-import-manifest.json
       - name: Exercise legacy and private programme preparation controls
         run: python3 tests/board-v2-import/run.py
+      # The #5120 reader-rebind mutation legs mutate the rebind stage by exact source text. This checks, in seconds, that
+      # every leg still matches; it runs no mutation. The sweep: scripts/gate-mutate.py --specs tests/coord-reader-rebind-mutation/specs.yml
+      - name: Reader-rebind mutation matrix is runnable
+        run: bash tests/coord-reader-rebind-mutation/run.sh

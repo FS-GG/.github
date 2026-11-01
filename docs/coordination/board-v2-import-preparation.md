@@ -442,6 +442,7 @@ implementation authority.
 | `plan-successor --request --native-facts --repository --template-output --payload-output` | closed request, read-only native facts, predecessor private pair, protected public blob at the merge sha | successor binding template and payload (private custody) |
 | `prepare-successor --request --template --payload --private-output --public-output --receipt-output` | request, template, payload, predecessor private pair | the successor pair and a closed non-secret `receipt.json` |
 | `bind-runtime --private-binding --repository --merge-sha --runtime-output` | successor private binding, public blob at the merge | runtime binding differing only in the 40 hex bytes of `populationRevision` |
+| `rebind-reader --installed-reader --known-readers --record-output [--runtime-binding --repository --runtime-output] [--scope --scope-output]` | runtime binding and the public blob at its `populationRevision`, and/or a migration scope; the executing reader | the same documents differing only in their reader identity, and a non-secret record ([#5120](https://github.com/FS-GG/.github/issues/5120), below) |
 | `render-carrier --receipt --output` | `receipt.json` only | fixed-template carrier document |
 
 The successor payload is the predecessor payload bytes before its closing `]}`, a comma, the appended rows and the
@@ -458,7 +459,7 @@ Refusals print one closed code on stderr and never payload, nonce, path or input
 `InputUnreadable` (an input file is absent, linked, oversize or unreadable), `CustodyUnavailable` (an output could not be
 created, synced or read back), `GitReadFailed` (the protected public blob could not be read through git; a blob that is read
 and does not authenticate stays `PredecessorCommitmentMismatch`), `NativeReadFailed` (a read-only GET failed or returned an
-unusable body) and `SuccessorNotRederived`. A `CreateNew` that loses a race is `OutputExists`, not a custody failure.
+unusable body), `SuccessorNotRederived` and, for `rebind-reader` ([#5120](https://github.com/FS-GG/.github/issues/5120)), `ReaderNotVerified` and `ReaderAlreadyBound`. A `CreateNew` that loses a race is `OutputExists`, not a custody failure.
 
 ## Supported-route preflight and online resolution ([#4941](https://github.com/FS-GG/.github/issues/4941), PR 2)
 
@@ -498,7 +499,7 @@ from the successor's own appended rows (a sha-pinned reference is immutable and 
 |---|---|---|---|
 | `ConstructorIdentity` | running constructor source revision, intended protected main (`--online`: the live head by GET; `--main-revision`: asserted; otherwise the local tracking ref, which may be stale), and, when they differ, the constructor closure read from `--repository` (#5113) | a differing live or asserted main does not descend from the constructor revision (`ConstructorNotAncestorOfMain`), or a path in the constructor closure changed between them (`ConstructorDiffersFromMain`, with the count) | either revision unreadable; the main is only the local tracking ref (a stale checkout can equal a stale ref, so a match proves nothing offline and the exit is never 0); or the closure evidence is unread (`ConstructorClosure/ReadFailed`, for example a checkout without both commits), underivable (`ConstructorClosure/Incomplete`) or for another pair |
 | `PredecessorIntegrity` | private pair, public blob at the recorded merge | the commitment differs, or the payload cannot be spliced | either unreadable |
-| `RuntimeBindingIntegrity` | runtime binding against the private pair | it differs in anything but `populationRevision`, or that is not the recorded merge | not supplied |
+| `RuntimeBindingIntegrity` | runtime binding against the private pair | it differs in anything but `populationRevision` and a reader identity (`artifactSha256`, `recipeRevision`) rebound by `rebind-reader`, or `populationRevision` is not the recorded merge | not supplied, or the reader identity was rebound to an artifact `--known-readers` does not list (`RuntimeBinding/NotInKnownTable`) |
 | `FactsComplete`, `IssueKind`, `IssueIdentity`, `ProjectMembership`, `RepositoryInBinding`, `NotAlreadyEnrolled`, `RoadmapConflict` | the planner's own per-row findings, all of them rather than the first | a row fails the check (the row is named) | facts partial or unobserved |
 | `PlanGrammar` | the installed plan grammar; the installed artifact sha against a known table | a plan reference is not admitted | the installed artifact is not in the known table |
 | `PlanBlob` | plan documents on `main` now | a document is absent in a readable repository | facts were supplied rather than read now, or the repository may be invisible (`PlanBlob/NotVisible`) |
@@ -592,8 +593,38 @@ when the checkout's gate bytes equal the trusted base's (`refs/remotes/origin/ma
 (`CoverageAudit/GateModified`, or `/Unreadable` with no trusted ref).
 
 **Engine surface.** The commands are registered in the coordination engine as the roots `enrollment` (`plan`, `prepare`,
-`bind-runtime`, `render-carrier`, `resolve-issues`) and `route-preflight`, reaching the installed tool through the `fsgg-coord` shim, which execs the engine (`fsgg-coord-engine enrollment ...` and
+`bind-runtime`, `rebind-reader`, `render-carrier`, `resolve-issues`) and `route-preflight`, reaching the installed tool through the `fsgg-coord` shim, which execs the engine (`fsgg-coord-engine enrollment ...` and
 `fsgg-coord-engine route-preflight ...`). Both are dispatch arms ahead of the typed handler table, like `context-view`, and are
 not in the command catalogue; the V1 writer census classifies both in `outOfCatalogueRoots` as `writes: never` (they create only new owner-only local files, read GitHub by `GET`, and run the base-blob gates as subprocesses).
 `preflight` is not a root because the engine already answers a skill `preflight` root. The constructor identity in a receipt is now
 the `FS.GG.Coord.GitHub` assembly (revision and sha256) that both surfaces share, not the `BoardV2Import` executable.
+
+## Reader identity rebind after a coherent upgrade ([#5120](https://github.com/FS-GG/.github/issues/5120))
+
+`enrollment plan` copies the predecessor's reader identity into the successor, and `bind-runtime` may change only
+`populationRevision`, so after a coherent upgrade the runtime binding still names the previous reader and the installed
+reader refuses it ("selected binding does not match the loaded adapter assembly SHA-256"). On 2026-10-31 Root rebound
+cohort 90 by hand. The engine's `rebind-reader` enrollment verb is the designed stage for that step:
+
+1. It reads the executing reader: the `FS.GG.Coord.GitHub` assembly's sha256 and the revision embedded in its informational
+   version. It refuses `ReaderNotVerified` unless `--installed-reader` hashes to the same sha256 and the verified-reader table
+   `--known-readers` (one sha256 per line, the table `route-preflight` uses) lists it.
+2. With `--runtime-binding`, the binding must be a programme binding that authenticates against the public blob at its own
+   `populationRevision`, read through `--repository`, before and after. Only `artifactSha256` (to the adapter sha256) and
+   `recipeRevision` (to the embedded revision) change.
+3. With `--scope`, the document must have exactly the migration-scope key set. `sourceRevision`, `artifactSha256` and
+   `cliArtifactSha256` change to the executing revision, the adapter and the engine CLI. Only the engine can do this, as the
+   host whose identity the scope names, and only when the CLI's embedded revision equals the adapter's. The `BoardV2Import`
+   tool refuses a scope with `ReaderNotVerified`.
+4. Each value is replaced in place, so every other byte is carried over. The splice refuses unless each old value is the
+   top-level value, its `"name": "old"` occurrence is unique in the text, the new value is a 40- or 64-hex identity, and
+   the two documents are equal with the named fields removed. Every input is left in place. The outputs are new owner-only
+   files, and a supplied target that is already bound is written as an identical copy. If every target is already bound,
+   the stage writes nothing and refuses `ReaderAlreadyBound`.
+5. It writes a record (`fsgg.board-v2-reader-rebind/1`): the reader revision, artifact and installed sha256, then for each
+   target the source and output sha256 and the field diff. It carries no payload, nonce or node id.
+
+Replayed over cohort 90's `runtime-binding207.json` with Root's two values, the splice reproduces the hand-rebound file byte
+for byte (sha256 `eba7a946…f9a5`). The next cohort's `route-preflight` accepts the rebound runtime binding beside the
+predecessor private pair, which still names the old reader, but only when `--known-readers` lists the rebound artifact
+(`RuntimeBindingIntegrity`). The stage grants no native write and changes no other field.

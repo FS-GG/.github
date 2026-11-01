@@ -55,6 +55,11 @@ module V2Enrollment =
         /// Supplied successor template or payload bytes are not exactly what the planner re-derives
         /// from the request, the predecessor and the native facts.
         | SuccessorNotRederived
+        /// `rebind-reader` (#5120): the executing reader is not the named installed artifact, the verified-reader table
+        /// does not list it, or the host whose identity a migration scope needs is absent or of another revision.
+        | ReaderNotVerified
+        /// `rebind-reader` (#5120): every supplied target already names the executing reader; nothing is written.
+        | ReaderAlreadyBound
 
     /// The stable printable code, exactly the case name.
     val refusalCode: refusal: Refusal -> string

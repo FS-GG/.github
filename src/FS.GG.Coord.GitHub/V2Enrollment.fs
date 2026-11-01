@@ -33,6 +33,8 @@ module V2Enrollment =
         | GitReadFailed
         | NativeReadFailed
         | SuccessorNotRederived
+        | ReaderNotVerified
+        | ReaderAlreadyBound
 
     let refusalCode (refusal: Refusal) =
         match refusal with
@@ -56,6 +58,8 @@ module V2Enrollment =
         | GitReadFailed -> "GitReadFailed"
         | NativeReadFailed -> "NativeReadFailed"
         | SuccessorNotRederived -> "SuccessorNotRederived"
+        | ReaderNotVerified -> "ReaderNotVerified"
+        | ReaderAlreadyBound -> "ReaderAlreadyBound"
 
     type PlanSpec =
         | ProgrammeIssue3008

@@ -613,9 +613,9 @@ module V2Preflight =
             else supported PredecessorIntegrity ("private pair authenticates against the public blob; rows=" + string analysis.PredecessorRows)
         | None, _ -> unsupported PredecessorIntegrity PredecessorCommitmentMismatch []
 
-    let private stripPopulationRevision (json: string) =
+    let private stripFields (names: string list) (json: string) =
         let node = JsonNode.Parse json
-        node.AsObject().Remove "populationRevision" |> ignore
+        for name in names do node.AsObject().Remove name |> ignore
         node
 
     let private runtimeBindingIntegrity (ctx: Context) =
@@ -624,18 +624,33 @@ module V2Preflight =
         | _, NotObserved kind, _ -> unknown RuntimeBindingIntegrity PredecessorPublic kind []
         | _, _, NotObserved kind -> unknown RuntimeBindingIntegrity RuntimeBinding kind []
         | Known privateJson, Known publicJson, Known runtimeJson ->
-            let consistent =
+            // Beside its populationRevision, a runtime binding may differ from the private pair only in its reader identity
+            // (`artifactSha256`, `recipeRevision`), which `rebind-reader` rebinds after a coherent upgrade (#5120), and then
+            // only to a reader the verified table lists.
+            let decided =
                 try
                     match V2Projection.decodeBinding privateJson, V2Projection.decodeBinding runtimeJson with
                     | Ok pair, Ok runtime ->
-                        runtime.PopulationRevision = ctx.Inputs.Request.PredecessorMergeSha
-                        && JsonNode.DeepEquals(stripPopulationRevision privateJson, stripPopulationRevision runtimeJson)
-                        && (V2Projection.authenticateProgrammeEnrollment runtime publicJson |> Result.isOk)
-                        && pair.ProjectId = runtime.ProjectId
-                    | _ -> false
-                with _ -> false
-            if consistent then supported RuntimeBindingIntegrity "runtime binding differs from the private pair only in populationRevision, which is the recorded merge"
-            else unsupported RuntimeBindingIntegrity RuntimeBindingDiffers []
+                        let rebound = runtime.ArtifactSha256 <> pair.ArtifactSha256 || runtime.RecipeRevision <> pair.RecipeRevision
+                        let ignored = if rebound then [ "populationRevision"; "artifactSha256"; "recipeRevision" ] else [ "populationRevision" ]
+                        let consistent =
+                            runtime.PopulationRevision = ctx.Inputs.Request.PredecessorMergeSha
+                            && JsonNode.DeepEquals(stripFields ignored privateJson, stripFields ignored runtimeJson)
+                            && (V2Projection.authenticateProgrammeEnrollment runtime publicJson |> Result.isOk)
+                            && pair.ProjectId = runtime.ProjectId
+                        if not consistent then Choice3Of3()
+                        elif rebound && not (ctx.Inputs.KnownInstalledReaders.Contains runtime.ArtifactSha256) then Choice2Of3()
+                        else Choice1Of3 rebound
+                    | _ -> Choice3Of3()
+                with _ -> Choice3Of3()
+            match decided with
+            | Choice1Of3 false -> supported RuntimeBindingIntegrity "runtime binding differs from the private pair only in populationRevision, which is the recorded merge"
+            | Choice1Of3 true ->
+                supported RuntimeBindingIntegrity
+                    "runtime binding differs from the private pair only in populationRevision, which is the recorded merge, and in a reader identity rebound to a verified installed reader"
+            // A reader the table does not list may be a stale table rather than tampering, but it is never support.
+            | Choice2Of3() -> unknown RuntimeBindingIntegrity RuntimeBinding NotInKnownTable []
+            | Choice3Of3() -> unsupported RuntimeBindingIntegrity RuntimeBindingDiffers []
 
     let private factsComplete (ctx: Context) =
         match predecessorGap ctx, ctx.Analysis, factsGap ctx with

@@ -128,6 +128,9 @@ DECLARED_SITES: dict[str, str | None] = {
     # ESCAPED. It also cannot cause this row's defect: while it runs, the checkout has uncommitted work
     # under the engine's source trees by construction, which is precisely the kit-author case
     # `authored_engine_source` classifies as DELIBERATE and tier 2a is right to prefer.
+    # The #5120 reader-rebind mutation leg builds the engine to run it end to end, redirected through --artifacts-path
+    # into the leg's own private temp directory. Redirect enforced, not assumed.
+    "tests/coord-reader-rebind-mutation/leg.sh": None,
     "tests/coord-engine-mutation/leg.sh": (
         "the in-tree build is the mutation subject; the tree is dirty under the engine's source "
         "trees by construction while it runs, which is tier 2a's protected case"

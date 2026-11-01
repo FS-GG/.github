@@ -199,6 +199,34 @@ module V2PreflightTests =
         expectUnknown RuntimeBindingIntegrity RuntimeBinding NotSupplied (runPlan { healthy 5 with RuntimeBinding = NotObserved NotSupplied })
         expectUnsupported RuntimeBindingIntegrity RuntimeBindingDiffers PredecessorCustody (runPlan { healthy 5 with RuntimeBinding = Known "{" })
 
+    [<Fact>]
+    let ``runtime binding may also carry a reader identity rebound to a verified installed reader, and nothing else`` () =
+        // #5120: rebind-reader changes artifactSha256 and recipeRevision after a coherent upgrade; the next cohort's
+        // predecessor private pair still names the old reader.
+        let privateJson, _, _ = predecessor 5 ""
+        let rebound (artifact: string) (recipe: string) =
+            let node = JsonNode.Parse(runtimeOf privateJson mergeSha)
+            node.["artifactSha256"] <- JsonValue.Create artifact
+            node.["recipeRevision"] <- JsonValue.Create recipe
+            node
+        let upgraded = rebound reader (String.replicate 40 "7")
+        match verdictOf (runPlan { healthy 5 with RuntimeBinding = Known(upgraded.ToJsonString()) }) RuntimeBindingIntegrity with
+        | SupportedForNextStage evidence -> Assert.Contains("rebound to a verified installed reader", evidence)
+        | other -> failwithf "%A" other
+        // Causal: the same rebind to a reader the verified table does not list is never support.
+        expectUnknown RuntimeBindingIntegrity RuntimeBinding NotInKnownTable
+            (runPlan { healthy 5 with RuntimeBinding = Known(upgraded.ToJsonString()); KnownInstalledReaders = Set.empty })
+        expectUnknown RuntimeBindingIntegrity RuntimeBinding NotInKnownTable
+            (runPlan { healthy 5 with RuntimeBinding = Known((rebound (String.replicate 64 "f") (String.replicate 40 "7")).ToJsonString()) })
+        // A rebind does not open any other field: one more change is still a difference.
+        let drifted = rebound reader (String.replicate 40 "7")
+        drifted.["projectNumber"] <- JsonValue.Create 4
+        expectUnsupported RuntimeBindingIntegrity RuntimeBindingDiffers PredecessorCustody (runPlan { healthy 5 with RuntimeBinding = Known(drifted.ToJsonString()) })
+        // Nor does it excuse a population revision that is not the recorded merge.
+        let moved = rebound reader (String.replicate 40 "7")
+        moved.["populationRevision"] <- JsonValue.Create(String.replicate 40 "3")
+        expectUnsupported RuntimeBindingIntegrity RuntimeBindingDiffers PredecessorCustody (runPlan { healthy 5 with RuntimeBinding = Known(moved.ToJsonString()) })
+
     // ---- per-row checks, one negative control each ----
 
     [<Fact>]
