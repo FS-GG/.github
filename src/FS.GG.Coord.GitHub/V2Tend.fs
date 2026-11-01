@@ -42,7 +42,8 @@ module V2Tend =
           Linkage: Linkage
           UpdatedAt: DateTimeOffset
           MergedAt: DateTimeOffset option
-          Continues: bool }
+          Continues: bool
+          Completes: bool }
 
     type IntendedFields =
         { WorkLevel: WorkLevel option
@@ -399,7 +400,8 @@ module V2Tend =
 
         // ---- C1: close a Delivery whose strictly linked work is merged (decision 9) ----
         // Narrowed by the review of the decision-9 amendment (#5150): Status In review, a populated Work level
-        // of Delivery, the last merge at least CloseSettleHours old and not continuing. A reopened issue is
+        // of Delivery, the last merge at least CloseSettleHours old and declaring fsgg:delivery-completes/v1
+        // (and not fsgg:delivery-continues/v1). A reopened issue is
         // never closed again (P-REOPENED proposes it instead).
         let c1Candidate (c: Card) =
             // Work level and Status as they are on the board, not as this run would fill them.
@@ -415,7 +417,8 @@ module V2Tend =
                 | _ ->
                     let last = List.last merged
                     match last.MergedAt with
-                    | Some mergedAt when not last.Continues && hoursBetween now mergedAt >= parameters.CloseSettleHours ->
+                    // The last merge declares completion and only completion (Root's ruling on #5150).
+                    | Some mergedAt when last.Completes && not last.Continues && hoursBetween now mergedAt >= parameters.CloseSettleHours ->
                         Some(merged |> List.map (fun pr -> pr.Id))
                     | _ -> None
         let c1Applies (c: Card) = if c.TendClosedBefore then None else c1Candidate c
@@ -830,7 +833,8 @@ module V2Tend =
                                 | None -> Strict
                               UpdatedAt = time pr "updatedAt" |> Option.defaultValue created
                               MergedAt = time pr "mergedAt"
-                              Continues = flag pr "continues" false } ])
+                              Continues = flag pr "continues" false
+                              Completes = flag pr "completes" false } ])
                     |> Option.defaultValue []
                   TimelineComplete = flag c "timelineComplete" true
                   Intended = text c "intendedLine" |> Option.bind (fun line -> parseIntendedLine line (flag c "rootAuthored" false))

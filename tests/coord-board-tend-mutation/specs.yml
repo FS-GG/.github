@@ -365,9 +365,9 @@ mutations:
     command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
     target: src/FS.GG.Coord.GitHub/V2Tend.fs
     find: |-
-      | Some mergedAt when not last.Continues && hoursBetween now mergedAt >= parameters.CloseSettleHours ->
+      | Some mergedAt when last.Completes && not last.Continues && hoursBetween now mergedAt >= parameters.CloseSettleHours ->
     replace: |-
-      | Some mergedAt when not last.Continues ->
+      | Some mergedAt when last.Completes && not last.Continues ->
     breaks: >-
       a Delivery is closed minutes after its first merge, before a follow-up PR can open
     anchor:
@@ -379,9 +379,9 @@ mutations:
     command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
     target: src/FS.GG.Coord.GitHub/V2Tend.fs
     find: |-
-      | Some mergedAt when not last.Continues && hoursBetween now mergedAt >= parameters.CloseSettleHours ->
+      | Some mergedAt when last.Completes && not last.Continues && hoursBetween now mergedAt >= parameters.CloseSettleHours ->
     replace: |-
-      | Some mergedAt when hoursBetween now mergedAt >= parameters.CloseSettleHours ->
+      | Some mergedAt when last.Completes && hoursBetween now mergedAt >= parameters.CloseSettleHours ->
     breaks: >-
       a Delivery whose last merge says the work continues is closed
     anchor:
@@ -430,14 +430,28 @@ mutations:
       pattern: 'board-tend leg: \d+ passed, \d+ failed'
       produced_by: tests/coord-board-tend-mutation/leg.sh
 
+  - id: T31/c1-completes-required
+    gate: "C1 closes only after a last merge that declares fsgg:delivery-completes/v1"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | Some mergedAt when last.Completes && not last.Continues && hoursBetween now mergedAt >= parameters.CloseSettleHours ->
+    replace: |-
+      | Some mergedAt when not last.Continues && hoursBetween now mergedAt >= parameters.CloseSettleHours ->
+    breaks: >-
+      a Delivery whose last merge declares neither completes nor continues (or whose completing PR was an earlier one) is closed
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
   - id: R1/read-only-query-guard
     gate: "the tend transport sends only GraphQL queries"
     command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
     target: src/FS.GG.Coord.GitHub/V2TendReads.fs
     find: |-
-      | "POST", "graphql", Query(document, _) when document.TrimStart().StartsWith("query", StringComparison.Ordinal) ->
+      | Some kinds -> kinds |> List.contains "query" && kinds |> List.forall (fun kind -> kind = "query" || kind = "fragment")
     replace: |-
-      | "POST", "graphql", Query(document, _) ->
+      | Some kinds -> kinds |> List.contains "query"
     breaks: >-
       a mutation document passes the read-only transport
     anchor:
@@ -449,9 +463,9 @@ mutations:
     command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
     target: src/FS.GG.Coord.GitHub/V2TendReads.fs
     find: |-
-      if prOpen && not isOpen then Error "delivery-closed"
+      if prOpen && not card.Open then Unlinked "delivery-closed"
     replace: |-
-      if false then Error "delivery-closed"
+      if false then Unlinked "delivery-closed"
     breaks: >-
       the F# linkage disagrees with linkage_of on an open PR to a closed Delivery
     anchor:
@@ -482,6 +496,48 @@ mutations:
       { MaxPages = (maximumItems + 49) / 50; MaxItems = 100000 }
     breaks: >-
       the reader pages past the 500-item limit (#5119)
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: R5/linkage-unreadable-unknown
+    gate: "an unreadable reference, or a miss beside an anonymous unreadable card, is Unknown"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendReads.fs
+    find: |-
+      let unreadable = refs |> List.exists (fun r -> match find r with Some c -> c.Unreadable | None -> anonymousUnreadable)
+    replace: |-
+      let unreadable = false
+    breaks: >-
+      the F# linkage reads a PR as strictly linked where linkage_of gives r1-reference-unreadable
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: R6/canonical-reference-number
+    gate: "references compare numerically (no leading zeros) and case-insensitively"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendReads.fs
+    find: |-
+      match ascii.TrimStart '0' with
+    replace: |-
+      match ascii with
+    breaks: >-
+      `Refs #01` is not read as #1, so the F# linkage disagrees with linkage_of
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: R7/open-pr-search-count
+    gate: "the open-PR search must return as many nodes as its issueCount"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendReads.fs
+    find: |-
+      if issueCounts |> Seq.distinct |> Seq.length <> 1 || issueCounts.[0] <> openPrs.Length then
+    replace: |-
+      if false then
+    breaks: >-
+      a short or shifting open-PR search is read as the complete open-PR set, hiding an open PR from C1
     anchor:
       pattern: 'board-tend leg: \d+ passed, \d+ failed'
       produced_by: tests/coord-board-tend-mutation/leg.sh

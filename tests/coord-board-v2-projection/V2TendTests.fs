@@ -279,7 +279,8 @@ let private generate (seed: int) : Snapshot =
                   Linkage = if random.NextDouble() < 0.2 then Loose "multiple-deliveries" else Strict
                   UpdatedAt = observed.AddHours(-(float (random.Next(1, 200))))
                   MergedAt = Some(observed.AddHours(-(float (random.Next(1, 300)))))
-                  Continues = random.NextDouble() < 0.2 } ]
+                  Continues = random.NextDouble() < 0.2
+                  Completes = random.NextDouble() < 0.6 } ]
         let intended =
             if random.NextDouble() < 0.4 then
                 Some { WorkLevel = maybe 0.3 (pick [ Outcome; Delivery ])
@@ -501,7 +502,7 @@ let ``disabled S1 and S3 under the starting set never become proposals across ma
     let reviewable =
         { plain with
             ItemId = "S3-card"; Ref = "FS-GG/s#2"; Open = true; Status = Some Backlog; ClosedAt = None
-            Prs = [ { Id = "PR-s"; State = PrOpen; Draft = false; Linkage = Strict; UpdatedAt = observed; MergedAt = None; Continues = false } ] }
+            Prs = [ { Id = "PR-s"; State = PrOpen; Draft = false; Linkage = Strict; UpdatedAt = observed; MergedAt = None; Continues = false; Completes = false } ] }
     let mutable snapshot = { ObservedAt = observed; Cards = [ closed; reviewable ]; Ledger = [] }
     for run in 1 .. 10 do
         let plan = V2Tend.derive starting snapshot
@@ -555,14 +556,14 @@ let ``an Outcome's intended Status is never proposed, and a childless Outcome is
     Assert.Equal(None, effectOn plan "O" StatusField)
 
 [<Fact>]
-let ``case 28: C1 closes only a settled In review Delivery whose strictly linked PRs are all merged`` () =
+let ``case 28: C1 closes only a settled In review Delivery whose last merge declares completion`` () =
     let snapshot = fixture "28-delivery-closure.json"
     let plan = V2Tend.derive all snapshot
     let closed = plan.Close |> List.map (fun c -> c.ItemId) |> Set.ofList
     Assert.Equal<Set<string>>(set [ "D-done" ], closed)
     Assert.Equal<string list>([ "FS-GG/x#1401"; "FS-GG/x#1402" ], (plan.Close |> List.head).MergedPrs)
     for item in [ "D-continues"; "D-blocked"; "O-outcome"; "D-open"; "D-draft"; "D-loose-open"; "D-partial"; "D-none"
-                  "D-recent"; "D-progress"; "D-structural"; "D-reopened" ] do
+                  "D-recent"; "D-progress"; "D-structural"; "D-reopened"; "D-undeclared"; "D-both"; "D-earlier-completes" ] do
         Assert.False(closed.Contains item, item)
     Assert.True(proposed plan "FS-GG/x#153" "reopened-after-close")
     // With C1 off the same closure is would-close only, never sent and never proposed.

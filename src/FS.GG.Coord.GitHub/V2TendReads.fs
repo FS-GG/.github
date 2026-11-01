@@ -17,7 +17,84 @@ module V2TendReads =
           Ledger: V2Tend.Deferral list
           Enrolled: Map<string, string option> }
 
+    type LinkCard =
+        { WorkLevel: V2Tend.WorkLevel option
+          Open: bool
+          Status: V2Tend.Status option
+          Parent: string option
+          Unreadable: bool }
+
+    type Linkage =
+        | Linked of delivery: string
+        | Unlinked of reason: string
+        | Unknown of reason: string
+
     let readCeiling (rows: int) = 8 + (rows + 49) / 50 + (rows + 24) / 25
+
+    // The kinds of a GraphQL document's top-level definitions ("query", "mutation", "subscription",
+    // "fragment"; a bare selection set is a query), or None when the document cannot be read that far:
+    // comments, strings and block strings are skipped, and braces and parentheses must balance.
+    let operationKinds (document: string) : string list option =
+        let text = if isNull document then "" else document
+        let n = text.Length
+        let kinds = Collections.Generic.List<string>()
+        let mutable i = 0
+        let mutable braces = 0
+        let mutable parens = 0
+        let mutable between = true
+        let mutable ok = true
+        while ok && i < n do
+            let c = text.[i]
+            if c = '#' then
+                while i < n && text.[i] <> '\n' && text.[i] <> '\r' do i <- i + 1
+            elif c = '"' then
+                if i + 2 < n && text.[i + 1] = '"' && text.[i + 2] = '"' then
+                    let mutable j = i + 3
+                    let mutable closed = false
+                    while not closed && j <= n - 3 do
+                        if text.[j] = '\\' && j + 3 < n && text.[j + 1] = '"' && text.[j + 2] = '"' && text.[j + 3] = '"' then j <- j + 4
+                        elif text.[j] = '"' && text.[j + 1] = '"' && text.[j + 2] = '"' then closed <- true
+                        else j <- j + 1
+                    if closed then i <- j + 3 else ok <- false
+                else
+                    let mutable j = i + 1
+                    let mutable closed = false
+                    while ok && not closed && j < n do
+                        match text.[j] with
+                        | '\\' -> j <- j + 2
+                        | '"' -> closed <- true
+                        | '\n' | '\r' -> ok <- false
+                        | _ -> j <- j + 1
+                    if closed then i <- j + 1 else ok <- false
+            elif c = '{' then
+                if braces = 0 && parens = 0 && between then
+                    kinds.Add "query"
+                    between <- false
+                braces <- braces + 1
+                i <- i + 1
+            elif c = '}' then
+                braces <- braces - 1
+                if braces < 0 then ok <- false
+                elif braces = 0 && parens = 0 then between <- true
+                i <- i + 1
+            elif c = '(' then
+                parens <- parens + 1
+                i <- i + 1
+            elif c = ')' then
+                parens <- parens - 1
+                if parens < 0 then ok <- false
+                i <- i + 1
+            elif Char.IsLetter c || c = '_' then
+                let start = i
+                while i < n && (Char.IsLetterOrDigit text.[i] || text.[i] = '_') do i <- i + 1
+                if braces = 0 && parens = 0 && between then
+                    match text.Substring(start, i - start) with
+                    | "query" | "mutation" | "subscription" | "fragment" as kind ->
+                        kinds.Add kind
+                        between <- false
+                    | _ -> ok <- false
+            else i <- i + 1
+        if ok && braces = 0 && parens = 0 && between && kinds.Count > 0 then Some(List.ofSeq kinds) else None
 
     let private maximumItems = 500
 
@@ -25,7 +102,10 @@ module V2TendReads =
         { new IGitHubTransport with
             member _.Send request =
                 match request.Method, request.Path, request.Body with
-                | "POST", "graphql", Query(document, _) when document.TrimStart().StartsWith("query", StringComparison.Ordinal) ->
+                | "POST", "graphql", Query(document, _) when
+                    (match operationKinds document with
+                     | Some kinds -> kinds |> List.contains "query" && kinds |> List.forall (fun kind -> kind = "query" || kind = "fragment")
+                     | None -> false) ->
                     transport.Send request
                 | _ -> Error(Malformed(request.Subject, "board-v2 tend is read-only: only GraphQL queries are sent"))
             member _.SendMutation mutation = Error(Malformed(mutation.Request.Subject, "board-v2 tend is read-only"))
@@ -40,6 +120,7 @@ module V2TendReads =
     let private closing = Regex(@"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+" + refList, RegexOptions.IgnoreCase)
     let private oneRef = Regex(@"(?:([\w.-]+/[\w.-]+))?#(\d+)")
     let private continuesMarker = "<!-- fsgg:delivery-continues/v1 -->"
+    let private completesMarker = "<!-- fsgg:delivery-completes/v1 -->"
     let private tendClosedMarker = "<!-- fsgg:tend-closed/v1 -->"
     let private blockedOnMarker = Regex(@"<!--\s*fsgg:blocked-on/v1\b([^>]*)-->")
     let private fullRef = Regex(@"([\w.-]+/[\w.-]+)#(\d+)")
@@ -48,33 +129,61 @@ module V2TendReads =
         let normalised = (if isNull body then "" else body).Replace("\r\n", "\n").Replace("\r", "\n")
         inline'.Replace(fence.Replace(normalised, " "), " ")
 
+    // N as a number: any Unicode decimal digits (as Python's int() reads them), no leading zeros.
+    let private canonicalNumber (digits: string) =
+        let ascii = String(digits.ToCharArray() |> Array.map (fun c -> char (int '0' + int (Char.GetNumericValue c))))
+        match ascii.TrimStart '0' with
+        | "" -> "0"
+        | trimmed -> trimmed
+
+    let canonicalRef (reference: string) =
+        let text = if isNull reference then "" else reference
+        match text.LastIndexOf '#' with
+        | -1 -> text.ToLowerInvariant()
+        | index ->
+            let number = text.Substring(index + 1)
+            if number <> "" && number |> Seq.forall Char.IsDigit then text.Substring(0, index).ToLowerInvariant() + "#" + canonicalNumber number
+            else text.ToLowerInvariant()
+
     let bodyRefs (repository: string) (body: string) =
         let text = visible body
         [ for pattern in [ refsLine; closing ] do
             for m in pattern.Matches text do
                 for r in oneRef.Matches m.Groups.[1].Value do
                     let repo = if r.Groups.[1].Success then r.Groups.[1].Value else repository
-                    yield (repo + "#" + r.Groups.[2].Value).ToLowerInvariant() ]
+                    yield canonicalRef (repo + "#" + r.Groups.[2].Value) ]
         |> List.distinct
         |> List.sort
 
     let continues (body: string) = (visible body).Contains continuesMarker
 
-    let linkage (cards: Map<string, V2Tend.WorkLevel option * bool * V2Tend.Status option * string option>) (prRepository: string) (prNumber: int) (prOpen: bool) (body: string) =
-        let own = (prRepository + "#" + string prNumber).ToLowerInvariant()
+    let completes (body: string) = (visible body).Contains completesMarker
+
+    let linkage (cards: Map<string, LinkCard>) (anonymousUnreadable: bool) (prRepository: string) (prNumber: int) (prOpen: bool) (body: string) =
+        let find (reference: string) = cards |> Map.tryFind (canonicalRef reference)
+        let own = canonicalRef (prRepository + "#" + string prNumber)
         let refs = bodyRefs prRepository body |> List.filter (fun r -> r <> own)
-        let deliveries = refs |> List.filter (fun r -> match cards |> Map.tryFind r with Some(Some V2Tend.Delivery, _, _, _) -> true | _ -> false)
-        match deliveries with
-        | [] -> Error "no-delivery"
-        | [ delivery ] ->
-            let _, isOpen, status, parent = cards.[delivery]
-            if prOpen && not isOpen then Error "delivery-closed"
-            elif prOpen && status = Some V2Tend.Done then Error "delivery-done"
-            else
-                match parent |> Option.map (fun p -> p.ToLowerInvariant()) |> Option.bind (fun p -> cards |> Map.tryFind p) with
-                | Some(Some V2Tend.Outcome, _, _, _) -> Ok delivery
-                | _ -> Error "no-parent-outcome"
-        | _ -> Error "multiple-deliveries"
+        // An unreadable referenced card, or a miss while the board holds an unreadable card with no identity
+        // (the miss could be that card), gives no verdict.
+        let unreadable = refs |> List.exists (fun r -> match find r with Some c -> c.Unreadable | None -> anonymousUnreadable)
+        if unreadable then Unknown "r1-reference-unreadable"
+        else
+            let deliveries = refs |> List.choose (fun r -> match find r with Some c when c.WorkLevel = Some V2Tend.Delivery -> Some(r, c) | _ -> None)
+            match deliveries with
+            | [] -> Unlinked "no-delivery"
+            | [ delivery, card ] ->
+                if prOpen && not card.Open then Unlinked "delivery-closed"
+                elif prOpen && card.Status = Some V2Tend.Done then Unlinked "delivery-done"
+                else
+                    match card.Parent with
+                    | None -> Unlinked "no-parent-outcome"
+                    | Some parent ->
+                        match find parent with
+                        | Some p when p.Unreadable -> Unknown "r1-parent-unreadable"
+                        | None when anonymousUnreadable -> Unknown "r1-parent-unreadable"
+                        | Some p when p.WorkLevel = Some V2Tend.Outcome -> Linked delivery
+                        | _ -> Unlinked "no-parent-outcome"
+            | _ -> Unlinked "multiple-deliveries"
 
     let bodySections (body: string) =
         let lines = (if isNull body then "" else body).Replace("\r\n", "\n").Split('\n') |> Array.map (fun l -> l.TrimEnd())
@@ -217,11 +326,13 @@ module V2TendReads =
                 |> orFail itemsSubject
             // (B) open pull requests in the organization (the search API reads at most 1000 results)
             let searchSubject = "tend open pull requests"
+            let issueCounts = Collections.Generic.List<int>()
             let openPrs =
                 GraphQl.drain searchSubject "the open pull requests" { MaxPages = 10; MaxItems = 1000 } (fun cursor ->
                     let variables = [ "q", VString(sprintf "org:%s is:pr is:open" inputs.Owner) ] @ (match cursor with Some c -> [ "cursor", VString c ] | None -> [])
                     sendIo (request searchDocument variables searchSubject) (fun data ->
                         let search = data.GetProperty "search"
+                        issueCounts.Add(search.GetProperty("issueCount").GetInt32())
                         if search.GetProperty("issueCount").GetInt32() > 1000 then
                             Error(Malformed(searchSubject, "more than 1000 open pull requests: the search cannot be read completely"))
                         else
@@ -232,6 +343,11 @@ module V2TendReads =
                                     | None -> Error(Malformed(searchSubject, "a pull request node omitted its repository or number")))
                                 search))
                 |> orFail searchSubject
+            // The search connection has no totalCount: its issueCount must hold on every page and equal the
+            // nodes read, or the open-PR set is incomplete (a PR opened or closed mid-read, or a short page).
+            if issueCounts |> Seq.distinct |> Seq.length <> 1 || issueCounts.[0] <> openPrs.Length then
+                failwithf "%s: read %d open pull requests but the search reported %s" searchSubject openPrs.Length
+                    (String.Join(", ", issueCounts |> Seq.distinct |> Seq.map string))
             // Decode cards (without PRs yet).
             let cardOf (node: JsonElement) =
                 let itemId = node.GetProperty("id").GetString()
@@ -279,11 +395,14 @@ module V2TendReads =
                     Some("", { emptyCard itemId inputs.ObservedAt with Kind = (match other with Some "DraftIssue" -> V2Tend.DraftCard | _ -> V2Tend.Unreadable) })
             let decoded = items |> Seq.choose cardOf |> List.ofSeq
             let cards = decoded |> List.map snd
+            // Pull-request and draft cards are never a Delivery: they are off the board for linkage, as in
+            // linkage_of(). An unreadable card has no identity here, so every miss becomes Unknown.
             let lookup =
                 cards
                 |> List.filter (fun c -> c.Kind = V2Tend.Issue)
-                |> List.map (fun c -> c.Ref.ToLowerInvariant(), (c.WorkLevel, c.Open, c.Status, c.Parent))
+                |> List.map (fun c -> canonicalRef c.Ref, ({ WorkLevel = c.WorkLevel; Open = c.Open; Status = c.Status; Parent = c.Parent; Unreadable = false } : LinkCard))
                 |> Map.ofList
+            let anonymousUnreadable = cards |> List.exists (fun c -> c.Kind = V2Tend.Unreadable)
             // (C) timeline and comments for every open issue card, 25 aliased per request.
             let targets = decoded |> List.filter (fun (nodeId, c) -> nodeId <> "" && c.Open && c.Kind = V2Tend.Issue)
             let timelines = Collections.Generic.Dictionary<string, Pr list * bool * V2Tend.Blocker list option * bool>()
@@ -321,9 +440,9 @@ module V2TendReads =
                                 match markers |> List.sortBy fst |> List.tryLast with
                                 | Some(_, refs) ->
                                     let named = [ for r in fullRef.Matches refs -> (r.Groups.[1].Value + "#" + r.Groups.[2].Value) ]
-                                    let states = named |> List.map (fun r -> r, lookup |> Map.tryFind (r.ToLowerInvariant()))
+                                    let states = named |> List.map (fun r -> r, lookup |> Map.tryFind (canonicalRef r))
                                     if states |> List.exists (snd >> Option.isNone) then None // a blocker off the board: its state is unknown
-                                    else Some(states |> List.map (fun (r, s) -> let _, o, _, _ = s.Value in ({ Ref = r; Open = o } : V2Tend.Blocker)))
+                                    else Some(states |> List.map (fun (r, s) -> ({ Ref = r; Open = s.Value.Open } : V2Tend.Blocker)))
                                 | None -> if commentsComplete then Some [] else None
                             c.ItemId, (prs, complete, marker, tendClosed) ]) with
                 | Error e -> failwith e
@@ -331,15 +450,21 @@ module V2TendReads =
             // Link PRs to cards with the board-currency linkage.
             let allPrs (c: V2Tend.Card) =
                 let fromTimeline = match timelines.TryGetValue c.ItemId with | true, (prs, _, _, _) -> prs | _ -> []
-                let relevant = openPrs |> Seq.filter (fun pr -> bodyRefs pr.Repo pr.Body |> List.contains (c.Ref.ToLowerInvariant())) |> List.ofSeq
+                let own = canonicalRef c.Ref
+                let relevant = openPrs |> Seq.filter (fun pr -> bodyRefs pr.Repo pr.Body |> List.contains own) |> List.ofSeq
                 fromTimeline @ relevant
                 |> List.distinctBy (fun pr -> pr.Repo.ToLowerInvariant(), pr.Number)
-                |> List.filter (fun pr -> bodyRefs pr.Repo pr.Body |> List.contains (c.Ref.ToLowerInvariant()))
+                |> List.filter (fun pr -> bodyRefs pr.Repo pr.Body |> List.contains own)
                 |> List.map (fun pr ->
-                    let verdict = linkage lookup pr.Repo pr.Number (pr.State = V2Tend.PrOpen) pr.Body
+                    let verdict = linkage lookup anonymousUnreadable pr.Repo pr.Number (pr.State = V2Tend.PrOpen) pr.Body
                     ({ Id = pr.Repo + "#" + string pr.Number; State = pr.State; Draft = pr.Draft
-                       Linkage = (match verdict with Ok d when d = c.Ref.ToLowerInvariant() -> V2Tend.Strict | Ok _ -> V2Tend.Loose "names-another-delivery" | Error reason -> V2Tend.Loose reason)
-                       UpdatedAt = pr.UpdatedAt; MergedAt = pr.MergedAt; Continues = continues pr.Body } : V2Tend.LinkedPr))
+                       // Unknown is never strict: it gates nothing automatically and is kept as the reason.
+                       Linkage =
+                           (match verdict with
+                            | Linked d when d = own -> V2Tend.Strict
+                            | Linked _ -> V2Tend.Loose "names-another-delivery"
+                            | Unlinked reason | Unknown reason -> V2Tend.Loose reason)
+                       UpdatedAt = pr.UpdatedAt; MergedAt = pr.MergedAt; Continues = continues pr.Body; Completes = completes pr.Body } : V2Tend.LinkedPr))
             let linked =
                 cards
                 |> List.map (fun c ->

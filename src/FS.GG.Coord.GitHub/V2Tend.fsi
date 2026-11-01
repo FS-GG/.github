@@ -56,7 +56,9 @@ module V2Tend =
           UpdatedAt: DateTimeOffset
           MergedAt: DateTimeOffset option
           /// The PR body carries `<!-- fsgg:delivery-continues/v1 -->` (outside code spans and fences).
-          Continues: bool }
+          Continues: bool
+          /// The PR body carries `<!-- fsgg:delivery-completes/v1 -->` (outside code spans and fences).
+          Completes: bool }
 
     /// The intended-fields line `Work level: <v> · Track: <v> · Intended Status: <v>`; each part may be absent.
     type IntendedFields =

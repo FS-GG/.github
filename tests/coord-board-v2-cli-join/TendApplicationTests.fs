@@ -56,3 +56,17 @@ let ``tend refuses an unknown rule, a missing plan file and stray arguments befo
         Assert.Equal(Some(Ok()), BoardV2Application.validateInvocation [ "board-v2"; "tend"; "--plan-file"; plan; "--rules"; "W1h,T1f,C1" ])
         Assert.True(BoardV2Application.validateInvocation [ "board-v2"; "tend"; "--apply" ] |> Option.exists Result.isError)
     finally Directory.Delete(dir, true)
+
+[<Fact>]
+let ``tend refuses a plan directory that is missing or not private before any read`` () =
+    let dir = directory ()
+    try
+        let sent = ResizeArray<Request>()
+        let shared = Path.Combine(dir, "shared")
+        Directory.CreateDirectory shared |> ignore
+        File.SetUnixFileMode(shared, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute ||| UnixFileMode.GroupRead ||| UnixFileMode.GroupExecute)
+        Assert.Equal(1, BoardV2Application.runTendWithTransport (emptyBoard sent) TimeProvider.System [ "--plan-file"; Path.Combine(shared, "plan.json") ])
+        Assert.Equal(1, BoardV2Application.runTendWithTransport (emptyBoard sent) TimeProvider.System [ "--plan-file"; Path.Combine(dir, "absent", "plan.json") ])
+        Assert.Empty(sent)
+        Assert.False(File.Exists(Path.Combine(shared, "plan.json")))
+    finally Directory.Delete(dir, true)

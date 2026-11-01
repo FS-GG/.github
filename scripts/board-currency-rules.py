@@ -160,14 +160,55 @@ def ref_key(repo: object, number: object) -> str:
     return f"{repo}#{number}"
 
 
+def canonical_ref(ref: object) -> str:
+    """The comparison key of an `owner/repo#N` reference. GitHub owner and repository names are
+    case-insensitive and N is a number, so `FS-GG/X#01` and `fs-gg/x#1` are one issue. The F# tend reader
+    (V2TendReads.canonicalRef) uses the same key; tests/coord-board-v2-projection/tend-linkage-corpus.json
+    holds both to it."""
+    text = str(ref)
+    repo, sep, number = text.rpartition("#")
+    if not sep:
+        return text.lower()
+    try:
+        return f"{repo.lower()}#{int(number)}"
+    except ValueError:
+        return text.lower()
+
+
+class RefIndex(dict):
+    """A reference-keyed mapping whose keys are compared by canonical_ref()."""
+
+    def __init__(self, items=()) -> None:
+        super().__init__()
+        for key, value in (items.items() if isinstance(items, dict) else items):
+            self[key] = value
+
+    def __setitem__(self, key, value) -> None:
+        super().__setitem__(canonical_ref(key), value)
+
+    def __getitem__(self, key):
+        return super().__getitem__(canonical_ref(key))
+
+    def __contains__(self, key) -> bool:
+        return super().__contains__(canonical_ref(key))
+
+    def get(self, key, default=None):
+        return super().get(canonical_ref(key), default)
+
+    def setdefault(self, key, default=None):
+        return super().setdefault(canonical_ref(key), default)
+
+
 def visible_text(body: object) -> str:
     """Body text with fenced blocks and code spans removed: a quoted example is not a reference."""
     return _INLINE.sub(" ", _FENCE.sub(" ", body if isinstance(body, str) else ""))
 
 
 def pr_refs(pr_repo: str, body: object) -> set[str]:
-    """Every issue a PR body names with `Refs` or a closing keyword, as `owner/repo#N` keys."""
-    text = visible_text(body)
+    """Every issue a PR body names with `Refs` or a closing keyword, as `owner/repo#N` keys. Line endings
+    are normalised first (CRLF and lone CR to LF), as override_text() does, so a code span cannot run
+    across a lone CR on one client and stop at a line break on another."""
+    text = visible_text(_lf(body))
     found: set[str] = set()
     for pattern in (_REFS, _CLOSING):
         for line in pattern.finditer(text):
@@ -208,6 +249,11 @@ def blocked_on_refs(comments: list[dict]) -> list[str] | None:
     return newest
 
 
+def _lf(body: object) -> str:
+    text = body if isinstance(body, str) else ""
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def override_text(body: object) -> str:
     """The text the override regex is applied to: CRLF and lone CR normalised to LF (so `^...$` means the
     same on every client), then code spans and fences removed. The one helper used by both override_of()
@@ -235,11 +281,13 @@ def linkage_of(pr: dict, lookup, *, anonymous_unreadable: bool = False) -> tuple
     """R1 linkage for one PR, shared by the observer, the board-linkage check and the merge gate.
 
     `lookup(ref)` returns the Project 3 card for an `owner/repo#N` key, or None when it is not on the board.
+    References are compared by canonical_ref() (case-insensitive owner/repo, numeric N), so `lookup` must
+    canonicalise too: pass a RefIndex's `get`.
     `anonymous_unreadable` says the board holds an unreadable card with no identity: then a miss could be
     that card, so a miss is Unknown, not "off the board". Returns (failures, delivery) where failures is a
     list of (rule, reason): [] means linked; a ("U", ...) entry means no verdict."""
-    own = ref_key(pr.get("repo"), pr.get("number"))
-    refs = sorted(pr_refs(str(pr.get("repo", "")), pr.get("body")) - {own})
+    own = canonical_ref(ref_key(pr.get("repo"), pr.get("number")))
+    refs = sorted({canonical_ref(ref) for ref in pr_refs(str(pr.get("repo", "")), pr.get("body"))} - {own})
     # A PR is never a Delivery (or an Outcome): a PR-typed card counts as off the board, as it does in the
     # board-linkage check and the merge gate.
     def card(ref: str) -> dict | None:
@@ -309,7 +357,7 @@ class _Board:
 
     def __init__(self, snapshot: dict) -> None:
         self.items = [i for i in snapshot["items"] if isinstance(i, dict)]
-        self.by_ref: dict[str, dict] = {}
+        self.by_ref: RefIndex = RefIndex()
         for item in self.items:
             if item.get("repo") and item.get("number") is not None:
                 self.by_ref[ref_key(item["repo"], item["number"])] = item
@@ -318,10 +366,10 @@ class _Board:
         self.anonymous_unreadable = any(i.get("unreadable") and not (i.get("repo") and i.get("number") is not None)
                                         and i.get("type") != "DraftIssue" for i in self.items)
         self.prs = [p for p in snapshot["pullRequests"] if isinstance(p, dict)]
-        self.prs_by_ref: dict[str, list[dict]] = {}
+        self.prs_by_ref: RefIndex = RefIndex()
         for pr in self.prs:
-            own = ref_key(pr.get("repo"), pr.get("number"))
-            for ref in pr_refs(str(pr.get("repo", "")), pr.get("body")):
+            own = canonical_ref(ref_key(pr.get("repo"), pr.get("number")))
+            for ref in {canonical_ref(r) for r in pr_refs(str(pr.get("repo", "")), pr.get("body"))}:
                 if ref != own:
                     self.prs_by_ref.setdefault(ref, []).append(pr)
 

@@ -63,10 +63,11 @@ let private itemNode (i: Issue) =
     node["workLevel"] <- value "workLevel" "name" i.WorkLevel
     node["track"] <- value "track" "name" (Some "Follow-up")
     node["roadmap"] <- null
-    node["content"] <- content
+    // An item whose content cannot be read (for example a private repository's issue) has no identity.
+    node["content"] <- (if i.State = "UNREADABLE" then null else content :> JsonNode)
     node
 
-type private Board(issues: Issue list, openPrs: JsonObject list, ?total: int) =
+type private Board(issues: Issue list, openPrs: JsonObject list, ?total: int, ?issueCount: int) =
     let mutable requests: Request list = []
     member _.Requests = List.rev requests
     interface IGitHubTransport with
@@ -86,7 +87,7 @@ type private Board(issues: Issue list, openPrs: JsonObject list, ?total: int) =
                 data["organization"] <- JsonObject(dict [ "projectV2", JsonObject(dict [ "items", items :> JsonNode ]) :> JsonNode ])
             elif document.Contains "search(type: ISSUE" then
                 let search = JsonObject()
-                search["issueCount"] <- openPrs.Length
+                search["issueCount"] <- defaultArg issueCount openPrs.Length
                 search["pageInfo"] <- JsonObject(dict [ "hasNextPage", JsonValue.Create false :> JsonNode; "endCursor", null ])
                 search["nodes"] <- JsonArray([| for p in openPrs -> p.DeepClone() |])
                 data["search"] <- search
@@ -136,28 +137,66 @@ let ``the linkage conformance corpus agrees with the board-currency linkage_of``
     // The same corpus is run against scripts/board-currency-rules.py linkage_of by tests/board-currency.
     let corpus = JsonDocument.Parse(File.ReadAllText(Path.Combine(__SOURCE_DIRECTORY__, "tend-linkage-corpus.json")))
     let mutable cases = 0
+    let text (e: JsonElement) (name: string) = match e.TryGetProperty name with | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString()) | _ -> None
+    let flag (e: JsonElement) (name: string) = match e.TryGetProperty name with | true, v -> v.ValueKind = JsonValueKind.True | _ -> false
     for case in corpus.RootElement.GetProperty("cases").EnumerateArray() do
         cases <- cases + 1
         let cards =
-            [ for prop in case.GetProperty("cards").EnumerateObject() ->
+            [ for prop in case.GetProperty("cards").EnumerateObject() do
                 let c = prop.Value
-                let level = match c.GetProperty("workLevel").GetString() with "Delivery" -> Some V2Tend.Delivery | "Outcome" -> Some V2Tend.Outcome | _ -> None
-                let status = match c.TryGetProperty "status" with | true, s when s.ValueKind = JsonValueKind.String && s.GetString() = "Done" -> Some V2Tend.Done | _ -> Some V2Tend.InProgress
-                let parent = match c.TryGetProperty "parent" with | true, p when p.ValueKind = JsonValueKind.String -> Some(p.GetString()) | _ -> None
-                prop.Name.ToLowerInvariant(), (level, c.GetProperty("state").GetString() = "OPEN", status, parent) ]
+                // A pull-request card is absent from the reader's linkage map: it is never a Delivery.
+                if text c "type" <> Some "PullRequest" then
+                    let level = match text c "workLevel" with Some "Delivery" -> Some V2Tend.Delivery | Some "Outcome" -> Some V2Tend.Outcome | _ -> None
+                    let status = match text c "status" with Some "Done" -> Some V2Tend.Done | _ -> Some V2Tend.InProgress
+                    yield V2TendReads.canonicalRef prop.Name,
+                          ({ WorkLevel = level; Open = (text c "state" = Some "OPEN"); Status = status; Parent = text c "parent"; Unreadable = flag c "unreadable" } : V2TendReads.LinkCard) ]
             |> Map.ofList
         let pr = case.GetProperty "pr"
         let actual =
-            V2TendReads.linkage cards (pr.GetProperty("repo").GetString()) (pr.GetProperty("number").GetInt32()) (pr.GetProperty("state").GetString() = "OPEN") (pr.GetProperty("body").GetString())
+            V2TendReads.linkage cards (flag case "anonymousUnreadable") (pr.GetProperty("repo").GetString()) (pr.GetProperty("number").GetInt32())
+                (pr.GetProperty("state").GetString() = "OPEN") (pr.GetProperty("body").GetString())
         let expected = case.GetProperty("expect").GetString()
-        let shown = match actual with Ok delivery -> delivery | Error reason -> reason
-        Assert.True((shown = expected.ToLowerInvariant() || shown = expected), sprintf "%s: expected %s, got %s" (case.GetProperty("name").GetString()) expected shown)
-    Assert.True(cases >= 8)
+        let shown =
+            match actual with
+            | V2TendReads.Linked delivery -> delivery
+            | V2TendReads.Unlinked reason | V2TendReads.Unknown reason -> reason
+        Assert.True((shown = V2TendReads.canonicalRef expected || shown = expected), sprintf "%s: expected %s, got %s" (case.GetProperty("name").GetString()) expected shown)
+        // Unknown carries exactly the U reasons.
+        match actual with
+        | V2TendReads.Unknown reason -> Assert.StartsWith("r1-", reason)
+        | _ -> ()
+    Assert.True(cases >= 16)
+
+[<Fact>]
+let ``references compare case-insensitively on owner and repository and numerically on the number`` () =
+    Assert.Equal("fs-gg/x#1", V2TendReads.canonicalRef "FS-GG/X#01")
+    Assert.Equal("fs-gg/x#0", V2TendReads.canonicalRef "FS-GG/x#000")
+    Assert.Equal<string list>([ "fs-gg/x#1" ], V2TendReads.bodyRefs "FS-GG/x" "Refs #1 and FS-GG/X#001")
+    // A lone CR ends a code span, exactly as a line feed does.
+    Assert.Equal<string list>([ "fs-gg/x#1" ], V2TendReads.bodyRefs "FS-GG/x" "`x\rRefs #1`")
+
+[<Fact>]
+let ``the read-only transport admits only documents of queries, judged by parsing the operations`` () =
+    let admitted document = V2TendReads.operationKinds document |> Option.exists (fun kinds -> kinds |> List.contains "query" && kinds |> List.forall (fun k -> k = "query" || k = "fragment"))
+    Assert.Equal(Some [ "query" ], V2TendReads.operationKinds "query($a: Int) { viewer { login } }")
+    Assert.Equal(Some [ "query" ], V2TendReads.operationKinds "  { viewer { login } }")
+    Assert.Equal(Some [ "query"; "fragment" ], V2TendReads.operationKinds "query { ...F }\nfragment F on User { login }")
+    Assert.True(admitted "# mutation { closeIssue }\nquery { search(query: \"mutation {\") { issueCount } }")
+    Assert.True(admitted "query { a(b: \"\"\"mutation { x }\\\"\"\" still a string\"\"\") }")
+    Assert.False(admitted "query { viewer { login } } mutation { closeIssue(input: {}) { clientMutationId } }")
+    Assert.False(admitted "# query\nmutation { closeIssue(input: {}) { clientMutationId } }")
+    Assert.False(admitted "subscription { x }")
+    Assert.False(admitted "query { viewer { login }")
+    Assert.False(admitted "query { a(b: \"unterminated) }")
+    Assert.False(admitted "query { a } }")
+    Assert.False(admitted "")
+    Assert.False(admitted "fragment F on User { login }")
+    Assert.False(admitted "nonsense { a }")
 
 [<Fact>]
 let ``a small board is read in three requests with its cost, facts and linkage`` () =
     let outcome = { (issue 10) with WorkLevel = Some "Outcome"; SubIssues = [ 11; 12 ]; Status = Some "In progress" }
-    let merged = pr 101 "MERGED" "Refs #11\n<!-- fsgg:delivery-continues/v1 -->" (Some "2026-10-28T10:00:00Z")
+    let merged = pr 101 "MERGED" "Refs #11\n<!-- fsgg:delivery-continues/v1 -->\n`<!-- fsgg:delivery-completes/v1 -->`" (Some "2026-10-28T10:00:00Z")
     let delivery =
         { (issue 11) with
             Parent = Some 10; Status = Some "In review"; Prs = [ merged ]
@@ -177,7 +216,8 @@ let ``a small board is read in three requests with its cost, facts and linkage``
     Assert.Equal(Some "Nothing", d.BlockedOn)
     Assert.Equal(Some true, d.Intended |> Option.map (fun i -> i.RootAuthored))
     let strict = d.Prs |> List.find (fun p -> p.Id = "FS-GG/x#101")
-    Assert.Equal((V2Tend.Strict, V2Tend.PrMerged, true), (strict.Linkage, strict.State, strict.Continues))
+    // A marker quoted in code does not count.
+    Assert.Equal((V2Tend.Strict, V2Tend.PrMerged, true, false), (strict.Linkage, strict.State, strict.Continues, strict.Completes))
     // The open PR names two Deliveries: loose for both.
     Assert.Equal(V2Tend.Loose "multiple-deliveries", (d.Prs |> List.find (fun p -> p.Id = "FS-GG/x#102")).Linkage)
     let blocked = card snapshot 12
@@ -216,6 +256,25 @@ let ``the read-only transport refuses mutations and anything that is not a Graph
     let guarded = V2TendReads.readOnly inner
     let mutation : Request = { Method = "POST"; Path = "graphql"; Query = []; Body = Query("mutation { closeIssue(input: {issueId: \"I_1\"}) { clientMutationId } }", []); Budget = GraphQl; IfNoneMatch = None; Subject = "x" }
     Assert.True(guarded.Send mutation |> Result.isError)
+    // A query followed by a mutation in one document is refused: the operations are parsed, not prefixed.
+    Assert.True(guarded.Send { mutation with Body = Query("query { viewer { login } } mutation { closeIssue(input: {issueId: \"I_1\"}) { clientMutationId } }", []) } |> Result.isError)
     Assert.True(guarded.Send { mutation with Method = "GET"; Path = "repos/FS-GG/x/issues/1"; Body = NoBody } |> Result.isError)
     Assert.True(guarded.SendMutation { EffectId = "e"; Request = mutation } |> Result.isError)
     Assert.Empty(inner.Requests)
+
+[<Fact>]
+let ``an open-PR search whose node count differs from issueCount is refused`` () =
+    let openPr = pr 102 "OPEN" "Refs #1" None
+    Assert.True(V2TendReads.readSnapshot (Board([ issue 1 ], [ openPr ], issueCount = 2)) inputs |> Result.isError)
+    Assert.True(V2TendReads.readSnapshot (Board([ issue 1 ], [ openPr ])) inputs |> Result.isOk)
+
+[<Fact>]
+let ``an unreadable card makes an off-board reference Unknown, never a strict link`` () =
+    let outcome = { (issue 10) with WorkLevel = Some "Outcome"; SubIssues = [ 11 ] }
+    let merged = pr 101 "MERGED" "Refs #11 and #77" (Some "2026-10-28T10:00:00Z")
+    let delivery = { (issue 11) with Parent = Some 10; Status = Some "In review"; Prs = [ merged ] }
+    let unreadable = { (issue 12) with State = "UNREADABLE" }
+    let board = Board([ outcome; delivery; unreadable ], [])
+    let snapshot, _ = read board
+    let linked = (card snapshot 11).Prs |> List.find (fun p -> p.Id = "FS-GG/x#101")
+    Assert.Equal(V2Tend.Loose "r1-reference-unreadable", linked.Linkage)

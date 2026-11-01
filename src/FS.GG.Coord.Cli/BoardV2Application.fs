@@ -771,8 +771,17 @@ module BoardV2Application =
     // Read-only: reads Project 3 and native facts, derives the plan, writes it privately. Never writes the board.
     let private executeTend (transport: IGitHubTransport) (clock: TimeProvider) (command: TendCommand) =
         try
-            if File.Exists command.PlanPath then
+            let parent = Path.GetDirectoryName command.PlanPath
+            let others = UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute
+            if File.Exists command.PlanPath || Directory.Exists command.PlanPath then
                 eprintfn "fsgg-coord-engine: board-v2 tend refused: --plan-file must be a new path"
+                1
+            elif not (Directory.Exists parent) then
+                eprintfn "fsgg-coord-engine: board-v2 tend refused: the --plan-file directory %s does not exist" parent
+                1
+            elif not (OperatingSystem.IsWindows()) && File.GetUnixFileMode parent &&& others <> enum<UnixFileMode> 0 then
+                // Checked before any read, so a run is never spent on a plan that cannot be written.
+                eprintfn "fsgg-coord-engine: board-v2 tend refused: the --plan-file directory %s must be private to its owner (mode 0700); it is %s" parent (File.GetUnixFileMode parent |> string)
                 1
             else
                 let started = clock.GetTimestamp()
@@ -788,6 +797,9 @@ module BoardV2Application =
                                 transport.Send request
                         member _.SendMutation mutation = Error(Errors.Malformed(mutation.Request.Subject, "board-v2 tend is read-only"))
                         member _.RetryMutation effectId = Error(Errors.Malformed(effectId, "board-v2 tend is read-only")) }
+                // Placeholders, wired before PR 5 and PR 8: the Root login (until the board-currency
+                // rootLogins parameter is read), an empty ledger (until the state directory) and no
+                // enrollment input (RM1 inert; P-READY reports cards as unenrolled).
                 let inputs: V2TendReads.Inputs =
                     { Owner = "FS-GG"; ProjectNumber = 3; RootLogins = set [ "EHotwagner" ]; ObservedAt = observed; Ledger = []; Enrolled = Map.empty }
                 match V2TendReads.readSnapshot (V2TendReads.readOnly bounded) inputs with
