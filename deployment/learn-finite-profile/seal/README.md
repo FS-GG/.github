@@ -41,13 +41,21 @@ The declaration is `{"schema": "learn-synthetic-source/1", "synthetic": true, "g
 **Where a synthetic seal is refused.** The real `claim`, `supersede` (both through the seal check), the real `seal` and `quiesce`
 (through manifest validation) refuse it by record type. The real `void`, `status` and the pod operator's `verify_claim` do not look
 in the synthetic directories, and a synthetic claim copied into `claims/` is refused by `verify_claim` for its schema. The pod
-operator therefore cannot start a run from a synthetic claim until a later change gives it an explicit synthetic path.
+operator reads a synthetic claim only on its explicit synthetic path (#5184: the admitted argv-json names `input:synthetic`; see
+`pod-operator/README.md`), and finalizer r5 only with `--input synthetic`.
 
 **Where real input is refused.** A synthetic base that is a symlink, is not a directory, is or lies inside or contains the real
 spool, the persistent source area or the mounted view; a symlink in any component of a pinned subtree path below the base (for example
 `<base>/passive-home-canonical-v1` pointing into the real spool); a tree with no valid declaration (a copy of the real spool is one); a
 file whose `(st_dev, st_ino)` matches a file under the real spool roots (lstat only, nothing is read) or that has more than one link;
-and a real manifest or a real seal given to the synthetic commands. The sealed record carries the declaration's `generator` and
+and a real manifest or a real seal given to the synthetic commands. After the last file is copied, the seal re-takes the manifest
+(M3 = M1), re-reads the declaration and re-runs the subtree path guard before it writes the sealed record. A swap in that window (a subtree parent
+renamed and replaced by a symlink with the same inodes, which M3 cannot see; a file relinked to real data; a parent pointed into the real spool; a
+copied file altered before its hash check) refuses the seal and removes the copy. Tests S3b fire the swap after the copy loop has finished (the
+first post-loop source read) and include a control that disables the post-copy guard; S3c alters the last copy inside the loop.
+
+**The precheck must match the claim kind (#5204 review N4).** `_precheck_ok` refuses a synthetic claim unless the operator RESULT says
+`inputProvenance: synthetic`, and a real claim unless it says `real` (a RESULT without the field is from an operator that has only the real kind). The sealed record carries the declaration's `generator` and
 `nonce` as the caller's claim. The roots
 are pinned in the tool; `extra_real_roots` can only add to them.
 

@@ -78,10 +78,16 @@ for name in ('EVID_MAX_BYTES, EVID_MAX_ENTRIES', 'read_record_nofollow', 'eviden
              'kver', 'norm_rule', 'expected_set', 'effective_set', 'dump_cmd'):
     check(p2[name] == r6[name], f'{name} is byte for byte the one in operator r6')
 R1_SAME = ('SCHEMA', 'MAX_TTL_S', 'OPID', 'HEX64', 'POD_MEMORY_HEADROOM, POD_PIDS_HEADROOM, POD_MEMAVAILABLE', 'SLICE_MEMORY_MAX, SLICE_PIDS_MAX', 'TRANSITIONING',
-           'Refuse', 'refuse', 'HELD_LOCKS', 'ACK_DIR', 'sha_bytes', 'read_pinned', 'take_lock', 'exclusion_conflicts', 'headroom', 'verify_claim', 'fsync_dir',
+           'Refuse', 'refuse', 'HELD_LOCKS', 'ACK_DIR', 'sha_bytes', 'read_pinned', 'take_lock', 'exclusion_conflicts', 'headroom', 'fsync_dir',
            'create_marker', 'begin_input_access')
 for name in R1_SAME:
     check(p2[name] == p1[name], f'{name} is byte for byte the one in pod operator r1 (the gate layer is unchanged)')
+# #5184: verify_claim is the ONE gate-layer function r2 changes (the synthetic input kind). Its delta against r1 is pinned here, and the real-kind
+# behaviour is checked against r1's own function on the same vectors in the SYN section below.
+import difflib
+vdelta = [l for l in difflib.unified_diff(p1['verify_claim'].splitlines(), p2['verify_claim'].splitlines(), lineterm='', n=0) if l[:1] in '+-' and l[:3] not in ('+++', '---')]
+check(sum(1 for l in vdelta if l.startswith('-')) == 2 and sum(1 for l in vdelta if l.startswith('+')) == 6,
+      f'verify_claim differs from r1 only by the input-kind lines (2 removed, 6 added): {vdelta}')
 src2 = open(POD).read()
 check("'podman', 'exec'" not in src2 and "'exec'," not in src2, 'r2 never builds a podman exec argv')
 check(M.PROD['finalizer_sha'] == sha(open(FIN, 'rb').read()), 'the finalizer pin is the sha256 of finalizer r5 in this tree')
@@ -94,9 +100,16 @@ check(F5.VOLUME_ROOT == M.PROD['volume_root'] and F5.DEFAULTS['cred_root'] == M.
 check(M.HOST_UID == {'pg': 428678, 'app': 428679}, 'the host uid gate is design section 3\'s {428678, 428679}')
 errs, held = M.validate_plan(M.PLAN)
 check(errs == [], f'the production plan keeps every invariant: {errs}')
-check(len(held) == 8 and all('#5184' in h for h in held), 'the production plan holds exactly the eight fixture-dependent values, each naming #5184')
-check(sorted({h.split(':')[0] for h in held}) == ['feed-admin.prepare', 'feed-admin.resume', 'feed-replay.activate', 'feed-replay.drain', 'host-init.service',
-                                                  'host-init.verify', 'host-restart.service', 'host-restart.verify'], 'the held values are the Host fixture steps and the producer association')
+# #5184 resolved the eight r2 values: host-init verify and serve, host-restart serve (the driver carries the backup identity), feed-replay activate and
+# drain are filled from the pinned sources; host-restart's verify is dropped (verify refuses a non-empty store); prepare and resume are dropped by Root's
+# ruling (no Host assignment step in the pod: main work is admitted and resumed host-side). Nothing is held.
+check(held == [], f'the production plan holds nothing: {held}')
+check([n_ for n_, _ in M.PLAN['generations']['host-restart']['steps']] == ['wait-pg'], 'host-restart runs no verify (verify-installed-adoption refuses a non-empty store)')
+fa_ = M.PLAN['generations']['feed-admin']
+check([n_ for n_, _ in fa_['steps']] == ['wait-host'] and fa_['creds'] == [] and fa_['service'] == M.HOLD,
+      'feed-admin runs no Host assignment step (Root ruling: no prepare-main-admission or resume in the pod), holds no credential and only holds its slot')
+src_r2 = open(POD).read()
+check("'prepare-main-admission'" not in src_r2 and "'/v1/resume'" not in src_r2 and 'issuecomment-6559191767' in src_r2, 'the plan has no prepare or resume command and cites the ruling')
 check(sum(1 for a in M.PLAN['actions'] if a[0] == 'checkpoint') == 5, 'the production plan uses five of finalizer r5\'s eight checkpoints')
 
 
@@ -111,6 +124,8 @@ def complete_plan():
 
 
 TP = complete_plan()
+HELD_PLAN = copy.deepcopy(TP)                            # a plan with one value still to decide (the production plan holds none since #5184)
+HELD_PLAN['generations']['host-init']['steps'][2] = ('request', M.Held('held for a test'))
 check(M.validate_plan(TP) == ([], []), 'the completed plan validates with no error and nothing held')
 
 
@@ -260,6 +275,135 @@ with tempfile.TemporaryDirectory() as tmp:
     check(rc == 1 and open(f'{d}/01-wait/rc').read() == '1\n', 'runner: wait-tcp times out with exit 1 when nothing listens on the port')
     rc, d, p = runner(tmp + '/y', 'host', ['wait', '3', 'wait-tcp', 'x', '1'])
     check(rc == 64, 'runner: wait-tcp needs numeric arguments')
+
+# ============================================================ #5184: the resolved plan values, run for real where a shell can run them
+G = M.PLAN['generations']
+hi = G['host-init']['steps']
+check([n_ for n_, _ in hi] == ['wait-pg', 'init', 'request', 'verify'], 'host-init: wait for pg, init, build the verify request, verify')
+check(hi[3][1] == [M.HOSTX, 'verify-installed-adoption', '--connection-file', '/cred/pg.connection', '--request-file', '/work/verify-request.json'],
+      'host-init verify: exactly the two flags verify-installed-adoption allows')
+check(set(G['host-init']['creds']) >= {'pg.connection', 'operator.token', 'runner.token'}, 'host-init has the connection and both tokens serve reads from files')
+with tempfile.TemporaryDirectory() as tmp:
+    # the runner's own numbering puts init's stdout where the request step reads it
+    rc, d, p = runner(tmp, 'host', ['wait-pg', '1', '/bin/true', 'init', '2', '/bin/echo', '{}'])
+    check(rc == 0 and os.path.isfile(os.path.join(d, '02-init', 'stdout')) and M.INIT_STDOUT == '/out/host/steps/02-init/stdout', 'INIT_STDOUT is the runner\'s path for host-init\'s second step')
+BID = '3f2c1a9e-5b7d-4e8f-9a0b-1c2d3e4f5a6b'
+# The bytes Host init prints (FS.GG.Coordination 5d525ad2, src/FS.GG.Coordination.Orchestration.Host/Program.fs:52-58): JsonSerializer.Serialize of an F#
+# anonymous record {| schema = ...; backupIdentity = identity |}, whose fields System.Text.Json writes in ALPHABETICAL order, compact, then printfn's newline
+# (reproduced by the #5204 review with dotnet fsi). The earlier fixtures assumed schema-first; that assumption fails on these bytes (tested below).
+REAL_INIT = '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}\n'
+
+
+def request_step(tmp, init_stdout, date_bin=None):
+    work = os.path.join(tmp, 'work')
+    os.makedirs(work, exist_ok=True)
+    os.chmod(work, 0o700)
+    src = os.path.join(tmp, 'init.stdout')
+    open(src, 'w').write(init_stdout)
+    script = M.VERIFY_REQUEST_SH.replace('/work/', work + '/')
+    argv = hi[2][1]
+    check(argv[:2] == ['/bin/sh', '-c'] and argv[2] == M.VERIFY_REQUEST_SH and argv[3:] == ['verify-request', M.INIT_STDOUT, M.HOST_SOURCE_REVISION, M.HOST_SHA256, M.STORE_ID],
+          'the request step is the pinned script with init\'s stdout path, the Host source revision, the Host sha256 and the store id')
+    t0 = datetime.now(timezone.utc).replace(microsecond=0)
+    p = subprocess.run([SH, '-c', script, 'verify-request', src, M.HOST_SOURCE_REVISION, M.HOST_SHA256, M.STORE_ID], capture_output=True, text=True, timeout=30)
+    return p, work, t0
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    p, work, t0 = request_step(tmp, '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}\n' % BID)
+    rq = os.path.join(work, 'verify-request.json')
+    check(p.returncode == 0 and os.path.isfile(rq), f'the request step builds the verify request from init\'s stdout: {p.stderr}')
+    st_ = os.stat(rq)
+    check(stat.S_IMODE(st_.st_mode) == 0o600 and st_.st_uid == os.getuid() and stat.S_IMODE(os.stat(os.path.join(work, 'backup-identity')).st_mode) == 0o600,
+          'the request and the backup identity are private files (0600, owner = the container user): what the Host\'s privateFile check requires')
+    j = json.loads(open(rq).read())
+    # the Host's decodeRequest rules (InstalledAdoptionVerification.fs at 5d525ad2, requestNames, subjectNames and the checks after them), restated here
+    names = {'schema', 'operationId', 'expectedSourceRevision', 'expectedExecutableSha256', 'storeId', 'expectedBackupIdentity', 'expectedSchemaVersion',
+             'expectedGenerationFence', 'issuedAt', 'expiresAt', 'ordinaryCapacity', 'recoveryCapacityPerProject', 'projectA', 'projectB'}
+    subj = {'projectId', 'repositoryNodeId', 'repositoryDatabaseId', 'issueNodeId', 'issueDatabaseId'}
+    check(set(j) == names and set(j['projectA']) == subj and set(j['projectB']) == subj, 'the request has exactly the Host\'s field set (request and both subjects)')
+    check(j['schema'] == 'fsgg.orchestration.installed-adoption-request/1' and re.fullmatch(r'[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}', j['operationId'])
+          and j['operationId'] != '00000000-0000-0000-0000-000000000000', 'schema and a fresh non-zero operation id')
+    check(j['expectedSourceRevision'] == M.HOST_SOURCE_REVISION and re.fullmatch('[0-9a-f]{40}', j['expectedSourceRevision'])
+          and j['expectedExecutableSha256'] == M.HOST_SHA256 and re.fullmatch('[0-9a-f]{64}', j['expectedExecutableSha256']), 'the runtime binding: lower-hex 40 and 64')
+    check(j['expectedBackupIdentity'] == BID and open(os.path.join(work, 'backup-identity')).read() == BID, 'the backup identity is chained from init\'s stdout')
+    check(j['storeId'] == M.STORE_ID and 0 < len(M.STORE_ID) <= 128 and j['expectedSchemaVersion'] == 2 and j['expectedGenerationFence'] == 0
+          and j['ordinaryCapacity'] == 1 and j['recoveryCapacityPerProject'] >= 1, 'store binding and capacities as the Host requires')
+    iss, exp = (datetime.fromisoformat(j[k].replace('Z', '+00:00')) for k in ('issuedAt', 'expiresAt'))
+    now_ = datetime.now(timezone.utc)
+    check(t0 - timedelta(seconds=1) <= iss <= now_ and exp > now_ and exp > iss and (exp - iss) <= timedelta(minutes=10), 'issuedAt is not in the future, expiresAt is later and within 10 minutes')
+    check(j['projectA']['projectId'] != j['projectB']['projectId'] and all(j[x]['repositoryDatabaseId'] > 0 and j[x]['issueDatabaseId'] > 0 for x in ('projectA', 'projectB')),
+          'two distinct subjects with positive database ids')
+    p2_, work2, _ = request_step(os.path.join(tmp, 'again'), '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}' % BID)
+    check(p2_.returncode == 0 and json.load(open(os.path.join(work2, 'verify-request.json')))['operationId'] != j['operationId'], 'each request has a new operation id')
+# B1 (#5204 review): the real bytes are accepted, and the old schema-first byte pattern does NOT match them (every real run would have exited 65)
+OLD_SCHEMA_FIRST = r'\{"schema":"fsgg\.orchestration\.host-init/1","backupIdentity":"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"\}'
+check(re.fullmatch(OLD_SCHEMA_FIRST, (REAL_INIT % BID).rstrip('\n')) is None and json.loads(REAL_INIT % BID) == {'backupIdentity': BID, 'schema': 'fsgg.orchestration.host-init/1'}
+      and list(json.loads(REAL_INIT % BID)) == sorted(json.loads(REAL_INIT % BID)), 'B1: the real init bytes are alphabetical, and the old schema-first pattern fails on them')
+for what, out_ in (('the real bytes', REAL_INIT % BID), ('the same object schema-first', '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}\n' % BID)):
+    with tempfile.TemporaryDirectory() as tmp:
+        p, work, _ = request_step(tmp, out_)
+        check(p.returncode == 0 and open(os.path.join(work, 'backup-identity')).read() == BID, f'B1: the request step accepts {what} (the check does not depend on key order)')
+for what, out_ in (('an upper-case identity', '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}' % BID.upper()),
+                   ('another schema', '{"schema":"fsgg.orchestration.host-init/2","backupIdentity":"%s"}' % BID),
+                   ('an extra field', '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s","x":1}' % BID),
+                   ('two objects', '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}\n{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}' % (BID, BID)),
+                   ('an empty stdout', ''), ('trailing text on the line (grep -x)', (REAL_INIT % BID).rstrip('\n') + ' x'),
+                   ('leading text on the line (grep -x)', 'x ' + REAL_INIT % BID), ('a second identity key', '{"backupIdentity":"%s","backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}' % (BID, BID)), ('an identity with a quote', '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s\\""}' % BID)):
+    with tempfile.TemporaryDirectory() as tmp:
+        p, work, _ = request_step(tmp, out_)
+        check(p.returncode == 65 and not os.listdir(work), f'the request step refuses {what} (exit 65) and writes nothing')
+# serve: the no-GitHub mode, with the backup identity read from the file the request step wrote
+svc = G['host-init']['service']
+check(svc[:2] == ['/bin/sh', '-c'] and svc[4:6] == [M.HOSTX, 'serve'] and svc[6:] == M.SERVE_ARGS, 'host-init service: serve with the fixed arguments behind a backup-identity wrapper')
+sa = dict(zip(M.SERVE_ARGS[0::2], M.SERVE_ARGS[1::2]))
+check(len(M.SERVE_ARGS) % 2 == 0 and not any(k.startswith(('--github', '--runner-executable', '--executor-binding', '--telemetry', '--codex')) for k in sa)
+      and sa['--prefix'] == 'http://127.0.0.1:5108/' and sa['--runner-token-file'] != sa['--token-file'], 'serve runs without GitHub, runner roots, executor binding or telemetry (no egress); loopback prefix on the host port; distinct token files')
+check(sa['--store-id'] == M.STORE_ID and sa['--minimum-generation-fence'] == '0' and int(sa['--repository-database-id']) > 0 and int(sa['--issue-database-id']) > 0
+      and re.fullmatch(r'[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}', sa['--permit-id']), 'serve\'s store id equals the request\'s; fence 0; positive ids; a non-zero permit GUID')
+with tempfile.TemporaryDirectory() as tmp:
+    work = os.path.join(tmp, 'work')
+    os.makedirs(work)
+    fake = os.path.join(tmp, 'host')
+    open(fake, 'w').write('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+    os.chmod(fake, 0o755)
+    wrap = [x.replace('/work/', work + '/') for x in svc[:4]] + [fake] + svc[5:]
+    p = subprocess.run(wrap, capture_output=True, text=True, timeout=30)
+    check(p.returncode == 70, 'serve wrapper: no backup-identity file, no serve (exit 70)')
+    open(os.path.join(work, 'backup-identity'), 'w').write(BID)
+    p = subprocess.run(wrap, capture_output=True, text=True, timeout=30)
+    check(p.returncode == 0 and p.stdout.split('\n')[:-1] == ['serve'] + M.SERVE_ARGS + ['--backup-identity', BID], 'serve wrapper: execs the Host with the fixed arguments plus --backup-identity from init')
+# the producer: activate-remote, then drain bound to the association digest
+fr = dict(G['feed-replay']['steps'])
+check([n_ for n_, _ in G['feed-replay']['steps']] == ['copy', 'verify', 'private', 'credential', 'activate', 'drain'], 'feed-replay: copy, verify, make private, credential, activate, drain')
+check(fr['private'] == ['/bin/chmod', '-R', 'u=rwX,go=', '/work/spool'], 'the copy is made private before activate (spool root 0700, *.ready 0600)')
+act = fr['activate']
+check(act[:2] == M.PRODUCER_CLI and act[2:5] == ['telemetry', 'workspace', 'activate-remote'] and '--capture-only' not in act, 'activate-remote through the pinned CLI tree, not capture-only')
+aa = dict(zip(act[5::2], act[6::2]))
+check(aa == {'--config': '/work/telemetry.json', '--workspace': M.WS, '--producer': M.PRODUCER, '--stream': M.STREAM, '--repository': 'FS-GG/.github',
+             '--endpoint': 'https://localhost:5443', '--credential-reference': 'collector', '--spool-root': '/work/spool/passive-prospective-0106-20261018/spool'},
+      'activate-remote: the one drainable identity, the in-pod receiver over https, the collector credential, the copied replay subtree')
+check(aa['--spool-root'] == '/work/spool/' + M.REPLAY_SUBTREE and 'FSGG_TELEMETRY_CREDENTIAL_' + aa['--credential-reference'].upper() == fr['credential'][1],
+      'the spool root is the replay subtree of the copy, and the credential reference names the exported variable')
+dr = fr['drain']
+check(dr[:5] == M.PRODUCER_CLI + ['telemetry', 'workspace', 'drain'] and dict(zip(dr[5::2], dr[6::2])) == {'--config': aa['--config'], '--repository': aa['--repository'], '--binding-digest': M.BINDING_DIGEST},
+      'drain: the same config and repository, bound to the association digest')
+
+
+def assoc_digest(values):
+    """WorkspaceTelemetryApplication.associationDigest, restated: int32 little-endian length prefix, UTF-8, sha256, lower hex."""
+    b = b''
+    for v in values:
+        e_ = v.encode()
+        b += len(e_).to_bytes(4, 'little', signed=True) + e_
+    return hashlib.sha256(b).hexdigest()
+
+
+check(assoc_digest([aa['--workspace'], aa['--producer'], aa['--stream'], 'remote', aa['--endpoint'] + '/', aa['--credential-reference'], aa['--spool-root'], aa['--repository']])
+      == M.BINDING_DIGEST, 'the drain binding digest is the association digest of exactly the activate-remote arguments (endpoint as its AbsoluteUri)')
+check(assoc_digest([aa['--workspace'], aa['--producer'], aa['--stream'], 'remote', aa['--endpoint'] + '/', aa['--credential-reference'], aa['--spool-root'] + 'x', aa['--repository']])
+      != M.BINDING_DIGEST, 'control: another spool root gives another digest (drain would refuse with association-stale)')
+check(all(not M.is_held(a) for _, a in G['feed-replay']['steps']) and not M.is_held(G['host-init']['service']), 'no held value is left in host-init or feed-replay')
 
 # ============================================================ the probe script and its parser
 with tempfile.TemporaryDirectory() as tmp:
@@ -529,8 +673,10 @@ with tempfile.TemporaryDirectory() as tmp:
     w = World(tmp)
     code, r, _ = go(w, PRE, env={'app_image': None, 'pg_image': None})
     check(code == 5 and err(r, 'no image ids are pinned'), 'the production image pins (None) refuse')
-    code, r, _ = go(w, PRE, env={'plan': M.PLAN})
-    check(code == 5 and err(r, 'the plan has held steps') and 'podPrecheck' not in r['gates'], 'the production plan refuses (held steps) before any container starts')
+    held_plan = copy.deepcopy(TP)
+    held_plan['generations']['host-init']['steps'][2] = ('request', M.Held('x'))
+    code, r, _ = go(w, PRE, env={'plan': held_plan}, argv=M.plan_argv(held_plan))
+    check(code == 5 and err(r, 'the plan has held steps') and 'podPrecheck' not in r['gates'], 'a plan with a held step refuses before any container starts')
     code, r, _ = go(w, PRE, argv='["x"]')
     check(code == 5 and err(r, 'argv-json must name this operator\'s plan'), 'argv-json that does not name the plan refuses')
     bad = copy.deepcopy(TP)
@@ -758,6 +904,7 @@ class DriveWorld(World):
         self.owned, self.locked = {}, []
         self.trigger, self.archived, self.archive_s, self.fin_dead, self.partial_ack, self.no_cgroup_line = None, {}, 0, False, False, set()
         self.term_late = set()
+        self.init_stdout = REAL_INIT % '3f2c1a9e-5b7d-4e8f-9a0b-1c2d3e4f5a6b'   # what Host init prints (Host 5d525ad2 Program.fs:52-58)
         self.cust = os.path.join(self.state, 'learn-custody', self.opid)
         self.ckdir = os.path.join(self.state, 'learn-checkpoint', self.opid)
         os.makedirs(self.cust)
@@ -830,7 +977,8 @@ class DriveWorld(World):
                     sd = os.path.join(out, 'steps', f'{k:02d}-{nm}')
                     os.makedirs(sd)
                     open(os.path.join(sd, 'rc'), 'w').write('0\n')
-                    open(os.path.join(sd, 'stdout'), 'w').write(json.dumps({'step': nm}) + '\n')
+                    so = self.init_stdout if (slot, nm) == ('host', 'init') else json.dumps({'step': nm}) + '\n'
+                    open(os.path.join(sd, 'stdout'), 'w').write(so)
                 i += 2 + cnt
             if slot not in self.no_complete:
                 open(os.path.join(out, 'steps', 'complete'), 'w').close()
@@ -1125,9 +1273,9 @@ with tempfile.TemporaryDirectory() as tmp:
         stat.S_IMODE(os.lstat(os.path.join(d, gn, f)).st_mode) == 0o600 for gn in CRED_GENS for f in os.listdir(os.path.join(d, gn)))
     check(modes_ok and sorted(os.listdir(d)) == sorted(CRED_GENS), 'credentials: one 0700 directory per generation that has credentials, every file 0600, nothing else (no work directory)')
     check(all(sorted(os.listdir(os.path.join(d, gn))) == CRED_GENS[gn] for gn in CRED_GENS) and rec['holders'] == CRED_GENS, 'credentials: each generation holds exactly the files it names')
-    check('pg.connection' not in CRED_GENS['feed-replay'] and 'operator.token' not in CRED_GENS['feed-replay'] and 'collector.secret' not in CRED_GENS['feed-admin']
+    check('pg.connection' not in CRED_GENS['feed-replay'] and 'operator.token' not in CRED_GENS['feed-replay'] and 'feed-admin' not in CRED_GENS
           and not any('collector.secret' in CRED_GENS[gn] for gn in ('host-init', 'host-restart')) and 'hold' not in CRED_GENS,
-          'N4: the /in replay gets no pg connection or operator token, feed-admin no collector grant, host never the grant, hold nothing')
+          'N4: the /in replay gets no pg connection or operator token, feed-admin (no Host assignment step since #5184) and hold nothing, host never the grant')
     check(not any(f.endswith(('.key', '.csr', '.ext')) for _, _, fs in os.walk(d) for f in fs), 'credentials: no private key, request or extension file survives')
     check(len(seen) == 6 and len(set(seen)) == 6 and all(len(x) >= 43 for x in seen), 'credentials: six distinct CSPRNG values (secrets.token_urlsafe), none shorter than 32 bytes of entropy')
     check(M.default_deps()['token'] is M.secrets.token_urlsafe, 'credentials: production draws from secrets.token_urlsafe')
@@ -1196,6 +1344,65 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             check(cm == [], f'{gn}: no credentials, no /cred mount')
 
+# ---- #5184 plan value 4: host-restart's serve gets host-init's backup identity, read back from the custody of the `admitted` checkpoint
+DBID = '3f2c1a9e-5b7d-4e8f-9a0b-1c2d3e4f5a6b'
+with tempfile.TemporaryDirectory() as tmp:
+    w = DriveWorld(tmp)
+    code, r, out, log = drive(w)
+    hr = [c['argv'] for c in w.ctrs.values() if c['slot'] == 'host'] + [c for c in w.calls if c[:3] == ['podman', 'run', '-d'] and c[c.index('--name') + 1].endswith('-host')]
+    restarts = [a for a in hr if a[a.index('step-runner') + 2:a.index('step-runner') + 3] == ['wait-pg'] and 'init' not in a[a.index('step-runner'):]]
+    check(code == 0 and restarts and all(a[-2:] == ['--backup-identity', DBID] and M.BID_REF not in a for a in restarts),
+          'every host-restart container serves with --backup-identity = host-init\'s, substituted by the driver')
+    bl = events(log, 'backup-identity')
+    check(len(bl) == 1 and bl[0]['backupIdentity'] == DBID and bl[0]['n'] == 1, 'the driver reads the backup identity once, from the first checkpoint (admitted), and logs it')
+for what, so in (('another schema', '{"schema":"fsgg.orchestration.host-init/2","backupIdentity":"%s"}\n' % DBID),
+                 ('two objects', ('{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}\n' % DBID) * 2),
+                 ('an upper-case identity', '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}\n' % DBID.upper()), ('nothing', '')):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = DriveWorld(tmp)
+        w.init_stdout = so
+        code, r, out, log = drive(w)
+        check(code == 3 and any('init stdout' in e for e in r['errors']) and not events(log, 'remove') and not events(log, 'kill'),
+              f'drive: host-init init stdout with {what} aborts at the first checkpoint, before any removal or kill')
+# B1: the driver PARSES init's stdout (exact keys, schema, UUID), whatever the key order; the byte forms it must refuse
+with tempfile.TemporaryDirectory() as tmp:
+    ex = os.path.join(tmp, 'extract-host')
+    os.makedirs(os.path.join(ex, 'steps', '02-init'))
+
+    def bid_of(text):
+        open(os.path.join(ex, M.INIT_STDOUT_REL), 'w').write(text)
+        return M.backup_identity_from(ex)
+    check(bid_of(REAL_INIT % DBID) == DBID, 'B1: the driver reads the identity from the real (alphabetical) init bytes')
+    check(bid_of('{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}' % DBID) == DBID, 'B1: ... and from the same object in the other key order')
+    for what, text in (('a duplicate key', '{"backupIdentity":"%s","backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}' % (DBID, DBID)),
+                       ('an extra key', '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1","x":1}' % DBID),
+                       ('another schema', '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/2"}' % DBID),
+                       ('a non-UUID identity', '{"backupIdentity":"%s-0","schema":"fsgg.orchestration.host-init/1"}' % DBID),
+                       ('a number identity', '{"backupIdentity":1,"schema":"fsgg.orchestration.host-init/1"}'),
+                       ('a second line', REAL_INIT % DBID + 'x\n'), ('a blank second line', REAL_INIT % DBID + '\n'), ('trailing text', (REAL_INIT % DBID).rstrip() + 'x'), ('a JSON array', '[1]'), ('invalid UTF-8', '\udcff')):
+        try:
+            if what == 'invalid UTF-8':
+                open(os.path.join(ex, M.INIT_STDOUT_REL), 'wb').write(b'\xff')
+                M.backup_identity_from(ex)
+            else:
+                bid_of(text)
+            check(False, f'B1: the driver refuses {what}')
+        except M.Abort:
+            check(True, f'B1: the driver refuses {what}')
+
+# validate_plan: the reference needs a checkpoint holding host-init first, and only a host service may carry it
+bad = copy.deepcopy(TP)
+i_ = bad['actions'].index(['checkpoint', 'admitted'])
+bad['actions'][i_:i_] = [['stop', 'host'], ['remove', 'host'], ['start', 'host-restart'], ['wait-ready', 'host']]
+check(any('no checkpoint with host-init' in e for e in M.validate_plan(bad)[0]), 'validate_plan: a host-restart started before any checkpoint held host-init is refused')
+bad2 = copy.deepcopy(TP)
+bad2['generations']['recv-restart']['service'] = bad2['generations']['recv-restart']['service'] + ['--x', M.BID_REF]
+check(any('only for a host service' in e for e in M.validate_plan(bad2)[0]), 'validate_plan: the reference in a non-host service is refused')
+bad3 = copy.deepcopy(TP)
+bad3['generations']['host-init']['steps'] = bad3['generations']['host-init']['steps'] + [('x', ['/bin/echo', M.BID_REF])]
+check(any('only for a host service' in e for e in M.validate_plan(bad3)[0]), 'validate_plan: the reference in a step is refused (only the driver-started service carries it)')
+check(M.validate_plan(TP) == ([], []), 'validate_plan control: the production order (admitted checkpoint before any host-restart) passes')
+
 # ---- authority: each refusal leaves nothing behind
 AUTH_CASES = [
     ('another uid', lambda w: None, {'geteuid': lambda: UID + 1}, 'run as fsgg-learn-qual'),
@@ -1205,7 +1412,8 @@ AUTH_CASES = [
     ('an admission for another operator', lambda w: (os.unlink(os.path.join(w.view, 'admissions', w.opid + '.admit')), w.admit(operator_sha=H('9'))), {}, 'does not name this op'),
     ('no input-read marker', lambda w: os.unlink(os.path.join(w.state, 'learn-input', w.opid, 'input-read')), {}, 'no input-read marker'),
     ('a claim of another op', lambda w: w.claim(opid='op-zzz'), {}, 'names another op'),
-    ('a held plan', lambda w: setattr(w, 'env_over', {'plan': M.PLAN}), {}, 'the plan cannot run'),
+    ('a held plan', lambda w: (setattr(w, 'env_over', {'plan': HELD_PLAN}), os.unlink(os.path.join(w.view, 'admissions', w.opid + '.admit')), w.admit(plan=HELD_PLAN)), {}, 'the plan cannot run'),
+    ('an admission for another plan (#5184: the driver binds the admitted argv)', lambda w: setattr(w, 'env_over', {'plan': HELD_PLAN}), {}, 'not given for this plan and input kind'),
     ('a driver that already ran', lambda w: os.makedirs(os.path.join(w.state, 'learn-drive', w.opid)), {}, 'already ran'),
 ]
 for what, mut, dover, needle in AUTH_CASES:
@@ -1556,6 +1764,31 @@ with tempfile.TemporaryDirectory() as tmp:
         raises(lambda: M.readback_extract(extract(st, complete), 'host', gen), M.Abort, needle, f'N8 readback: {what} is refused')
     check(M.readback_extract(extract(dict(ok_st, phase='terminal', reason='error', exit=1), False), 'host', gen)['phase'] == 'terminal',
           'readback: a step that failed has no steps/complete, and its evidence is still read back')
+# #5184 value 4, action by action: no backup identity in custody, no host-restart; the identity comes only from a checkpoint that held host-init
+with tempfile.TemporaryDirectory() as tmp:
+    w, drv = driver_at(tmp)
+    with contextlib.redirect_stdout(io.StringIO()):
+        drv.slots['host'] = None
+        n_runs = len([c for c in w.calls if c[:3] == ['podman', 'run', '-d']])
+        raises(lambda: drv.a_start('host-restart'), M.Abort, 'no backup identity of host-init in custody', 'value 4: a host-restart start before the identity is in custody aborts')
+        check(len([c for c in w.calls if c[:3] == ['podman', 'run', '-d']]) == n_runs, 'value 4: ... and creates no container')
+with tempfile.TemporaryDirectory() as tmp:
+    w, drv = driver_at(tmp)
+    with contextlib.redirect_stdout(io.StringIO()):
+        drv.a_checkpoint('a')
+        check(drv.bid == DBID, 'value 4 control: a checkpoint that held host-init yields the identity')
+with tempfile.TemporaryDirectory() as tmp:
+    w, drv = driver_at(tmp)
+    with contextlib.redirect_stdout(io.StringIO()):
+        drv.gens = dict(drv.gens, **{'host-plain': drv.gens['host-init']})
+        drv.slots['host']['gen'] = 'host-plain'               # the host slot holds another generation at this checkpoint
+        drv.a_checkpoint('a')
+        check(drv.bid is None, 'value 4: a checkpoint whose host slot is not host-init supplies no backup identity (only host-init\'s init stdout counts)')
+bad4 = copy.deepcopy(TP)
+bad4['generations']['host-plain'] = copy.deepcopy(bad4['generations']['host-init'])
+bad4['actions'][bad4['actions'].index(['start', 'host-init'])] = ['start', 'host-plain']
+check(any('no checkpoint with host-init' in e for e in M.validate_plan(bad4)[0]), 'validate_plan: a checkpoint that held another host generation does not supply the identity')
+
 # ---- N8: the drive budget is enforced
 with tempfile.TemporaryDirectory() as tmp:
     w = DriveWorld(tmp)
@@ -1564,5 +1797,159 @@ with tempfile.TemporaryDirectory() as tmp:
     ab = events(log, 'abort')
     check(code == 3 and ab and ('budget' in ab[0]['reason'] or 'timed out' in ab[0]['reason']) and log[[e['event'] for e in log].index('abort')]['utc'] and w.clock < M.DRIVE_BUDGET_S + 700,
           'N8: a drive that would run past its 1500 s budget aborts inside it')
+
+# ============================================================ #5184: a SYNTHETIC-input op (the pod harness, the install receipt op), explicit at every hop
+# Clock: the world's frozen `now`. Source: temporary trees; the synthetic claim and seal are written with the seal tool's record types and directories.
+SYN_ARGV = M.synthetic_plan_argv(TP)
+DROP = object()                                          # a field left out of a record
+
+
+def syn_admit(w, opid=None, argv=None):
+    a = argv or SYN_ARGV
+    return L.admit(opid or w.opid, sha(a.encode()), w.ident, SELF_SHA, sha(open(w.fin, 'rb').read()), [w.app, w.pg], 300,
+                   source_root=w.view, view_root=w.view, services=w.view, owner_uid=UID, now=w.now)
+
+
+def syn_claim(w, opid=None, snapshot='snap-1', sm_extra=None, claim_extra=None):
+    for d in ('synthetic-inputs', 'synthetic-claims'):
+        os.makedirs(os.path.join(w.view, d), exist_ok=True)
+        os.chmod(os.path.join(w.view, d), 0o755)
+    sm = {'schema': 'learn-input-snapshot-synthetic/1', 'provenance': 'synthetic', 'realSpoolProvenance': False, 'snapshotId': snapshot, 'sourceIdentity': w.ident,
+          'files': [{'path': f'{M.REPLAY_SUBTREE}/a.ready', 'type': 'file', 'size': 3, 'sha256': H('c'), 'mtime_ns': 1}]}
+    sm.update(sm_extra or {})
+    sm = {k: v for k, v in sm.items() if v is not DROP}
+    smb = L.canon(sm)
+    mp = os.path.join(w.view, 'synthetic-inputs', snapshot + '.manifest.json')
+    open(mp, 'wb').write(smb)
+    os.chmod(mp, 0o644)
+    cl = {'schema': 'learn-input-claim-synthetic/1', 'provenance': 'synthetic', 'realSpoolProvenance': False, 'generation': 1, 'sourceIdentity': w.ident,
+          'opId': opid or w.opid, 'snapshotId': snapshot, 'sealedManifestSha256': sha(smb), 'precheckResultSha256': H('b'), 'claimedUtc': w.now.isoformat(), 'supersedes': None}
+    cl.update(claim_extra or {})
+    cl = {k: v for k, v in cl.items() if v is not DROP}
+    cp = os.path.join(w.view, 'synthetic-claims', w.ident + '.claim')
+    if os.path.exists(cp):
+        os.unlink(cp)
+    open(cp, 'wb').write(L.canon(cl))
+    os.chmod(cp, 0o644)
+
+
+check(json.loads(SYN_ARGV) == [M.PLAN_SCHEMA, M.plan_digest(TP), 'input:synthetic'] and SYN_ARGV != M.plan_argv(TP), 'SYN: the synthetic argv-json is the plan argv plus the explicit declaration')
+check(M.argv_input_kind(M.plan_argv(TP), TP) == 'real' and M.argv_input_kind(SYN_ARGV, TP) == 'synthetic' and M.argv_input_kind('["x"]', TP) is None
+      and M.argv_input_kind(M.synthetic_plan_argv(HELD_PLAN), TP) is None, 'SYN: the input kind comes only from an argv that names THIS plan')
+check(M.INPUT_KINDS == mod('fin5syn', FIN).INPUT_KINDS, 'SYN: the pod operator and finalizer r5 read the same directories and record types per input kind')
+check((L.SYNTHETIC_CLAIMS, L.SYNTHETIC_CLAIM_SCHEMA, L.SYNTHETIC_INPUTS, L.SYNTHETIC_SNAPSHOT_SCHEMA) == tuple(M.INPUT_KINDS['synthetic'][k] for k in ('claims', 'claim', 'inputs', 'sealed')),
+      'SYN: ... and they are the seal tool\'s own synthetic constants')
+# the precheck: a synthetic precheck passes, says so, and the seal tool's synthetic claim accepts it
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    syn_admit(w)
+    code, r, _ = go(w, PRE, argv=SYN_ARGV)
+    check(code == 0 and r['inputProvenance'] == 'synthetic' and r['gates']['inputMounted'] is False, f'SYN: a synthetic --precheck-only passes and records inputProvenance synthetic: {r["errors"]}')
+    L._precheck_ok(r, w.opid, 'synthetic')
+    check(True, 'SYN: the seal tool\'s _precheck_ok (used by claim_synthetic) accepts the synthetic precheck RESULT for a synthetic claim')
+    raises(lambda: L._precheck_ok(r, w.opid), L.Refuse, 'not for a real-input op', 'SYN: ... and refuses it for a real claim (N4)')
+    code, r, _ = go(w, PRE)
+    check(code == 5 and err(r, 'argvJsonSha256 differs'), 'SYN: the same op run with the REAL argv refuses: the admission bound the synthetic declaration')
+    check(r['inputProvenance'] == 'real', 'SYN control: the refused real-argv run records inputProvenance real')
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    w.admit()
+    code, r, _ = go(w, PRE, argv=SYN_ARGV)
+    check(code == 5 and err(r, 'argvJsonSha256 differs'), 'SYN: a synthetic run under a REAL admission refuses (no real admission can start a synthetic op)')
+# --run: the synthetic claim is read from synthetic-claims/, the replay mounts synthetic-inputs/, and both units carry the declaration
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    syn_admit(w)
+    syn_claim(w)
+    code, r, _ = go(w, RUN, argv=SYN_ARGV)
+    check(code == 0 and r['inputProvenance'] == 'synthetic' and r['gates']['inputMounted'] is True, f'SYN: a synthetic --run with a synthetic claim starts: {r["errors"]}')
+    ins = [m for c in r['containers'] for m in c['mounts'] if m['destination'] == '/in']
+    check(len(ins) == 1 and ins[0]['source'] == os.path.join(w.view, 'synthetic-inputs', 'snap-1') and ins[0]['readOnly'], 'SYN: the replay mounts the SYNTHETIC sealed snapshot, read-only')
+    fin_c = next(c for c in w.calls if c[:2] == ['systemd-run', '--user'] and 'learn-fin-' in c[3])
+    pod_c = next(c for c in w.calls if c[:2] == ['systemd-run', '--user'] and 'learn-pod-' in c[3])
+    check(fin_c[-2:] == ['--input', 'synthetic'] and pod_c[-2:] == ['--input', 'synthetic'] and pod_c[pod_c.index('--') + 4] == '--drive',
+          'SYN: the finalizer unit and the driver are both started with the explicit --input synthetic')
+    F5S = mod('fin5syn2', FIN)
+    F5S.configure(fin_c[fin_c.index(w.fin) + 1:], {'FSGG_NONCE': 'cd' * 16, 'FSGG_PG_IMAGE': w.pg}, 30034, home=w.home, view=w.view, production=False)
+    check(F5S.INPUT == 'synthetic' and F5S.REC['inputProvenance'] == 'synthetic', 'SYN: finalizer r5 accepts that unit argv and reads the synthetic kind')
+    check(r['gates']['claim']['snapshotId'] == 'snap-1' and os.path.isfile(os.path.join(w.state, 'learn-input', w.opid, 'input-read')), 'SYN: the input-read marker is created as for a real op')
+for what, setup, argv, needle in (
+        ('a synthetic run with only a REAL claim', lambda w: (syn_admit(w), w.claim()), SYN_ARGV, 'synthetic-claims: No such file'),
+        ('a real run with only a SYNTHETIC claim', lambda w: (w.admit(), syn_claim(w)), None, 'absent: '),
+        ('a synthetic claim without provenance', lambda w: (syn_admit(w), syn_claim(w, claim_extra={'provenance': 'real'})), SYN_ARGV, 'does not say synthetic provenance'),
+        ('a synthetic claim that claims real-spool provenance', lambda w: (syn_admit(w), syn_claim(w, claim_extra={'realSpoolProvenance': True})), SYN_ARGV, 'does not say synthetic provenance'),
+        ('a synthetic claim with no realSpoolProvenance field', lambda w: (syn_admit(w), syn_claim(w, claim_extra={'realSpoolProvenance': DROP})), SYN_ARGV, 'does not say synthetic provenance'),
+        ('a synthetic seal with no realSpoolProvenance field', lambda w: (syn_admit(w), syn_claim(w, sm_extra={'realSpoolProvenance': DROP})), SYN_ARGV, 'not a synthetic seal'),
+        ('a real-schema claim in synthetic-claims/', lambda w: (syn_admit(w), syn_claim(w, claim_extra={'schema': 'learn-input-claim/1'})), SYN_ARGV, 'claim has another schema'),
+        ('a real-schema seal in synthetic-inputs/', lambda w: (syn_admit(w), syn_claim(w, sm_extra={'schema': 'learn-input-snapshot/1'})), SYN_ARGV, 'not a synthetic seal'),
+        ('a synthetic seal that claims real-spool provenance', lambda w: (syn_admit(w), syn_claim(w, sm_extra={'realSpoolProvenance': True})), SYN_ARGV, 'not a synthetic seal')):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = World(tmp)
+        setup(w)
+        code, r, _ = go(w, RUN, argv=argv)
+        check(code == 5 and err(r, needle) and not os.path.exists(os.path.join(w.state, 'learn-input', w.opid)) and not getattr(w, 'started', None),
+              f'SYN: {what} refuses before the marker and before any unit')
+# N3 (#5204 review): an argv that carries the synthetic tag but names ANOTHER plan is no input kind: refused at the identity gate even under an admission
+# written for exactly that argv, and the RESULT does not call it synthetic
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    other = M.synthetic_plan_argv(HELD_PLAN)
+    syn_admit(w, argv=other)
+    code, r, _ = go(w, PRE, argv=other)
+    check(code == 5 and err(r, 'argv-json must name this operator\'s plan') and r['inputProvenance'] == 'real' and 'podPrecheck' not in r['gates'],
+          'SYN: a synthetic-tagged argv naming another plan refuses at the identity gate, whatever the admission, and is not recorded as synthetic')
+# the real kind of verify_claim answers exactly as r1's on the same claim vectors (the gate layer's real behaviour is unchanged)
+M1 = mod('pod1syn', POD1)
+for what, setup in (('a matching real claim', lambda w: w.claim()), ('a claim of another op', lambda w: w.claim(opid='op-q')), ('no claim', lambda w: None),
+                    ('a manifest of another hash', lambda w: (w.claim(), open(os.path.join(w.view, 'inputs', 'snap-1.manifest.json'), 'ab').write(b' ')))):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = World(tmp)
+        setup(w)
+        outs = []
+        for mm in (M, M1):
+            try:
+                c_, h_, s_ = mm.verify_claim(w.env(), w.ident, w.opid)
+                outs.append(('ok', h_, s_))
+            except Exception as e:
+                outs.append(('refused', type(e).__name__, str(e)))
+        check(outs[0] == outs[1], f'SYN: r2\'s verify_claim of the real kind answers as r1\'s for {what}: {outs}')
+raises(lambda: M.verify_claim(dict(World(tempfile.mkdtemp()).env(), input='other'), H('a'), 'op-x'), M.Refuse, 'unknown input kind', 'SYN: an unknown input kind refuses')
+# the driver: --input synthetic is the only extra argument, and the admission must bind the synthetic argv
+check(M.parse_args(['--drive', '--id', 'op-x', '--source-identity', H('a'), '--input', 'synthetic'])[3] == 'synthetic'
+      and M.parse_args(['--drive', '--id', 'op-x', '--source-identity', H('a')])[3] == 'real', 'SYN: --drive takes an optional trailing --input synthetic')
+for bad in (['--drive', '--id', 'op-x', '--source-identity', H('a'), '--input', 'real'], ['--drive', '--id', 'op-x', '--input', 'synthetic', '--source-identity', H('a')],
+            ['--run', '--id', 'op-x', '--argv-json', SYN_ARGV, '--source-identity', H('a'), '--input', 'synthetic']):
+    raises(lambda bad=bad: M.parse_args(bad), M.Refuse, 'usage', f'SYN: {bad[0]} refuses {bad[-4:]}')
+
+
+class SynDriveWorld(DriveWorld):
+    def __init__(self, tmp, real_admission=False):
+        super().__init__(tmp)
+        os.unlink(os.path.join(self.view, 'claims', self.ident + '.claim'))
+        os.unlink(os.path.join(self.view, 'admissions', self.opid + '.admit'))
+        if real_admission:
+            self.admit(ttl=600)
+        else:
+            syn_admit(self)
+        syn_claim(self)
+
+
+SYN_DRIVE = lambda w: ['--drive', '--id', w.opid, '--source-identity', w.ident, '--input', 'synthetic']
+with tempfile.TemporaryDirectory() as tmp:
+    w = SynDriveWorld(tmp)
+    code, r, out, log = drive(w, argv=SYN_DRIVE(w))
+    check(code == 0 and r['verdict'] == 'complete' and r['checkpoints'] == 5, f'SYN: the driver runs the complete plan for a synthetic op: {r["errors"]}')
+    rep = [c for c in w.calls if c[:3] == ['podman', 'run', '-d'] and c[c.index('--name') + 1].endswith('-feed') and any(':/in:' in x for x in c)]
+    check(len(rep) == 1 and any(x.startswith(os.path.join(w.view, 'synthetic-inputs', 'snap-1') + ':/in:ro') for x in rep[0]), 'SYN: the driver\'s replay container mounts the synthetic snapshot')
+with tempfile.TemporaryDirectory() as tmp:
+    w = SynDriveWorld(tmp)
+    code, r, out, log = drive(w)
+    check(code == 5 and any('absent' in e or 'not given for this plan' in e for e in r['errors']) and not any(c[:3] == ['podman', 'pod', 'create'] for c in w.calls),
+          'SYN: the same synthetic op driven WITHOUT --input synthetic refuses and creates nothing')
+with tempfile.TemporaryDirectory() as tmp:
+    w = SynDriveWorld(tmp, real_admission=True)
+    code, r, out, log = drive(w, argv=SYN_DRIVE(w))
+    check(code == 5 and any('not given for this plan and input kind' in e for e in r['errors']) and not any(c[:3] == ['podman', 'pod', 'create'] for c in w.calls),
+          'SYN: a synthetic drive under a REAL admission refuses and creates nothing')
 
 print(f'learn-pod-operator-r2: {n} assertions passed')

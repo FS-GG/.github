@@ -3,7 +3,10 @@
 Refs FS-GG/.github#4647, FS-GG/.github#5183). r2 = the gate layer r1 (d34f812d) plus the START: pins, the loop-volume and container prechecks,
 the finalizer and pod units, the containers, the recovery driver and the per-run credential generator. Runs ONLY as uid 30034 (fsgg-learn-qual):
     learn-pod-operator-r2.py --precheck-only|--run --id <op-id> --argv-json '["learn-pod-plan/1","<plan sha256>"]' --source-identity <64 hex>
-    learn-pod-operator-r2.py --drive --id <op-id> --source-identity <64 hex>        (internal: the main process of learn-pod-<id>.service)
+    learn-pod-operator-r2.py --drive --id <op-id> --source-identity <64 hex> [--input synthetic]   (internal: the main process of learn-pod-<id>.service)
+#5184 adds the SYNTHETIC input kind (the pod harness, the install receipt op): the argv-json names it (synthetic_plan_argv: the plan argv plus
+"input:synthetic", bound by the admission), the claim and the sealed snapshot are read from synthetic-claims/ and synthetic-inputs/ with the seal tool's
+synthetic record types, and the finalizer and the driver are started with --input synthetic. The RESULT records inputProvenance.
 
 Gates (the first refusal wins; nothing is started or written before the lock except the RESULT on stdout). 1-10 are r1's, unchanged in effect:
   1 identity    euid 30034; exact arguments; argv-json names THIS file's plan by its sha256; the app and pg image Ids and the finalizer sha256 are pinned
@@ -94,9 +97,61 @@ DOTNET = '/usr/share/dotnet/dotnet'
 TH = [DOTNET, '/opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll']
 HOSTX = '/opt/fsgg/orchestration/host/fsgg-coord-orchestration-host'
 HOLD = ['/bin/sh', '-c', 'while :; do sleep 3600; done']
-FIXTURE = 'the section 5 fixture (verify request, assignment, executor binding, identities) is settled by the pod harness, #5184'
 RECV_SERVE = TH + ['serve', '--config', '/cred/host-config.json']
 WAIT_PG = ('wait-pg', ['wait-tcp', str(PG_PORT), '120'])
+# #5184: the plan values resolved from the pinned sources (Host: FS.GG.Coordination 5d525ad2; producer: FS.GG.Coord.Cli 0.113.0 = FS-GG/.github 79db622f, tag
+# coherent-set/v0.113.0). Citations and the reasoning are in the README ("The eight plan values"). Every identity below is a fixed per-plan constant
+# (fixture provenance); none is a secret. The backup identity is the one value init creates at random: it is chained from init's own stdout.
+HOST_SOURCE_REVISION = '5d525ad2423e733a38ce75fb1f9cac6cf76f214e'
+HOST_SHA256 = 'b3d6a6e664cf55ad25a110daa3bf1578a6f6210755e22857f5bddff139877c47'          # the matched pair's Host (pod-image context, INSTALL-FDEV)
+STORE_ID = 'learn-pod-qualification-store'
+FIXTURE_IDS = {'permit': 'c5d6f4a8-3e1b-4f0a-9b2c-7d8e9f0a1b2c', 'principal': 'learn-pod-pilot', 'repoNode': 'R_learn_pod', 'repoDb': '8201',
+               'issueNode': 'I_learn_pod', 'issueDb': '9201'}
+INIT_STDOUT = '/out/host/steps/02-init/stdout'          # the step runner's own path for host-init's second step (wait-pg is first); the tests run the runner to prove it
+# verify-installed-adoption needs a private per-run request (fsgg.orchestration.installed-adoption-request/1: exact field set, a 10-minute window, the
+# backup identity init just created). Built inside the container from init's archived stdout, which must be exactly the host-init/1 object; it fails closed.
+# What init prints (Host 5d525ad2, src/FS.GG.Coordination.Orchestration.Host/Program.fs:52-58): System.Text.Json of an F# ANONYMOUS record, whose fields
+# serialize in alphabetical order, compact: {"backupIdentity":"<uuid>","schema":"fsgg.orchestration.host-init/1"}. The check below does not depend on the
+# key order: the whole line must be that object with exactly those two keys in either order, so it holds exactly one UUID: the identity.
+VERIFY_REQUEST_SH = r'''set -eu
+umask 077
+j=$(cat "$1")
+[ "$(printf '%s\n' "$j" | wc -l)" -eq 1 ] || { echo 'init stdout is not exactly one line' >&2; exit 65; }
+u='"backupIdentity":"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"'
+k='"schema":"fsgg\.orchestration\.host-init/1"'
+printf '%s\n' "$j" | grep -Eqx "\\{($u,$k|$k,$u)\\}" || { echo 'init stdout is not exactly one host-init/1 object' >&2; exit 65; }
+b=$(printf '%s\n' "$j" | grep -Eo '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+o=$(cat /proc/sys/kernel/random/uuid)
+printf '%s\n' "$o" | grep -Eqx '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || exit 65
+t=$(date -u +%s)
+i=$(date -u -d "@$t" +%Y-%m-%dT%H:%M:%SZ)
+e=$(date -u -d "@$((t + 540))" +%Y-%m-%dT%H:%M:%SZ)
+printf '%s' "$b" > /work/backup-identity
+printf '{"schema":"fsgg.orchestration.installed-adoption-request/1","operationId":"%s","expectedSourceRevision":"%s","expectedExecutableSha256":"%s","storeId":"%s","expectedBackupIdentity":"%s","expectedSchemaVersion":2,"expectedGenerationFence":0,"issuedAt":"%s","expiresAt":"%s","ordinaryCapacity":1,"recoveryCapacityPerProject":1,"projectA":{"projectId":"f73401b4-b65d-4688-a960-a5de59b8f830","repositoryNodeId":"R_project_a","repositoryDatabaseId":8101,"issueNodeId":"I_subject_a","issueDatabaseId":9101},"projectB":{"projectId":"1e2807c3-8669-4bf3-baf2-c184532b3ea4","repositoryNodeId":"R_project_b","repositoryDatabaseId":8102,"issueNodeId":"I_subject_b","issueDatabaseId":9102}}' "$o" "$2" "$3" "$4" "$b" "$i" "$e" > /work/verify-request.json
+'''
+# serve without GitHub settings: the only mode Host 5d525ad2 runs with no egress. Runner roots, the fixture executor binding and the telemetry options are
+# accepted only WITH GitHub settings (local-executor-requires-github-main-configuration), so this serve admits no main work (see HOST_NO_EGRESS).
+SERVE_ARGS = ['--connection-file', '/cred/pg.connection', '--token-file', '/cred/operator.token', '--runner-token-file', '/cred/runner.token',
+              '--prefix', f'http://127.0.0.1:{HOST_PORT}/', '--store-id', STORE_ID, '--minimum-generation-fence', '0', '--permit-id', FIXTURE_IDS['permit'],
+              '--pilot-principal', FIXTURE_IDS['principal'], '--repository-node-id', FIXTURE_IDS['repoNode'], '--repository-database-id', FIXTURE_IDS['repoDb'],
+              '--issue-node-id', FIXTURE_IDS['issueNode'], '--issue-database-id', FIXTURE_IDS['issueDb']]
+HOST_SERVE = ['/bin/sh', '-c', 'b=$(cat /work/backup-identity) && [ -n "$b" ] || exit 70; exec "$@" --backup-identity "$b"', 'serve', HOSTX, 'serve'] + SERVE_ARGS
+# Root ruling (#5184, issuecomment-6559191767): the finite pod plan carries NO Host assignment step. Host 5d525ad2 admits and resumes main work only with
+# GitHub settings, and the pod has no egress beyond the model API (decision 1, #5068), so prepare-main-admission and resume are not run in the pod: main-work
+# assignment and resume stay host-side. feed-admin therefore only waits for the Host and holds its slot (no credentials).
+# host-restart's serve needs the backup identity host-init created, across containers (/work is per container; a second init refuses a schema-2 store).
+# The plan names it by BID_REF; the DRIVER substitutes it at the start, from host-init's init stdout that a checkpoint put in custody (validate_plan
+# requires such a checkpoint before any start that uses it). It is a store identity, not a secret.
+BID_REF = '%host-init-backup-identity%'
+INIT_STDOUT_REL = INIT_STDOUT[len('/out/host/'):]
+UUID = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+INIT_SCHEMA = 'fsgg.orchestration.host-init/1'
+# the producer association (activate-remote) and its binding digest: sha256 over the int32-LE-length-prefixed UTF-8 of [workspace, producer, stream,
+# 'remote', endpoint AbsoluteUri, credential reference, spool root] + repositories (WorkspaceTelemetryApplication.associationDigest). The tests recompute it.
+SPOOL_ROOT = '/work/spool/' + 'passive-prospective-0106-20261018/spool'
+TELEMETRY_CONFIG, PRODUCER_REPOSITORY = '/work/telemetry.json', 'FS-GG/.github'
+PRODUCER_CLI = [DOTNET, '/opt/fsgg/producer/fsgg-coord-engine.dll']
+BINDING_DIGEST = '92e0e70d86bdfc4611d229e07ce9c54092ad55bb2dd21fd1eb3a53d6b9a810bf'
 
 # Each generation is ONE container in one slot. creds: the files of the per-run credential set the slot's /cred holds. A generation without a
 # service ends when its steps end (role writes the terminal status and .done); with one, the runner execs it after the steps.
@@ -110,19 +165,30 @@ GENERATIONS = {
     'recv-restart': {'slot': 'recv', 'creds': ['server.pfx', 'server.password', 'collector.secret', 'host-config.json', 'browser-key-hash.json', 'ca.pem'], 'volume': True,
                      'steps': [], 'service': RECV_SERVE, 'ready': ['--ready-tcp', str(RECV_PORT), '--ready-timeout', '600']},
     'host-init': {'slot': 'host', 'creds': ['pg.connection', 'operator.token', 'runner.token', 'ca.pem'],
-                  'steps': [WAIT_PG, ('init', [HOSTX, 'init', '--connection-file', '/cred/pg.connection']), ('verify', Held(FIXTURE))],
-                  'service': Held(FIXTURE), 'ready': ['--ready-tcp', str(HOST_PORT), '--ready-timeout', '600']},
+                  'steps': [WAIT_PG, ('init', [HOSTX, 'init', '--connection-file', '/cred/pg.connection']),
+                            ('request', ['/bin/sh', '-c', VERIFY_REQUEST_SH, 'verify-request', INIT_STDOUT, HOST_SOURCE_REVISION, HOST_SHA256, STORE_ID]),
+                            ('verify', [HOSTX, 'verify-installed-adoption', '--connection-file', '/cred/pg.connection', '--request-file', '/work/verify-request.json'])],
+                  'service': HOST_SERVE, 'ready': ['--ready-tcp', str(HOST_PORT), '--ready-timeout', '600']},
+    # #5184: no verify after a restart: verify-installed-adoption refuses any store that is not empty (dedicated-store-not-empty), and init's verify
+    # and serve's startup pause have written rows by then. WAIT_PG and the readiness probe are what a restart can check.
     'host-restart': {'slot': 'host', 'creds': ['pg.connection', 'operator.token', 'runner.token', 'ca.pem'],
-                     'steps': [WAIT_PG, ('verify', Held(FIXTURE))], 'service': Held(FIXTURE), 'ready': ['--ready-tcp', str(HOST_PORT), '--ready-timeout', '600']},
-    'feed-admin': {'slot': 'feed', 'creds': ['pg.connection', 'operator.token', 'ca.pem'],
-                   'steps': [('wait-host', ['wait-tcp', str(HOST_PORT), '300']), ('prepare', Held(FIXTURE)), ('resume', Held(FIXTURE))],
+                     'steps': [WAIT_PG], 'service': [HOSTX, 'serve'] + SERVE_ARGS + ['--backup-identity', BID_REF],
+                     'ready': ['--ready-tcp', str(HOST_PORT), '--ready-timeout', '600']},
+    'feed-admin': {'slot': 'feed', 'creds': [],
+                   'steps': [('wait-host', ['wait-tcp', str(HOST_PORT), '300'])],
                    'service': HOLD, 'ready': ['--ready-file', '/out/feed/steps/complete', '--ready-timeout', '600']},
     'feed-replay': {'slot': 'feed', 'creds': ['ca.pem', 'collector.secret', 'spool.sha256'], 'input': True,
                     'steps': [('copy', ['/bin/cp', '-R', '--preserve=mode,timestamps', '/in/.', '/work/spool']),
                               ('verify', ['/usr/bin/sha256sum', '--check', '--strict', '--quiet', '/cred/spool.sha256']),
+                              # activate-remote needs the spool root 0700 under a private parent and drain needs *.ready at 0600; the seal makes them 0755/0644
+                              ('private', ['/bin/chmod', '-R', 'u=rwX,go=', '/work/spool']),
                               ('credential', ['env-file', 'FSGG_TELEMETRY_CREDENTIAL_COLLECTOR', '/cred/collector.secret']),
-                              ('activate', Held('the producer association flags (--repository and the binding digest it yields for drain) are a pod-harness spike, #5184')),
-                              ('drain', Held('drain takes the binding digest activate-remote prints; the chaining is a pod-harness spike, #5184'))],
+                              ('activate', PRODUCER_CLI + ['telemetry', 'workspace', 'activate-remote', '--config', TELEMETRY_CONFIG, '--workspace', WS,
+                                                           '--producer', PRODUCER, '--stream', STREAM, '--repository', PRODUCER_REPOSITORY,
+                                                           '--endpoint', f'https://localhost:{RECV_PORT}', '--credential-reference', 'collector',
+                                                           '--spool-root', SPOOL_ROOT]),
+                              ('drain', PRODUCER_CLI + ['telemetry', 'workspace', 'drain', '--config', TELEMETRY_CONFIG, '--repository', PRODUCER_REPOSITORY,
+                                                        '--binding-digest', BINDING_DIGEST])],
                     'service': None},
     'hold': {'slot': '*', 'creds': [], 'steps': [], 'service': HOLD, 'ready': []},
 }
@@ -248,7 +314,7 @@ PROD = {
     'slice': '/sys/fs/cgroup/user.slice/user-30034.slice',
     'meminfo': '/proc/meminfo',
     'fin': '/usr/local/libexec/fsgg-learn/learn-finalizer-r5.py',
-    'finalizer_sha': '94300e048bcf8f0abe76feb1420b2e55b3886af10402268459a68b413acbf440',    # finalizer r5 at main 55cf44e6 (#5029)
+    'finalizer_sha': 'c1de5c03598e6f1e315de7f5d55ce394f35b0880991c28467410420a042556d7',    # finalizer r5 with the #5184 synthetic-input declaration
     'app_image': None,              # learn-pod-app:r1 config Id: admitted after the build (INSTALL-FDEV step 7); None refuses
     'pg_image': None,               # postgres:18.6 local config Id: admitted after the pull by index digest PG_INDEX_DIGEST; None refuses
     'self': '/usr/local/libexec/fsgg-learn/learn-pod-operator-r2.py',
@@ -264,11 +330,27 @@ PROD = {
 PG_INDEX_DIGEST = 'sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280'      # design 2.1; recorded, the config Id is the pin
 
 
+# #5184: the input kinds. 'real' is the original reading; 'synthetic' is the seal tool's synthetic mode (learn_seal_claim.py --mode synthetic), selected
+# ONLY by the admitted argv-json (synthetic_plan_argv) and, for the driver and the finalizer, by an explicit `--input synthetic`. Same directories, record
+# types and provenance fields as the seal tool and finalizer r5's INPUT_KINDS.
+INPUT_KINDS = {'real': {'claims': 'claims', 'claim': 'learn-input-claim/1', 'inputs': 'inputs', 'sealed': 'learn-input-snapshot/1'},
+               'synthetic': {'claims': 'synthetic-claims', 'claim': 'learn-input-claim-synthetic/1', 'inputs': 'synthetic-inputs', 'sealed': 'learn-input-snapshot-synthetic/1'}}
+SYNTHETIC_TAG = 'input:synthetic'
+
+
+def input_kind(env):
+    k = env.get('input', 'real')
+    if k not in INPUT_KINDS:
+        refuse('unknown input kind')
+    return k
+
+
 def paths(env):
     st = f"{env['home']}/.local/state"
+    k = INPUT_KINDS[input_kind(env)]
     return {'lock': f'{st}/learn-operator.lock', 'custody': f'{st}/learn-custody', 'evidence': f'{st}/learn-evidence', 'markers': f'{st}/learn-input',
             'checkpoints': f'{st}/learn-checkpoint', 'drive': f'{st}/learn-drive',
-            'ack_dir': f"{env['view']}/retirement-acks", 'claims': f"{env['view']}/claims", 'inputs': f"{env['view']}/inputs"}
+            'ack_dir': f"{env['view']}/retirement-acks", 'claims': f"{env['view']}/{k['claims']}", 'inputs': f"{env['view']}/{k['inputs']}"}
 
 
 def image_ids(env):
@@ -590,11 +672,13 @@ def headroom(slice_dir, meminfo, custody_root, statvfs=os.statvfs):
 def verify_claim(env, ident, opid):
     """The live claim must name this op and this source identity, and its sealed manifest on disk must have the sha256 the claim records and
     the same source identity. Only metadata is read: the sealed COPY of the input is not opened (hashing it would be an input read)."""
-    p = paths(env)
+    p, k = paths(env), INPUT_KINDS[input_kind(env)]           # #5184: the claim directory and record type follow the admitted input kind
     raw = read_pinned(f"{p['claims']}/{ident}.claim", env['chain_start'], env['owner_uid'], 65536)
     claim = json.loads(raw)
-    if claim.get('schema') != 'learn-input-claim/1':
+    if claim.get('schema') != k['claim']:
         refuse('claim has another schema')
+    if k['claim'] != 'learn-input-claim/1' and (claim.get('provenance') != 'synthetic' or claim.get('realSpoolProvenance') is not False):
+        refuse('the synthetic claim does not say synthetic provenance')
     if claim.get('opId') != opid:
         refuse('the live claim names another op')
     if claim.get('sourceIdentity') != ident:
@@ -608,6 +692,8 @@ def verify_claim(env, ident, opid):
     sm = json.loads(smraw)
     if sm.get('sourceIdentity') != ident or sm.get('snapshotId') != sid:
         refuse('the sealed manifest names another source or snapshot')
+    if k['sealed'] != 'learn-input-snapshot/1' and (sm.get('schema') != k['sealed'] or sm.get('provenance') != 'synthetic' or sm.get('realSpoolProvenance') is not False):
+        refuse('the synthetic sealed manifest is not a synthetic seal')
     return claim, sha_bytes(raw), sid
 
 
@@ -673,6 +759,17 @@ def plan_argv(plan):
     return json.dumps([PLAN_SCHEMA, plan_digest(plan)], separators=(',', ':'))
 
 
+def synthetic_plan_argv(plan):
+    """#5184: the --argv-json of a SYNTHETIC-input op (the pod harness, the install receipt op). The third element is the explicit declaration; the
+    admission's argvJsonSha256 binds it, so Root admits a synthetic op as synthetic and no real admission can start one (or the reverse)."""
+    return json.dumps([PLAN_SCHEMA, plan_digest(plan), SYNTHETIC_TAG], separators=(',', ':'))
+
+
+def argv_input_kind(argv_raw, plan):
+    """The input kind an --argv-json names, or None when it names neither form of this plan."""
+    return {plan_argv(plan): 'real', synthetic_plan_argv(plan): 'synthetic'}.get(argv_raw)
+
+
 def strs(v):
     return isinstance(v, list) and len(v) > 0 and all(isinstance(x, str) and x and '\0' not in x for x in v)
 
@@ -715,8 +812,11 @@ def validate_plan(plan):
             errs.append(f'generation {gname}: bad readiness options')
         if g.get('input') and slot != 'feed':
             errs.append(f'generation {gname}: only the feed slot mounts /in')
+        if any(strs(st[1]) and BID_REF in st[1] for st in g.get('steps', []) if isinstance(st, (list, tuple)) and len(st) == 2) \
+                or BID_REF in (g.get('ready') or []) or (strs(svc) and BID_REF in svc and slot != 'host'):
+            errs.append(f'generation {gname}: the backup-identity reference is only for a host service')
     S = {s: None for s in SLOTS}
-    ck, replay, acts = 0, 0, plan['actions']
+    ck, replay, acts, bid = 0, 0, plan['actions'], False
 
     def need(cond, why):
         if not cond:
@@ -729,6 +829,8 @@ def validate_plan(plan):
         v, arg = a[0], (a[1] if len(a) > 1 else None)
         if v == 'start':
             g = gens.get(arg)
+            if g is not None and strs(g.get('service')) and BID_REF in g['service']:
+                need(bid, 'no checkpoint with host-init in the host slot holds the backup identity this start needs')
             if need(g is not None and g.get('slot') in SLOTS, 'unknown generation') and need(S[g['slot']] is None, 'the slot is occupied'):
                 S[g['slot']] = {'gen': arg, 'running': True, 'done': 'may' if (g['slot'] != 'pg' and g.get('service') is None) else 'no', 'dirty': g['slot'] != 'pg'}
                 replay += bool(g.get('input'))
@@ -764,6 +866,7 @@ def validate_plan(plan):
             if need(isinstance(arg, str) and re.fullmatch(r'[a-z0-9][a-z0-9-]{0,39}', arg) is not None, 'bad label') and \
                need(all(S[r_] is not None and S[r_]['running'] for r_ in ROLES), 'finalizer r5 needs all three role containers running at a checkpoint'):
                 ck += 1
+                bid = bid or S['host']['gen'] == 'host-init'
                 for r_ in ROLES:
                     S[r_]['dirty'] = False
         elif v == 'sleep':
@@ -819,7 +922,7 @@ def ctr_argv(env, opid, gname, slot, sid=None, pre=False, command=None):
         if g.get('volume'):
             a += ['-v', f'{vol}/recv:/recv:rw,nosuid,nodev,noexec']
         if g.get('input'):
-            a += ['-v', f"{env['view']}/inputs/{sid}:/in:ro,nosuid,nodev,noexec"]
+            a += ['-v', f"{env['view']}/{INPUT_KINDS[input_kind(env)]['inputs']}/{sid}:/in:ro,nosuid,nodev,noexec"]
     a += [env['app_image'], slot]
     if command is not None:
         return a + ['--'] + list(command)
@@ -853,7 +956,7 @@ def fin_unit_argv(env, opid, ident, nonce):
     """Finalizer r5 FIRST (design section 8). No pod removal here: a finalizer that loses the custody race exits 70 and must not touch the winner's pod."""
     return ['systemd-run', '--user', '--unit', f'learn-fin-{opid}', '-p', 'RuntimeMaxSec=1980', '-p', 'MemoryMax=512M', '-p', 'TasksMax=64',
             '-p', f'Environment=FSGG_NONCE={nonce}', '-p', f"Environment=FSGG_PG_IMAGE={env['pg_image']}",
-            env['python'], '-I', env['fin'], '--id', opid, '--source-identity', ident]
+            env['python'], '-I', env['fin'], '--id', opid, '--source-identity', ident] + (['--input', 'synthetic'] if input_kind(env) == 'synthetic' else [])
 
 
 def pod_unit_argv(env, opid, ident, nonce):
@@ -866,7 +969,7 @@ def pod_unit_argv(env, opid, ident, nonce):
             '-p', f'ExecStop=-/usr/bin/timeout 5 /usr/bin/podman pod unpause {pod}', '-p', f'ExecStop=-/usr/bin/timeout 9 /usr/bin/podman pod stop -t 3 {pod}',
             '-p', f'ExecStopPost={dump_cmd(nonce)}', '-p', f'ExecStopPost=-/usr/bin/podman pod rm -f --time 0 {pod}',
             '-p', f'ExecStopPost=-/usr/bin/podman unshare rm -rf --one-file-system {cred}',
-            '--', env['python'], '-I', env['self'], '--drive', '--id', opid, '--source-identity', ident]
+            '--', env['python'], '-I', env['self'], '--drive', '--id', opid, '--source-identity', ident] + (['--input', 'synthetic'] if input_kind(env) == 'synthetic' else [])
 
 
 # ============================================================ r2: the loop volume (carry-forward item 3)
@@ -1245,6 +1348,34 @@ class Abort(Exception):
     pass
 
 
+def backup_identity_from(extract_host):
+    """host-init's backup identity from its init stdout as the finalizer extracted it into custody (Host 5d525ad2 Program.fs:52-58 prints one compact JSON
+    object, keys in alphabetical order). Parsed as JSON, not matched as bytes: exactly one object, one line, exactly the keys backupIdentity and schema
+    (no duplicate), the host-init/1 schema and a lower-case UUID. Anything else aborts."""
+    try:
+        raw = read_private(f'{extract_host}/{INIT_STDOUT_REL}', 4096)
+    except (OSError, Refuse):
+        raise Abort('custody readback: no init stdout of host-init')
+
+    def pairs(kv):
+        if len({k for k, _ in kv}) != len(kv):
+            raise ValueError('duplicate key')
+        return dict(kv)
+    try:
+        text = raw.decode('utf-8')
+        if text.endswith('\n'):
+            text = text[:-1]
+        if '\n' in text:
+            raise ValueError('more than one line')
+        j = json.loads(text, object_pairs_hook=pairs)
+    except (UnicodeDecodeError, ValueError):
+        j = None
+    if not (isinstance(j, dict) and set(j) == {'backupIdentity', 'schema'} and j['schema'] == INIT_SCHEMA and isinstance(j['backupIdentity'], str)
+            and UUID.fullmatch(j['backupIdentity'])):
+        raise Abort('custody readback: host-init\'s init stdout is not exactly one host-init/1 object')
+    return j['backupIdentity']
+
+
 class Driver:
     """Runs PLAN against this op's pod. Every container is created by ctr_argv; every destructive act on a role container needs custody first (the
     checkpoint handshake with finalizer r5, read back); every action is logged with a hash chain."""
@@ -1255,7 +1386,7 @@ class Driver:
         p = paths(env)
         self.ckdir, self.cust, self.logdir = f"{p['checkpoints']}/{opid}", f"{p['custody']}/{opid}", f"{p['drive']}/{opid}"
         self.slots, self.ck, self.head, self.lines, self.t0 = {s: None for s in SLOTS}, 0, '0' * 64, 0, deps['monotonic']()
-        self.unit_cg = None
+        self.unit_cg, self.bid = None, None
 
     # ---- log, clock, reads
     def log(self, event, **kv):
@@ -1326,7 +1457,12 @@ class Driver:
         slot = g['slot']
         if self.slots[slot] is not None:
             raise Abort(f'start {gname}: the {slot} slot is occupied')
-        rc, _, err = self.run(ctr_argv(self.env, self.opid, gname, slot, self.sid), 120)
+        argv = ctr_argv(self.env, self.opid, gname, slot, self.sid)
+        if BID_REF in argv:                                     # host-restart's serve: host-init's backup identity, read back from custody
+            if not self.bid:
+                raise Abort(f'start {gname}: no backup identity of host-init in custody')
+            argv = [self.bid if x == BID_REF else x for x in argv]
+        rc, _, err = self.run(argv, 120)
         if rc != 0:
             raise Abort(f'start {gname}: {start_errno(err)}')
         self.adopt(slot, gname)
@@ -1404,6 +1540,9 @@ class Driver:
         if why:
             raise Abort(f'ack-{n} does not acknowledge this request with every role accepted: {why}')
         custody = {r_: readback_extract(f'{self.cust}/checkpoints/{n}/extract-{r_}', r_, self.gens[self.slots[r_]['gen']]) for r_ in ROLES}
+        if self.bid is None and self.slots['host']['gen'] == 'host-init':
+            self.bid = backup_identity_from(f'{self.cust}/checkpoints/{n}/extract-host')
+            self.log('backup-identity', n=n, backupIdentity=self.bid)
         self.ck = n
         for r_ in ROLES:
             self.slots[r_]['dirty'] = False
@@ -1536,6 +1675,9 @@ def drive_authority(env, deps, opid, ident):
         refuse('drive: the admission is not JSON')
     if adm.get('opId') != opid or adm.get('sourceIdentity') != ident or adm.get('operatorSha256') != self_sha:
         refuse('drive: the admission does not name this op, this source and this file')
+    want_argv = synthetic_plan_argv(env['plan']) if input_kind(env) == 'synthetic' else plan_argv(env['plan'])
+    if adm.get('argvJsonSha256') != sha_bytes(want_argv.encode()):
+        refuse('drive: the admission was not given for this plan and input kind')
     if not os.path.isfile(f"{p['markers']}/{opid}/input-read"):
         refuse('drive: no input-read marker; only a --run starts a driver')
     claim, _, sid = verify_claim(env, ident, opid)
@@ -1628,7 +1770,8 @@ def drive_main(opid, ident, env, deps):
 
 
 # ============================================================ r2: arguments, gates, start, main
-USAGE = 'usage: --precheck-only|--run --id <op-id> --argv-json <JSON list> --source-identity <64 hex> | --drive --id <op-id> --source-identity <64 hex>'
+USAGE = ('usage: --precheck-only|--run --id <op-id> --argv-json <JSON list> --source-identity <64 hex> | --drive --id <op-id> --source-identity <64 hex>'
+         ' [--input synthetic]')
 
 
 def parse_args(argv):
@@ -1640,6 +1783,10 @@ def parse_args(argv):
         opts[argv[i]] = argv[i + 1]
         i += 2
     want = {'--id', '--source-identity'} if mode == '--drive' else {'--id', '--argv-json', '--source-identity'}
+    if mode == '--drive' and '--input' in opts:                  # #5184: only the driver takes the kind as an argument (the others take it from argv-json)
+        if opts['--input'] != 'synthetic' or argv[-2:] != ['--input', 'synthetic']:
+            refuse(USAGE)
+        want = want | {'--input'}
     if mode not in ('--precheck-only', '--run', '--drive') or set(opts) != want:
         refuse(USAGE)
     if not OPID.match(opts['--id']):
@@ -1647,7 +1794,7 @@ def parse_args(argv):
     if not HEX64.match(opts['--source-identity']):
         refuse('source identity must be 64 lowercase hex')
     if mode == '--drive':
-        return mode, opts['--id'], None, None, opts['--source-identity']
+        return mode, opts['--id'], None, 'synthetic' if '--input' in opts else 'real', opts['--source-identity']
     try:
         argv_list = json.loads(opts['--argv-json'])
     except ValueError:
@@ -1699,8 +1846,8 @@ def gates(env, deps, R, mode, opid, argv_raw, ident):
     if deps['geteuid']() != env['uid']:
         refuse(f"refuse: run as fsgg-learn-qual (uid {env['uid']})")
     os.umask(0o077)
-    if argv_raw != plan_argv(env['plan']):
-        refuse('argv-json must name this operator\'s plan: ' + plan_argv(env['plan']))
+    if argv_input_kind(argv_raw, env['plan']) is None:                       # main() took the input kind from this same argv
+        refuse('argv-json must name this operator\'s plan: ' + plan_argv(env['plan']) + ' (or, for a synthetic-input op, ' + synthetic_plan_argv(env['plan']) + ')')
     # 11 plan (static, so it is checked with the identity)
     errs, held = validate_plan(env['plan'])
     R['gates']['plan'] = {'errors': errs, 'held': held, 'checkpoints': sum(1 for a in env['plan']['actions'] if a[0] == 'checkpoint')}
@@ -1798,7 +1945,8 @@ def main(argv, env=None, deps=None):
     deps = dict(default_deps(), **(deps or {}))
     if argv[:1] == ['--drive']:
         try:
-            _, opid, _, _, ident = parse_args(argv)
+            _, opid, _, kind, ident = parse_args(argv)
+            env['input'] = kind
         except Refuse as e:
             print(json.dumps({'schema': 'home-learn-pod-drive/1', 'errors': [str(e)], 'exitCode': 5}))
             return 5
@@ -1811,6 +1959,8 @@ def main(argv, env=None, deps=None):
         if mode == '--drive':
             refuse(USAGE)
         R.update(mode=mode, opId=opid, argv=argv_list, sourceIdentity=ident)
+        env['input'] = argv_input_kind(argv_raw, env['plan']) or 'real'          # #5184: the kind is what the admitted argv names; gates() refuses any other
+        R['inputProvenance'] = env['input']
         R['operatorSha256'] = gates(env, deps, R, mode, opid, argv_raw, ident)
         pod_precheck(env, deps, R, opid)                                         # 13: precheck pod, both modes (as operator r6 runs its precheck op)
         if mode == '--run':

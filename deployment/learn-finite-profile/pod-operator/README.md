@@ -81,7 +81,7 @@ and nothing here has run against a real pod. Root admits the install and every r
 
 ```text
 learn-pod-operator-r2.py --precheck-only|--run --id <op-id> --argv-json '["learn-pod-plan/1","<plan sha256>"]' --source-identity <64 hex>
-learn-pod-operator-r2.py --drive --id <op-id> --source-identity <64 hex>     (internal: the main process of learn-pod-<id>.service)
+learn-pod-operator-r2.py --drive --id <op-id> --source-identity <64 hex> [--input synthetic]     (internal: the main process of learn-pod-<id>.service)
 ```
 
 `--argv-json` names the plan by its digest (`plan_argv(PLAN)`), so the admission binds a run to the exact plan in this file.
@@ -113,7 +113,7 @@ Alternatives considered:
 ### Gates and the precheck
 
 1 to 10 are r1's (identity, pins, slice, lock, exclusion, custody, acks, evidence, admission, headroom). Changes: the pins are the app and pg image
-Ids (empty here: they are admitted after the build and the pull, so every real run refuses), finalizer r5's sha256 (`94300e04…`) and the seccomp
+Ids (empty here: they are admitted after the build and the pull, so every real run refuses), finalizer r5's sha256 (`94300e04…` at merge; re-pinned by #5184 to the revision with the synthetic-input declaration) and the seccomp
 profile's; exclusion also refuses a leftover `learn-pre-*` precheck pod; the op-id check also covers the checkpoint, drive, marker and credential
 directories. New:
 
@@ -206,9 +206,51 @@ also validated by `--run` before the input-read marker, so an unsafe sealed path
 ### Held in this revision
 
 - **Image Ids** (`app_image`, `pg_image`): admitted after the build and the pull; every real run refuses until a pin-only revision.
-- **Eight plan values** marked `HELD` (`validate_plan` lists them): the Host's `verify-installed-adoption` request and `serve` flags (fixture executor,
-  identities, the chaining of `init`'s backup identity), `prepare-main-admission` and the resume control, and the producer's `activate-remote`
-  flags and the `drain` binding digest. They belong to the pod harness (#5184); a plan holding one refuses before any container starts.
+- **No plan value** is held since #5184 (see "The eight plan values"). `Held` and `validate_plan`'s refusal of a held value stay for later plans.
+
+### The synthetic input kind (#5184)
+
+A pod op can run on a **synthetic** snapshot (the seal tool's `--mode synthetic`), so the pod harness and the install receipt op consume no real claim.
+The kind is explicit and bound at every hop:
+
+- `--argv-json` names it: `synthetic_plan_argv(PLAN)` is `["learn-pod-plan/1","<plan sha256>","input:synthetic"]`. The admission's `argvJsonSha256`
+  binds it, so a real admission cannot start a synthetic op, nor the reverse. Any other argv refuses.
+- `paths(env)` and `verify_claim` read `synthetic-claims/` and `synthetic-inputs/` with the synthetic record types, and require `provenance: synthetic`
+  and `realSpoolProvenance: false` on the claim and the sealed manifest. `verify_claim` is the one gate-layer function that differs from r1 (2 lines
+  removed, 6 added); for the real kind it answers as r1's on the same vectors (tested).
+- The replay mounts `synthetic-inputs/<snapshot>` at `/in`. The finalizer unit gets `--input synthetic`, and so does the driver, which also refuses an
+  admission whose argv hash is not this plan's for its kind.
+- The RESULT records `inputProvenance`.
+
+### The eight plan values (#5184)
+
+Resolved from the pinned sources: the Host is FS.GG.Coordination `5d525ad2` (the matched pair's build); the producer CLI is `FS.GG.Coord.Cli` 0.113.0,
+built from this repository at `79db622f` (tag `coherent-set/v0.113.0`). Paths below are in those trees (`Host/` is
+`src/FS.GG.Coordination.Orchestration.Host/`, `Cli/` is `src/FS.GG.Coord.Cli/`).
+
+| # | Value | Resolution | In the plan |
+|---|---|---|---|
+| 1 | host-init `verify` | `verify-installed-adoption --connection-file --request-file`, its only two flags (`Host/HostConfiguration.fs`). The request (`fsgg.orchestration.installed-adoption-request/1`) has an exact field set, a window of at most 10 minutes and `ordinaryCapacity` 1 (`Host/InstalledAdoptionVerification.fs`). Its backup identity is created at random by `init` and printed only on stdout (`Host/Program.fs:52-58`: an F# anonymous record through System.Text.Json, so the keys come out in alphabetical order, `{"backupIdentity":"<uuid>","schema":"fsgg.orchestration.host-init/1"}`). A `request` step builds the file from init's archived stdout. Its check does not depend on key order: the whole line must be that object with exactly those two keys, in either order, and a lower-case UUID. It fails closed (exit 65) and writes nothing otherwise. (r2 at `94113002` assumed schema-first and would have refused every real init; the tests now use the real bytes and show the old pattern fails on them) | filled |
+| 2 | host-init `serve` | Host `5d525ad2` accepts runner roots, the executor binding and the telemetry options **only with GitHub settings** (`local-executor-requires-github-main-configuration`, `local-telemetry-requires-local-executor`), and those need the GitHub API and a token. The no-egress serve is the one filled: tokens and connection from files, loopback prefix, fixed fixture identities, `--backup-identity` read from the file the `request` step wrote | filled (no-GitHub mode) |
+| 3 | host-restart `verify` | dropped: `verify-installed-adoption` refuses a store that is not empty (`dedicated-store-not-empty`), and verify and serve's startup pause have written rows by then; the Host has no read-only status command | removed |
+| 4 | host-restart `serve` | the same argv, but the backup identity must cross containers (`/work` is per container; a second `init` refuses a schema-2 store). The plan names it `BID_REF`; at the first checkpoint that holds host-init (`admitted`) the driver reads `steps/02-init/stdout` from the custody extract and parses it as JSON: one line, exactly the keys `backupIdentity` and `schema` with no duplicate, the `host-init/1` schema and a lower-case UUID (else it aborts, before any removal or kill), logs it, and substitutes it when it starts a host-restart. `validate_plan` refuses a start that needs it before such a checkpoint, and the reference anywhere but a host service | filled (driver) |
+| 5 | feed-admin `prepare` | `prepare-main-admission` exists, but no pinned fixture assignment file exists at `5d525ad2` (only test code), the request has 33 exact fields, and posting it to `/v1/main/admit` returns 503 without GitHub settings | dropped by Root's ruling |
+| 6 | feed-admin `resume` | no command: `POST /v1/resume` with `operator.token` and values read from `/v1/status` at run time; it returns 404 `legacy-main-control-route-not-supported` without GitHub settings | dropped by Root's ruling |
+| 7 | feed-replay `activate` | `telemetry workspace activate-remote --config --workspace --producer --stream --repository --endpoint --credential-reference --spool-root` (`Cli/TelemetryApplication.fs`). No network call and no digest printed. It needs the spool root 0700 under a private parent and drain needs `*.ready` at 0600, while the seal makes 0755/0644: a `private` step (`chmod -R u=rwX,go=`) comes first | filled |
+| 8 | feed-replay `drain` | `telemetry workspace drain --config --repository --binding-digest`. The digest is computed from the association alone (`Cli/WorkspaceTelemetryApplication.fs`, `associationDigest`: int32-LE length-prefixed UTF-8 of workspace, producer, stream, `remote`, the endpoint's AbsoluteUri, the credential reference, the spool root, then the repositories), so it is a literal in the plan; the test recomputes it | filled |
+
+**Root's ruling: no Host assignment step in the pod** ([#5184](https://github.com/FS-GG/.github/issues/5184#issuecomment-6559191767)). On
+Host `5d525ad2`, admitting, resuming and invoking main work all need GitHub settings, and the first effect after prepare is an external GitHub claim;
+the pod has no egress beyond the model API (decision 1, #5068). So `prepare-main-admission` and `resume` are not run in the pod: main-work assignment
+and resume stay host-side, outside it. `feed-admin` only waits for the Host and holds its slot, with no credential. Widening pod egress to the GitHub
+API and a Host offline fixture mode were both rejected. Consequence: in the pod the Host part qualifies `init`, `verify-installed-adoption`, the
+no-GitHub `serve` and its restarts; design section 5's assignment, resume and controlled invocation, and the actor capture that depends on them, are
+not shown by the pod.
+
+**Still open after the resolution:** `drain` exits 0 with `processed: 0` when nothing is pending, so the verdict reads its
+`fsgg.telemetry.workspace-drain/1` stdout; a passive chain sends only its earliest pending batch per run, so the three real batches may need up to
+three drains; the tool's outcome files stay under `/work` unless copied to `/out/feed`; whether the request step's `date -d` and the base's `grep -E`
+behave as GNU coreutils does in the base image; whether verify's A/B rows disturb a later serve.
 
 ### Tests
 
@@ -220,7 +262,8 @@ README with the baseline's identifier classes.
 ### What is NOT established
 
 - Whether `--cgroups=split` places pod members (and the infra container) under the pod unit's cgroup. The driver asserts it (`assert-cgroups`) and
-  aborts if not. Root routed this to a #5184 synthetic spike before the first real claim (N5b).
+  aborts if not. The pod harness's `n5b-cgroups` case answers it (`pod-harness/README.md`); it has not run.
+- Design section 5's assignment, resume and invocation inside the pod: not run there, by Root's ruling (see "The eight plan values").
 - Seccomp applicability to PostgreSQL and the .NET applications, the CLI and Host wire compatibility, a Generic credential for the Host outbox,
   `cp --preserve` and `sha256sum` in the base image, `openssl` on the host: pod-harness items. (`setsid -w` is asserted by the precheck.)
 - That `docker-entrypoint.sh` of the pinned pg image honours `POSTGRES_PASSWORD_FILE` with a read-only root and `PGDATA` on the volume.
