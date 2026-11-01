@@ -53,15 +53,17 @@ permissions:
   issues: read     # reads fsgg:claim marker comments on the item the PR's branch names — a valid
                    # GITHUB_TOKEN scope, unlike `administration` (.github#2342).
 
-# PR-keyed concurrency (#4730 CI-load), the SAME shape scripts/check-pr-concurrency.py governs on the other
-# PR workflows: this workflow re-runs on every body edit, so a newer event for the same pull request
-# cancels the superseded run instead of letting it finish. The cancelled run is for a body or head that is
-# no longer current, and the newer run reports the context for the current one. The `github.sha` fallback
-# and the pull_request-only cancel are inert while this workflow triggers on pull_request alone; they are
-# kept so a trigger added later cannot make main-push or merge_group runs share a group or be cancelled.
-# tests/claim-generation/run.sh pins this block exactly.
+# Head-keyed concurrency (#4730 CI-load, #5159), the SAME shape scripts/check-pr-concurrency.py governs on
+# the other workflows a body edit starts. A head action (opened, synchronize, reopened) keys on the pull
+# request, so a newer head cancels the superseded head's run. `edited` keys on `github.run_id`, which is
+# unique to the run: a body edit never cancels the head run for the SAME head and is never cancelled
+# itself. That matters most here, because this is a REQUIRED context: a cancelled required check on a live
+# head reads as failing, and a re-run replays the stale body (#5159). Each edit's run settles on its own
+# payload, which is exactly what `edited` is for (#2488). The cancel is pull_request-only so a trigger
+# added later cannot make other events cancel. tests/claim-generation/run.sh pins this block exactly, and
+# check-pr-concurrency.py (GOVERNED) derives the required shape from the `edited` trigger above.
 concurrency:
-  group: claim-generation-${{ github.event.pull_request.number || github.sha }}
+  group: claim-generation-${{ contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

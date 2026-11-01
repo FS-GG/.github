@@ -90,8 +90,8 @@ WHY THESE (the basis, recorded rather than implied).
     `workflow_dispatch`). The latter two keyed on `github.ref` (`refs/pull/N/merge`), so a body edit
     cancelled the same head's run. The sweep in audit() now refuses any such workflow left ungoverned.
   * `landed-revert-guard` (landed by #5008) already had the PR-only block; it is listed in PR_ONLY so the gate
-    pins it. `claim-generation` (#5004, held) is not on main yet; its block is the default shape, so it goes in
-    GOVERNED when it lands.
+    pins it. `claim-generation` (#5004) moved out of coherence.yml in its own workflow, which keeps `edited` (it reads
+    the PR body) and is therefore head-keyed like `fsgg-claim-fence`; it is in GOVERNED.
   * `wizard-graph-seal` already declares `<name>-${{ github.ref }}`, cancel true, and is one of the 73 PR
     workflows with a block of their own (many `<name>-${{ github.ref }}`, which also cancels main pushes).
   On that tree 136 workflows trigger on pull_request or pull_request_target: 60 governed here, 74 with their
@@ -134,7 +134,7 @@ GOVERNED = [
     "c3-coordination-ordinary-enrollment-bridge-selftest",
     "c3-game-ordinary-enrollment-bridge-selftest", "c3-governance-ordinary-enrollment-bridge-selftest",
     "c3-net-ordinary-enrollment-bridge-selftest", "c3-rendering-ordinary-enrollment-bridge-selftest",
-    "coherence", "coord-report-selftest", "coordination-sync-selftest", "cross-repo-request-predicate",
+    "claim-generation", "coherence", "coord-report-selftest", "coordination-sync-selftest", "cross-repo-request-predicate",
     "dispatch-preflight-selftest", "feed-autofix", "fsc-progress-evidence", "fsgg-claim-fence",
     "fsgg-dispatch-broker-selftest", "generator-list", "gs2-09-7-receiver-observer-probe-selftest",
     "kit-package-selftest", "learn-finite-profile-selftest", "learn-pod-operator-selftest",

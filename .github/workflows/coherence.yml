@@ -50,15 +50,16 @@ permissions:
                    # marker comments. Kept unchanged by the split so it moves no privilege in either
                    # direction; whether the jobs left here still need it is a separate question.
 
-# Head-keyed concurrency (#4730 CI-load, #5159): a head action (opened, synchronize, reopened) keys on
-# the pull request, so a newer head cancels the superseded head's run. Every other event keys on
-# `github.run_id`, which is unique to the run. For a body edit or label event that means it never
-# cancels the head run for the SAME head, and is never cancelled itself: a cancelled required check on a
-# live head reads as failing, and a re-run replays the stale body (#5159). For a non-PR event it means
-# no pending run is dropped: GitHub discards an older PENDING run in a shared group even without
-# cancel-in-progress. scripts/check-pr-concurrency.py derives both from this block.
+# PR-keyed concurrency (#4730 CI-load, #5159): this workflow now fires only on the three head actions
+# (opened, synchronize, reopened), so every pull_request run is a head run and keys on the pull request: a
+# newer head cancels the superseded head's run. Every other event (push to main, workflow_dispatch) keys on
+# `github.run_id`, which is unique to the run, so no pending run is dropped: GitHub discards an older
+# PENDING run in a shared group even without cancel-in-progress. #5162 head-guarded this group while the
+# workflow also fired on `edited`; with `edited` gone (it moved to claim-generation.yml, which keeps the
+# head-keyed guard) the guard has nothing to exclude, and scripts/check-pr-concurrency.py derives the plain
+# shape from the trigger types.
 concurrency:
-  group: coherence-${{ contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) && github.event.pull_request.number || github.run_id }}
+  group: coherence-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
