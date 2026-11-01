@@ -910,7 +910,8 @@ module BoardV2Application =
           WriterLock: Result<V2WriterLock.Location, string>
           ConfigHome: string
           StateHome: string
-          SyncDirectory: string -> unit }
+          SyncDirectory: string -> unit
+          KitRoot: unit -> string option }
 
     let private tendProject = "PVT_kwDOEYAWY84Bldpa"
     let private privateModeBits =
@@ -927,18 +928,44 @@ module BoardV2Application =
             member _.SendMutation mutation = Error(Errors.Malformed(mutation.Request.Subject, "board-v2 tend reads never mutate"))
             member _.RetryMutation effectId = Error(Errors.Malformed(effectId, "board-v2 tend reads never mutate")) }
 
+    // The installed lifecycle contract, as the engine reads it: the work-board contract in each runtime mirror of
+    // the kit root (`FSGG_KIT_ROOT`, else the git toplevel), the same discovery `readProductWaveModel` uses for
+    // the installed host-loop policy. A mirror the tree does not carry is skipped; every mirror it does carry
+    // must declare the marker, so a stale mirror keeps the gated rules refused.
+    let private contractMirrors =
+        [ ".claude/skills/work-board/references/lifecycle-contract.md"
+          ".agents/skills/work-board/references/lifecycle-contract.md" ]
+
+    let private readContractAmendment (kitRoot: unit -> string option) : V2TendWrite.ContractAmendment =
+        match kitRoot () with
+        | None -> V2TendWrite.NotAmended "the kit root is unavailable"
+        | Some root ->
+            contractMirrors
+            |> List.choose (fun relative ->
+                let path = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar))
+                if not (File.Exists path) then None
+                else Some(relative, (try Ok(File.ReadAllText path) with error -> Error error.Message)))
+            |> V2TendWrite.contractAmendment
+
     // The enable file (design §8): `$XDG_CONFIG_HOME/fsgg/board-tend.json`, mode 0600. A file this process can
     // read under mode 0600 is owned by its user (or the process is root). Missing or invalid: plan-only.
-    let private readEnable (configHome: string) : Result<V2TendWrite.Enable * string list, string> =
+    let private readEnable (configHome: string) (kitRoot: unit -> string option) : Result<V2TendWrite.Enable * string list, string> =
         let path = Path.Combine(configHome, "fsgg", "board-tend.json")
         if not (File.Exists path) then Error "no enable file"
         elif File.GetAttributes(path).HasFlag FileAttributes.ReparsePoint then Error "the enable file is a symlink"
         elif not (OperatingSystem.IsWindows()) && File.GetUnixFileMode path &&& privateModeBits <> enum<UnixFileMode> 0 then
             Error "the enable file must be mode 0600"
         else
-            // The contract amendment (fsgg:board-tend-contract/v1) is in lifecycle-contract.md (#5136 PR 6); the
-            // engine's read of that marker is #5174. Until it lands every contract-gated rule is dropped.
-            V2TendWrite.parseEnable (File.ReadAllText path) false
+            let json = File.ReadAllText path
+            // The contract amendment (fsgg:board-tend-contract/v1, #5136 PR 6) is read from the installed contract
+            // (#5174). Without it every contract-gated rule is dropped, each with the reason.
+            match V2TendWrite.parseEnable json false with
+            | Error _ as refused -> refused
+            | Ok(withoutAmendment, dropped) when dropped.IsEmpty -> Ok(withoutAmendment, dropped)
+            | Ok(withoutAmendment, dropped) ->
+                match readContractAmendment kitRoot with
+                | V2TendWrite.Amended -> V2TendWrite.parseEnable json true
+                | V2TendWrite.NotAmended reason -> Ok(withoutAmendment, dropped |> List.map (fun message -> message + ": " + reason))
 
     // Read-only: reads Project 3 and native facts, derives the plan, writes it privately. With --apply and a
     // valid enable file, it also writes under the writer lock through the guarded tend writer.
@@ -967,7 +994,7 @@ module BoardV2Application =
                 let enable =
                     if not command.Apply then None
                     else
-                        match readEnable deps.ConfigHome with
+                        match readEnable deps.ConfigHome deps.KitRoot with
                         | Error reason ->
                             eprintfn "fsgg-coord-engine: board-v2 tend: --apply ignored (%s); plan-only" reason
                             None
@@ -1065,7 +1092,8 @@ module BoardV2Application =
           WriterLock = Error "a plan-only run takes no writer lock"
           ConfigHome = Path.Combine(Path.GetTempPath(), "fsgg-tend-no-config-" + Guid.NewGuid().ToString("N"))
           StateHome = Path.Combine(Path.GetTempPath(), "fsgg-tend-no-state-" + Guid.NewGuid().ToString("N"))
-          SyncDirectory = syncMigrationDirectory }
+          SyncDirectory = syncMigrationDirectory
+          KitRoot = fun () -> None }
 
     let runTendWithTransport (transport: IGitHubTransport) (clock: TimeProvider) (arguments: string list) =
         runTend (readOnlyDependencies transport clock) arguments
@@ -1212,7 +1240,8 @@ module BoardV2Application =
                               WriterLock = (try Ok(productionWriterLock tendProject V2WriterLock.migrationLegacyName) with error -> Error error.Message)
                               ConfigHome = xdg "XDG_CONFIG_HOME" ".config"
                               StateHome = xdg "XDG_STATE_HOME" (Path.Combine(".local", "state"))
-                              SyncDirectory = syncMigrationDirectory }
+                              SyncDirectory = syncMigrationDirectory
+                              KitRoot = KitDigest.kitRoot }
                             rest)
         | "board-v2" :: ((command :: _) as rest) when command.StartsWith("migration-", StringComparison.Ordinal) ->
             Some(

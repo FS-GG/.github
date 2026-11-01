@@ -519,6 +519,37 @@ let ``the enable file refuses unknown keys and rules and drops gated rules until
     | Error e -> failwith e
 
 [<Fact>]
+let ``the contract marker is read from a line of its own outside code, and only the supported version amends`` () =
+    let marker = "<!-- fsgg:board-tend-contract/v1 -->"
+    Assert.Equal<string list>([ "v1" ], V2TendWrite.markerVersions ("# C\n\n" + marker + "\ntext\n"))
+    Assert.Equal<string list>([ "v1" ], V2TendWrite.markerVersions ("  <!--fsgg:board-tend-contract/v1-->  \r\n"))
+    Assert.Equal<string list>([ "v2" ], V2TendWrite.markerVersions "<!-- fsgg:board-tend-contract/v2 -->")
+    Assert.Equal<string list>([ "" ], V2TendWrite.markerVersions "<!-- fsgg:board-tend-contract/ -->")
+    // Quoted, inline, fenced or tilde-fenced mentions declare nothing.
+    Assert.Empty(V2TendWrite.markerVersions ("the marker `" + marker + "` is required"))
+    Assert.Empty(V2TendWrite.markerVersions ("see " + marker + " above"))
+    Assert.Empty(V2TendWrite.markerVersions ("```\n" + marker + "\n```"))
+    Assert.Empty(V2TendWrite.markerVersions ("~~~\n" + marker + "\n~~~"))
+    Assert.Equal<string list>([ "v1" ], V2TendWrite.markerVersions ("```\nx\n```\n" + marker))
+    let judge documents = V2TendWrite.contractAmendment documents
+    let isRefused = function V2TendWrite.NotAmended _ -> true | V2TendWrite.Amended -> false
+    // Missing, wrong version, present.
+    Assert.True(isRefused (judge []))
+    Assert.True(isRefused (judge [ "a", Ok "no marker" ]))
+    Assert.True(isRefused (judge [ "a", Ok "<!-- fsgg:board-tend-contract/v2 -->" ]))
+    Assert.True(isRefused (judge [ "a", Ok(marker + "\n<!-- fsgg:board-tend-contract/v2 -->") ]))
+    Assert.Equal(V2TendWrite.Amended, judge [ "a", Ok marker ])
+    // Every mirror that exists must agree: one stale, wrong or unreadable mirror refuses, with its name.
+    Assert.Equal(V2TendWrite.Amended, judge [ "a", Ok marker; "b", Ok marker ])
+    match judge [ "a", Ok marker; "b", Ok "stale" ] with
+    | V2TendWrite.NotAmended reason -> Assert.Contains("b carries no", reason)
+    | V2TendWrite.Amended -> failwith "a stale mirror must refuse"
+    match judge [ "a", Ok marker; "b", Ok "<!-- fsgg:board-tend-contract/v3 -->" ] with
+    | V2TendWrite.NotAmended reason -> Assert.Contains("v3", reason)
+    | V2TendWrite.Amended -> failwith "a wrong-version mirror must refuse"
+    Assert.True(isRefused (judge [ "a", Ok marker; "b", Error "denied" ]))
+
+[<Fact>]
 let ``the document parser reports every root field after aliases and spreads`` () =
     let fields d = (V2TendReads.parseDocument d).Value.Operations |> List.map (fun o -> o.Kind, o.RootFields)
     Assert.Equal<(string * string list) list>([ "mutation", [ "closeIssue"; "archiveProjectV2Item" ] ], fields "mutation { a: closeIssue(input: {}) { x } archiveProjectV2Item(input: {}) @skip(if: false) { y { z } } }")
