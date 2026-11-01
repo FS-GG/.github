@@ -31,8 +31,8 @@ let private harness (run: string) (root: string) (board: Board) =
           Send = V2TendWrite.allowlisted projectId closable.Contains board.Mutate
           Custody = V2TendWrite.Custody(Path.Combine(root, "tend"), run, ignore)
           Gate = V2TendWrite.GateCustody(Path.Combine(root, "gate"), ignore)
-          Clock = TimeProvider.System
-          Pacer = V2TendWrite.Pacer(TimeProvider.System, (fun span -> waits.Add span), TimeSpan.FromSeconds 1.0)
+          Clock = board.Clock
+          Pacer = V2TendWrite.Pacer(board.Clock, (fun span -> waits.Add span), TimeSpan.FromSeconds 1.0)
           Closable = closable
           Settings = V2TendWrite.defaultSettings projectId (set [ "EHotwagner" ]) } }
 
@@ -52,13 +52,13 @@ let private snapshotOf (board: Board) (prs: (string * V2Tend.LinkedPr list) list
                Roadmap = i.Values.TryFind "Roadmap"; Parent = i.Parent; SubIssues = []; SubIssuesComplete = true; Blockers = []; BlockersComplete = true
                MarkerBlockers = Some []; Prs = (prs |> List.tryPick (fun (id, p) -> if id = itemId then Some p else None) |> Option.defaultValue []); TimelineComplete = true
                Intended = None; BlockedOn = None; AcceptanceEvidence = None; Enrolled = false; EnrolledRoadmap = None; TendClosedBefore = false } : V2Tend.Card) ]
-    { ObservedAt = DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero); Cards = cards; Ledger = [] }
+    { ObservedAt = FakeClock.Anchor; Cards = cards; Ledger = [] }
 
 let private effect id itemId ref field preimage target rules depends : V2Tend.Effect =
     { Id = id; ItemId = itemId; Ref = ref; Field = field; Preimage = preimage; Target = target; Rules = rules; DependsOn = depends }
 
 let private plan (effects: V2Tend.Effect list) (closures: V2Tend.Closure list) : V2Tend.Plan =
-    { Ruleset = V2Tend.ruleset; ObservedAt = DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero); Apply = effects; WouldApply = []; Deferred = []
+    { Ruleset = V2Tend.ruleset; ObservedAt = FakeClock.Anchor; Apply = effects; WouldApply = []; Deferred = []
       Propose = []; Refuse = []; T1iComparison = { Pairs = 0; Disagreements = 0 }; Close = closures; WouldClose = [] }
 
 let private run (h: Harness) (input: V2Tend.Plan) (snapshot: V2Tend.Snapshot) =
@@ -215,7 +215,7 @@ let ``a deciding PR that changed since the snapshot refuses an S3 move`` () =
         let board = Board()
         board.AddItem("PVTI_a", item "FS-GG/x#10" "I_a" [ "Status", "In progress" ])
         board.AddPr("FS-GG/x#100", { State = "OPEN"; Draft = false; MergedAt = None; Body = "Refs #10"; MergeOid = ""; Comments = [] })
-        let linked : V2Tend.LinkedPr = { Id = "FS-GG/x#100"; State = V2Tend.PrOpen; Draft = false; Linkage = V2Tend.Strict; UpdatedAt = DateTimeOffset.UtcNow; MergedAt = None; Continues = false; Completes = false }
+        let linked : V2Tend.LinkedPr = { Id = "FS-GG/x#100"; State = V2Tend.PrOpen; Draft = false; Linkage = V2Tend.Strict; UpdatedAt = board.Clock.GetUtcNow(); MergedAt = None; Continues = false; Completes = false }
         let snapshot = snapshotOf board [ "PVTI_a", [ linked ] ]
         board.Prs.["FS-GG/x#100"].State <- "CLOSED"
         let h = harness "run1" root board
