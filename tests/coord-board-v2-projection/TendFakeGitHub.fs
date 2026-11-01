@@ -25,6 +25,21 @@ type FakePr =
 
 let projectId = "PVT_kwDOEYAWY84Bldpa"
 
+/// The one clock a tend test runs on (the #5109 fixture rule: no wall-clock-dependent fixtures). It never reads the
+/// system clock: time moves only when a test calls Advance, and the monotonic timestamp follows the same instant, so
+/// a Pacer built on it is deterministic too. The fake GitHub stamps its comments from it and the tend run reads it.
+type FakeClock(start: DateTimeOffset) =
+    inherit TimeProvider()
+    let mutable now = start
+    /// The instant the tend fixtures are anchored on.
+    static member Anchor = DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero)
+    override _.GetUtcNow() = now
+    override _.GetTimestamp() = now.UtcTicks
+    override _.TimestampFrequency = TimeSpan.TicksPerSecond
+    member _.Advance(by: TimeSpan) = now <- now + by
+    /// The ISO 8601 form GitHub uses for createdAt.
+    member _.Stamp() = now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", Globalization.CultureInfo.InvariantCulture)
+
 let statusOptions = [ "Backlog"; "Ready"; "In progress"; "In review"; "Blocked"; "Done" ]
 let fieldDefinitions =
     [ "Status", "SINGLE_SELECT", statusOptions
@@ -37,7 +52,7 @@ let optionId (field: string) (value: string) = "O_" + field.Replace(" ", "_") + 
 
 type Call = { Kind: string; Subject: string; Document: string }
 
-type Board() =
+type Board(clock: FakeClock) =
     let items = Collections.Generic.Dictionary<string, FakeItem>()
     let prs = Collections.Generic.Dictionary<string, FakePr>()
     let comments = Collections.Generic.Dictionary<string, Collections.Generic.List<string * string * string>>()
@@ -59,7 +74,9 @@ type Board() =
     member val ProposalComments = Collections.Generic.List<string * string * string * string>() with get
     member val PrivateRepos = Collections.Generic.HashSet<string>() with get
     member val LoseProposalResponse = false with get, set
-    member val Now = "2026-11-01T12:00:00Z" with get, set
+    /// The clock the tend run under test must also use, so the comments' createdAt and the run's custody time agree.
+    member _.Clock = clock
+    new() = Board(FakeClock(FakeClock.Anchor))
 
     member _.AddItem(itemId: string, item: FakeItem) = items.[itemId] <- item
     member _.AddPr(reference: string, pr: FakePr) = prs.[reference] <- pr
@@ -199,7 +216,7 @@ type Board() =
         calls.Add { Kind = "mutation"; Subject = request.Subject; Document = request.Path }
         use parsed = System.Text.Json.JsonDocument.Parse json
         let id = sprintf "IC_proposal_%d" (this.ProposalComments.Count + 1)
-        this.ProposalComments.Add((id, parsed.RootElement.GetProperty("body").GetString(), this.Now, "EHotwagner"))
+        this.ProposalComments.Add((id, parsed.RootElement.GetProperty("body").GetString(), clock.Stamp(), "EHotwagner"))
         if this.LoseProposalResponse then Error(Errors.Malformed(request.Subject, "response lost after the send"))
         else Ok { Status = 201; ETag = None; NextLink = None; Headers = Map.empty; Body = JsonObject(dict [ "id", JsonValue.Create(this.ProposalComments.Count) :> JsonNode; "node_id", JsonValue.Create id :> JsonNode ]).ToJsonString() }
       | _ ->
