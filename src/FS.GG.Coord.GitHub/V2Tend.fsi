@@ -8,8 +8,9 @@ namespace FS.GG.Coord.GitHub
 /// gives the same plan. Nothing here reads the network, a file or the wall clock, and nothing here writes.
 ///
 /// Scope of this module: Work level (W1h, W1d), Track (T1d, T1i, T1f), Delivery Status (S1, S3, S3b, S4,
-/// S9, S9r and the proposals), the Outcome roll-up (O1) and Roadmap for enrolled cards (RM1). Enrollment
-/// candidates (E1, E2) and archive planning (A1) are later deliveries of the same design.
+/// S9, S9r and the proposals), the Outcome roll-up (O1), Roadmap for enrolled cards (RM1) and Delivery
+/// closure (C1, owner decision 9). Enrollment candidates (E1, E2) and archive planning (A1) are later
+/// deliveries of the same design.
 module V2Tend =
     open System
 
@@ -52,7 +53,12 @@ module V2Tend =
           State: PrState
           Draft: bool
           Linkage: Linkage
-          UpdatedAt: DateTimeOffset }
+          UpdatedAt: DateTimeOffset
+          MergedAt: DateTimeOffset option
+          /// The PR body carries `<!-- fsgg:delivery-continues/v1 -->` (outside code spans and fences).
+          Continues: bool
+          /// The PR body carries `<!-- fsgg:delivery-completes/v1 -->` (outside code spans and fences).
+          Completes: bool }
 
     /// The intended-fields line `Work level: <v> · Track: <v> · Intended Status: <v>`; each part may be absent.
     type IntendedFields =
@@ -94,7 +100,9 @@ module V2Tend =
           BlockedOn: string option
           AcceptanceEvidence: string option
           Enrolled: bool
-          EnrolledRoadmap: string option }
+          EnrolledRoadmap: string option
+          /// The issue carries a Root `fsgg:tend-closed/v1` comment: it was closed by tend and reopened since.
+          TendClosedBefore: bool }
 
     /// One entry of the local deferral ledger, keyed by `<rule>:<item>:<field>`.
     type Deferral =
@@ -112,6 +120,7 @@ module V2Tend =
           DoneSettleMinutes: float
           ReviewSettleHours: float
           LeafSettleHours: float
+          CloseSettleHours: float
           ExpiryRuns: int
           ExpiryHours: float
           /// Rule ids whose effects may be applied; every other rule's effects are listed as would-apply.
@@ -120,7 +129,7 @@ module V2Tend =
     /// The v1 parameter values of the design (§3) with the given enabled rules.
     val v1: enabled: Set<string> -> Parameters
 
-    /// Every Apply rule id this module can produce.
+    /// Every Apply rule id this module can produce, including C1 (closures are listed in `Plan.Close`).
     val applyRules: Set<string>
 
     type Field =
@@ -180,6 +189,16 @@ module V2Tend =
 
     type Comparison = { Pairs: int; Disagreements: int }
 
+    /// Rule C1 (owner decision 9, FS-GG/.github#4730 issuecomment-6551301543): close a Delivery issue when
+    /// every strictly linked PR is merged, at least one is, none is open, and the last merge does not carry
+    /// `fsgg:delivery-continues/v1`. Never an Outcome, never a Blocked card.
+    type Closure =
+        { Id: string
+          ItemId: string
+          Ref: string
+          /// The merged PRs (`OWNER/REPO#N`), oldest merge first, for the closing comment.
+          MergedPrs: string list }
+
     type Plan =
         { Ruleset: string
           ObservedAt: DateTimeOffset
@@ -190,7 +209,11 @@ module V2Tend =
           Propose: Proposal list
           Refuse: Refusal list
           /// T1i's would-be Track against people's Tracks on existing undeclared Delivery-Outcome pairs.
-          T1iComparison: Comparison }
+          T1iComparison: Comparison
+          /// C1 closures (decision 9): open, non-Blocked Deliveries whose strictly linked PRs are all merged.
+          Close: Closure list
+          /// C1 closures that would happen if C1 were enabled; never sent.
+          WouldClose: Closure list }
 
     val ruleset: string
 
@@ -216,3 +239,6 @@ module V2Tend =
 
     /// Decode a `fsgg.board-tend-snapshot/1` JSON document (fixtures, and later the reader's output).
     val decodeSnapshot: json: string -> Result<Snapshot, string>
+
+    /// Encode a plan as the `fsgg.board-tend-plan/1` JSON document (local, private custody: it names cards).
+    val encodePlan: plan: Plan -> string

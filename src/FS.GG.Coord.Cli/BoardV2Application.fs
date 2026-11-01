@@ -745,8 +745,89 @@ module BoardV2Application =
         | ("refresh" | "inspect") :: rest -> flags Map.empty rest
         | _ -> Error "expected board-v2 refresh or inspect"
 
+    // ---- board-v2 tend, plan-only (#5136 phase 2 PR 3) ----
+
+    type private TendCommand = { PlanPath: string; Rules: Set<string> }
+
+    let private tendSyntax (arguments: string list) =
+        let rec flags (values: Map<string, string>) = function
+            | [] -> Ok values
+            | ("--plan-file" | "--rules") as flag :: value :: rest when not (values.ContainsKey flag) && not (value.StartsWith("--", StringComparison.Ordinal)) ->
+                flags (values.Add(flag, value)) rest
+            | _ -> Error "board-v2 tend takes --plan-file NEW [--rules R1,R2,...]"
+        flags Map.empty arguments
+        |> Result.bind (fun values ->
+            match values.TryFind "--plan-file" with
+            | None -> Error "board-v2 tend needs --plan-file"
+            | Some plan ->
+                let rules =
+                    values.TryFind "--rules"
+                    |> Option.map (fun text -> text.Split(',', StringSplitOptions.RemoveEmptyEntries ||| StringSplitOptions.TrimEntries) |> Set.ofArray)
+                    |> Option.defaultValue (set [ "W1h"; "T1f" ])
+                let unknown = rules - V2Tend.applyRules
+                if not unknown.IsEmpty then Error("unknown tend rules: " + String.Join(",", unknown))
+                else Ok { PlanPath = Path.GetFullPath plan; Rules = rules })
+
+    // Read-only: reads Project 3 and native facts, derives the plan, writes it privately. Never writes the board.
+    let private executeTend (transport: IGitHubTransport) (clock: TimeProvider) (command: TendCommand) =
+        try
+            let parent = Path.GetDirectoryName command.PlanPath
+            let others = UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute
+            if File.Exists command.PlanPath || Directory.Exists command.PlanPath then
+                eprintfn "fsgg-coord-engine: board-v2 tend refused: --plan-file must be a new path"
+                1
+            elif not (Directory.Exists parent) then
+                eprintfn "fsgg-coord-engine: board-v2 tend refused: the --plan-file directory %s does not exist" parent
+                1
+            elif not (OperatingSystem.IsWindows()) && File.GetUnixFileMode parent &&& others <> enum<UnixFileMode> 0 then
+                // Checked before any read, so a run is never spent on a plan that cannot be written.
+                eprintfn "fsgg-coord-engine: board-v2 tend refused: the --plan-file directory %s must be private to its owner (mode 0700); it is %s" parent (File.GetUnixFileMode parent |> string)
+                1
+            else
+                let started = clock.GetTimestamp()
+                let observed = clock.GetUtcNow()
+                let ceiling = V2TendReads.readCeiling 500 + 24
+                let mutable calls = 0
+                let bounded =
+                    { new IGitHubTransport with
+                        member _.Send request =
+                            if calls >= ceiling then Error(Errors.Malformed(request.Subject, "tend read ceiling reached; coverage Unknown"))
+                            else
+                                calls <- calls + 1
+                                transport.Send request
+                        member _.SendMutation mutation = Error(Errors.Malformed(mutation.Request.Subject, "board-v2 tend is read-only"))
+                        member _.RetryMutation effectId = Error(Errors.Malformed(effectId, "board-v2 tend is read-only")) }
+                // Placeholders, wired before PR 5 and PR 8: the Root login (until the board-currency
+                // rootLogins parameter is read), an empty ledger (until the state directory) and no
+                // enrollment input (RM1 inert; P-READY reports cards as unenrolled).
+                let inputs: V2TendReads.Inputs =
+                    { Owner = "FS-GG"; ProjectNumber = 3; RootLogins = set [ "EHotwagner" ]; ObservedAt = observed; Ledger = []; Enrolled = Map.empty }
+                match V2TendReads.readSnapshot (V2TendReads.readOnly bounded) inputs with
+                | Error message ->
+                    eprintfn "fsgg-coord-engine: board-v2 tend refused: %s" message
+                    3
+                | Ok(snapshot, cost) ->
+                    let plan = V2Tend.derive (V2Tend.v1 command.Rules) snapshot
+                    privateJson syncMigrationDirectory command.PlanPath (V2Tend.encodePlan plan + Environment.NewLine)
+                    let seconds = clock.GetElapsedTime(started).TotalSeconds
+                    printfn "board-v2 tend: plan-only; cards=%d apply=%d wouldApply=%d close=%d wouldClose=%d deferred=%d propose=%d refuse=%d; requests=%d graphqlPoints=%d rest=%d; seconds=%.1f"
+                        snapshot.Cards.Length plan.Apply.Length plan.WouldApply.Length plan.Close.Length plan.WouldClose.Length
+                        plan.Deferred.Length plan.Propose.Length plan.Refuse.Length cost.Requests cost.GraphQlPoints cost.RestCalls seconds
+                    0
+        with error ->
+            eprintfn "fsgg-coord-engine: board-v2 tend refused: %s" (error.GetType().Name)
+            1
+
+    let runTendWithTransport (transport: IGitHubTransport) (clock: TimeProvider) (arguments: string list) =
+        match tendSyntax arguments with
+        | Error message ->
+            eprintfn "fsgg-coord-engine: board-v2 tend refused: %s" message
+            1
+        | Ok command -> executeTend transport clock command
+
     let validateInvocation arguments =
         match arguments with
+        | "board-v2" :: "tend" :: rest -> Some(tendSyntax rest |> Result.map ignore)
         | "board-v2" :: ((command :: _) as rest) when command.StartsWith("migration-", StringComparison.Ordinal) ->
             Some(try migrationSyntax rest |> Result.map ignore with _ -> Error "invalid migration argument")
         | "board-v2" :: rest -> parseSyntax rest |> Result.map ignore |> Some
@@ -859,6 +940,21 @@ module BoardV2Application =
 
     let tryRun arguments =
         match arguments with
+        | "board-v2" :: "tend" :: rest ->
+            Some(
+                match tendSyntax rest with
+                | Error message ->
+                    eprintfn "fsgg-coord-engine: board-v2 tend refused: %s" message
+                    1
+                | Ok command ->
+                    let primary = Environment.GetEnvironmentVariable "GITHUB_TOKEN"
+                    let token = if String.IsNullOrWhiteSpace primary then Environment.GetEnvironmentVariable "GH_TOKEN" else primary
+                    if String.IsNullOrWhiteSpace token then
+                        eprintfn "fsgg-coord-engine: board-v2 tend refused: no GITHUB_TOKEN or GH_TOKEN"
+                        1
+                    else
+                        use transport = new HttpTransport(apiBaseFromEnv (), token)
+                        executeTend transport TimeProvider.System command)
         | "board-v2" :: ((command :: _) as rest) when command.StartsWith("migration-", StringComparison.Ordinal) ->
             Some(
                 try

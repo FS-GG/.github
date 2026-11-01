@@ -2222,7 +2222,7 @@ def evaluate_board_gate(api: Any, rules: Any, repo: str, number: int, rest_body:
         return BoardVerdict("unknown", "board-read-incomplete")
     try:
         # Each ref is resolved from its own issue, so a miss is a definite "not on Project 3".
-        failures, delivery = rules.linkage_of(dict(pr, repo=repo, number=number, state="OPEN"), cards.get,
+        failures, delivery = rules.linkage_of(dict(pr, repo=repo, number=number, state="OPEN"), rules.RefIndex(cards).get,
                                               anonymous_unreadable=False)
     except Exception:
         return BoardVerdict("unknown", "rules-error")

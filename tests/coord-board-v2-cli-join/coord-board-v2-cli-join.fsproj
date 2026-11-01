@@ -13,6 +13,7 @@
     <Compile Include="BoardV2ApplicationTests.fs" />
     <Compile Include="BoardV2MigrationTests.fs" />
     <Compile Include="V2WriterLockTests.fs" />
+    <Compile Include="TendApplicationTests.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" />

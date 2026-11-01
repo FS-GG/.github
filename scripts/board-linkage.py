@@ -156,7 +156,7 @@ def evaluate(pr: dict, rules) -> tuple[str, str | None]:
         cards.update(read_cards(sorted(parents - set(cards))))
     except ReadError:
         return "unknown", "board-read"
-    failures, _ = rules.linkage_of(pr, cards.get)
+    failures, _ = rules.linkage_of(pr, rules.RefIndex(cards).get)
     unknown = [reason for rule, reason in failures if rule == "U"]
     if unknown:
         return "unknown", unknown[0]

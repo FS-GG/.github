@@ -40,7 +40,10 @@ module V2Tend =
           State: PrState
           Draft: bool
           Linkage: Linkage
-          UpdatedAt: DateTimeOffset }
+          UpdatedAt: DateTimeOffset
+          MergedAt: DateTimeOffset option
+          Continues: bool
+          Completes: bool }
 
     type IntendedFields =
         { WorkLevel: WorkLevel option
@@ -75,7 +78,8 @@ module V2Tend =
           BlockedOn: string option
           AcceptanceEvidence: string option
           Enrolled: bool
-          EnrolledRoadmap: string option }
+          EnrolledRoadmap: string option
+          TendClosedBefore: bool }
 
     type Deferral =
         { Key: string
@@ -92,6 +96,7 @@ module V2Tend =
           DoneSettleMinutes: float
           ReviewSettleHours: float
           LeafSettleHours: float
+          CloseSettleHours: float
           ExpiryRuns: int
           ExpiryHours: float
           Enabled: Set<string> }
@@ -101,11 +106,12 @@ module V2Tend =
           DoneSettleMinutes = 15.0
           ReviewSettleHours = 48.0
           LeafSettleHours = 24.0
+          CloseSettleHours = 48.0
           ExpiryRuns = 3
           ExpiryHours = 24.0
           Enabled = enabled }
 
-    let applyRules = set [ "W1h"; "W1d"; "T1d"; "T1i"; "T1f"; "RM1"; "S1"; "S3"; "S3b"; "S4"; "S9"; "S9r"; "O1" ]
+    let applyRules = set [ "W1h"; "W1d"; "T1d"; "T1i"; "T1f"; "RM1"; "S1"; "S3"; "S3b"; "S4"; "S9"; "S9r"; "O1"; "C1" ]
 
     type Field =
         | StatusField
@@ -161,6 +167,12 @@ module V2Tend =
 
     type Comparison = { Pairs: int; Disagreements: int }
 
+    type Closure =
+        { Id: string
+          ItemId: string
+          Ref: string
+          MergedPrs: string list }
+
     type Plan =
         { Ruleset: string
           ObservedAt: DateTimeOffset
@@ -169,7 +181,9 @@ module V2Tend =
           Deferred: Deferred list
           Propose: Proposal list
           Refuse: Refusal list
-          T1iComparison: Comparison }
+          T1iComparison: Comparison
+          Close: Closure list
+          WouldClose: Closure list }
 
     let ruleset = "fsgg:board-tend-rules/v1"
 
@@ -310,6 +324,7 @@ module V2Tend =
             |> List.map (fun card -> card.ItemId)
         let bottomUp = List.rev topDown
 
+        let enabled rule = parameters.Enabled.Contains rule
         let mutable state = original
         let mutable chains: Map<string * Field, Chain> = Map.empty
         let mutable origins: Map<string * Field, Origin> = Map.empty
@@ -383,6 +398,31 @@ module V2Tend =
                             let deps = if chains.ContainsKey(c.ItemId, WorkLevelField) then [ c.ItemId, WorkLevelField ] else []
                             Change("T1f", "Follow-up", true, deps)
 
+        // ---- C1: close a Delivery whose strictly linked work is merged (decision 9) ----
+        // Narrowed by the review of the decision-9 amendment (#5150): Status In review, a populated Work level
+        // of Delivery, the last merge at least CloseSettleHours old and declaring fsgg:delivery-completes/v1
+        // (and not fsgg:delivery-continues/v1). A reopened issue is
+        // never closed again (P-REOPENED proposes it instead).
+        let c1Candidate (c: Card) =
+            // Work level and Status as they are on the board, not as this run would fill them.
+            let onBoard = original.[c.ItemId]
+            if c.Kind <> Issue || not c.Open || onBoard.WorkLevel <> Some Delivery || onBoard.Status <> Some InReview || not c.TimelineComplete then None
+            else
+                let strict = c.Prs |> List.filter (fun pr -> pr.Linkage = Strict)
+                let anyOpen = c.Prs |> List.exists (fun pr -> pr.State = PrOpen)
+                let merged = strict |> List.filter (fun pr -> pr.State = PrMerged) |> List.sortBy (fun pr -> pr.MergedAt, pr.Id)
+                match merged with
+                | [] -> None
+                | _ when anyOpen -> None
+                | _ ->
+                    let last = List.last merged
+                    match last.MergedAt with
+                    // The last merge declares completion and only completion (Root's ruling on #5150).
+                    | Some mergedAt when last.Completes && not last.Continues && hoursBetween now mergedAt >= parameters.CloseSettleHours ->
+                        Some(merged |> List.map (fun pr -> pr.Id))
+                    | _ -> None
+        let c1Applies (c: Card) = if c.TendClosedBefore then None else c1Candidate c
+
         // ---- Delivery Status ----
         let evalDeliveryStatus (c: Card) =
             if not c.Open then
@@ -412,6 +452,8 @@ module V2Tend =
                         match c.StatusUpdatedAt with
                         | Some updated when hoursBetween now updated >= parameters.ReviewSettleHours -> Change("S4", "In progress", false, [])
                         | _ -> NoChange
+                // An enabled C1 closes the card; nothing else is decided for its Status.
+                | Some _ when enabled "C1" && (c1Applies c).IsSome -> NoChange
                 | Some (InReview | InProgress) when noOpen && not (List.isEmpty strictMerged) && hasEvidence c.AcceptanceEvidence ->
                     if not c.TimelineComplete then Refuse("P-ACCEPT", "timeline-incomplete")
                     else Propose("P-ACCEPT", "acceptance-ready", None)
@@ -541,7 +583,6 @@ module V2Tend =
                 let c = card item
                 if isOutcomeLike c then record item StatusField (evalOutcomeStatus round c)
 
-        let enabled rule = parameters.Enabled.Contains rule
         let applyChange round item field rule target fallback (deps: (string * Field) list) =
             let before = card item
             let chain =
@@ -632,12 +673,13 @@ module V2Tend =
         if not converged then refuse "fixpoint" "board" "fixpoint-not-reached"
 
         let effectId (item, field) (chain: Chain) = String.Join("+", chain.Rules) + ":" + item + ":" + fieldName field + ":" + chain.Target
+        // A chain that moved a field away and back is no effect, and nothing may depend on it.
+        let kept = chains |> Map.filter (fun _ chain -> chain.Preimage <> Some chain.Target)
         let effects =
             if not converged then []
             else
-                chains
+                kept
                 |> Map.toList
-                |> List.filter (fun ((item, field), chain) -> chain.Preimage <> Some chain.Target)
                 |> List.map (fun ((item, field), chain) ->
                     { Id = effectId (item, field) chain
                       ItemId = item
@@ -649,9 +691,20 @@ module V2Tend =
                       DependsOn =
                         chain.Deps
                         |> Set.toList
-                        |> List.choose (fun key -> chains |> Map.tryFind key |> Option.map (effectId key))
+                        |> List.choose (fun key -> kept |> Map.tryFind key |> Option.map (effectId key))
                         |> List.sort })
                 |> List.sortBy (fun effect -> effect.Id)
+
+        let closures =
+            if not converged then []
+            else
+                topDown
+                |> List.choose (fun item ->
+                    c1Applies (card item)
+                    |> Option.map (fun prs -> { Id = "C1:" + item + ":closed"; ItemId = item; Ref = reference item; MergedPrs = prs }))
+        for item in topDown do
+            let c = card item
+            if c.TendClosedBefore && (c1Candidate c).IsSome then propose "P-REOPENED" c.Ref "reopened-after-close" None
 
         // T1i against people's Tracks on existing undeclared leaf-under-Outcome pairs (original values only).
         let comparison =
@@ -671,17 +724,22 @@ module V2Tend =
           Deferred = deferred |> Seq.distinctBy (fun d -> d.Key) |> Seq.sortBy (fun d -> d.Key) |> List.ofSeq
           Propose = proposals.Values |> Seq.sortBy (fun p -> p.Id) |> List.ofSeq
           Refuse = refusals.Values |> Seq.sortBy (fun r -> r.Id) |> List.ofSeq
-          T1iComparison = { Pairs = comparison.Length; Disagreements = comparison |> List.filter id |> List.length } }
+          T1iComparison = { Pairs = comparison.Length; Disagreements = comparison |> List.filter id |> List.length }
+          Close = (if enabled "C1" then closures else [])
+          WouldClose = (if enabled "C1" then [] else closures) }
 
     let applyPlan (plan: Plan) (snapshot: Snapshot) =
         let byItem = plan.Apply |> List.groupBy (fun effect -> effect.ItemId) |> Map.ofList
+        let closed = plan.Close |> List.map (fun closure -> closure.ItemId) |> Set.ofList
         { snapshot with
             Cards =
                 snapshot.Cards
                 |> List.map (fun card ->
-                    match byItem |> Map.tryFind card.ItemId with
-                    | None -> card
-                    | Some effects -> effects |> List.fold (fun c effect -> withValue snapshot.ObservedAt c effect.Field effect.Target) card) }
+                    let card =
+                        match byItem |> Map.tryFind card.ItemId with
+                        | None -> card
+                        | Some effects -> effects |> List.fold (fun c effect -> withValue snapshot.ObservedAt c effect.Field effect.Target) card
+                    if closed.Contains card.ItemId then { card with Open = false; ClosedAt = Some snapshot.ObservedAt } else card) }
 
     let nextLedger (plan: Plan) (previous: Deferral list) (now: DateTimeOffset) =
         let prior = previous |> List.map (fun entry -> entry.Key, entry) |> Map.ofList
@@ -773,14 +831,18 @@ module V2Tend =
                                 match tryProp pr "loose" with
                                 | Some reason -> Loose(reason.GetString())
                                 | None -> Strict
-                              UpdatedAt = time pr "updatedAt" |> Option.defaultValue created } ])
+                              UpdatedAt = time pr "updatedAt" |> Option.defaultValue created
+                              MergedAt = time pr "mergedAt"
+                              Continues = flag pr "continues" false
+                              Completes = flag pr "completes" false } ])
                     |> Option.defaultValue []
                   TimelineComplete = flag c "timelineComplete" true
                   Intended = text c "intendedLine" |> Option.bind (fun line -> parseIntendedLine line (flag c "rootAuthored" false))
                   BlockedOn = text c "blockedOn"
                   AcceptanceEvidence = text c "acceptanceEvidence"
                   Enrolled = flag c "enrolled" false
-                  EnrolledRoadmap = text c "enrolledRoadmap" }
+                  EnrolledRoadmap = text c "enrolledRoadmap"
+                  TendClosedBefore = flag c "tendClosedBefore" false }
             let ledger =
                 tryProp root "ledger"
                 |> Option.map (fun a ->
@@ -791,3 +853,67 @@ module V2Tend =
                 |> Option.defaultValue []
             Ok { ObservedAt = observed; Cards = [ for c in root.GetProperty("cards").EnumerateArray() -> card c ]; Ledger = ledger }
         with error -> Error("snapshot decode failed: " + error.Message)
+
+    // ---- plan encoding (fsgg.board-tend-plan/1) ----
+
+    let encodePlan (plan: Plan) =
+        use stream = new IO.MemoryStream()
+        (
+            use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = true))
+            let opt (name: string) (value: string option) =
+                match value with
+                | Some v -> w.WriteString(name, v)
+                | None -> w.WriteNull name
+            let strings (name: string) (values: string list) =
+                w.WriteStartArray name
+                for v in values do w.WriteStringValue v
+                w.WriteEndArray()
+            let effects (name: string) (items: Effect list) =
+                w.WriteStartArray name
+                for e in items do
+                    w.WriteStartObject()
+                    w.WriteString("id", e.Id); w.WriteString("item", e.ItemId); w.WriteString("ref", e.Ref)
+                    w.WriteString("field", fieldName e.Field); opt "preimage" e.Preimage; w.WriteString("target", e.Target)
+                    strings "rules" e.Rules; strings "dependsOn" e.DependsOn
+                    w.WriteEndObject()
+                w.WriteEndArray()
+            let closures (name: string) (items: Closure list) =
+                w.WriteStartArray name
+                for c in items do
+                    w.WriteStartObject()
+                    w.WriteString("id", c.Id); w.WriteString("item", c.ItemId); w.WriteString("ref", c.Ref); strings "mergedPrs" c.MergedPrs
+                    w.WriteEndObject()
+                w.WriteEndArray()
+            w.WriteStartObject()
+            w.WriteString("schema", "fsgg.board-tend-plan/1")
+            w.WriteString("ruleset", plan.Ruleset)
+            w.WriteString("observedAt", plan.ObservedAt.ToString("O"))
+            effects "apply" plan.Apply
+            effects "wouldApply" plan.WouldApply
+            closures "close" plan.Close
+            closures "wouldClose" plan.WouldClose
+            w.WriteStartArray "deferred"
+            for d in plan.Deferred do
+                w.WriteStartObject()
+                w.WriteString("key", d.Key); w.WriteString("ref", d.Ref); w.WriteString("field", fieldName d.Field); w.WriteString("rule", d.Rule)
+                w.WriteString("reason", (match d.Reason with InputPending -> "input-pending" | RuleDisabled -> "rule-disabled" | SettleWindow -> "settle-window"))
+                w.WriteBoolean("counts", d.Counts); w.WriteBoolean("expired", d.Expired); w.WriteString("label", d.Label)
+                w.WriteEndObject()
+            w.WriteEndArray()
+            w.WriteStartArray "propose"
+            for p in plan.Propose do
+                w.WriteStartObject()
+                w.WriteString("id", p.Id); w.WriteString("ref", p.Ref); w.WriteString("rule", p.Rule); w.WriteString("reason", p.Reason); opt "suggested" p.Suggested
+                w.WriteEndObject()
+            w.WriteEndArray()
+            w.WriteStartArray "refuse"
+            for r in plan.Refuse do
+                w.WriteStartObject()
+                w.WriteString("id", r.Id); w.WriteString("ref", r.Ref); w.WriteString("rule", r.Rule); w.WriteString("reason", r.Reason)
+                w.WriteEndObject()
+            w.WriteEndArray()
+            w.WriteStartObject "t1iComparison"
+            w.WriteNumber("pairs", plan.T1iComparison.Pairs); w.WriteNumber("disagreements", plan.T1iComparison.Disagreements)
+            w.WriteEndObject()
+            w.WriteEndObject())
+        Text.Encoding.UTF8.GetString(stream.ToArray())

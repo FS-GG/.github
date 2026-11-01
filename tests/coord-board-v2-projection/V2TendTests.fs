@@ -91,7 +91,10 @@ let ``case 4 and 17: In review moves back only when nothing is linked and the se
     Assert.Equal(Some [ "S4" ], rules plan "I-nothing" StatusField)
     Assert.Equal(None, effectOn plan "I-recent" StatusField)
     Assert.Equal(None, effectOn plan "I-merged" StatusField)
-    Assert.True(proposed plan "FS-GG/x#32" "acceptance-ready")
+    // C1 closes the merged Delivery; with C1 off it is an acceptance-ready proposal instead.
+    Assert.Contains(plan.Close, fun c -> c.ItemId = "I-merged" && c.MergedPrs = [ "PR-32" ])
+    Assert.False(proposed plan "FS-GG/x#32" "acceptance-ready")
+    Assert.True(proposed (V2Tend.derive (without [ "C1" ]) (fixture "04-in-review.json")) "FS-GG/x#32" "acceptance-ready")
     Assert.Equal(Some "In progress", target plan "I-abandoned" StatusField) // a closed unmerged PR is ignored
     Assert.Equal(None, effectOn plan "I-partial" StatusField)
     Assert.True(refused plan "FS-GG/x#34" "timeline-incomplete")
@@ -102,6 +105,8 @@ let ``case 5: an open PR moves to In review, idle work is proposed, finished wor
     Assert.Equal(Some [ "S3" ], rules plan "I-open-pr" StatusField)
     Assert.True(proposed plan "FS-GG/x#41" "stale-active")
     Assert.False(proposed plan "FS-GG/x#42" "stale-active")
+    // In progress means the work continues: C1 leaves it, and it is acceptance-ready.
+    Assert.DoesNotContain(plan.Close, fun c -> c.ItemId = "I-finished")
     Assert.True(proposed plan "FS-GG/x#43" "acceptance-ready")
     Assert.Equal(Some [ "S3b" ], rules plan "I-draft" StatusField)
     Assert.Equal(None, effectOn plan "I-blocked-pr" StatusField) // Blocked is never moved by an open PR
@@ -272,7 +277,10 @@ let private generate (seed: int) : Snapshot =
                   State = pick [ PrOpen; PrClosed; PrMerged ]
                   Draft = random.NextDouble() < 0.2
                   Linkage = if random.NextDouble() < 0.2 then Loose "multiple-deliveries" else Strict
-                  UpdatedAt = observed.AddHours(-(float (random.Next(1, 200)))) } ]
+                  UpdatedAt = observed.AddHours(-(float (random.Next(1, 200))))
+                  MergedAt = Some(observed.AddHours(-(float (random.Next(1, 300)))))
+                  Continues = random.NextDouble() < 0.2
+                  Completes = random.NextDouble() < 0.6 } ]
         let intended =
             if random.NextDouble() < 0.4 then
                 Some { WorkLevel = maybe 0.3 (pick [ Outcome; Delivery ])
@@ -295,7 +303,8 @@ let private generate (seed: int) : Snapshot =
               Prs = prs; TimelineComplete = random.NextDouble() < 0.95
               Intended = intended
               BlockedOn = maybe 0.3 "Nothing"; AcceptanceEvidence = maybe 0.3 "merge recorded"
-              Enrolled = random.NextDouble() < 0.5; EnrolledRoadmap = maybe 0.5 "https://github.com/FS-GG/.github/blob/main/docs/x.md" }
+              Enrolled = random.NextDouble() < 0.5; EnrolledRoadmap = maybe 0.5 "https://github.com/FS-GG/.github/blob/main/docs/x.md"
+              TendClosedBefore = random.NextDouble() < 0.1 }
         cards <- card :: cards
         reference, isOpen
     for _ in 1 .. random.Next(2, 6) do make None 0 |> ignore
@@ -493,7 +502,7 @@ let ``disabled S1 and S3 under the starting set never become proposals across ma
     let reviewable =
         { plain with
             ItemId = "S3-card"; Ref = "FS-GG/s#2"; Open = true; Status = Some Backlog; ClosedAt = None
-            Prs = [ { Id = "PR-s"; State = PrOpen; Draft = false; Linkage = Strict; UpdatedAt = observed } ] }
+            Prs = [ { Id = "PR-s"; State = PrOpen; Draft = false; Linkage = Strict; UpdatedAt = observed; MergedAt = None; Continues = false; Completes = false } ] }
     let mutable snapshot = { ObservedAt = observed; Cards = [ closed; reviewable ]; Ledger = [] }
     for run in 1 .. 10 do
         let plan = V2Tend.derive starting snapshot
@@ -545,3 +554,41 @@ let ``an Outcome's intended Status is never proposed, and a childless Outcome is
     Assert.False(plan.Propose |> List.exists (fun p -> p.Rule = "P-INTENT"))
     Assert.True(proposed plan "FS-GG/o#1" "no-open-delivery")
     Assert.Equal(None, effectOn plan "O" StatusField)
+
+[<Fact>]
+let ``case 28: C1 closes only a settled In review Delivery whose last merge declares completion`` () =
+    let snapshot = fixture "28-delivery-closure.json"
+    let plan = V2Tend.derive all snapshot
+    let closed = plan.Close |> List.map (fun c -> c.ItemId) |> Set.ofList
+    Assert.Equal<Set<string>>(set [ "D-done" ], closed)
+    Assert.Equal<string list>([ "FS-GG/x#1401"; "FS-GG/x#1402" ], (plan.Close |> List.head).MergedPrs)
+    for item in [ "D-continues"; "D-blocked"; "O-outcome"; "D-open"; "D-draft"; "D-loose-open"; "D-partial"; "D-none"
+                  "D-recent"; "D-progress"; "D-structural"; "D-reopened"; "D-undeclared"; "D-both"; "D-earlier-completes" ] do
+        Assert.False(closed.Contains item, item)
+    Assert.True(proposed plan "FS-GG/x#153" "reopened-after-close")
+    // With C1 off the same closure is would-close only, never sent and never proposed.
+    let off = V2Tend.derive (without [ "C1" ]) snapshot
+    Assert.Empty(off.Close)
+    Assert.Equal<string list>([ "D-done" ], off.WouldClose |> List.map (fun c -> c.ItemId))
+    // The settle window passes: the recent merge closes too.
+    let later = V2Tend.derive all { snapshot with ObservedAt = snapshot.ObservedAt.AddHours 48.0 }
+    Assert.Contains(later.Close, fun c -> c.ItemId = "D-recent")
+    // Applied: the card is closed; S1 then waits its settle window before Done.
+    let after = V2Tend.applyPlan plan snapshot
+    let card = after.Cards |> List.find (fun c -> c.ItemId = "D-done")
+    Assert.False(card.Open)
+    Assert.Equal(None, effectOn (V2Tend.derive all after) "D-done" StatusField)
+
+[<Fact>]
+let ``C1 never closes an Outcome or a Blocked card on generated boards`` () =
+    for seed in seeds do
+        let snapshot = generate seed
+        let cards = snapshot.Cards |> List.map (fun c -> c.ItemId, c) |> Map.ofList
+        let plan = V2Tend.derive all snapshot
+        for closure in plan.Close @ plan.WouldClose do
+            let card = cards.[closure.ItemId]
+            Assert.True(card.Open, closure.Id)
+            Assert.Equal(Some InReview, card.Status)
+            Assert.Equal(Some Delivery, card.WorkLevel)
+            Assert.False(card.TendClosedBefore, closure.Id)
+            Assert.NotEmpty(closure.MergedPrs)

@@ -94,6 +94,10 @@ MUTANTS = [
     ("partial snapshot accepted", 'if snapshot.get("complete") is not True:', "if False:"),
     ("count mismatch accepted", "if not isinstance(total, int) or total != len(items):", "if not isinstance(total, int):"),
     ("private subject published", 'return flag is False', "return flag is not True"),
+    ("reference owner/repo compared case-sensitively", 'return f"{repo.lower()}#{int(number)}"', 'return f"{repo}#{int(number)}"'),
+    ("reference number compared as text", 'return f"{repo.lower()}#{int(number)}"', 'return f"{repo.lower()}#{number}"'),
+    ("linkage references not canonical", "refs = sorted({canonical_ref(ref) for ref in pr_refs(", "refs = sorted({ref for ref in pr_refs("),
+    ("lone CR not normalised for references", "text = visible_text(_lf(body))", "text = visible_text(body)"),
 ]
 
 
