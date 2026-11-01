@@ -17,6 +17,10 @@
 #   M8 `<name>-${{ github.ref }}` + cancel true   -> MODEL: a main push IS cancelled (the shape adr-coherence uses)
 #   M9 a job-level concurrency block, the workflow-level one left clean -> "job-level concurrency"
 #   M10 fallback github.sha (the #5001 key)      -> MODEL: two dispatches at one commit DO drop the older pending run
+#   M11 the pre-#5159 PR-wide key on a workflow a body edit starts (head-keyed workflow: drop the head guard;
+#       any other: add `edited` to its pull_request types) -> MODEL: an `edited` run DOES cancel the `opened` run
+#   M12 (head-keyed workflows only) `edited` added to the head-action list -> MODEL: the same
+#   D1 (sweep) an ungoverned workflow a body edit starts -> "not governed"; D2 one only head actions start -> clean
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -41,8 +45,13 @@ ALL=("${NAMES[@]}" "${PTNAMES[@]}")
 [ "${#NAMES[@]}" -gt 0 ] || { echo "FAIL  no governed workflows listed — a gate that governs nothing is not a clean gate"; exit 1; }
 
 mutants=0
+mapfile -t METANAMES < <(python3 "$TOOL" --root "$ROOT" --list-head-keyed)
+[ "${#METANAMES[@]}" -gt 0 ] || { echo "FAIL  no head-keyed workflows listed — #5159's body-edit claims would govern nothing"; exit 1; }
+is_meta() { local n; for n in "${METANAMES[@]}"; do [ "$n" = "$1" ] && return 0; done; return 1; }
+EDITED_KEY="a PR \`edited\` event never cancels or replaces the \`opened\` run for the same head"
 for name in "${NAMES[@]}"; do
-  for m in M1 M2 M3 M4 M5 M6 M7 M8 M9 M10; do
+  ms="M1 M2 M3 M4 M5 M6 M7 M8 M9 M10 M11"; is_meta "$name" && ms="$ms M12"
+  for m in $ms; do
     d="$WORK/$name-$m"; mkdir -p "$d/.github/workflows"
     # every governed file must exist in the mutant root, so copy them all and mutate only one
     for other in "${ALL[@]}"; do cp "$ROOT/.github/workflows/$other.yml" "$d/.github/workflows/"; done
@@ -53,6 +62,28 @@ t = open(path, encoding="utf-8").read()
 block = re.search(r"^concurrency:\n(?:  .*\n)+", t, re.M)
 assert block, f"{path}: the clean tree has no concurrency block to mutate"
 b = block.group(0)
+GUARD = "contains(fromJSON('[\"opened\",\"synchronize\",\"reopened\"]'), github.event.action) && "
+if m in ("M11", "P6") and GUARD not in b:
+    # a workflow a body edit does not start: make one start it, leaving the PR-wide key alone
+    import yaml
+    doc = yaml.safe_load(t)
+    on = doc.get("on", doc.get(True))
+    if isinstance(on, (str, list)):
+        on = {e: None for e in ([on] if isinstance(on, str) else on)}
+    event = "pull_request_target" if "pull_request_target" in on else "pull_request"
+    spec = on[event] if isinstance(on[event], dict) else {}
+    spec["types"] = list(spec.get("types") or ["opened", "synchronize", "reopened"]) + ["edited"]
+    on[event] = spec
+    doc.pop(True, None); doc["on"] = on
+    open(path, "w", encoding="utf-8").write(yaml.safe_dump(doc, sort_keys=False))
+    sys.exit(0)
+if m in ("M11", "P6"):
+    open(path, "w", encoding="utf-8").write(t.replace(b, b.replace(GUARD, ""), 1))
+    sys.exit(0)
+if m in ("M12", "P7"):
+    assert GUARD in b, f"{m} applies only to a head-keyed workflow"
+    open(path, "w", encoding="utf-8").write(t.replace(b, b.replace('"reopened"]', '"reopened","edited"]'), 1))
+    sys.exit(0)
 if m == "M9":
     # leave the workflow-level block alone; give the FIRST job its own, cancelling, concurrency
     first = re.search(r"^jobs:\n(?:[ \t]*(?:#.*)?\n)*  [A-Za-z0-9_-]+:\n", t, re.M)
@@ -85,6 +116,7 @@ PY
       M8) want="model says it IS true that a main push does not cancel the previous main push run" ;;
       M9) want="job-level concurrency" ;;
       M10) want="model says it IS true that two workflow_dispatch runs at one commit do not drop the older PENDING run" ;;
+      M11|M12) want="model says it IS true that $EDITED_KEY" ;;
     esac
     rc=0; out="$(python3 "$TOOL" --root "$d" 2>&1)" || rc=$?
     mutants=$((mutants+1))
@@ -102,9 +134,12 @@ done
 #   P1 delete the block -> "no workflow-level"   P2 never cancel -> MODEL: a PR push does NOT cancel
 #   P3 group = sha only -> MODEL: a PR push does NOT cancel   P4 group = default-branch ref -> MODEL: another PR IS cancelled
 #   P5 job-level concurrency (workflow-level left clean) -> "job-level concurrency"
+#   P6 the pre-#5159 PR-wide key on a workflow a body edit starts -> MODEL: an `edited` run DOES cancel the `opened` run
+#   P7 (head-keyed only) `edited` added to the head-action list -> MODEL: the same
 ptm=0
 for name in "${PTNAMES[@]}"; do
-  for m in P1 P2 P3 P4 P5; do
+  ms="P1 P2 P3 P4 P5 P6"; is_meta "$name" && ms="$ms P7"
+  for m in $ms; do
     d="$WORK/$name-$m"; mkdir -p "$d/.github/workflows"
     for other in "${ALL[@]}"; do cp "$ROOT/.github/workflows/$other.yml" "$d/.github/workflows/"; done
     python3 - "$d/.github/workflows/$name.yml" "$m" "$name" <<'PY'
@@ -114,6 +149,24 @@ t = open(path, encoding="utf-8").read()
 block = re.search(r"^concurrency:\n(?:  .*\n)+", t, re.M)
 assert block, f"{path}: the clean tree has no concurrency block to mutate"
 b = block.group(0)
+GUARD = "contains(fromJSON('[\"opened\",\"synchronize\",\"reopened\"]'), github.event.action) && "
+if m == "P6" and GUARD not in b:
+    import yaml
+    doc = yaml.safe_load(t)
+    on = doc.get("on", doc.get(True))
+    event = "pull_request_target" if "pull_request_target" in on else "pull_request"
+    spec = on[event] if isinstance(on[event], dict) else {}
+    spec["types"] = list(spec.get("types") or ["opened", "synchronize", "reopened"]) + ["edited"]
+    on[event] = spec
+    doc.pop(True, None); doc["on"] = on
+    open(path, "w", encoding="utf-8").write(yaml.safe_dump(doc, sort_keys=False))
+    sys.exit(0)
+if m == "P6":
+    open(path, "w", encoding="utf-8").write(t.replace(b, b.replace(GUARD, ""), 1))
+    sys.exit(0)
+if m == "P7":
+    open(path, "w", encoding="utf-8").write(t.replace(b, b.replace('"reopened"]', '"reopened","edited"]'), 1))
+    sys.exit(0)
 if m == "P5":
     first = re.search(r"^jobs:\n(?:[ \t]*(?:#.*)?\n)*  [A-Za-z0-9_-]+:\n", t, re.M)
     assert first, "no first job"
@@ -133,6 +186,7 @@ PY
       P3) key="model says it is NOT true that a PR push (new head) cancels the superseded head's run" ;;
       P4) key="concurrency.group is" ;;
       P5) key="job-level concurrency" ;;
+      P6|P7) key="model says it IS true that $EDITED_KEY" ;;
     esac
     rc=0; out="$(python3 "$TOOL" --root "$d" 2>&1)" || rc=$?
     ptm=$((ptm+1))
@@ -185,6 +239,36 @@ PY
   done
 done
 [ "$failcount" != 0 ] || echo "PASS  B3 $ivm mutant(s) over ${#ISSUENAMES[@]} issue-keyed workflow(s) were each refused for the reason that mutation introduces"
+
+# D. The repo-wide sweep (#5159): a workflow a body edit starts must be governed, whatever its name.
+for m in D1 D2; do
+  d="$WORK/sweep-$m"; mkdir -p "$d/.github/workflows"
+  for other in "${ALL[@]}"; do cp "$ROOT/.github/workflows/$other.yml" "$d/.github/workflows/"; done
+  types="[opened, synchronize, reopened, edited]"; [ "$m" = D2 ] && types="[opened, synchronize, reopened]"
+  cat >"$d/.github/workflows/stray-body-reader.yml" <<YML
+name: stray-body-reader
+on:
+  pull_request:
+    types: $types
+concurrency:
+  group: stray-body-reader-\${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo body
+YML
+  rc=0; out="$(python3 "$TOOL" --root "$d" 2>&1)" || rc=$?
+  if [ "$m" = D1 ]; then
+    case "$(grep -F stray-body-reader.yml <<<"$out" || true)" in
+      *"fires on edited but it is not governed"*) [ "$rc" = 1 ] && { ok; echo "PASS  D1 an ungoverned workflow a body edit starts is refused"; } || bad "D1 exited $rc, want 1" "$out" ;;
+      *) bad "D1 an ungoverned body-edit workflow was not refused for the right reason (rc=$rc)" "$(sed -n 1,5p <<<"$out")" ;;
+    esac
+  else
+    [ "$rc" = 0 ] && { ok; echo "PASS  D2 an ungoverned workflow only head actions start is left alone"; } || bad "D2 a head-only stray must not be refused (rc=$rc)" "$out"
+  fi
+done
 
 # C. A missing governed workflow is NO VERDICT (3), never a pass.
 d="$WORK/missing"; mkdir -p "$d/.github/workflows"

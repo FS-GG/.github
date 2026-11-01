@@ -16,7 +16,8 @@
 #     payload of the run that `edited` starts (`github.event.pull_request.body`, passed through the
 #     environment to --body-file); a manual "re-run" replays the old payload, so edit the body instead.
 #     A marker in a commit message works too, and also survives into the squash message.
-#   * PR-keyed concurrency with cancel-in-progress, so a superseded push does not run to completion.
+#   * PR-keyed concurrency with cancel-in-progress, so a superseded push does not run to completion. An
+#     `edited` run keys on its own run id (#5159), so a body edit never cancels the same head's run.
 #   * The fixture is a separate path-filtered workflow (landed-reverts-selftest.yml): ordinary PRs pay
 #     for the gate, not for proving the gate.
 #   * Stdlib git and Python only: no setup action, no install, no network after checkout (~15 s).
@@ -38,7 +39,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: landed-revert-guard-${{ github.event.pull_request.number }}
+  group: landed-revert-guard-${{ contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:

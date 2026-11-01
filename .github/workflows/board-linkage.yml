@@ -26,8 +26,13 @@ on:
 permissions:
   contents: read
 
+# Head-keyed concurrency (#4730 CI-load, #5159): a head action (opened, synchronize, reopened) keys on
+# the pull request and cancels the superseded head's run. A body edit (or any other action) keys on its
+# own `github.run_id`, so it never cancels the head run for the same head and is never cancelled: a
+# cancelled required check on a live head reads as failing, and a re-run replays the stale body.
+# scripts/check-pr-concurrency.py derives both from this block.
 concurrency:
-  group: board-linkage-${{ github.event.pull_request.number }}
+  group: board-linkage-${{ contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
