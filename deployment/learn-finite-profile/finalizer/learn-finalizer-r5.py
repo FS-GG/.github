@@ -9,15 +9,16 @@ It is the ONLY custody actor. Names it expects from the pod operator (a later PR
 learn-pod-<id>-{host,recv,feed,pg}, the loop volume mounted at <volume_root>/<id>.mnt, the per-run credential tmpfs at /run/user/30034/learn-cred/<id>.
 
 What it does (all of it recorded in one hash-chained record):
-  1 start      creates the custody directory (exist_ok=False) and the checkpoint directory; reads the claim and the sealed manifest through pinned descriptors.
+  1 start      exits 70 and writes nothing if the custody, checkpoint or evidence directory already exists; else creates the first two; reads the claim and the sealed
+               manifest through pinned descriptors, and cross-checks the pg image against the admission (admissions/<id>.admit).
   2 wait       anchors on the pod unit; polls; samples the volume with statvfs every 5 s (90% used: trigger `budget`); serves checkpoint requests; triggers when
                every role has /out/<role>/.done, at the soft deadline (1800 s), on the budget, or when the pod unit ends first (unrecoverable).
   3 archive    for host, recv, feed in turn: pause, stream `podman unshare tar` of /proc/<pid>/root/out/<role> into custody, check the container identity before and
                after, unpause; inventory and verdict under ONE shared budget of 4096 members and 256 MiB for the whole op (checkpoints included); extract if accepted.
   4 pg         SIGINT (fast shutdown) to the pg container; stop and remove the pod; one network-less container from the pinned pg image runs pg_controldata on the
                stopped cluster through a read-only bind. The cluster must read `shut down`.
-  5 retire     the checks of design section 8, each recorded: pod and containers gone, pod cgroup unpopulated, no failed or transitioning unit of this op (then
-               reset-failed), pod secrets and the credential tmpfs gone, the volume a mount point of at most 1 GiB with no process left, the sealed snapshot and the
+  5 retire     the checks of design section 8, each recorded: pod and containers gone, pod cgroup unpopulated, no unit of this op other than inactive after
+               reset-failed, pod secrets and the credential tmpfs gone, the volume a mount point of at most 1 GiB with no process left, the sealed snapshot and the
                claim byte-identical to the start, and the slice back near its starting memory and pids.
   6 record     evidence tree and record.json. Schemas: learn-op-pod-success/1, learn-op-pod-killed-retired/1, learn-op-pod-unrecoverable/1,
                learn-op-pod-failed-to-start/1, and learn-op-retirement-failure/1 (the schema the acknowledgement gate keys on). Every record carries `opId`,
