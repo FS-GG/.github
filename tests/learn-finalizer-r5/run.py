@@ -232,6 +232,7 @@ with tempfile.TemporaryDirectory() as tmp:
     w.at(10, die)
     r = go(w)
     check(r.code == 0 and r.rec['schema'] == 'learn-op-pod-unrecoverable/1' and r.rec['retirement']['earlyPath'] == 'ended-without-done', 'a pod unit that ends before every role is done is unrecoverable, retired')
+    check('unitStateUnknown' not in r.rec, 'a unit observed ended is not recorded as an unknown-state conclusion')
     check(r.rec['containersStartedWithInput'] == [] and r.rec['inputRead'] is False, 'the containers gone, the census succeeded and the input-read marker absent: the list is EMPTY (the marker is created before the first mount)')
 
 # ============================================================ soft deadline and the volume budget
@@ -1016,6 +1017,58 @@ with tempfile.TemporaryDirectory() as tmp:
     finally:
         os.makedirs = real_makedirs
     check(r.code == 70 and not os.path.exists(r.cust) and w.calls == [], 'a checkpoint directory that appears between the check and the creation: custody is removed again and the exit is 70')
+
+# B1: a second finalizer that loses the race on the CUSTODY directory exits 70 before any side effect (it must never reach main's generic handler, which would stop the winner's pod)
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    real_makedirs = os.makedirs
+
+    def racing_cust(path, *a, **k):
+        if str(path).endswith('/learn-custody/' + W.OPID):
+            real_makedirs(path)                                     # the winner creates it between the existence check and the creation
+        return real_makedirs(path, *a, **k)
+    os.makedirs = racing_cust
+    try:
+        r = go(w)
+    finally:
+        os.makedirs = real_makedirs
+    check(r.code == 70 and w.calls == [] and not os.path.exists(r.evid) and 'RECORD' not in r.out and os.path.isdir(r.cust) and not os.path.exists(os.path.join(r.cust, 'chain.jsonl')),
+          'a lost race on the custody directory: exit 70, no podman or systemctl call, no evidence directory, no record, the winner\'s directory untouched')
+    check(os.path.isdir(r.cust) and not os.path.exists(r.ck), 'the loser created nothing of its own (no checkpoint directory)')
+
+# N1: one transient `systemctl show` failure is not the unit ending
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.at(4, lambda: setattr(w, 'show_state_fails', 1))
+    r = go(w)
+    check(r.rec['schema'] == 'learn-op-pod-success/1' and r.rec['trigger'] == 'done' and 'earlyPath' not in r.rec['retirement'] and all(r.rec['roles'][x]['custody']['verdict'] == 'accepted' for x in W.ROLES),
+          'one failing `systemctl show` in the wait loop: the run still archives every role and succeeds')
+    check(any(e['event'] == 'unit-state-unknown' for e in r.rec['events']) and 'unitStateUnknown' not in r.rec, 'the unreadable poll is chained, and it is not recorded as a conclusion')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.at(4, lambda: setattr(w, 'show_state_fails', 5))
+    r = go(w)
+    check(r.rec['schema'] == 'learn-op-pod-success/1' and [e['event'] for e in r.rec['events']].count('unit-state-unknown') == 1, '5 consecutive unreadable polls (the bound) are still not the unit ending, and the run is chained as unknown once')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp, done_at=None)
+    w.at(4, lambda: setattr(w, 'show_state_fails', 1000))
+    r = go(w)
+    check(r.rec['schema'] == 'learn-op-pod-unrecoverable/1' and r.rec['retirement']['earlyPath'] == 'ended-without-done' and r.rec['unitStateUnknown'] == {'consecutivePolls': 6, 'concluded': 'ended'},
+          'a unit state that stays unreadable past the bound is concluded as ended, and that conclusion is recorded explicitly')
+
+# N2: the pod unit's cgroup must come from systemd on the paths that can succeed
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.cg_read_fails = 3
+    r = go(w)
+    check(r.rec['schema'] == 'learn-op-pod-success/1' and r.rec['retirement']['podCgroupFromSystemd'] is True and r.rec['podControlGroupReadTries'] == 4,
+          'a ControlGroup read that fails three times is retried and the run succeeds with the systemd path')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.cg_read_fails = 1000
+    r = go(w)
+    check(r.rec['retirement']['podCgroupFromSystemd'] is False and r.rec['schema'] == 'learn-op-pod-killed-retired/1' and r.rec['podControlGroupReadTries'] == 5,
+          'a ControlGroup that stays empty: the checks ran on a guessed path, so the run is never a success')
 
 # pg takes time to exit after SIGINT: the stop-wait loop is pinned
 with tempfile.TemporaryDirectory() as tmp:

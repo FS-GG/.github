@@ -232,6 +232,12 @@ class World:
             p = subprocess.run(a, capture_output=True, text=True)
             return p.returncode, '', ''
         if a[:3] == ['systemctl', '--user', 'show']:
+            if a[4:] == ['-pActiveState'] and getattr(self, 'show_state_fails', 0) > 0:        # a transient `systemctl show` failure (timeout or nonzero rc): nothing on stdout
+                self.show_state_fails -= 1
+                return 1, '', 'timeout'
+            if a[4:] == ['-pControlGroup'] and getattr(self, 'cg_read_fails', 0) > 0:
+                self.cg_read_fails -= 1
+                return 0, 'ControlGroup=\n', ''
             props = {'ActiveEnterTimestampMonotonic': str(self.enter_us), 'ActiveState': self.unit_state, 'ExecMainPID': self.exec_pid, 'ControlGroup': self.cg_unit,
                      'Result': self.unit_result, 'ExecMainStatus': '0'}
             return 0, ''.join(f'{p[2:]}={props.get(p[2:], "")}\n' for p in a[4:]), ''

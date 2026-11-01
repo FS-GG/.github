@@ -31,13 +31,15 @@ Runs only as uid 30034, as the transient user unit `learn-fin-<id>.service`, sta
 ## The run
 
 1. **Start.** Looks at the custody, checkpoint and evidence directories **before creating any**; if any of the three exists it **exits 70 and writes nothing**, so a second
-   finalizer can never replace the first one's record (a checkpoint directory that appears between the check and the creation removes the custody directory again and exits 70).
+   finalizer can never replace the first one's record (a custody directory that appears between the check and the creation exits 70 with nothing done; a checkpoint directory that appears there removes the custody directory again and exits 70).
    Then creates `~/.local/state/learn-custody/<id>/` and `~/.local/state/learn-checkpoint/<id>/`. Records the slice's memory and pids. Reads the claim
    (`claims/<source-identity>.claim`) and the sealed manifest through pinned descriptors, and cross-checks the pg image (below); a failure is recorded and later makes the run
    fail (it does not stop the run).
 2. **Wait.** Anchors on the pod unit (30 s, else `failed-to-start`). Polls every 2 s. Samples the volume with `statvfs` every 5 s; **90% used triggers `budget`**. Serves checkpoint
    requests. Triggers when every role has `/out/<role>/.done`, at the soft deadline (1800 s, `time`), on the budget, or, if the unit ends first, takes the early path
-   (`unrecoverable`).
+   (`unrecoverable`). A `systemctl show` that fails or prints no state is **unknown, not "ended"**: the poll is chained once (`unit-state-unknown`) and repeated; only after 5
+   consecutive unreadable polls is the unit concluded to have ended, and that conclusion is recorded (`unitStateUnknown`). The pod unit's `ControlGroup` is read with up to 5 tries at the
+   anchor (`podControlGroupReadTries`); if it never comes back as a path, the retirement checks ran on a guessed path and the run **cannot be a success**.
 3. **Archive.** `host`, `recv`, `feed` in turn: `podman pause`, the container identity sampled (cgroup contains the container id, process start time, `frozen 1`, state `paused`),
    `podman unshare tar` of `/proc/<pid>/root/out/<role>` into custody, the identity sampled again, `podman unpause`. The stream is inventoried (regular files and directories only, depth
    at most 8, no `..`, no absolute name) and given a verdict: `accepted` or `rejected:{budget,truncated,identity,count,size,type,tar}`, in r4's precedence. Accepted streams are extracted
@@ -51,7 +53,7 @@ Runs only as uid 30034, as the transient user unit `learn-fin-<id>.service`, sta
    | Check | Meaning |
    |---|---|
    | `podGone`, `containersGone` | `podman pod ps -a` and `podman ps -a` filtered by this op's names (the infra container and the controldata container included) are empty and the listing succeeded |
-   | `podCgroupRetired`, `podCgroupProcsEmpty` | the pod unit's cgroup (taken from systemd at the anchor) is absent or `populated 0`, and `cgroup.procs` is empty |
+   | `podCgroupRetired`, `podCgroupProcsEmpty` | the pod unit's cgroup (taken from systemd at the anchor; `podCgroupFromSystemd` records that it was, and a success needs it) is absent or `populated 0`, and `cgroup.procs` is empty |
    | `unitsClean` | this op's units are listed, `reset-failed` is run on each (and on the pod unit), and they are listed again: **none may be anything but `inactive` afterwards** (design section 8: no unit failed, activating or deactivating, `reset-failed` first). The states before the reset are recorded too. A pod unit that the stop left `failed` is normal and passes once the reset clears it; one that stays failed is a retirement failure, because operator r6's sweep refuses a failed unit as busy and would block the next op |
    | `secretsGone`, `credentialTmpfsGone` | no `podman secret` named for the op, and the credential tmpfs path is absent |
    | `volumeOk` | the volume is a mount point, its last `statvfs` is at most 1 GiB (not the host filesystem), it was sampled, and no process is left in the pod cgroup (the finalizer-side proxy for "no open handle"; a successful unmount by Root is authoritative) |

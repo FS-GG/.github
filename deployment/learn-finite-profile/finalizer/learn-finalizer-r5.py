@@ -363,6 +363,9 @@ def configure(argv, environ, euid=None, **over):
     STATE.clear()
 
 
+UNIT_UNKNOWN_MAX, CG_READ_TRIES = 5, 5          # consecutive unreadable unit-state polls before the unit is concluded to have ended; tries to read the pod unit's ControlGroup
+
+
 def sleep(s):
     time.sleep(s)
 
@@ -899,10 +902,13 @@ def early_finish(kind, schema_retired, cg_rel):
 
 def claim_ids():
     """An op id is used once. If the evidence, custody OR checkpoint directory exists, this id was run (or is running): exit 70 and write NOTHING, so a second finalizer can
-    never replace the first one's record. All three are looked at before any is created; a race on the second creation removes the first again."""
+    never replace the first one's record. All three are looked at before any is created; a race on either creation exits 70 before any side effect (a lost race on the second removes the first again)."""
     if any(os.path.lexists(d) for d in (EVID, CUST, CKDIR)):
         mark('FIN', error='op id already used'); sys.exit(70)
-    os.makedirs(CUST, 0o700, exist_ok=False)
+    try:
+        os.makedirs(CUST, 0o700, exist_ok=False)
+    except FileExistsError:                                  # another finalizer won the race: nothing of ours exists to undo, and main's handler must never run (it would stop the winner's pod)
+        mark('FIN', error='op id already used'); sys.exit(70)
     try:
         os.makedirs(CKDIR, 0o700, exist_ok=False)
     except FileExistsError:
@@ -933,11 +939,15 @@ def flow():
         sleep(1)
     exec_main_pid = s.get('ExecMainPID'); REC['anchorMonotonicUs'] = anchor; REC['execMainPid'] = exec_main_pid
     STATE['anchor'] = anchor
-    cg_rel = show(OPU, 'ControlGroup').get('ControlGroup', '')
+    for _try in range(CG_READ_TRIES):                       # a failed or empty read must not leave the retirement checks to a guessed path
+        cg_rel = show(OPU, 'ControlGroup').get('ControlGroup', '')
+        if cg_rel.startswith('/'): break
+        sleep(1)
+    REC['podControlGroupReadTries'] = _try + 1
     STATE['cg_rel'] = cg_rel; REC['podControlGroup'] = cg_rel
     chain('anchor', anchorUs=anchor, execMainPid=exec_main_pid)
     # 2. trigger: every role done, the soft deadline, the volume budget, or the unit ending
-    trigger, last_wait, last_vol, ck_done = None, time.monotonic(), -1e9, 0
+    trigger, last_wait, last_vol, ck_done, unknown = None, time.monotonic(), -1e9, 0, 0
     cks = REC['checkpoints'] = []
     while trigger is None:
         st = show(OPU, 'ActiveState').get('ActiveState')
@@ -948,7 +958,11 @@ def flow():
             if used is not None and used >= VOLUME_BUDGET: trigger = 'budget'; break
         if all(role_done(r_) for r_ in ROLES): trigger = 'done'; break
         if int(time.monotonic() * 1e6) - anchor >= SOFT_S * 1e6: trigger = 'time'; break
-        if st not in ('active', 'activating'):
+        unknown = unknown + 1 if st in (None, '') else 0     # a failed `systemctl show` says nothing about the unit: it is not "ended"
+        if st in (None, '') and unknown <= UNIT_UNKNOWN_MAX:
+            if unknown == 1: chain('unit-state-unknown')
+        elif st not in ('active', 'activating'):
+            if st in (None, ''): REC['unitStateUnknown'] = {'consecutivePolls': unknown, 'concluded': 'ended'}
             mark('FIN', outcome='pod_ended_without_done', state=st); chain('ended-without-done', state=st)
             early_finish('ended-without-done', SCHEMA_UNRECOVERABLE, cg_rel)
         if time.monotonic() - last_wait >= 60: chain('wait'); last_wait = time.monotonic()
@@ -1001,7 +1015,7 @@ def flow():
     if late: REC['custodyNote'] = 'custody completed after the 31:30 deadline; partial/late'; finish(SCHEMA_RETIREMENT_FAILURE)
     if not retired: finish(SCHEMA_RETIREMENT_FAILURE)
     ok = (all(r_['outcomeOk'] and r_.get('unpauseRc', 0) == 0 for r_ in roles.values()) and pg['ok'] and REC['oom'] == 'no' and not REC['deadline'] and trigger == 'done'
-          and REC['admission']['ok'] and REC['containersStartedWithInput'] is not None and not block['volume']['budgetHit']
+          and REC['admission']['ok'] and block['podCgroupFromSystemd'] and REC['containersStartedWithInput'] is not None and not block['volume']['budgetHit']
           and all(c['roles'] and all(v['custody'].get('verdict') == 'accepted' and v.get('unpauseRc') == 0 for v in c['roles'].values()) for c in cks))      # a failed checkpoint has no roles
     finish(SCHEMA_OK if ok else SCHEMA_KILLED)
 
