@@ -91,7 +91,7 @@ cp -r "$PL" "$T/corrupt"; echo tamper >> "$T/corrupt/files/scripts/lib/gate.py"
 expect "corrupt payload is refused" 2 python3 "$TOOL" apply "$R" --payload "$T/corrupt"
 [ "$(git -C "$R" status --porcelain | wc -l)" = "$before" ] && ok "nothing written from a corrupt payload" || bad "nothing written from a corrupt payload"
 expect "payload lacking a file is refused" 2 bash -c "cp -r '$PL' '$T/short' && rm '$T/short/files/scripts/lib/gate.py' && python3 '$TOOL' apply '$R' --payload '$T/short'"
-git -C "$R" status --porcelain | grep -q . && bad "no partial write after missing-file refusal" || ok "no partial write after missing-file refusal"
+[ -z "$(git -C "$R" status --porcelain)" ] && ok "no partial write after missing-file refusal" || bad "no partial write after missing-file refusal"
 
 # Shallow history cannot name stale pins: refuse to call it clean.
 git clone -q --depth 1 "file://$SRC" "$T/shallow"
