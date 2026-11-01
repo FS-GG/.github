@@ -6,6 +6,9 @@ on:
       - .github/workflows/routine-eligibility.yml
       - .github/workflows/routine-eligibility-selftest.yml
       - scripts/check-routine-eligibility-envelope.py
+      - scripts/check-claim-generation.py
+      - tools/routine-delivery.py
+      - tools/pr-lane-admission.py
       - tests/routine-eligibility/**
 
 permissions:

@@ -31,6 +31,11 @@ if grep -qF 'show "$BASE_SHA:' "$WORKFLOW"; then
   exit 1
 fi
 require 'refs/pull/${PR_NUMBER}/head:refs/remotes/origin/routine-head' "$WORKFLOW"
+# Push parent (#5189): only GitHub's own `synchronize` `before`, only after proven ancestry.
+require 'EVENT_BEFORE: ${{ github.event.before }}' "$WORKFLOW"
+require 'if test "${EVENT_ACTION:-}" = synchronize' "$WORKFLOW"
+require 'merge-base --is-ancestor "$EVENT_BEFORE" refs/remotes/origin/routine-head' "$WORKFLOW"
+require 'previous_args=(--previous-head "$previous_head")' "$WORKFLOW"
 require 'pull_request:' "$SELFTEST"
 require 'name: routine-eligibility-fixture' "$SELFTEST"
 require 'bash tests/routine-eligibility/run.sh' "$SELFTEST"
@@ -201,3 +206,6 @@ PYFETCH
 
 # The moved-base race: real workflow shell, real shallow transport, real envelope and validator.
 python3 "$ROOT/tests/routine-eligibility/moved_base.py"
+
+# The push-parent allowance (#5189): stale, forced, rebound, forged and unrebound-merge controls.
+python3 "$ROOT/tests/routine-eligibility/push_parent.py"
