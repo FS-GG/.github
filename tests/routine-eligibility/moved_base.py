@@ -121,14 +121,14 @@ class Fixture:
         self.git("push", "-q", "--force", "origin", f"{sha}:refs/pull/{PR}/head")
 
     def run(self, workflow: pathlib.Path, *, event_base: str, event_head: str, body: str,
-            head_ref: str = "routine/fixture") -> tuple[int, str]:
+            head_ref: str = "routine/fixture", event: dict[str, str] | None = None) -> tuple[int, str]:
         runner = self.base / f"runner-{len(list(self.base.glob('runner-*')))}"
         runner.mkdir()
         env = dict(self.env, RUNNER_TEMP=str(runner), RECEIVER_FETCH_TOKEN=TOKEN, PR_BODY=body,
                    PR_NUMBER=PR, BASE_REF="main", DEFAULT_BRANCH="main", BASE_SHA=event_base,
                    HEAD_REF=head_ref, HEAD_SHA=event_head, REPOSITORY=REPOSITORY,
                    GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0=f"url.file://{self.origin}.insteadOf",
-                   GIT_CONFIG_VALUE_0=f"https://github.com/{REPOSITORY}.git")
+                   GIT_CONFIG_VALUE_0=f"https://github.com/{REPOSITORY}.git", **(event or {}))
         done = subprocess.run(["bash", "-c", workflow_shell(workflow)], cwd=runner, env=env, text=True,
                               capture_output=True, check=False, timeout=120)
         output = done.stdout + done.stderr
