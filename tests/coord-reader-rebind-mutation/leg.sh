@@ -7,8 +7,8 @@
 #   1. tests/coord-board-v2-projection (builds FS.GG.Coord.GitHub): the splice and the preflight decision;
 #   2. the BoardV2Import end-to-end test in tests/board-v2-import/run.py (rebuilds the tool at this checkout's HEAD):
 #      the verification, authentication, already-bound and record guards, and the next cohort's preflight;
-#   3. the engine end-to-end test (builds the engine, then runs it through scripts/fsgg-coord): the migration-scope rebind,
-#      which only the engine host can do.
+#   3. the engine end-to-end test (builds the engine into this leg's private artifacts directory, never the caller's
+#      checkout, then runs it through scripts/fsgg-coord): the migration-scope rebind, which only the engine host can do.
 #
 # It runs under a private TMPDIR and a private XDG_RUNTIME_DIR, so nothing reaches a live board lock. This file is never
 # a mutation target, so no mutation can delete the evidence that it ran.
@@ -46,9 +46,12 @@ python3 "$ROOT/tests/board-v2-import/run.py" \
 tally "$TOOL" "the BoardV2Import end-to-end test"
 
 BUILD="$PRIVATE_TMP/engine-build.log"
-dotnet build "$ROOT/src/FS.GG.Coord.Cli" -c Release --nologo >"$BUILD" 2>&1 || not_measured "the engine did not build" "$BUILD"
+ARTIFACTS="$PRIVATE_TMP/engine-artifacts"
+dotnet build "$ROOT/src/FS.GG.Coord.Cli" -c Release --nologo --artifacts-path "$ARTIFACTS" >"$BUILD" 2>&1 || not_measured "the engine did not build" "$BUILD"
+ENGINE_BIN="$(find "$ARTIFACTS/bin/FS.GG.Coord.Cli" -name fsgg-coord-engine -type f -perm -u+x | head -1)"
+[ -n "$ENGINE_BIN" ] || not_measured "the engine build produced no fsgg-coord-engine" "$BUILD"
 ENGINE="$PRIVATE_TMP/engine.log"
-FSGG_COORD_ENGINE_BIN="$ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine" python3 "$ROOT/tests/board-v2-import/run.py" --no-build \
+FSGG_COORD_ENGINE_BIN="$ENGINE_BIN" python3 "$ROOT/tests/board-v2-import/run.py" --no-build \
   EngineShimTests.test_rebind_reader_rebinds_a_migration_scope_to_the_engine_host >"$ENGINE" 2>&1
 tally "$ENGINE" "the engine end-to-end test"
 

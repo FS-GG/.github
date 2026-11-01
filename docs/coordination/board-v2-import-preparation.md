@@ -604,7 +604,7 @@ the `FS.GG.Coord.GitHub` assembly (revision and sha256) that both surfaces share
 `enrollment plan` copies the predecessor's reader identity into the successor, and `bind-runtime` may change only
 `populationRevision`, so after a coherent upgrade the runtime binding still names the previous reader and the installed
 reader refuses it ("selected binding does not match the loaded adapter assembly SHA-256"). On 2026-10-31 Root rebound
-cohort 90 by hand. `fsgg-coord enrollment rebind-reader` is the designed stage for that step:
+cohort 90 by hand. The engine's `rebind-reader` enrollment verb is the designed stage for that step:
 
 1. It reads the executing reader: the `FS.GG.Coord.GitHub` assembly's sha256 and the revision embedded in its informational
    version. It refuses `ReaderNotVerified` unless `--installed-reader` hashes to the same sha256 and the verified-reader table
