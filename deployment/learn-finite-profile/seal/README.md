@@ -22,6 +22,39 @@ are constants (Root decision, #4647). The CLI takes no base or subtree argument,
 refused, so a different selection cannot produce an identity. The source identity is the sha256 of the base and, per file,
 relative path, size, sha256 and `mtime_ns`; re-sealing the same source gives the same identity.
 
+## Synthetic mode (Refs FS-GG/.github#5184)
+
+`--mode synthetic` seals and claims a **synthetic** source, so a pod harness can be qualified without touching the real spool. It never
+claims real-spool provenance. Real mode (no `--mode`, or `--mode real`) is unchanged.
+
+| | Real | Synthetic |
+|---|---|---|
+| Source | the two pinned `spool/` subtrees under the fixed base | `--synthetic-base DIR`, with the same two subtree names under it, declaring itself in `DIR/SYNTHETIC-SOURCE.json` |
+| Commands | all | `manifest`, `seal`, `claim`, `status` (the rest are refused: no quiesce against the live drain timer, no void, supersede or admit) |
+| Manifest | `learn-input-source-manifest/1` | `learn-input-source-manifest-synthetic/1` |
+| Sealed record | `learn-input-snapshot/1` in `inputs/` | `learn-input-snapshot-synthetic/1` in `synthetic-inputs/`, with `provenance: synthetic` and `realSpoolProvenance: false` |
+| Claim | `learn-input-claim/1` in `claims/` | `learn-input-claim-synthetic/1` in `synthetic-claims/`, one per identity |
+| Identity | sha256 over base, subtrees and per-file path, size, sha256, `mtime_ns` | sha256 over a domain tag, the declaration hash, subtrees and the same per-file fields. The base path is not hashed; a new run declares a new `nonce`, which is a new identity |
+
+The declaration is `{"schema": "learn-synthetic-source/1", "synthetic": true, "generator": TEXT, "nonce": [A-Za-z0-9._-]{1,64}}` and nothing else.
+
+**Where a synthetic seal is refused.** The real `claim`, `supersede` (both through the seal check), the real `seal` and `quiesce`
+(through manifest validation) refuse it by record type. The real `void`, `status` and the pod operator's `verify_claim` do not look
+in the synthetic directories, and a synthetic claim copied into `claims/` is refused by `verify_claim` for its schema. The pod
+operator therefore cannot start a run from a synthetic claim until a later change gives it an explicit synthetic path.
+
+**Where real input is refused.** A synthetic base that is a symlink, is not a directory, is or lies inside or contains the real
+spool, the persistent source area or the mounted view; a symlink in any component of a pinned subtree path below the base (for example
+`<base>/passive-home-canonical-v1` pointing into the real spool); a tree with no valid declaration (a copy of the real spool is one); a
+file whose `(st_dev, st_ino)` matches a file under the real spool roots (lstat only, nothing is read) or that has more than one link;
+and a real manifest or a real seal given to the synthetic commands. The sealed record carries the declaration's `generator` and
+`nonce` as the caller's claim. The roots
+are pinned in the tool; `extra_real_roots` can only add to them.
+
+**Limit, stated plainly.** This is cooperative. A copy of real data (new inodes, one link) that also carries a forged declaration is not
+detectable by this tool, which does not read the real spool. Root decides what a synthetic base contains; the record only makes the
+claim "synthetic" explicit and keeps it from satisfying a check that requires real provenance.
+
 ## Claim state and generation
 
 State and the next generation are derived from the history on disk: the live claim, `.claim.consumed-<op>`,
