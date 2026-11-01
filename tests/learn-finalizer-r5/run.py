@@ -106,6 +106,7 @@ def go(w, patch=None, argv=None, env=None, euid=30034, over=None):
 
 def world(tmp, done_at=20, activate_at=1, reasons=None, files=True):
     w = W.World(tmp)
+    w.write_admission(FIN_SHA)
     if activate_at is not None:
         w.at(activate_at, w.activate)
     if done_at is not None:
@@ -231,7 +232,7 @@ with tempfile.TemporaryDirectory() as tmp:
     w.at(10, die)
     r = go(w)
     check(r.code == 0 and r.rec['schema'] == 'learn-op-pod-unrecoverable/1' and r.rec['retirement']['earlyPath'] == 'ended-without-done', 'a pod unit that ends before every role is done is unrecoverable, retired')
-    check(r.rec['containersStartedWithInput'] is None and r.rec['inputRead'] is False, 'with the containers already gone the started-with-input list is null, not []')
+    check(r.rec['containersStartedWithInput'] == [] and r.rec['inputRead'] is False, 'the containers gone, the census succeeded and the input-read marker absent: the list is EMPTY (the marker is created before the first mount)')
 
 # ============================================================ soft deadline and the volume budget
 with tempfile.TemporaryDirectory() as tmp:
@@ -626,7 +627,11 @@ retire_case(lambda w: os.makedirs(os.path.join(w.cred, W.OPID)), 'credentialTmpf
 retire_case(lambda w: w.fail.add('cg_populated'), 'podCgroupRetired', 'a pod cgroup still populated', expect=False)
 retire_case(lambda w: w.fail.add('cg_populated'), 'podCgroupProcsEmpty', 'a pod cgroup with processes', expect=False)
 retire_case(lambda w: w.fail.add('cg_populated'), 'volumeOk', 'a process in the pod cgroup means an open handle on the volume', expect=False)
-retire_case(lambda w: w.fail.add('unit_failed'), 'unitsClean', 'a pod unit that ended failed is clean after the stop (reset-failed follows)', expect=True, schema='learn-op-pod-success/1')
+r_ = retire_case(lambda w: w.fail.add('unit_failed'), 'unitsClean', 'a pod unit that the stop left failed is clean once reset-failed has cleared it', expect=True, schema='learn-op-pod-success/1')
+check(r_.rec['retirement']['unitStatesBeforeReset'] == {'learn-pod-op-pod-1.service': 'failed'} and r_.rec['retirement']['unitStates'] == {'learn-pod-op-pod-1.service': 'inactive'}, 'the failed state before the reset is recorded, and the unit reads inactive after it')
+retire_case(lambda w: w.fail.update({'unit_failed', 'reset_stuck'}), 'unitsClean', 'a pod unit that STAYS failed after reset-failed (the next op\'s sweep would refuse it)', expect=False)
+retire_case(lambda w: w.extra_units.append(f'learn-pod-{W.OPID}-x.service loaded failed failed X'), 'unitsClean', 'another failed unit of this op is cleared by the reset', expect=True, schema='learn-op-pod-success/1')
+retire_case(lambda w: (w.extra_units.append(f'learn-pod-{W.OPID}-x.service loaded failed failed X'), w.fail.add('reset_stuck')), 'unitsClean', 'another failed unit that the reset does not clear', expect=False)
 retire_case(lambda w: w.fail.add('units'), 'unitsClean', 'a failing unit census', expect=False)
 retire_case(lambda w: w.extra_units.append(f'learn-pod-{W.OPID}-x.service loaded activating start X'), 'unitsClean', 'another unit of this op still activating', expect=False)
 retire_case(lambda w: w.extra_units.append(f'learn-fin-{W.OPID}-y.service loaded deactivating stop Y'), 'unitsClean', 'a finalizer-side unit of this op still deactivating', expect=False)
@@ -871,15 +876,199 @@ with tempfile.TemporaryDirectory() as tmp:
     w.fail.add('unpause')
     r = go(w)
     check(r.rec['checkpoints'][0]['roles']['host']['unpauseRc'] == 1 and r.rec['schema'] == 'learn-op-pod-killed-retired/1', 'a checkpoint that left a role paused is recorded and the run cannot succeed')
-# a crash before any archive: the handler itself unpauses everything and removes the pod
+# a crash before any archive: the handler itself unpauses everything and removes the pod, and the record still carries the input evidence
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    real_vs, calls_ = F.volume_sample, []
+
+    def boom_once():
+        calls_.append(1)
+        if len(calls_) == 1:
+            raise RuntimeError('statvfs exploded')
+        return real_vs()
+    r = go(w, patch={'volume_sample': boom_once})
+    check(all(idx(w.calls, ['podman', 'unpause', f'learn-pod-op-pod-1-{x}']) > 0 for x in W.ROLES) and idx(w.calls, ['podman', 'pod', 'rm']) > 0 and r.rec['schema'] == 'learn-op-retirement-failure/1'
+          and 'statvfs exploded' in r.rec['error'], 'a crash before any archive still unpauses every role and removes the pod')
+    check(r.rec['inputRead'] is False and r.rec['containersStartedWithInput'] == [] and r.rec['retirement']['earlyPath'] == 'exception',
+          'the exception path computes the input evidence too (before the pod is removed): every record carries the fields the claim tooling reads')
+    ps_i, rm_i = idx(w.calls, ['podman', 'ps']), idx(w.calls, ['podman', 'pod', 'rm'])
+    check(0 < ps_i < rm_i, 'the container census for the input evidence ran before the pod was removed')
+# the evidence function itself failing never loses the contract fields, on any path
+for what, kw, mk in (('the final path', dict(done_at=20), None), ('the early path', dict(activate_at=None, done_at=None), None)):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = world(tmp, **kw)
+
+        def explode():
+            raise RuntimeError('inputs exploded')
+        r = go(w, patch={'inputs_evidence': explode})
+        check('inputRead' in r.rec and r.rec['containersStartedWithInput'] is None and r.rec['inputRead'] is False, f'{what}: an inputs_evidence that raises still yields inputRead and a null list')
+        check(r.rec['schema'] != 'learn-op-pod-success/1', f'{what}: unknown input evidence is never a success' if what == 'the final path' else f'{what}: still a record')
 with tempfile.TemporaryDirectory() as tmp:
     w = world(tmp)
 
-    def early_boom():
-        raise RuntimeError('inputs exploded')
-    r = go(w, patch={'inputs_evidence': early_boom})
-    check(all(idx(w.calls, ['podman', 'unpause', f'learn-pod-op-pod-1-{x}']) > 0 for x in W.ROLES) and idx(w.calls, ['podman', 'pod', 'rm']) > 0 and r.rec['schema'] == 'learn-op-retirement-failure/1',
-          'a crash before any archive still unpauses every role and removes the pod')
+    def explode2():
+        raise RuntimeError('x')
+    os.makedirs(os.path.join(w.home, '.local', 'state', 'learn-input', W.OPID))
+    open(os.path.join(w.home, '.local', 'state', 'learn-input', W.OPID, 'input-read'), 'w').close()
+    r = go(w, patch={'inputs_evidence': explode2})
+    check(r.rec['inputRead'] is True and r.rec['containersStartedWithInput'] is None, 'a failing evidence function still reports the marker it can see')
+
+# the census that succeeds and lists no container
+for what, marker, want in (('no marker', False, []), ('the marker present', True, None)):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = world(tmp, activate_at=None, done_at=None)
+        if marker:
+            os.makedirs(os.path.join(w.home, '.local', 'state', 'learn-input', W.OPID))
+            open(os.path.join(w.home, '.local', 'state', 'learn-input', W.OPID, 'input-read'), 'w').close()
+        w.containers.clear()                                  # `podman ps` succeeds and lists nothing
+        r = go(w)
+        check(r.rec['containersStartedWithInput'] == want and r.rec['inputRead'] is marker, f'a successful census listing zero containers with {what}: containersStartedWithInput is {want}')
+        v, sup = None, None
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.fail.add('ps')
+    r = go(w)
+    check(r.rec['containersStartedWithInput'] is None, 'a FAILED census is null whatever the marker says')
+
+# ============================================================ third round: review findings
+SEAL = os.path.join(ROOT, 'deployment', 'learn-finite-profile', 'seal', 'learn_seal_claim.py')
+spec_l = importlib.util.spec_from_file_location('lsc', SEAL)
+L = importlib.util.module_from_spec(spec_l)
+spec_l.loader.exec_module(L)
+
+
+def contract(r, marker_present):
+    """What the claim tooling decides about this record: (void blockers, supersede evidence)."""
+    mk = os.path.join(r.w.home, '.local', 'state', 'learn-input')
+    opres = {'schema': L.OPERATOR_RESULT_SCHEMA, 'opId': W.OPID, 'mode': '--run', 'exitCode': 5, 'errors': ['x'], 'gates': {'inputMounted': False}, 'containers': [],
+             'runNonceSha256': r.rec.get('runNonceSha256'), 'operatorSha256': 'b2' * 32}
+    adm = {'operatorSha256': 'b2' * 32, 'finalizerSha256': r.rec.get('finalizerSha256')}
+    return L._evidence_contract(W.OPID, opres, r.rec, mk, adm), L._positive_consumption(W.OPID, r.rec, mk)
+
+
+# void and supersede against REAL records (the deadlock the review found: a null list with no marker made a claim neither voidable nor supersedable)
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp, activate_at=None, done_at=None)
+    w.containers.clear()
+    r = go(w)
+    void_why, sup = contract(r, False)
+    check(r.rec['schema'] == 'learn-op-pod-failed-to-start/1' and void_why == [] and sup == [], 'a pod that never started, marker absent: the claim tooling finds the claim VOIDABLE and nothing to supersede (no deadlock)')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp, activate_at=None, done_at=None)
+    os.makedirs(os.path.join(w.home, '.local', 'state', 'learn-input', W.OPID))
+    open(os.path.join(w.home, '.local', 'state', 'learn-input', W.OPID, 'input-read'), 'w').close()
+    w.containers.clear()
+    r = go(w)
+    void_why, sup = contract(r, True)
+    check(void_why and sup, 'marker present and no container left to ask: not voidable, and supersedable (the marker is positive evidence)')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.containers['learn-pod-op-pod-1-feed']['mounts'] = [{'Destination': '/in'}]
+    r = go(w)
+    void_why, sup = contract(r, False)
+    check(void_why and sup == ['the finalizer record lists containers started with the input'], 'a container started with /in: not voidable, supersedable on the record alone')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.fail.add('ps')
+    r = go(w)
+    void_why, sup = contract(r, False)
+    check(void_why and not sup, 'a census that failed: neither provable as clean nor as consumed: the void is refused (fail closed) and nothing is claimed as consumption')
+
+# an op id with ONLY the checkpoint directory present: exit 70 and nothing created
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    os.makedirs(os.path.join(w.home, '.local', 'state', 'learn-checkpoint', W.OPID))
+    r = go(w)
+    check(r.code == 70 and not os.path.exists(r.cust) and not os.path.exists(r.evid) and w.calls == [] and 'RECORD' not in r.out, 'only the checkpoint directory exists: exit 70 and the custody directory is NOT created')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    real_makedirs = os.makedirs
+
+    def racing(path, *a, **k):
+        if str(path).endswith('/learn-checkpoint/' + W.OPID):
+            real_makedirs(path)                                     # another process creates it between the check and the creation
+        return real_makedirs(path, *a, **k)
+    os.makedirs = racing
+    try:
+        r = go(w)
+    finally:
+        os.makedirs = real_makedirs
+    check(r.code == 70 and not os.path.exists(r.cust) and w.calls == [], 'a checkpoint directory that appears between the check and the creation: custody is removed again and the exit is 70')
+
+# pg takes time to exit after SIGINT: the stop-wait loop is pinned
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.pg_exit_after = 4
+    r = go(w)
+    kill_i = idx(w.calls, ['podman', 'kill'])
+    polls = [i for i, c in enumerate(w.calls) if i > kill_i and c[:2] == ['podman', 'inspect'] and c[-1].endswith('-pg') and c[3].startswith('{{.State.Status}}|')]
+    check(r.rec['pg']['ok'] and r.rec['pg']['stop']['exited'] and len(polls) >= 5 and r.rec['schema'] == 'learn-op-pod-success/1',
+          'pg that needs 4 s to exit after SIGINT is polled (about once a second) until it has exited, then read: pg ok')
+    check(r.rec['pg']['stop']['before'].startswith('running|') and r.rec['pg']['stop']['after'].startswith('exited|'), 'the state before the signal was running and after the wait exited')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.pg_exit_after = 45
+    r = go(w)
+    kill_i = idx(w.calls, ['podman', 'kill'])
+    polls = [c for i, c in enumerate(w.calls) if i > kill_i and c[:2] == ['podman', 'inspect'] and c[-1].endswith('-pg') and c[3].startswith('{{.State.Status}}|')]
+    check(r.rec['pg']['stop']['exited'] is False and r.rec['pg']['stop']['exitCode'] is None and r.rec['pg']['ok'] is False and r.rec['schema'] == 'learn-op-pod-killed-retired/1',
+          'pg that has not exited within 30 s is not ok (its exit code is not read from a running container); the pod is stopped regardless')
+    check(30 <= len(polls) <= 33, f'the wait is bounded at about 30 polls (got {len(polls)})')
+
+# the admission cross-check of the pg image
+for what, mut in (('no admission file', lambda w: os.unlink(w.admission_path)), ('only an admission for another op', lambda w: (os.unlink(w.admission_path), w.write_admission(FIN_SHA, op='op-other'))),
+                  ('an admission whose file names another op', lambda w: (w.write_admission(FIN_SHA, op=W.OPID, raw=json.dumps({'schema': 'learn-pod-admission/1', 'opId': 'op-other', 'sourceIdentity': W.IDENT, 'finalizerSha256': FIN_SHA, 'imageIds': [W.PGIMG]})))),
+                  ('another source identity', lambda w: w.write_admission(FIN_SHA, ident='12' * 32)), ('another finalizer', lambda w: w.write_admission('34' * 32)),
+                  ('a pg image that was not admitted', lambda w: w.write_admission(FIN_SHA, image_ids=['56' * 32])), ('an empty image list', lambda w: w.write_admission(FIN_SHA, image_ids=[])),
+                  ('a malformed image Id', lambda w: w.write_admission(FIN_SHA, image_ids=[W.PGIMG, 'xyz'])), ('another schema', lambda w: w.write_admission(FIN_SHA, schema='x/1')),
+                  ('invalid JSON', lambda w: w.write_admission(FIN_SHA, raw='{"x"')), ('a list', lambda w: w.write_admission(FIN_SHA, raw='[1]')),
+                  ('a group-writable file', lambda w: w.write_admission(FIN_SHA, mode=0o664)),
+                  ('a symlink', lambda w: (os.rename(w.admission_path, w.admission_path + '.real'), os.symlink(w.admission_path + '.real', w.admission_path)))):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = world(tmp)
+        mut(w)
+        r = go(w)
+        check(r.rec['admission']['ok'] is False and r.rec['admission']['reasons'] and r.rec['schema'] == 'learn-op-pod-killed-retired/1', f'{what}: the admission cross-check fails and the run cannot succeed')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    r = go(w)
+    check(r.rec['admission']['ok'] and r.rec['admission']['reasons'] == [] and r.rec['admission']['sha256'] == sha(open(w.admission_path, 'rb').read()), 'an admission naming this op, source, finalizer and the pg image passes and its hash is recorded')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    os.chmod(os.path.join(w.view, 'admissions'), 0o777)
+    r = go(w)
+    check('not root-safe' in ' '.join(r.rec['admission']['reasons']), 'the admission is read through the pinned chain: a writable admissions directory is refused')
+
+# pod cgroup: populated 1 in cgroup.events with an empty cgroup.procs is still not retired
+retire_case(lambda w: w.fail.add('cg_events_only'), 'podCgroupRetired', 'a pod cgroup whose events file still says populated', expect=False)
+
+# the archive command: tar stays on one filesystem and writes ustar
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    seen_ = []
+    real_arch = F.archive
+
+    def spy(argv, *a, **k):
+        seen_.append(list(argv))
+        return real_arch(argv, *a, **k)
+    r = go(w, patch={'archive': spy})
+    check(len(seen_) == 3 and all('--one-file-system' in a_ and '--format=ustar' in a_ and a_[a_.index('-C') + 2:a_.index('-C') + 4] == ['-cf', '-'] for a_ in seen_)
+          and [a_[a_.index('-C') + 1].split('/')[-1] for a_ in seen_] == list(W.ROLES), 'tar is run once per role over that role\'s /out/<role>, on one filesystem, in ustar format')
+
+# the acknowledgement is written only after that checkpoint's archives are done
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.at(6, request(w, 1))
+    acks_at_archive = []
+    real_arch2 = F.archive
+
+    def spy2(argv, *a, **k):
+        acks_at_archive.append(os.path.exists(os.path.join(w.home, '.local/state/learn-checkpoint', W.OPID, 'ack-1')))
+        return real_arch2(argv, *a, **k)
+    r = go(w, patch={'archive': spy2})
+    check(acks_at_archive[:3] == [False, False, False] and os.path.exists(os.path.join(r.ck, 'ack-1')), 'ack-1 does not exist while the checkpoint\'s three archives run; it is written after them')
+    ev_ = [json.loads(l)['event'] for l in open(os.path.join(r.cust, 'chain.jsonl')).read().splitlines()]
+    check(ev_.index('checkpoint-request') < ev_.index('checkpoint-ack'), 'the chain logs the request before the acknowledgement')
 
 # ============================================================ unit tests of the pieces
 # parse_status
@@ -939,7 +1128,7 @@ with tempfile.TemporaryDirectory() as tmp:
         except Exception:
             check(True, f'inventory: {what} cannot even be put in a tar here')
     i, _, _ = inv(tmp, base, members_left=3)
-    check(i['verdict'] == 'rejected:count', 'inventory: more members than are left is rejected:count')
+    check(i['verdict'] == 'rejected:count' and len(i.get('members', [])) <= 3, 'inventory: more members than are left is rejected:count')
     i, _, _ = inv(tmp, base, content_left=100)
     check(i['verdict'] == 'rejected:size', 'inventory: more content than is left is rejected:size')
     i, _, _ = inv(tmp, base, ident_ok=False)

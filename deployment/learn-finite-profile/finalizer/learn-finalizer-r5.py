@@ -480,6 +480,27 @@ def snapshot_verify(start):
     return out
 
 
+def admission_check():
+    """Cross-check what the pod operator passed in FSGG_PG_IMAGE against the admission Root wrote for THIS op (read through pinned descriptors): same op id, same source
+    identity, this finalizer's own sha256 as the admitted finalizer, and the pg image Id among the admitted image Ids. The lifetime is not checked here (the operator
+    did that when the run started). Returns {ok, reasons, sha256}; never raises."""
+    try:
+        raw = read_pinned(f'{VIEW}/admissions/{OPID}.admit', CFG['chain_start'], CFG['owner_uid'], 65536)
+        a = json.loads(raw)
+    except (Refuse, OSError, ValueError) as e:
+        return {'ok': False, 'reasons': [f'admission unreadable: {type(e).__name__}: {str(e)[:120]}']}
+    why = []
+    if not isinstance(a, dict) or a.get('schema') != 'learn-pod-admission/1':
+        return {'ok': False, 'reasons': ['admission has another schema'], 'sha256': sha_bytes(raw)}
+    if a.get('opId') != OPID: why.append('admission names another op')
+    if a.get('sourceIdentity') != IDENT: why.append('admission names another source identity')
+    if a.get('finalizerSha256') != SELF_SHA: why.append('admission names another finalizer')
+    ids = a.get('imageIds')
+    if not isinstance(ids, list) or not all(isinstance(x, str) and HEX64.fullmatch(x) for x in ids): why.append('admission has no valid image Id list')
+    elif PGIMG not in ids: why.append('the pg image Id is not among the admitted image Ids')
+    return {'ok': not why, 'reasons': why, 'sha256': sha_bytes(raw)}
+
+
 # ---------------- the loop volume ----------------
 def volume_sample():
     """statvfs of the loop mount, bytes only (the finalizer cannot read inside the subuid-owned trees). Records the sample; returns the used fraction or None."""
@@ -686,13 +707,21 @@ def process_checkpoints(done, state):
 # ---------------- what the pod did with the input, from the containers before they are removed ----------------
 def inputs_evidence():
     """inputRead: the pod operator's marker exists. containersStartedWithInput: names of the pod's containers that were STARTED with a mount at /in; None when
-    it cannot be determined (the claim tooling treats None as 'not empty', so a void is refused)."""
+    it cannot be determined (the claim tooling treats None as 'not empty', so a void is refused): the census failed, an inspect failed, or the marker exists and no
+    container remains to ask."""
     out = {'inputRead': os.path.lexists(MARKER), 'containersStartedWithInput': None}
     rc, names, _ = run(['podman', 'ps', '-a', '--filter', f'name=^{POD}-', '--format', '{{.Names}}'], 15)
-    if rc != 0 or not names.split():                       # no container to ask: 'none started with the input' cannot be shown, so it is not said
+    if rc != 0:
+        return out
+    ctrs = sorted(names.split())
+    if not ctrs:
+        # A census that succeeded and lists nothing. The pod operator creates the input-read marker BEFORE it first reads or mounts the input (design section 4), so with
+        # the marker absent no container can have started with /in and the answer is the empty list. With the marker present, nothing remains to ask: not determinable.
+        if not out['inputRead']:
+            out['containersStartedWithInput'] = []
         return out
     started, ok = [], True
-    for ctr in sorted(names.split()):
+    for ctr in ctrs:
         v = insp(ctr, '{{json .Mounts}}|{{.State.StartedAt}}')
         if v is None or '|' not in v:
             ok = False
@@ -777,12 +806,18 @@ def retirement(cg_rel, snapshot_start, extra=None):
         r['podCgroupProcsEmpty'] = True
     except OSError:
         r['podCgroupProcsEmpty'] = False
-    rc, rows, _ = run(['systemctl', '--user', 'list-units', '--all', '--no-legend', '--plain', 'learn-pod-*', 'learn-fin-*'], 30)
-    units = [l.replace('●', ' ').split() for l in rows.splitlines()]
-    mine = [x for x in units if len(x) >= 4 and (x[0] == OPU or x[0].startswith((f'{POD}-', f'learn-fin-{OPID}-')))]      # this op's units; the finalizer's own unit is not listed by these names
-    r['unitStates'] = {x[0]: x[2] for x in mine}
-    r['unitsClean'] = rc == 0 and all(x[2] in ('inactive', 'failed') for x in mine)
-    r['resetFailedRc'] = run(['systemctl', '--user', 'reset-failed', OPU], 10)[0]
+    # Design section 8: no unit of this op is failed, activating or deactivating, with `reset-failed` run first. A pod unit that the stop left `failed` is normal and is
+    # recorded; but operator r6's sweep refuses a failed unit as busy, so a unit that STAYS failed after the reset would block the next op: that is the retirement failure.
+    def op_units():
+        rc_, rows_, _ = run(['systemctl', '--user', 'list-units', '--all', '--no-legend', '--plain', 'learn-pod-*', 'learn-fin-*'], 30)
+        units = [l.replace('●', ' ').split() for l in rows_.splitlines()]
+        return rc_, [x for x in units if len(x) >= 4 and (x[0] == OPU or x[0].startswith((f'{POD}-', f'learn-fin-{OPID}-')))]      # the finalizer's own unit is not listed by these names
+    rc, mine = op_units()
+    r['unitStatesBeforeReset'] = {x[0]: x[2] for x in mine}
+    r['resetFailedRc'] = [run(['systemctl', '--user', 'reset-failed', u], 10)[0] for u in sorted({OPU, *[x[0] for x in mine]})]
+    rc2, mine2 = op_units()
+    r['unitStates'] = {x[0]: x[2] for x in mine2}
+    r['unitsClean'] = rc == 0 and rc2 == 0 and all(x[2] == 'inactive' for x in mine2)
     rc, sec, _ = run(['podman', 'secret', 'ls', '--format', '{{.Name}}'], 15)
     r['secretsGone'] = rc == 0 and not any(n.startswith(f'{POD}-') for n in sec.split())
     r['credentialTmpfsGone'] = not os.path.lexists(CRED)
@@ -831,6 +866,19 @@ def wait_unit_inactive(n=60):
         sleep(1)
 
 
+def safe_inputs():
+    """inputs_evidence() that cannot raise: every record, on every path, carries the two fields the claim tooling reads. On an error the marker is still looked at and
+    the list is null."""
+    try:
+        return inputs_evidence()
+    except Exception:
+        try:
+            read = os.path.lexists(MARKER)
+        except Exception:
+            read = None
+        return {'inputRead': read, 'containersStartedWithInput': None}
+
+
 def role_done(role):
     pid = insp(CTRS[role], '{{.State.Pid}}')
     return bool(pid and pid != '0' and done_marker(pid, role))
@@ -839,7 +887,7 @@ def role_done(role):
 def early_finish(kind, schema_retired, cg_rel):
     """The pod unit never became active, or ended before every role was done: the inputs evidence is taken from whatever containers remain, the pod is
     removed, and the same retirement checks as any other path decide between `schema_retired` and a retirement failure."""
-    REC.update(inputs_evidence())
+    REC.update(safe_inputs())
     wait_unit_inactive()
     REC['stop'] = stop_pod()
     REC['opUnit'] = show(OPU, 'ActiveState', 'Result')
@@ -849,15 +897,16 @@ def early_finish(kind, schema_retired, cg_rel):
 
 
 def claim_ids():
-    """An op id is used once. Any custody, evidence or checkpoint directory that already exists means this id was run (or is running): exit 70 and write
-    nothing, so a second finalizer can never replace the first one's record."""
-    if os.path.lexists(EVID):
-        mark('FIN', error='op id already used (evidence)'); sys.exit(70)
-    for d in (CUST, CKDIR):
-        try:
-            os.makedirs(d, 0o700, exist_ok=False)
-        except FileExistsError:
-            mark('FIN', error='op id already used'); sys.exit(70)
+    """An op id is used once. If the evidence, custody OR checkpoint directory exists, this id was run (or is running): exit 70 and write NOTHING, so a second finalizer can
+    never replace the first one's record. All three are looked at before any is created; a race on the second creation removes the first again."""
+    if any(os.path.lexists(d) for d in (EVID, CUST, CKDIR)):
+        mark('FIN', error='op id already used'); sys.exit(70)
+    os.makedirs(CUST, 0o700, exist_ok=False)
+    try:
+        os.makedirs(CKDIR, 0o700, exist_ok=False)
+    except FileExistsError:
+        os.rmdir(CUST)
+        mark('FIN', error='op id already used'); sys.exit(70)
 
 
 def flow():
@@ -871,6 +920,7 @@ def flow():
         snap0 = None
         REC['snapshotStart'] = {'error': f'{type(e).__name__}: {str(e)[:160]}'}
     STATE['snap0'] = snap0
+    REC['admission'] = admission_check()
     # 1. anchor on the pod unit
     while True:
         s = show(OPU, 'ActiveEnterTimestampMonotonic', 'ActiveState', 'ExecMainPID')
@@ -904,7 +954,7 @@ def flow():
         sleep(POLL_S)
     mark('FIN', trigger=trigger); chain('trigger', trigger=trigger); REC['trigger'] = trigger
     # 3. what the pod did with the input, then each role from its live container
-    REC.update(inputs_evidence())
+    REC.update(safe_inputs())
     volume_sample()
     roles, final_extracts = {}, {}
     vol_last = VOLUME_STATE['last']
@@ -950,7 +1000,7 @@ def flow():
     if late: REC['custodyNote'] = 'custody completed after the 31:30 deadline; partial/late'; finish(SCHEMA_RETIREMENT_FAILURE)
     if not retired: finish(SCHEMA_RETIREMENT_FAILURE)
     ok = (all(r_['outcomeOk'] and r_.get('unpauseRc', 0) == 0 for r_ in roles.values()) and pg['ok'] and REC['oom'] == 'no' and not REC['deadline'] and trigger == 'done'
-          and REC['containersStartedWithInput'] is not None and not block['volume']['budgetHit']
+          and REC['admission']['ok'] and REC['containersStartedWithInput'] is not None and not block['volume']['budgetHit']
           and all(c['roles'] and all(v['custody'].get('verdict') == 'accepted' and v.get('unpauseRc') == 0 for v in c['roles'].values()) for c in cks))      # a failed checkpoint has no roles
     finish(SCHEMA_OK if ok else SCHEMA_KILLED)
 
@@ -963,6 +1013,8 @@ def main(argv=None, environ=None, euid=None, **over):
         raise
     except Exception as e:
         REC['error'] = f'{type(e).__name__}: {str(e)[:200]}'; mark('FIN', error=type(e).__name__)
+        if 'containersStartedWithInput' not in REC:
+            REC.update(safe_inputs())                      # before the pod is removed: the containers are what it asks
         try:
             for ctr in CTRS.values(): run(['podman', 'unpause', ctr], 30)
             REC['stop'] = stop_pod()

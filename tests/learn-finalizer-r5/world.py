@@ -75,6 +75,20 @@ class World:
         self.add_container(f'{POD}-pg', pg=True)
         self.add_container(f'{POD}-infra', infra=True)
         self.make_snapshot()
+        self.pg_exit_after = 0
+
+    def write_admission(self, fin_sha, image_ids=None, op=OPID, ident=IDENT, schema='learn-pod-admission/1', raw=None, mode=0o644):
+        d = os.path.join(self.view, 'admissions')
+        os.makedirs(d, exist_ok=True)
+        os.chmod(d, 0o755)
+        p = os.path.join(d, op + '.admit')
+        if os.path.lexists(p):
+            os.unlink(p)
+        body = raw if raw is not None else json.dumps({'schema': schema, 'opId': op, 'argvJsonSha256': 'a1' * 32, 'sourceIdentity': ident, 'operatorSha256': 'b2' * 32, 'finalizerSha256': fin_sha,
+                                                          'imageIds': sorted(image_ids if image_ids is not None else [PGIMG, 'ff' * 32]), 'issuedUtc': '2026-10-31T08:00:00+00:00', 'expiresUtc': '2026-10-31T08:05:00+00:00'}, sort_keys=True)
+        open(p, 'w').write(body)
+        os.chmod(p, mode)
+        self.admission_path = p
 
     # ------------------------------------------------------------ containers
     def add_container(self, name, role=None, pg=False, infra=False):
@@ -118,6 +132,8 @@ class World:
     def set_cg_unit(self, populated):
         open(self.cg + self.cg_unit + '/cgroup.events', 'w').write(f'populated {populated}\n')
         open(self.cg + self.cg_unit + '/cgroup.procs', 'w').write('123\n' if populated else '')
+        if 'cg_events_only' in getattr(self, 'fail', ()) and not populated:
+            open(self.cg + self.cg_unit + '/cgroup.events', 'w').write('populated 1\n')                  # the events file still says populated; the procs list is empty
 
     def write_slice(self):
         open(os.path.join(self.slice, 'memory.current'), 'w').write(f'{self.mem}\n')
@@ -225,6 +241,10 @@ class World:
             rows = [f'{OPU} loaded {self.unit_state} running Learn pod'] + self.extra_units
             return 0, '\n'.join(rows) + '\n', ''
         if a[:3] == ['systemctl', '--user', 'reset-failed']:
+            if 'reset_stuck' not in self.fail:
+                if a[3] == OPU and self.unit_state == 'failed':
+                    self.unit_state = 'inactive'
+                self.extra_units = [r for r in self.extra_units if not (r.split()[0] == a[3] and r.split()[2] == 'failed')]
             return 0, '', ''
         if a[:2] == ['podman', 'inspect']:
             name, fmt = a[-1], a[3]
@@ -262,8 +282,13 @@ class World:
             c = self.containers.get(a[-1])
             if c is None or 'kill' in self.fail:
                 return 1, '', 'no'
-            c['state'] = 'exited'
-            c['exit'] = 0 if 'pg_exit' not in self.fail else 137
+            def stop(c=c):
+                c['state'] = 'exited'
+                c['exit'] = 0 if 'pg_exit' not in self.fail else 137
+            if self.pg_exit_after:
+                self.at(self.clock - self.t_start + self.pg_exit_after, stop)         # the container keeps running until the event fires
+            else:
+                stop()
             return 0, '', ''
         if a[:3] == ['podman', 'pod', 'stop']:
             for c in self.containers.values():

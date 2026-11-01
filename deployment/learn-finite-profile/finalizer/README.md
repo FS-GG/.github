@@ -30,9 +30,11 @@ Runs only as uid 30034, as the transient user unit `learn-fin-<id>.service`, sta
 
 ## The run
 
-1. **Start.** Creates `~/.local/state/learn-custody/<id>/` and `~/.local/state/learn-checkpoint/<id>/` with `exist_ok=False`; if either, or the evidence directory, exists, it
-   **exits 70 and writes nothing**, so a second finalizer can never replace the first one's record. Records the slice's memory and pids. Reads the claim
-   (`claims/<source-identity>.claim`) and the sealed manifest through pinned descriptors; a failure is recorded and later makes retirement fail (it does not stop the run).
+1. **Start.** Looks at the custody, checkpoint and evidence directories **before creating any**; if any of the three exists it **exits 70 and writes nothing**, so a second
+   finalizer can never replace the first one's record (a checkpoint directory that appears between the check and the creation removes the custody directory again and exits 70).
+   Then creates `~/.local/state/learn-custody/<id>/` and `~/.local/state/learn-checkpoint/<id>/`. Records the slice's memory and pids. Reads the claim
+   (`claims/<source-identity>.claim`) and the sealed manifest through pinned descriptors, and cross-checks the pg image (below); a failure is recorded and later makes the run
+   fail (it does not stop the run).
 2. **Wait.** Anchors on the pod unit (30 s, else `failed-to-start`). Polls every 2 s. Samples the volume with `statvfs` every 5 s; **90% used triggers `budget`**. Serves checkpoint
    requests. Triggers when every role has `/out/<role>/.done`, at the soft deadline (1800 s, `time`), on the budget, or, if the unit ends first, takes the early path
    (`unrecoverable`).
@@ -50,7 +52,7 @@ Runs only as uid 30034, as the transient user unit `learn-fin-<id>.service`, sta
    |---|---|
    | `podGone`, `containersGone` | `podman pod ps -a` and `podman ps -a` filtered by this op's names (the infra container and the controldata container included) are empty and the listing succeeded |
    | `podCgroupRetired`, `podCgroupProcsEmpty` | the pod unit's cgroup (taken from systemd at the anchor) is absent or `populated 0`, and `cgroup.procs` is empty |
-   | `unitsClean` | none of this op's units is anything but `inactive` or `failed`; then `reset-failed` |
+   | `unitsClean` | this op's units are listed, `reset-failed` is run on each (and on the pod unit), and they are listed again: **none may be anything but `inactive` afterwards** (design section 8: no unit failed, activating or deactivating, `reset-failed` first). The states before the reset are recorded too. A pod unit that the stop left `failed` is normal and passes once the reset clears it; one that stays failed is a retirement failure, because operator r6's sweep refuses a failed unit as busy and would block the next op |
    | `secretsGone`, `credentialTmpfsGone` | no `podman secret` named for the op, and the credential tmpfs path is absent |
    | `volumeOk` | the volume is a mount point, its last `statvfs` is at most 1 GiB (not the host filesystem), it was sampled, and no process is left in the pod cgroup (the finalizer-side proxy for "no open handle"; a successful unmount by Root is authoritative) |
    | `snapshot` | the claim and the sealed manifest are byte-identical to the start, and the sealed snapshot is exactly the manifest: every file's size, sha256, mtime and mode (0644: the seal tool chmods every copy), no extra file, no symlink, read through pinned descriptors |
@@ -61,12 +63,23 @@ Runs only as uid 30034, as the transient user unit `learn-fin-<id>.service`, sta
 ## Schemas and what the claim tooling reads
 
 `learn-op-pod-success/1`, `learn-op-pod-killed-retired/1`, `learn-op-pod-unrecoverable/1`, `learn-op-pod-failed-to-start/1` and `learn-op-retirement-failure/1`. The last keeps the name
-the acknowledgement gate keys on, and the first four start with `learn-op-` as the claim tooling requires. Every record, whatever its schema, carries `opId`, `runNonceSha256`
-(sha256 of the nonce), `finalizerSha256`, **`inputRead`** (the pod operator's `input-read` marker exists) and **`containersStartedWithInput`**: the pod's containers that were
-*started* with a mount at `/in`. It is a list, or **`null` when it cannot be determined**: the container list or an inspect failed, or no container remains to ask. The claim tooling
-treats `null` as "not empty", so a void is refused; an empty list is only ever claimed when containers were inspected and none qualified.
+the acknowledgement gate keys on, and the first four start with `learn-op-` as the claim tooling requires. Every record, whatever its schema **and whatever path wrote it, the exception path included** (the evidence is taken in a `try` that cannot lose the fields), carries `opId`,
+`runNonceSha256` (sha256 of the nonce), `finalizerSha256`, **`inputRead`** (the pod operator's `input-read` marker exists) and **`containersStartedWithInput`**: the pod's
+containers that were *started* with a mount at `/in`. It is a list, or **`null` when it cannot be determined**: the container census failed, an inspect failed, or the marker exists
+and no container remains to ask. The claim tooling treats `null` as "not empty", so a void is refused. **A census that succeeds and lists no container with the marker absent
+gives `[]`**: the pod operator creates the marker before it first reads or mounts the input (design section 4), so with no marker no container can have started with `/in`. That
+rule matters: without it a pod that never started, or whose containers were already gone, left a claim that could be neither voided nor superseded.
 
-**Success** needs all of: trigger `done`; for each role an accepted archive and a valid terminal status whose reason the role may end with (`host` and `recv`: `ok` or `signalled`,
+**The pg image is cross-checked against the admission.** `FSGG_PG_IMAGE` comes from the pod operator's unit; the finalizer reads `admissions/<id>.admit` through pinned descriptors and
+requires the same op id and source identity, **this finalizer's own sha256** as the admitted finalizer, and the pg image Id among the admitted `imageIds`. The result is recorded
+(`admission`) and a run whose admission does not match cannot be a success. The admission's lifetime is not checked here (the operator did that when the run started).
+
+**What the pg `shut down` evidence is worth.** `pg_controldata` reads `global/pg_control` in `/pgdata`, a file the pod's own pg process writes, so the state line is
+*attested by the pod*, not independently measured; what the finalizer adds is the podman exit code of the container (the pg process exiting 0 after SIGINT), the image Id check
+and the fact that the one-shot reads the cluster after the pod is gone. Together they show a fast shutdown completed, to the extent a cooperative profile can: a compromised pg could
+write the file and exit 0. Root's independent readback of the volume (mounted read-only after retirement) is the strong check.
+
+**Success** needs all of: the admission cross-check ok; trigger `done`; for each role an accepted archive and a valid terminal status whose reason the role may end with (`host` and `recv`: `ok` or `signalled`,
 because the driver stops them with TERM; `feed`: `ok`); every unpause succeeded; pg `ok`; no OOM kill (`MEMEV` read exactly once) and no `RuntimeMaxSec` expiry; the input evidence known; the volume under its
 90% budget; every checkpoint acknowledged with accepted archives; and retirement clean. Late custody (after 1890 s) or any failed retirement check is a retirement failure. Anything else
 is `killed-retired`.
