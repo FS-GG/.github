@@ -28,16 +28,18 @@ module BoardV2MigrationTests =
         do Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
         let mutable scope = actualScope()
         let native = Native snapshot
+        let lockDirectory = TestLock.fresh ()
         let run (arguments: string list) =
             use connection = native.Connection()
-            BoardV2Application.runMigrationWithConnection connection arguments
+            BoardV2Application.runMigrationWithConnection lockDirectory connection arguments
         member _.Directory = directory
+        member _.LockDirectory = lockDirectory
         member _.Native = native
         member _.Scope with get() = scope and set value = scope <- value
         member _.Run arguments = run arguments
         member _.RunWithCustody(syncDirectory: string -> unit, clock: TimeProvider, arguments: string list) =
             use connection = native.Connection()
-            BoardV2Application.runMigrationWithCustody connection syncDirectory clock arguments
+            BoardV2Application.runMigrationWithCustody lockDirectory connection syncDirectory clock arguments
         member _.Prepare(name: string) =
             let input = Path.Combine(directory, name + "-scope.json")
             let report = Path.Combine(directory, name + "-prepared.json")
@@ -96,6 +98,24 @@ module BoardV2MigrationTests =
         Assert.Equal(0, repeatCode)
         Assert.Equal(0, fixture.Run(fixture.ApplyArguments repeatPath))
         Assert.Equal(before, fixture.Native.Mutations.Length)
+
+    [<Fact>]
+    let ``migration-apply refuses while the writer lock is held, before its invocation marker and any send`` () =
+        use fixture = new Fixture()
+        let code, path = fixture.Prepare "locked"
+        Assert.Equal(0, code)
+        let location = V2WriterLock.inDirectory fixture.LockDirectory "PVT_kwDOEYAWY84Bldpa" V2WriterLock.migrationLegacyName
+        (
+            use _held = match V2WriterLock.tryAcquire location with Ok lease -> lease | Error reason -> failwith reason
+            Assert.NotEqual(0, fixture.Run(fixture.ApplyArguments path))
+            Assert.Empty fixture.Native.Mutations
+            Assert.False(File.Exists(path + ".invocation-reserved"), "the lock must be taken before the invocation marker")
+            Assert.False(Directory.Exists(path + ".invocation")))
+        // Non-vacuous: the same prepared file applies once the lock is free.
+        let freshCode, freshPath = fixture.Prepare "unlocked"
+        Assert.Equal(0, freshCode)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments freshPath))
+        Assert.NotEmpty fixture.Native.Mutations
 
     [<Fact>]
     let ``actual CLI lost response keeps original intent stops later stages and readback never replays`` () =
@@ -1108,7 +1128,7 @@ module BoardV2MigrationTests =
                     member _.RemainingTime = remaining()
                     member _.Dispatch(prepared: Prepared, change: Change, until: DateTimeOffset) = connection.Dispatch(prepared, change, until)
                     member _.Dispose() = () }
-            Assert.Equal(3, BoardV2Application.runMigrationWithCustody bounded ignore clock args)
+            Assert.Equal(3, BoardV2Application.runMigrationWithCustody (TestLock.fresh ()) bounded ignore clock args)
             Assert.Single fixture.Native.Mutations |> ignore
             let elapsed = clock.GetUtcNow() - (if mode = "planning" then planningUntil - TimeSpan.FromSeconds 0.5 else started)
             Assert.Equal<TimeSpan>((if mode = "after-wait" then TimeSpan.FromSeconds 1.0 else TimeSpan.Zero), elapsed)
@@ -1134,7 +1154,7 @@ module BoardV2MigrationTests =
                         while fixture.Native.Requests.Length - initialReads + fixture.Native.Mutations.Length < 499 do
                             connection.Reads.Send request |> get |> ignore
                     sourceClock.CreateTimer(callback, state, dueTime, period) }
-        Assert.Equal(3, BoardV2Application.runMigrationWithCustody connection ignore clock (fixture.ApplyArguments path))
+        Assert.Equal(3, BoardV2Application.runMigrationWithCustody (TestLock.fresh ()) connection ignore clock (fixture.ApplyArguments path))
         Assert.True filled
         Assert.Single fixture.Native.Mutations |> ignore
         Assert.Equal(500, fixture.Native.Requests.Length - initialReads + fixture.Native.Mutations.Length)
