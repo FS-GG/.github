@@ -7,7 +7,7 @@ installs it from a root-owned copy and admits every run; the `plan` command prin
     learn-pod-harness-r1.py case    --run-id <id> --case <case> --admission-ref <comment URL> [--argv-json ...] [--source-identity ...]   (uid 30034)
     learn-pod-harness-r1.py summary --run-id <id>                                                                  (uid 30034; read only)
     learn-pod-harness-r1.py synth-tree --out <new dir> --nonce <nonce>                                            (any uid; writes only <new dir>)
-    learn-pod-harness-r1.py spike-cgroups --run-id <id>        (internal: the main process of learn-pod-hq-<id>-n5b.service, uid 30034)
+    learn-pod-harness-r1.py spike-cgroups --run-id <id> --nonce <hex>   (internal: the main process of learn-pod-hq-<id>-n5b.service, uid 30034)
 
 The cases, in order (`plan` lists each with what runs, as which uid, what it may create or write, the expected verdict and the receipts):
   phase A, operator r6 re-qualification (design section 10): census; a27-unacked (the f1-pre failure record refuses while its acknowledgement is absent);
@@ -23,7 +23,7 @@ hq-<run-id>-<case>; it stops and resets only units it started, by exact name; ev
 harness; a census before and after each case must be clean; each case's RESULT is written once (O_EXCL); the first failed case writes STOP and every
 later case refuses. A case never retries. Cooperative: it detects mistakes and does not defend against Root.
 """
-import hashlib, json, os, re, stat, subprocess, sys, time
+import hashlib, json, os, re, secrets, stat, subprocess, sys, time
 from datetime import datetime, timezone
 
 SCHEMA = 'learn-pod-harness/1'
@@ -89,12 +89,12 @@ def dummy_argv(name, seconds=DUMMY_S):
     return ['systemd-run', '--user', '--unit', name, '-p', f'RuntimeMaxSec={seconds + 30}', '-p', 'TasksMax=4', '-p', 'MemoryMax=16M', '--', '/usr/bin/sleep', str(seconds)]
 
 
-def spike_unit_argv(env, run_id):
+def spike_unit_argv(env, run_id, nonce='<a fresh 128-bit hex nonce per invocation>'):
     """The N5b spike runs INSIDE a learn-pod-* unit with the pod unit's cgroup properties (Delegate, KillMode), so the question it answers is the one the
     pod operator's real pod unit poses. While it runs, its name makes both operators (r6 and the pod one) refuse."""
     return ['systemd-run', '--user', '--unit', f'learn-pod-{op(run_id, "n5b")}', '--wait', '--collect', '-p', 'Delegate=yes', '-p', 'KillMode=control-group',
             '-p', f'RuntimeMaxSec={SPIKE_RUNTIME_S}', '-p', 'TasksMax=256', '-p', 'MemoryMax=1G', '-p', 'MemorySwapMax=0',
-            '--', env['python'], '-I', env['self'], 'spike-cgroups', '--run-id', run_id]
+            '--', env['python'], '-I', env['self'], 'spike-cgroups', '--run-id', run_id, '--nonce', nonce]
 
 
 def cases(env, run_id, argv_json=None, ident=None):
@@ -313,11 +313,20 @@ def c_held(env, deps, run_id, a):
     return 'held', {}
 
 
+def n5b_prestart(env, deps, run_id, a):
+    """N1 (#5204): a spike RESULT that exists before this invocation (an earlier or aborted spike) is never read as this one's."""
+    if deps['exists'](f'{state_dir(env, run_id)}/n5b-spike.json'):
+        refuse('a spike RESULT already exists for this run: it is not this invocation\'s')
+
+
 def c_n5b(env, deps, run_id, a):
-    rc, out, err = deps['run'](spike_unit_argv(env, run_id), SPIKE_RUNTIME_S + 60)
+    nonce = deps['nonce']()
+    rc, out, err = deps['run'](spike_unit_argv(env, run_id, nonce), SPIKE_RUNTIME_S + 60)
     sp = deps['read_json'](f'{state_dir(env, run_id)}/n5b-spike.json')
-    facts = {'unitRc': rc, 'spike': sp, 'spikeSha256': deps['sha_file'](f'{state_dir(env, run_id)}/n5b-spike.json') if sp else None}
-    if not sp or sp.get('schema') != SPIKE_SCHEMA or sp.get('verdict') == 'incomplete' or not sp.get('podRemoved') or sp.get('leftoverProcs'):
+    facts = {'unitRc': rc, 'spike': sp, 'nonceSha256': sha_bytes(nonce.encode()),
+             'spikeSha256': deps['sha_file'](f'{state_dir(env, run_id)}/n5b-spike.json') if sp else None}
+    if (rc != 0 or not sp or sp.get('schema') != SPIKE_SCHEMA or sp.get('nonce') != nonce or sp.get('verdict') not in SPIKE_VERDICTS
+            or not sp.get('podRemoved') or sp.get('leftoverProcs')):
         return 'fail', facts
     return ('pass' if sp['verdict'] == 'members-and-infra-under-unit' else 'finding'), facts
 
@@ -378,6 +387,8 @@ def c_syn_reuse(env, deps, run_id, a):
     return ('pass' if ok else 'fail'), {'rc': rc, 'resultSha256': rsha, 'errors': errs(r)}
 
 
+SPIKE_VERDICTS = ('members-and-infra-under-unit', 'not-under-unit', 'split-refused')     # 'incomplete' is never one of them
+PRESTART = {'n5b-cgroups': n5b_prestart}
 EXECUTORS = {'census': c_census, 'a27-unacked': c_a27, 'a0-summary': c_a0, 'exclusion-reader': c_exclusion, 'a29-cap': c_cap, 'a0-r4-smoke': c_held,
              'n5b-cgroups': c_n5b, 'syn-precheck': c_syn_precheck, 'syn-run': c_syn_run, 'syn-reuse': c_syn_reuse}
 NO_CENSUS_BEFORE = ('census',)
@@ -394,7 +405,7 @@ def write_once(path, data):
 def run_case(env, deps, run_id, case, a):
     """One case: the gates, the census before, the executor, the census after, the RESULT written once; a failure writes STOP."""
     R = {'schema': SCHEMA, 'harnessRevision': REVISION, 'runId': run_id, 'case': case, 'utc': deps['now']().isoformat(), 'errors': []}
-    code, executing = 5, False
+    code, executing, guarded = 5, False, False
     try:
         if deps['geteuid']() != env['uid']:
             refuse(f"run as uid {env['uid']}")
@@ -409,6 +420,7 @@ def run_case(env, deps, run_id, case, a):
         if spec['held']:
             R.update(verdict='held', held=spec['held'], exitCode=0)
             return R, 0
+        guarded = True                                           # from here every path takes the census after (N2, #5204)
         if case.startswith('syn-'):
             synthetic_args(a)                                    # checked before anything runs
         sd = state_dir(env, run_id)
@@ -421,13 +433,11 @@ def run_case(env, deps, run_id, case, a):
             R['censusBefore'] = census(deps)
             if not R['censusBefore']['ok']:
                 refuse('the census before the case is not clean')
+        if case in PRESTART:
+            PRESTART[case](env, deps, run_id, a)                 # refusals that need nothing to have run
         executing = True                                         # from here a refusal is a failure: something may have run
         verdict, facts = EXECUTORS[case](env, deps, run_id, a)
         R['facts'] = facts
-        R['censusAfter'] = census(deps)
-        if not R['censusAfter']['ok'] and verdict != 'not-applicable':
-            verdict = 'fail'
-            R['errors'].append('the census after the case is not clean')
         R['verdict'] = verdict
         code = 0 if verdict in ('pass', 'finding', 'not-applicable') else 3
     except Refuse as e:
@@ -438,6 +448,14 @@ def run_case(env, deps, run_id, case, a):
         R['errors'].append(f'exception: {type(e).__name__}: {str(e)[:200]}')
         R['verdict'] = 'fail'
         code = 3
+    if guarded:                                                  # every path, a refusal or an exception included: what is left behind is recorded
+        try:
+            R['censusAfter'] = census(deps)
+        except Exception as e:
+            R['censusAfter'] = {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
+        if not R['censusAfter']['ok'] and R.get('verdict') in ('pass', 'finding'):
+            R['verdict'], code = 'fail', 3
+            R['errors'].append('the census after the case is not clean')
     R['exitCode'] = code
     sd = state_dir(env, run_id)
     if R.get('verdict') in ('pass', 'fail', 'finding', 'not-applicable') and os.path.isdir(sd):
@@ -496,10 +514,10 @@ def procs_under(env, deps, cg_rel):
     return sorted(pids)
 
 
-def spike_cgroups(env, deps, run_id):
+def spike_cgroups(env, deps, run_id, nonce):
     pod = f'learn-pod-{op(run_id, "n5b")}'
     unit = f'{pod}.service'
-    S = {'schema': SPIKE_SCHEMA, 'runId': run_id, 'pod': pod, 'members': {}, 'startErrors': {}, 'podRemoved': False, 'verdict': 'incomplete'}
+    S = {'schema': SPIKE_SCHEMA, 'runId': run_id, 'nonce': nonce, 'pod': pod, 'members': {}, 'startErrors': {}, 'podRemoved': False, 'verdict': 'incomplete'}
     try:
         me = cgroup_of(env, deps, 'self')
         S['unitCgroup'] = me
@@ -550,7 +568,7 @@ def spike_cgroups(env, deps, run_id):
     os.makedirs(sd, 0o700, exist_ok=True)
     write_once(f'{sd}/n5b-spike.json', data)
     print(data.decode())
-    return 0 if S['verdict'] in ('members-and-infra-under-unit', 'not-under-unit') else 3
+    return 0 if S['verdict'] in SPIKE_VERDICTS else 3              # a definite answer (a finding included) exits 0; the unit then succeeds
 
 
 # ============================================================ the synthetic tree Root seals with learn_seal_claim.py --mode synthetic
@@ -585,9 +603,9 @@ def synth_tree(out, nonce, mtime_ns=1_700_000_000_000_000_000):
 
 # ============================================================ arguments and main
 USAGE = ('usage: plan --run-id ID [--argv-json J --source-identity H] | case --run-id ID --case C --admission-ref URL [--argv-json J --source-identity H] '
-         '| summary --run-id ID | synth-tree --out DIR --nonce N | spike-cgroups --run-id ID')
+         '| summary --run-id ID | synth-tree --out DIR --nonce N | spike-cgroups --run-id ID --nonce HEX')
 ALLOWED = {'plan': ({'--run-id'}, {'--argv-json', '--source-identity'}), 'case': ({'--run-id', '--case', '--admission-ref'}, {'--argv-json', '--source-identity'}),
-           'summary': ({'--run-id'}, set()), 'synth-tree': ({'--out', '--nonce'}, set()), 'spike-cgroups': ({'--run-id'}, set())}
+           'summary': ({'--run-id'}, set()), 'synth-tree': ({'--out', '--nonce'}, set()), 'spike-cgroups': ({'--run-id', '--nonce'}, set())}
 
 
 def parse(argv):
@@ -647,7 +665,7 @@ def default_deps(env):
     me = os.path.abspath(__file__)
     return {'run': run, 'read': read, 'read_json': read_json, 'read_lines': read_lines, 'sha_file': sha_file, 'exists': os.path.lexists,
             'geteuid': os.geteuid, 'getpid': os.getpid, 'now': lambda: datetime.now(timezone.utc), 'monotonic': time.monotonic, 'sleep': time.sleep,
-            'walk': os.walk, 'self_stat': lambda: os.stat(me), 'self_sha': lambda: sha_file(me)}
+            'walk': os.walk, 'self_stat': lambda: os.stat(me), 'self_sha': lambda: sha_file(me), 'nonce': lambda: secrets.token_hex(16)}
 
 
 def emit(obj):
@@ -675,7 +693,9 @@ def main(argv, env=None, deps=None):
         if cmd == 'spike-cgroups':
             if deps['geteuid']() != env['uid']:
                 refuse(f"run as uid {env['uid']}")
-            return spike_cgroups(env, deps, a['--run-id'])
+            if not re.fullmatch(r'[0-9a-f]{32}', a['--nonce']):
+                refuse('the spike nonce is 32 lowercase hex')
+            return spike_cgroups(env, deps, a['--run-id'], a['--nonce'])
         R, code = run_case(env, deps, a['--run-id'], a['--case'], a)
         emit(R)
         return code

@@ -1018,14 +1018,14 @@ with tempfile.TemporaryDirectory() as tmp:
             check(open(cp, 'rb').read() == data and os.stat(cp).st_mtime_ns == MTIME_NS, f'synthetic copy of {rel} has the source bytes and mtime')
     ident = r['sourceIdentity']
     check(ident == L.synthetic_identity(m1) and L.HEX64.match(ident), 'the reported identity is the synthetic identity of the manifest')
-    c = L.claim_synthetic(ident, 'op-syn-1', 'syn-snap-1', r['sealedManifestSha256'], precheck('op-syn-1'), H('b'), now=clock, **e.kw())
+    c = L.claim_synthetic(ident, 'op-syn-1', 'syn-snap-1', r['sealedManifestSha256'], precheck('op-syn-1', inputProvenance='synthetic'), H('b'), now=clock, **e.kw())
     cj = json.load(open(c['claim']))
     check(cj['schema'] == L.SYNTHETIC_CLAIM_SCHEMA != 'learn-input-claim/1' and cj['realSpoolProvenance'] is False and cj['claimedUtc'] == clock.isoformat(), 'the synthetic claim has its own type and the injected clock')
     check(os.path.dirname(c['claim']).endswith(L.SYNTHETIC_CLAIMS), 'the synthetic claim lives in synthetic-claims/')
     st = L.status_synthetic(ident, e.root)
     check(st['state'] == 'claimed' and st['provenance'] == 'synthetic', 'synthetic status reports the claim')
-    refused(lambda: L.claim_synthetic(ident, 'op-syn-2', 'syn-snap-1', r['sealedManifestSha256'], precheck('op-syn-2'), H('b'), now=clock, **e.kw()), 'already has a claim', 'a second synthetic claim for one identity is refused')
-    refused(lambda: L.claim_synthetic(ident, 'op-syn-3', 'syn-snap-1', H('9'), precheck('op-syn-3'), H('b'), now=clock, **e.kw()), 'already has a claim', 'control: the identity stays claimed whatever the sha')
+    refused(lambda: L.claim_synthetic(ident, 'op-syn-2', 'syn-snap-1', r['sealedManifestSha256'], precheck('op-syn-2', inputProvenance='synthetic'), H('b'), now=clock, **e.kw()), 'already has a claim', 'a second synthetic claim for one identity is refused')
+    refused(lambda: L.claim_synthetic(ident, 'op-syn-3', 'syn-snap-1', H('9'), precheck('op-syn-3', inputProvenance='synthetic'), H('b'), now=clock, **e.kw()), 'already has a claim', 'control: the identity stays claimed whatever the sha')
     # identity: moves with the declared nonce, not with the path; never equals a real identity
     sb2 = synth_base(tmp, 'syn-b', nonce='n2')
     sb3 = synth_base(tmp, 'syn-c', nonce='n1')
@@ -1050,6 +1050,24 @@ with tempfile.TemporaryDirectory() as tmp:
     refused(lambda: syn_seal(e, sb, 'syn-snap-1'), 'snapshot already exists', 'a synthetic snapshot id is not reused')
     refused(lambda: syn_seal(e, sb, 'Bad Id'), 'bad snapshot id', 'a bad synthetic snapshot id is refused')
 
+# N4 (#5204 review): the precheck RESULT's inputProvenance must match the claim kind
+with tempfile.TemporaryDirectory() as tmp:
+    e = Env(tmp)
+    sb = synth_base(tmp, 'syn-n4', nonce='n4x')
+    m1, r = syn_seal(e, sb, 'syn-n4')
+    ident = L.synthetic_identity(m1)
+    for what, pr, needle in (('a real precheck', precheck('op-n4', inputProvenance='real'), 'not for a synthetic-input op'),
+                             ('a precheck with no inputProvenance', precheck('op-n4'), 'not for a synthetic-input op')):
+        refused(lambda pr=pr: L.claim_synthetic(ident, 'op-n4', 'syn-n4', r['sealedManifestSha256'], pr, H('b'), now=clock, **e.kw()), needle, f'N4: a synthetic claim refuses {what}')
+    check(not os.path.lexists(os.path.join(e.root, L.SYNTHETIC_CLAIMS, ident + '.claim')), 'N4: nothing is claimed')
+    L.claim_synthetic(ident, 'op-n4', 'syn-n4', r['sealedManifestSha256'], precheck('op-n4', inputProvenance='synthetic'), H('b'), now=clock, **e.kw())
+    check(L.status_synthetic(ident, e.root)['state'] == 'claimed', 'N4 control: a synthetic precheck takes the synthetic claim')
+    refused(lambda: L._precheck_ok(precheck('op-n4', inputProvenance='synthetic'), 'op-n4'), 'not for a real-input op', 'N4: a real claim refuses a synthetic precheck')
+    L._precheck_ok(precheck('op-n4', inputProvenance='real'), 'op-n4')
+    L._precheck_ok(precheck('op-n4'), 'op-n4')
+    check(True, 'N4 control: a real claim takes a real precheck, and one with no field (an operator with only the real kind)')
+    refused(lambda: L._precheck_ok(precheck('op-n4', inputProvenance='other'), 'op-n4'), 'not for a real-input op', 'N4: an unknown provenance is refused for a real claim')
+
 # ---- S2: a synthetic seal is refused wherever real-spool provenance is required
 with tempfile.TemporaryDirectory() as tmp:
     e = Env(tmp)
@@ -1071,7 +1089,7 @@ with tempfile.TemporaryDirectory() as tmp:
     refused(lambda: L.void(ident, 'op-syn-1', run_result('op-syn-1'), H('d'), fin('op-syn-1'), H('e'), URL, marker_root=e.markers, **e.kw()), 'no live claim', 'the real void finds no claim for a synthetic identity')
     check(L.status(ident, e.root)['state'] == 'unclaimed', 'the real status of a synthetic identity is unclaimed (nothing real was claimed)')
     # the synthetic claim, copied into the real claims/ directory, is not accepted by the pod operator either (a positive real control below proves the harness)
-    L.claim_synthetic(ident, 'op-syn-1', 'syn-snap-1', ssha, precheck('op-syn-1'), H('b'), now=clock, **e.kw())
+    L.claim_synthetic(ident, 'op-syn-1', 'syn-snap-1', ssha, precheck('op-syn-1', inputProvenance='synthetic'), H('b'), now=clock, **e.kw())
     os.makedirs(os.path.join(e.root, 'claims'), mode=0o755, exist_ok=True)
     pod_refuses(lambda: P.verify_claim(pod_env(e), ident, 'op-syn-1'), 'absent', 'the pod operator finds no claim for the synthetic identity in the real claims/')
     shutil.copy(os.path.join(e.root, L.SYNTHETIC_CLAIMS, ident + '.claim'), os.path.join(e.root, 'claims', ident + '.claim'))
@@ -1087,7 +1105,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # a real claim cannot be backed by, nor mistaken for, a synthetic seal; and a real seal cannot back a synthetic claim
     os.makedirs(os.path.join(e.root, L.SYNTHETIC_INPUTS), mode=0o755)
     shutil.copy(os.path.join(e.root, 'inputs', 'real-snap-1.manifest.json'), os.path.join(e.root, L.SYNTHETIC_INPUTS, 'real-snap-1.manifest.json'))
-    refused(lambda: L.claim_synthetic(rr['sourceIdentity'], 'op-syn-5', 'real-snap-1', rr['sealedManifestSha256'], precheck('op-syn-5'), H('b'), now=clock, **e.kw()),
+    refused(lambda: L.claim_synthetic(rr['sourceIdentity'], 'op-syn-5', 'real-snap-1', rr['sealedManifestSha256'], precheck('op-syn-5', inputProvenance='synthetic'), H('b'), now=clock, **e.kw()),
             'real seal cannot back a synthetic claim', 'a real seal placed in synthetic-inputs/ cannot back a synthetic claim')
 
 # ---- S3: real input is refused in synthetic mode
@@ -1243,20 +1261,34 @@ with tempfile.TemporaryDirectory() as tmp:
     refused(lambda: L.seal_synthetic(sb4, L.take_synthetic_manifest(sb4, now=clock, extra_real_roots=EX), 'syn-bad', now=clock, extra_real_roots=EX, copy=bad_copy, **e.kw()), 'does not match its source hash', 'a corrupt copy is refused')
     check(not os.path.lexists(os.path.join(e.root, L.SYNTHETIC_INPUTS, 'syn-bad')), 'a corrupt synthetic copy is removed')
 
-    # ---- S3b (#5192 review observation 1): a swap AFTER the last file is copied and before the sealed record is written. The copy loop has
-    # finished, so only the post-copy re-checks (manifest M3, the declaration, the subtree path guard) stand between the swap and a seal. Each
-    # swap fires inside the injected copy function, right after the LAST file's bytes land. Clock: the suite's injected `clock`. Source: trees
-    # built here. Nothing outside the temp tree is read or written.
-    def copy_then(sbx, swap):
-        mx = L.take_synthetic_manifest(sbx, now=clock, extra_real_roots=EX)
-        done = []
+    # ---- S3b (#5192 review observation 1; made genuinely post-copy by the #5204 review, N6): a swap AFTER the copy loop has finished (every file
+    # copied, chmodded, re-timed and hash-checked, every directory chmodded) and before the sealed record is written. The swap fires inside the first
+    # post-loop source read, the M3 manifest (take_manifest is called nowhere else inside seal_synthetic), and each swap first asserts that the whole
+    # snapshot is already in place. Only the post-copy re-checks (M3, the declaration, the subtree path guard) stand between the swap and a seal.
+    # Clock: the suite's injected `clock`. Source: trees built here. Nothing outside the temp tree is read or written.
+    TM0, GUARD0 = L.take_manifest, L.synthetic_guard
 
-        def cp(src, dst):
-            shutil.copyfile(src, dst)
-            done.append(dst)
-            if len(done) == len(mx['files']):
+    def post_copy_seal(sbx, snap, swap, guard=None):
+        """Returns the manifest, the hook's record and a thunk that seals with the hooks installed for exactly that call."""
+        mx = L.take_synthetic_manifest(sbx, now=clock, extra_real_roots=EX)
+        state = {'fired': 0, 'complete': None}
+
+        def tm(*a, **k):
+            if not state['fired']:
+                state['fired'] = 1
+                dest = os.path.join(e.root, L.SYNTHETIC_INPUTS, snap)
+                state['complete'] = all(os.path.isfile(os.path.join(dest, f['path'])) and L.sha_file(os.path.join(dest, f['path'])) == f['sha256']
+                                        and stat.S_IMODE(os.stat(os.path.join(dest, f['path'])).st_mode) == 0o644 for f in mx['files'])
                 swap(sbx)
-        return mx, cp
+            return TM0(*a, **k)
+
+        def thunk():
+            try:
+                L.take_manifest, L.synthetic_guard = tm, (guard or GUARD0)
+                return L.seal_synthetic(sbx, mx, snap, now=clock, extra_real_roots=EX, **e.kw())
+            finally:
+                L.take_manifest, L.synthetic_guard = TM0, GUARD0
+        return mx, state, thunk
 
     def gone(snap):
         return (not os.path.lexists(os.path.join(e.root, L.SYNTHETIC_INPUTS, snap)) and not os.path.lexists(os.path.join(e.root, L.SYNTHETIC_INPUTS, snap + '.manifest.json'))
@@ -1268,56 +1300,59 @@ with tempfile.TemporaryDirectory() as tmp:
         os.symlink(parent + '.moved', os.path.join(sbx, parent))
 
     sb8 = synth_base(tmp, 'syn-post-1', nonce='n8')
-    m8, cp8 = copy_then(sb8, same_inode_dir_swap)
-    refused(lambda: L.seal_synthetic(sb8, m8, 'syn-post-1', now=clock, extra_real_roots=EX, copy=cp8, **e.kw()), 'contains a symlink',
-            'S3b: a subtree parent swapped for a symlink (same inodes) after the last copy refuses the seal')
+    m8, st8, th8 = post_copy_seal(sb8, 'syn-post-1', same_inode_dir_swap)
+    refused(lambda: th8(), 'contains a symlink', 'S3b: a subtree parent swapped for a symlink (same inodes) after the copy loop refuses the seal')
+    check(st8['fired'] == 1 and st8['complete'] is True, 'S3b: the swap happened after the copy loop had finished (every file in place, hashed, 0644)')
     check(gone('syn-post-1'), 'S3b: the post-copy symlink swap leaves no snapshot directory, sealed manifest or claim directory')
     check(L.manifest_diff(m8, L.take_manifest(sb8, m8['subtrees'])) == [], 'S3b control: the same-inode swap is invisible to M3, so only the post-copy path guard can refuse it')
     # causal control: with the post-copy guard disabled (the first call, before the copy, still runs) the same swap is SEALED, so the refusal above
     # is caused by the post-copy re-check and nothing else
-    real_guard = L.synthetic_guard
     calls = []
 
     def first_call_only(base, extra=()):
         calls.append(base)
-        return real_guard(base, extra) if len(calls) == 1 else os.path.realpath(base)
+        return GUARD0(base, extra) if len(calls) == 1 else os.path.realpath(base)
     sb9 = synth_base(tmp, 'syn-post-2', nonce='n9')
-    m9, cp9 = copy_then(sb9, same_inode_dir_swap)
-    try:
-        L.synthetic_guard = first_call_only
-        r9 = L.seal_synthetic(sb9, m9, 'syn-post-2', now=clock, extra_real_roots=EX, copy=cp9, **e.kw())
-    finally:
-        L.synthetic_guard = real_guard
-    check(len(calls) == 2 and r9['files'] == len(m9['files']), 'S3b MUTANT-control: without the post-copy guard the swapped source is sealed (the guard runs twice and only the second sees the swap)')
+    m9, st9, th9 = post_copy_seal(sb9, 'syn-post-2', same_inode_dir_swap, guard=first_call_only)
+    r9 = th9()
+    check(len(calls) == 2 and r9['files'] == len(m9['files']) and st9['complete'] is True,
+          'S3b MUTANT-control: without the post-copy guard the swapped source is sealed (the guard runs twice and only the second sees the swap)')
 
     def relink_to_real(sbx):
         f = os.path.join(sbx, SUBS[1], 'one.ready')
         os.remove(f)
         os.link(os.path.join(e.base, SUBS[1], 'one.ready'), f)
     sb10 = synth_base(tmp, 'syn-post-3', nonce='n10')
-    m10, cp10 = copy_then(sb10, relink_to_real)
-    refused(lambda: L.seal_synthetic(sb10, m10, 'syn-post-3', now=clock, extra_real_roots=EX, copy=cp10, **e.kw()), 'source changed during the copy',
-            'S3b: a synthetic file relinked to a real-spool file after the last copy refuses the seal (M3 sees the inode and the bytes)')
-    check(gone('syn-post-3'), 'S3b: the post-copy relink leaves nothing behind')
+    m10, st10, th10 = post_copy_seal(sb10, 'syn-post-3', relink_to_real)
+    refused(lambda: th10(), 'source changed during the copy', 'S3b: a synthetic file relinked to a real-spool file after the copy loop refuses the seal (M3 sees the inode and the bytes)')
+    check(st10['complete'] is True and gone('syn-post-3'), 'S3b: the post-copy relink happened after the loop and leaves nothing behind')
 
     def parent_to_real(sbx):
         shutil.rmtree(os.path.join(sbx, parent))
         os.symlink(os.path.join(e.base, parent), os.path.join(sbx, parent))
     sb11 = synth_base(tmp, 'syn-post-4', nonce='n11')
-    m11, cp11 = copy_then(sb11, parent_to_real)
-    refused(lambda: L.seal_synthetic(sb11, m11, 'syn-post-4', now=clock, extra_real_roots=EX, copy=cp11, **e.kw()), 'source changed during the copy',
-            'S3b: a subtree parent swapped for a symlink into the real spool after the last copy refuses the seal')
-    check(gone('syn-post-4'), 'S3b: the post-copy swap into the real spool leaves nothing behind')
+    m11, st11, th11 = post_copy_seal(sb11, 'syn-post-4', parent_to_real)
+    refused(lambda: th11(), 'source changed during the copy', 'S3b: a subtree parent swapped for a symlink into the real spool after the copy loop refuses the seal')
+    check(st11['complete'] is True and gone('syn-post-4'), 'S3b: the post-copy swap into the real spool happened after the loop and leaves nothing behind')
+    check(L.take_manifest is TM0 and L.synthetic_guard is GUARD0, 'S3b: the hooks are removed')
 
-    def swap_copied_bytes(sbx):
-        # the swap targets the COPY, not the source: the copy loop's own hash check runs right after copy() returns, so it must refuse
-        last = sorted(os.path.join(dp, fn) for dp, _, fs in os.walk(os.path.join(e.root, L.SYNTHETIC_INPUTS, 'syn-post-5')) for fn in fs)
-        open(last[-1], 'ab').write(b'!')
+    # ---- S3c: the copy's own bytes altered inside the loop, right after the LAST copy() returns: the loop's per-file hash check refuses it. (After the
+    # loop the copy is not re-read; it lies in the root-owned pinned directory, which the cooperative model leaves to Root.)
+    def in_loop_alter(sbx, snap):
+        mx = L.take_synthetic_manifest(sbx, now=clock, extra_real_roots=EX)
+        done = []
+
+        def cp(src, dst):
+            shutil.copyfile(src, dst)
+            done.append(dst)
+            if len(done) == len(mx['files']):
+                open(dst, 'ab').write(b'!')
+        return mx, cp
     sb12 = synth_base(tmp, 'syn-post-5', nonce='n12')
-    m12, cp12 = copy_then(sb12, swap_copied_bytes)
+    m12, cp12 = in_loop_alter(sb12, 'syn-post-5')
     refused(lambda: L.seal_synthetic(sb12, m12, 'syn-post-5', now=clock, extra_real_roots=EX, copy=cp12, **e.kw()), 'does not match its source hash',
-            'S3b: a copied file altered right after the last copy refuses the seal')
-    check(gone('syn-post-5'), 'S3b: the altered copy is removed')
+            'S3c: the last copied file altered before its hash check refuses the seal')
+    check(gone('syn-post-5'), 'S3c: the altered copy is removed')
 
 # ---- S4: real mode is unchanged
 with tempfile.TemporaryDirectory() as tmp:

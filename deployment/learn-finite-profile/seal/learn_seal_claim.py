@@ -629,7 +629,9 @@ def status(ident, source_root):
 
 
 # ---------------------------------------------------------------- claim
-def _precheck_ok(result, op_id):
+def _precheck_ok(result, op_id, kind='real'):
+    """kind: the claim's input kind. The pod operator records `inputProvenance` (#5184): a synthetic claim needs a precheck that says 'synthetic', a real claim
+    one that says 'real' (a RESULT without the field is from an operator that has only the real kind)."""
     if result.get('schema') != OPERATOR_RESULT_SCHEMA:
         refuse('precheck result has another schema')
     if result.get('opId') != op_id:
@@ -638,6 +640,8 @@ def _precheck_ok(result, op_id):
         refuse('the non-input prechecks did not pass')
     if (result.get('gates') or {}).get('inputMounted') is not False:
         refuse('the precheck result does not show the input untouched')
+    if result.get('inputProvenance', 'real' if kind == 'real' else None) != kind:
+        refuse(f'the precheck result is not for a {kind}-input op')
 
 
 def _check_seal(inputs_dir, snapshot_id, ident, sealed_sha):
@@ -1055,7 +1059,7 @@ def claim_synthetic(ident, op_id, snapshot_id, sealed_sha, precheck, precheck_sh
     _check_ids(ident, op_id)
     if not HEX64.match(sealed_sha):
         refuse('sealed manifest sha256 must be 64 lowercase hex')
-    _precheck_ok(precheck, op_id)
+    _precheck_ok(precheck, op_id, 'synthetic')
     claims = sub(source_root, SYNTHETIC_CLAIMS, owner_uid)
     if derive_state(claims, ident)['state'] != 'unclaimed':
         refuse('this synthetic source identity already has a claim')

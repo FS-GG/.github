@@ -288,6 +288,10 @@ with tempfile.TemporaryDirectory() as tmp:
     rc, d, p = runner(tmp, 'host', ['wait-pg', '1', '/bin/true', 'init', '2', '/bin/echo', '{}'])
     check(rc == 0 and os.path.isfile(os.path.join(d, '02-init', 'stdout')) and M.INIT_STDOUT == '/out/host/steps/02-init/stdout', 'INIT_STDOUT is the runner\'s path for host-init\'s second step')
 BID = '3f2c1a9e-5b7d-4e8f-9a0b-1c2d3e4f5a6b'
+# The bytes Host init prints (FS.GG.Coordination 5d525ad2, src/FS.GG.Coordination.Orchestration.Host/Program.fs:52-58): JsonSerializer.Serialize of an F#
+# anonymous record {| schema = ...; backupIdentity = identity |}, whose fields System.Text.Json writes in ALPHABETICAL order, compact, then printfn's newline
+# (reproduced by the #5204 review with dotnet fsi). The earlier fixtures assumed schema-first; that assumption fails on these bytes (tested below).
+REAL_INIT = '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}\n'
 
 
 def request_step(tmp, init_stdout, date_bin=None):
@@ -306,7 +310,7 @@ def request_step(tmp, init_stdout, date_bin=None):
 
 
 with tempfile.TemporaryDirectory() as tmp:
-    p, work, t0 = request_step(tmp, '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}\n' % BID)
+    p, work, t0 = request_step(tmp, '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}\n' % BID)
     rq = os.path.join(work, 'verify-request.json')
     check(p.returncode == 0 and os.path.isfile(rq), f'the request step builds the verify request from init\'s stdout: {p.stderr}')
     st_ = os.stat(rq)
@@ -330,13 +334,22 @@ with tempfile.TemporaryDirectory() as tmp:
     check(t0 - timedelta(seconds=1) <= iss <= now_ and exp > now_ and exp > iss and (exp - iss) <= timedelta(minutes=10), 'issuedAt is not in the future, expiresAt is later and within 10 minutes')
     check(j['projectA']['projectId'] != j['projectB']['projectId'] and all(j[x]['repositoryDatabaseId'] > 0 and j[x]['issueDatabaseId'] > 0 for x in ('projectA', 'projectB')),
           'two distinct subjects with positive database ids')
-    p2_, work2, _ = request_step(os.path.join(tmp, 'again'), '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}' % BID)
+    p2_, work2, _ = request_step(os.path.join(tmp, 'again'), '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}' % BID)
     check(p2_.returncode == 0 and json.load(open(os.path.join(work2, 'verify-request.json')))['operationId'] != j['operationId'], 'each request has a new operation id')
-for what, out_ in (('an upper-case identity', '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}' % BID.upper()),
+# B1 (#5204 review): the real bytes are accepted, and the old schema-first byte pattern does NOT match them (every real run would have exited 65)
+OLD_SCHEMA_FIRST = r'\{"schema":"fsgg\.orchestration\.host-init/1","backupIdentity":"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"\}'
+check(re.fullmatch(OLD_SCHEMA_FIRST, (REAL_INIT % BID).rstrip('\n')) is None and json.loads(REAL_INIT % BID) == {'backupIdentity': BID, 'schema': 'fsgg.orchestration.host-init/1'}
+      and list(json.loads(REAL_INIT % BID)) == sorted(json.loads(REAL_INIT % BID)), 'B1: the real init bytes are alphabetical, and the old schema-first pattern fails on them')
+for what, out_ in (('the real bytes', REAL_INIT % BID), ('the same object schema-first', '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}\n' % BID)):
+    with tempfile.TemporaryDirectory() as tmp:
+        p, work, _ = request_step(tmp, out_)
+        check(p.returncode == 0 and open(os.path.join(work, 'backup-identity')).read() == BID, f'B1: the request step accepts {what} (the check does not depend on key order)')
+for what, out_ in (('an upper-case identity', '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}' % BID.upper()),
                    ('another schema', '{"schema":"fsgg.orchestration.host-init/2","backupIdentity":"%s"}' % BID),
                    ('an extra field', '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s","x":1}' % BID),
-                   ('two objects', '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}\n{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}' % (BID, BID)),
-                   ('an empty stdout', ''), ('an identity with a quote', '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s\\""}' % BID)):
+                   ('two objects', '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}\n{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}' % (BID, BID)),
+                   ('an empty stdout', ''), ('trailing text on the line (grep -x)', (REAL_INIT % BID).rstrip('\n') + ' x'),
+                   ('leading text on the line (grep -x)', 'x ' + REAL_INIT % BID), ('a second identity key', '{"backupIdentity":"%s","backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}' % (BID, BID)), ('an identity with a quote', '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s\\""}' % BID)):
     with tempfile.TemporaryDirectory() as tmp:
         p, work, _ = request_step(tmp, out_)
         check(p.returncode == 65 and not os.listdir(work), f'the request step refuses {what} (exit 65) and writes nothing')
@@ -891,7 +904,7 @@ class DriveWorld(World):
         self.owned, self.locked = {}, []
         self.trigger, self.archived, self.archive_s, self.fin_dead, self.partial_ack, self.no_cgroup_line = None, {}, 0, False, False, set()
         self.term_late = set()
-        self.init_stdout = '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"3f2c1a9e-5b7d-4e8f-9a0b-1c2d3e4f5a6b"}\n'   # what Host init prints
+        self.init_stdout = REAL_INIT % '3f2c1a9e-5b7d-4e8f-9a0b-1c2d3e4f5a6b'   # what Host init prints (Host 5d525ad2 Program.fs:52-58)
         self.cust = os.path.join(self.state, 'learn-custody', self.opid)
         self.ckdir = os.path.join(self.state, 'learn-checkpoint', self.opid)
         os.makedirs(self.cust)
@@ -1343,14 +1356,40 @@ with tempfile.TemporaryDirectory() as tmp:
     bl = events(log, 'backup-identity')
     check(len(bl) == 1 and bl[0]['backupIdentity'] == DBID and bl[0]['n'] == 1, 'the driver reads the backup identity once, from the first checkpoint (admitted), and logs it')
 for what, so in (('another schema', '{"schema":"fsgg.orchestration.host-init/2","backupIdentity":"%s"}\n' % DBID),
-                 ('two objects', ('{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}\n' % DBID) * 2),
-                 ('an upper-case identity', '{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}\n' % DBID.upper()), ('nothing', '')):
+                 ('two objects', ('{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}\n' % DBID) * 2),
+                 ('an upper-case identity', '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}\n' % DBID.upper()), ('nothing', '')):
     with tempfile.TemporaryDirectory() as tmp:
         w = DriveWorld(tmp)
         w.init_stdout = so
         code, r, out, log = drive(w)
         check(code == 3 and any('init stdout' in e for e in r['errors']) and not events(log, 'remove') and not events(log, 'kill'),
               f'drive: host-init init stdout with {what} aborts at the first checkpoint, before any removal or kill')
+# B1: the driver PARSES init's stdout (exact keys, schema, UUID), whatever the key order; the byte forms it must refuse
+with tempfile.TemporaryDirectory() as tmp:
+    ex = os.path.join(tmp, 'extract-host')
+    os.makedirs(os.path.join(ex, 'steps', '02-init'))
+
+    def bid_of(text):
+        open(os.path.join(ex, M.INIT_STDOUT_REL), 'w').write(text)
+        return M.backup_identity_from(ex)
+    check(bid_of(REAL_INIT % DBID) == DBID, 'B1: the driver reads the identity from the real (alphabetical) init bytes')
+    check(bid_of('{"schema":"fsgg.orchestration.host-init/1","backupIdentity":"%s"}' % DBID) == DBID, 'B1: ... and from the same object in the other key order')
+    for what, text in (('a duplicate key', '{"backupIdentity":"%s","backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1"}' % (DBID, DBID)),
+                       ('an extra key', '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/1","x":1}' % DBID),
+                       ('another schema', '{"backupIdentity":"%s","schema":"fsgg.orchestration.host-init/2"}' % DBID),
+                       ('a non-UUID identity', '{"backupIdentity":"%s-0","schema":"fsgg.orchestration.host-init/1"}' % DBID),
+                       ('a number identity', '{"backupIdentity":1,"schema":"fsgg.orchestration.host-init/1"}'),
+                       ('a second line', REAL_INIT % DBID + 'x\n'), ('a blank second line', REAL_INIT % DBID + '\n'), ('trailing text', (REAL_INIT % DBID).rstrip() + 'x'), ('a JSON array', '[1]'), ('invalid UTF-8', '\udcff')):
+        try:
+            if what == 'invalid UTF-8':
+                open(os.path.join(ex, M.INIT_STDOUT_REL), 'wb').write(b'\xff')
+                M.backup_identity_from(ex)
+            else:
+                bid_of(text)
+            check(False, f'B1: the driver refuses {what}')
+        except M.Abort:
+            check(True, f'B1: the driver refuses {what}')
+
 # validate_plan: the reference needs a checkpoint holding host-init first, and only a host service may carry it
 bad = copy.deepcopy(TP)
 i_ = bad['actions'].index(['checkpoint', 'admitted'])
@@ -1738,6 +1777,13 @@ with tempfile.TemporaryDirectory() as tmp:
     with contextlib.redirect_stdout(io.StringIO()):
         drv.a_checkpoint('a')
         check(drv.bid == DBID, 'value 4 control: a checkpoint that held host-init yields the identity')
+with tempfile.TemporaryDirectory() as tmp:
+    w, drv = driver_at(tmp)
+    with contextlib.redirect_stdout(io.StringIO()):
+        drv.gens = dict(drv.gens, **{'host-plain': drv.gens['host-init']})
+        drv.slots['host']['gen'] = 'host-plain'               # the host slot holds another generation at this checkpoint
+        drv.a_checkpoint('a')
+        check(drv.bid is None, 'value 4: a checkpoint whose host slot is not host-init supplies no backup identity (only host-init\'s init stdout counts)')
 bad4 = copy.deepcopy(TP)
 bad4['generations']['host-plain'] = copy.deepcopy(bad4['generations']['host-init'])
 bad4['actions'][bad4['actions'].index(['start', 'host-init'])] = ['start', 'host-plain']
@@ -1755,6 +1801,7 @@ with tempfile.TemporaryDirectory() as tmp:
 # ============================================================ #5184: a SYNTHETIC-input op (the pod harness, the install receipt op), explicit at every hop
 # Clock: the world's frozen `now`. Source: temporary trees; the synthetic claim and seal are written with the seal tool's record types and directories.
 SYN_ARGV = M.synthetic_plan_argv(TP)
+DROP = object()                                          # a field left out of a record
 
 
 def syn_admit(w, opid=None, argv=None):
@@ -1770,6 +1817,7 @@ def syn_claim(w, opid=None, snapshot='snap-1', sm_extra=None, claim_extra=None):
     sm = {'schema': 'learn-input-snapshot-synthetic/1', 'provenance': 'synthetic', 'realSpoolProvenance': False, 'snapshotId': snapshot, 'sourceIdentity': w.ident,
           'files': [{'path': f'{M.REPLAY_SUBTREE}/a.ready', 'type': 'file', 'size': 3, 'sha256': H('c'), 'mtime_ns': 1}]}
     sm.update(sm_extra or {})
+    sm = {k: v for k, v in sm.items() if v is not DROP}
     smb = L.canon(sm)
     mp = os.path.join(w.view, 'synthetic-inputs', snapshot + '.manifest.json')
     open(mp, 'wb').write(smb)
@@ -1777,6 +1825,7 @@ def syn_claim(w, opid=None, snapshot='snap-1', sm_extra=None, claim_extra=None):
     cl = {'schema': 'learn-input-claim-synthetic/1', 'provenance': 'synthetic', 'realSpoolProvenance': False, 'generation': 1, 'sourceIdentity': w.ident,
           'opId': opid or w.opid, 'snapshotId': snapshot, 'sealedManifestSha256': sha(smb), 'precheckResultSha256': H('b'), 'claimedUtc': w.now.isoformat(), 'supersedes': None}
     cl.update(claim_extra or {})
+    cl = {k: v for k, v in cl.items() if v is not DROP}
     cp = os.path.join(w.view, 'synthetic-claims', w.ident + '.claim')
     if os.path.exists(cp):
         os.unlink(cp)
@@ -1796,8 +1845,9 @@ with tempfile.TemporaryDirectory() as tmp:
     syn_admit(w)
     code, r, _ = go(w, PRE, argv=SYN_ARGV)
     check(code == 0 and r['inputProvenance'] == 'synthetic' and r['gates']['inputMounted'] is False, f'SYN: a synthetic --precheck-only passes and records inputProvenance synthetic: {r["errors"]}')
-    L._precheck_ok(r, w.opid)
-    check(True, 'SYN: the seal tool\'s _precheck_ok (used by claim_synthetic) accepts the synthetic precheck RESULT')
+    L._precheck_ok(r, w.opid, 'synthetic')
+    check(True, 'SYN: the seal tool\'s _precheck_ok (used by claim_synthetic) accepts the synthetic precheck RESULT for a synthetic claim')
+    raises(lambda: L._precheck_ok(r, w.opid), L.Refuse, 'not for a real-input op', 'SYN: ... and refuses it for a real claim (N4)')
     code, r, _ = go(w, PRE)
     check(code == 5 and err(r, 'argvJsonSha256 differs'), 'SYN: the same op run with the REAL argv refuses: the admission bound the synthetic declaration')
     check(r['inputProvenance'] == 'real', 'SYN control: the refused real-argv run records inputProvenance real')
@@ -1828,6 +1878,8 @@ for what, setup, argv, needle in (
         ('a real run with only a SYNTHETIC claim', lambda w: (w.admit(), syn_claim(w)), None, 'absent: '),
         ('a synthetic claim without provenance', lambda w: (syn_admit(w), syn_claim(w, claim_extra={'provenance': 'real'})), SYN_ARGV, 'does not say synthetic provenance'),
         ('a synthetic claim that claims real-spool provenance', lambda w: (syn_admit(w), syn_claim(w, claim_extra={'realSpoolProvenance': True})), SYN_ARGV, 'does not say synthetic provenance'),
+        ('a synthetic claim with no realSpoolProvenance field', lambda w: (syn_admit(w), syn_claim(w, claim_extra={'realSpoolProvenance': DROP})), SYN_ARGV, 'does not say synthetic provenance'),
+        ('a synthetic seal with no realSpoolProvenance field', lambda w: (syn_admit(w), syn_claim(w, sm_extra={'realSpoolProvenance': DROP})), SYN_ARGV, 'not a synthetic seal'),
         ('a real-schema claim in synthetic-claims/', lambda w: (syn_admit(w), syn_claim(w, claim_extra={'schema': 'learn-input-claim/1'})), SYN_ARGV, 'claim has another schema'),
         ('a real-schema seal in synthetic-inputs/', lambda w: (syn_admit(w), syn_claim(w, sm_extra={'schema': 'learn-input-snapshot/1'})), SYN_ARGV, 'not a synthetic seal'),
         ('a synthetic seal that claims real-spool provenance', lambda w: (syn_admit(w), syn_claim(w, sm_extra={'realSpoolProvenance': True})), SYN_ARGV, 'not a synthetic seal')):
@@ -1837,6 +1889,15 @@ for what, setup, argv, needle in (
         code, r, _ = go(w, RUN, argv=argv)
         check(code == 5 and err(r, needle) and not os.path.exists(os.path.join(w.state, 'learn-input', w.opid)) and not getattr(w, 'started', None),
               f'SYN: {what} refuses before the marker and before any unit')
+# N3 (#5204 review): an argv that carries the synthetic tag but names ANOTHER plan is no input kind: refused at the identity gate even under an admission
+# written for exactly that argv, and the RESULT does not call it synthetic
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    other = M.synthetic_plan_argv(HELD_PLAN)
+    syn_admit(w, argv=other)
+    code, r, _ = go(w, PRE, argv=other)
+    check(code == 5 and err(r, 'argv-json must name this operator\'s plan') and r['inputProvenance'] == 'real' and 'podPrecheck' not in r['gates'],
+          'SYN: a synthetic-tagged argv naming another plan refuses at the identity gate, whatever the admission, and is not recorded as synthetic')
 # the real kind of verify_claim answers exactly as r1's on the same claim vectors (the gate layer's real behaviour is unchanged)
 M1 = mod('pod1syn', POD1)
 for what, setup in (('a matching real claim', lambda w: w.claim()), ('a claim of another op', lambda w: w.claim(opid='op-q')), ('no claim', lambda w: None),

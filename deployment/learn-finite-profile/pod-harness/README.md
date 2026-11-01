@@ -14,7 +14,7 @@ learn-pod-harness-r1.py plan    --run-id <id> [--argv-json <synthetic argv> --so
 learn-pod-harness-r1.py case    --run-id <id> --case <case> --admission-ref <comment URL> [...]        uid 30034: one case
 learn-pod-harness-r1.py summary --run-id <id>                                                           uid 30034, read only
 learn-pod-harness-r1.py synth-tree --out <new dir> --nonce <nonce>                                      writes only <new dir>
-learn-pod-harness-r1.py spike-cgroups --run-id <id>        internal: the main process of the N5b spike unit
+learn-pod-harness-r1.py spike-cgroups --run-id <id> --nonce <hex>   internal: the main process of the N5b spike unit
 ```
 
 A run id is 4 to 12 lowercase letters and digits. Every unit, pod and container the harness creates is named `hq-<run id>-<case>`.
@@ -27,6 +27,7 @@ A run id is 4 to 12 lowercase letters and digits. Every unit, pod and container 
 - The first failed case writes `STOP`, and every later case of the run refuses.
 - It stops and resets only the units it started, by exact name. Every unit it starts has its own `RuntimeMaxSec`, so nothing outlives a dead harness.
 - A refusal before anything runs writes nothing and does not stop the run. A refusal after something ran is a failure.
+- Once the identity guards pass, the census after the case is taken and recorded on every path, a refusal or an exception included.
 
 ## The cases
 
@@ -61,8 +62,10 @@ because the precheck pod runs with default cgroups outside any unit.
 4. reads `/proc/<pid>/cgroup` of each member, each `conmon` and the infra container, and `podman pod inspect`'s cgroup path;
 5. removes the pod on every path, reads back that it is gone, and lists any process left in the unit's cgroup tree.
 
-It writes `n5b-spike.json` (`learn-pod-harness-spike/1`). Verdicts: `members-and-infra-under-unit`, `not-under-unit`, `split-refused` (podman
-refused the option in a pod), or `incomplete` (the pod was not removed, a process was left, or the spike was not inside its unit).
+It writes `n5b-spike.json` (`learn-pod-harness-spike/1`) with the nonce the harness gave it. Verdicts: `members-and-infra-under-unit`,
+`not-under-unit`, `split-refused` (podman refused the option in a pod), or `incomplete` (the pod was not removed, a process was left, or the spike
+was not inside its unit). A definite verdict exits 0 and `incomplete` exits 3, so the unit fails. The case refuses before it starts if a spike RESULT
+already exists for the run, and accepts the RESULT only with the unit's exit 0, the spike schema and this invocation's nonce.
 
 It needs no claim, no input, no volume, no credential and neither image of the pod. The recovery path end to end (checkpoints, restarts, kills and
 the replay) is `syn-run`: the whole plan on a synthetic claim, so no real claim is consumed.
@@ -101,6 +104,10 @@ Run order, interleaved with INSTALL-FDEV.md. Every harness command runs as uid 3
 | 5 | Root | INSTALL-FDEV steps 1 and 2 (ack writer r2, the f1-pre ack) |
 | 6 | uid 30034 | `case a0-summary`, `case exclusion-reader`, `case a29-cap`, `case n5b-cgroups`, then `summary` |
 | later | uid 30034 and Root | phase C after the image pins and the plan decision: `synth-tree`, the synthetic seal, the admission, the volume, `syn-precheck`, the synthetic claim, `syn-run`, `syn-reuse` |
+
+**Prerequisite for phase C (#5204 review N5):** before the first real pod run, Root checks that the installed Host build embeds the assembly
+metadata `FsggSourceRevision` equal to `5d525ad2423e733a38ce75fb1f9cac6cf76f214e`, because `verify-installed-adoption` compares it with the request's
+`expectedSourceRevision`.
 
 Expected receipts per case are in `plan`'s output. Writes: the harness state directory; r6's precheck op `hq-<id>-a0-pre` writes custody and
 evidence as any precheck op does. Units: `learn-op-hq-<id>-a0-pre` and `learn-fin-hq-<id>-a0-pre` (r6), the dummy units, and the spike unit. Pods

@@ -51,7 +51,11 @@ file whose `(st_dev, st_ino)` matches a file under the real spool roots (lstat o
 and a real manifest or a real seal given to the synthetic commands. After the last file is copied, the seal re-takes the manifest
 (M3 = M1), re-reads the declaration and re-runs the subtree path guard before it writes the sealed record. A swap in that window (a subtree parent
 renamed and replaced by a symlink with the same inodes, which M3 cannot see; a file relinked to real data; a parent pointed into the real spool; a
-copied file altered) refuses the seal and removes the copy (tests S3b, with a control that disables the post-copy guard). The sealed record carries the declaration's `generator` and
+copied file altered before its hash check) refuses the seal and removes the copy. Tests S3b fire the swap after the copy loop has finished (the
+first post-loop source read) and include a control that disables the post-copy guard; S3c alters the last copy inside the loop.
+
+**The precheck must match the claim kind (#5204 review N4).** `_precheck_ok` refuses a synthetic claim unless the operator RESULT says
+`inputProvenance: synthetic`, and a real claim unless it says `real` (a RESULT without the field is from an operator that has only the real kind). The sealed record carries the declaration's `generator` and
 `nonce` as the caller's claim. The roots
 are pinned in the tool; `extra_real_roots` can only add to them.
 

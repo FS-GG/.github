@@ -110,13 +110,17 @@ FIXTURE_IDS = {'permit': 'c5d6f4a8-3e1b-4f0a-9b2c-7d8e9f0a1b2c', 'principal': 'l
 INIT_STDOUT = '/out/host/steps/02-init/stdout'          # the step runner's own path for host-init's second step (wait-pg is first); the tests run the runner to prove it
 # verify-installed-adoption needs a private per-run request (fsgg.orchestration.installed-adoption-request/1: exact field set, a 10-minute window, the
 # backup identity init just created). Built inside the container from init's archived stdout, which must be exactly the host-init/1 object; it fails closed.
+# What init prints (Host 5d525ad2, src/FS.GG.Coordination.Orchestration.Host/Program.fs:52-58): System.Text.Json of an F# ANONYMOUS record, whose fields
+# serialize in alphabetical order, compact: {"backupIdentity":"<uuid>","schema":"fsgg.orchestration.host-init/1"}. The check below does not depend on the
+# key order: the whole line must be that object with exactly those two keys in either order, so it holds exactly one UUID: the identity.
 VERIFY_REQUEST_SH = r'''set -eu
 umask 077
 j=$(cat "$1")
 [ "$(printf '%s\n' "$j" | wc -l)" -eq 1 ] || { echo 'init stdout is not exactly one line' >&2; exit 65; }
-printf '%s\n' "$j" | grep -Eqx '\{"schema":"fsgg\.orchestration\.host-init/1","backupIdentity":"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"\}' || { echo 'init stdout is not exactly one host-init/1 object' >&2; exit 65; }
-b=${j#*'"backupIdentity":"'}
-b=${b%'"}'}
+u='"backupIdentity":"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"'
+k='"schema":"fsgg\.orchestration\.host-init/1"'
+printf '%s\n' "$j" | grep -Eqx "\\{($u,$k|$k,$u)\\}" || { echo 'init stdout is not exactly one host-init/1 object' >&2; exit 65; }
+b=$(printf '%s\n' "$j" | grep -Eo '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
 o=$(cat /proc/sys/kernel/random/uuid)
 printf '%s\n' "$o" | grep -Eqx '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || exit 65
 t=$(date -u +%s)
@@ -140,7 +144,8 @@ HOST_SERVE = ['/bin/sh', '-c', 'b=$(cat /work/backup-identity) && [ -n "$b" ] ||
 # requires such a checkpoint before any start that uses it). It is a store identity, not a secret.
 BID_REF = '%host-init-backup-identity%'
 INIT_STDOUT_REL = INIT_STDOUT[len('/out/host/'):]
-INIT_OBJECT = re.compile(r'\{"schema":"fsgg\.orchestration\.host-init/1","backupIdentity":"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"\}\n?')
+UUID = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+INIT_SCHEMA = 'fsgg.orchestration.host-init/1'
 # the producer association (activate-remote) and its binding digest: sha256 over the int32-LE-length-prefixed UTF-8 of [workspace, producer, stream,
 # 'remote', endpoint AbsoluteUri, credential reference, spool root] + repositories (WorkspaceTelemetryApplication.associationDigest). The tests recompute it.
 SPOOL_ROOT = '/work/spool/' + 'passive-prospective-0106-20261018/spool'
@@ -1344,15 +1349,31 @@ class Abort(Exception):
 
 
 def backup_identity_from(extract_host):
-    """host-init's backup identity from its init stdout as the finalizer extracted it into custody: exactly one host-init/1 object, else abort."""
+    """host-init's backup identity from its init stdout as the finalizer extracted it into custody (Host 5d525ad2 Program.fs:52-58 prints one compact JSON
+    object, keys in alphabetical order). Parsed as JSON, not matched as bytes: exactly one object, one line, exactly the keys backupIdentity and schema
+    (no duplicate), the host-init/1 schema and a lower-case UUID. Anything else aborts."""
     try:
         raw = read_private(f'{extract_host}/{INIT_STDOUT_REL}', 4096)
     except (OSError, Refuse):
         raise Abort('custody readback: no init stdout of host-init')
-    m = INIT_OBJECT.fullmatch(raw.decode('utf-8', 'replace'))
-    if not m:
+
+    def pairs(kv):
+        if len({k for k, _ in kv}) != len(kv):
+            raise ValueError('duplicate key')
+        return dict(kv)
+    try:
+        text = raw.decode('utf-8')
+        if text.endswith('\n'):
+            text = text[:-1]
+        if '\n' in text:
+            raise ValueError('more than one line')
+        j = json.loads(text, object_pairs_hook=pairs)
+    except (UnicodeDecodeError, ValueError):
+        j = None
+    if not (isinstance(j, dict) and set(j) == {'backupIdentity', 'schema'} and j['schema'] == INIT_SCHEMA and isinstance(j['backupIdentity'], str)
+            and UUID.fullmatch(j['backupIdentity'])):
         raise Abort('custody readback: host-init\'s init stdout is not exactly one host-init/1 object')
-    return m.group(1)
+    return j['backupIdentity']
 
 
 class Driver:

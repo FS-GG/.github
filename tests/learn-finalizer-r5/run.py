@@ -1290,6 +1290,9 @@ with tempfile.TemporaryDirectory() as tmp:
 for what, kw, needle in (('a synthetic claim without provenance', dict(claim_extra={'provenance': None}), 'does not say synthetic provenance'),
                          ('a synthetic claim that claims real-spool provenance', dict(claim_extra={'realSpoolProvenance': True}), 'does not say synthetic provenance'),
                          ('a synthetic seal that claims real-spool provenance', dict(sm_extra={'realSpoolProvenance': True}), 'does not say synthetic provenance'),
+                         ('a synthetic claim with no realSpoolProvenance field', dict(claim_extra={'realSpoolProvenance': W.DROP}), 'does not say synthetic provenance'),
+                         ('a synthetic seal with no realSpoolProvenance field', dict(sm_extra={'realSpoolProvenance': W.DROP}), 'does not say synthetic provenance'),
+                         ('a synthetic claim with no provenance field', dict(claim_extra={'provenance': W.DROP}), 'does not say synthetic provenance'),
                          ('a real-schema claim placed in synthetic-claims/', dict(claim_extra={'schema': 'learn-input-claim/1'}), 'not this op\'s claim'),
                          ('a real-schema seal placed in synthetic-inputs/', dict(sm_extra={'schema': 'learn-input-snapshot/1'}), 'names another snapshot or source')):
     with tempfile.TemporaryDirectory() as tmp:

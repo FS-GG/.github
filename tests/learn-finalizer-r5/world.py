@@ -36,6 +36,9 @@ class FakeTime:
         self.w.fire()
 
 
+DROP = object()                                   # a field left out of a record
+
+
 class World:
     def __init__(self, tmp):
         self.tmp = tmp
@@ -175,6 +178,7 @@ class World:
         if kind == 'synthetic':
             sm.update(schema='learn-input-snapshot-synthetic/1', provenance='synthetic', realSpoolProvenance=False)
         sm.update(sm_extra or {})
+        sm = {k: v for k, v in sm.items() if v is not DROP}
         smb = json.dumps(sm, sort_keys=True, separators=(',', ':')).encode()
         self.manifest_path = os.path.join(inputs, sid + '.manifest.json')
         open(self.manifest_path, 'wb').write(smb)
@@ -187,6 +191,7 @@ class World:
         if kind == 'synthetic':
             c.update(schema='learn-input-claim-synthetic/1', provenance='synthetic', realSpoolProvenance=False)
         c.update(extra or {})
+        c = {k: v for k, v in c.items() if v is not DROP}
         os.makedirs(claims, exist_ok=True)
         os.chmod(claims, 0o755)
         self.claim_path = os.path.join(claims, IDENT + '.claim')

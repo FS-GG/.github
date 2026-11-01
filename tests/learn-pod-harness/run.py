@@ -83,7 +83,7 @@ check(a27['commands'] == [['/usr/bin/python3', '-I', '/usr/local/libexec/fsgg-le
       'A27 runs the installed operator r6 --precheck-only once, under the harness op id')
 n5 = next(c for c in p1['cases'] if c['id'] == 'n5b-cgroups')['commands'][0]
 check(n5[:4] == ['systemd-run', '--user', '--unit', 'learn-pod-hq-run1-n5b'] and 'Delegate=yes' in n5 and 'KillMode=control-group' in n5 and '--collect' in n5
-      and n5[n5.index('--') + 1:] == ['/usr/bin/python3', '-I', Hm.PROD['self'], 'spike-cgroups', '--run-id', 'run1'],
+      and n5[n5.index('--') + 1:-1] == ['/usr/bin/python3', '-I', Hm.PROD['self'], 'spike-cgroups', '--run-id', 'run1', '--nonce'],
       'the N5b spike runs inside a delegated learn-pod-* unit with the pod unit\'s cgroup properties, bounded by its own RuntimeMaxSec')
 check(all('RuntimeMaxSec=' in ' '.join(cmd) for c in p1['cases'] for cmd in c['commands'] if cmd[:2] == ['systemd-run', '--user']),
       'every unit the harness starts carries its own RuntimeMaxSec (nothing outlives a dead harness)')
@@ -234,6 +234,8 @@ class World:
                 r = self.r6_forge(opid)
                 return r['exitCode'], f'RESULT-BEGIN\n{json.dumps(r)}\nRESULT-END\n', ''
             code, out = self.run_r6(a[3:])
+            if getattr(self, 'after_r6', None):
+                self.after_r6()
             if code == 'precheck':                    # the success path needs a container runtime: the scripted RESULT carries r6's own gate data
                 if self.r6_success is None:
                     return 1, '', 'precheck not scriptable'
@@ -262,6 +264,8 @@ class World:
             return self.spike_unit(a)
         if a[:3] == ['systemctl', '--user', 'is-active']:
             u = a[3][:-len('.service')]
+            if u in getattr(self, 'isactive_lies', ()) and u not in self.units:
+                return 0, 'active\n', ''
             return (0 if self.units.get(u) == 'active' else 3), self.units.get(u, 'unknown') + '\n', ''
         if a[:3] == ['systemctl', '--user', 'stop']:
             for x in a[3:]:
@@ -286,8 +290,9 @@ class World:
         if getattr(self, 'spike_json', None) is not None:
             sd = Hm.state_dir(self.env(), a[a.index('--run-id') + 1])
             os.makedirs(sd, 0o700, exist_ok=True)
-            open(os.path.join(sd, 'n5b-spike.json'), 'w').write(json.dumps(self.spike_json))
-        return 0, '', ''
+            j = dict({'nonce': a[a.index('--nonce') + 1]}, **self.spike_json)       # the spike records the nonce it was given, unless a test says otherwise
+            open(os.path.join(sd, 'n5b-spike.json'), 'w').write(json.dumps(j))
+        return getattr(self, 'spike_rc', 0), '', ''
 
     def deps(self, **over):
         def read_json(p):
@@ -308,7 +313,7 @@ class World:
         d = {'run': self.run, 'geteuid': lambda: 30034, 'getpid': lambda: 4242, 'now': lambda: NOW, 'monotonic': tick, 'sleep': lambda s_: None,
              'read': lambda p: open(p).read(), 'read_json': read_json, 'read_lines': read_lines, 'exists': os.path.lexists, 'walk': os.walk,
              'sha_file': lambda p: sha(open(p, 'rb').read()) if os.path.exists(p) else None,
-             'self_stat': lambda: os.stat(HARN), 'self_sha': lambda: sha(open(HARN, 'rb').read())}
+             'self_stat': lambda: os.stat(HARN), 'self_sha': lambda: sha(open(HARN, 'rb').read()), 'nonce': lambda: '9f' * 16}
         d.update(over)
         return d
 
@@ -453,6 +458,83 @@ with tempfile.TemporaryDirectory() as tmp:
     code_, out_ = w.run_r6(['--precheck-only', '--id', 'hq-run1-ctl'])
     check(code_ == 'precheck', 'control: without dummy units r6 passes the sweep, exclusion, concurrency and ack gates and reaches its precheck')
 
+# N2 (#5204 review): the census after is taken on every path past the identity guards: a refusal before the case, an exception inside it
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    w.units['learn-pod-busy'] = 'active'
+    R, code = case(w, 'a27-unacked')
+    check(R['verdict'] == 'refused' and 'censusAfter' in R and R['censusAfter']['busyUnits'] == ['learn-pod-busy.service'], 'N2: a refused case records the census after')
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    w.ack()
+    w.start_fails.add('learn-pod-hq-run1-x')
+    R, code = case(w, 'exclusion-reader')
+    check(R['verdict'] == 'fail' and R['censusAfter']['ok'] is True, 'N2: a case that raised records the census after')
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    R, code = case(w, 'census', deps={'geteuid': lambda: 1000})
+    check('censusAfter' not in R and not w.calls, 'N2 control: before the identity guards pass nothing runs, not even the census')
+# H6: the census after alone fails a case that otherwise passed (a stray pod appears while r6 runs)
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    w.after_r6 = lambda: w.pods.add('learn-pod-stray')
+    R, code = case(w, 'a27-unacked')
+    check(R['verdict'] == 'fail' and R['facts']['rc'] == 5 and any('census after' in e for e in R['errors']), 'N3: a case whose own verdict passes fails on an unclean census after')
+# H7: a dummy unit that is still active after the stop fails the case even when the listing no longer shows it
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    w.ack()
+    w.isactive_lies = {'learn-pod-hq-run1-x'}
+    R, code = case(w, 'exclusion-reader')
+    check(R['verdict'] == 'fail' and R['censusAfter']['ok'] and R['facts']['dummyStates']['learn-pod-hq-run1-x'] == 'active',
+          'N3: a dummy that reads active after the stop fails the case on its own readback')
+# H16: leftover learn-pre-* and learn-op-* pods make the census unclean
+for pod_ in ('learn-pre-old', 'learn-op-old'):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = World(tmp)
+        w.pods.add(pod_)
+        R, code = case(w, 'census')
+        check(R['verdict'] == 'fail' and R['facts']['census']['pods'] == [pod_], f'N3: a leftover {pod_} pod makes the census unclean')
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    w.pods.add('unrelated-pod')
+    R, code = case(w, 'census')
+    check(R['verdict'] == 'pass', 'N3 control: a pod that is not learn-* is not the harness\'s concern')
+# H21: the stops name only the units the harness started
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    w.ack()
+    case(w, 'exclusion-reader')
+    stops = [x for c in w.calls if c[:3] in (['systemctl', '--user', 'stop'], ['systemctl', '--user', 'reset-failed']) for x in c[3:]]
+    check(stops and set(stops) == {'learn-pod-hq-run1-x.service'}, f'N3: exclusion stops and resets only its own dummy unit: {stops}')
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    w.ack()
+    case(w, 'a29-cap')
+    stops = [x for c in w.calls if c[:3] in (['systemctl', '--user', 'stop'], ['systemctl', '--user', 'reset-failed']) for x in c[3:]]
+    check(set(stops) == {'learn-op-hq-run1-c1.service', 'learn-op-hq-run1-c2.service'}, f'N3: A29 stops and resets only its own two dummy units: {stops}')
+# H2b: a root-owned copy that group or other can write is refused
+for mode_ in (0o100664, 0o100646):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = World(tmp)
+        st_ = type('S', (), {'st_uid': 0, 'st_mode': mode_})()
+        R, code = case(w, 'census', env={'production': True, 'owner_uid': 0}, deps={'self_stat': lambda: st_})
+        check(code == 5 and any('root-owned copy' in e for e in R['errors']) and not w.calls, f'N3: a root-owned harness copy of mode {oct(mode_ & 0o777)} refuses')
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    st_ = type('S', (), {'st_uid': 0, 'st_mode': 0o100755})()
+    R, code = case(w, 'census', env={'production': True, 'owner_uid': 0}, deps={'self_stat': lambda: st_})
+    check(R['verdict'] == 'pass', 'N3 control: a root-owned 0755 copy runs')
+# H3: a case RESULT is created exclusively, never overwritten
+with tempfile.TemporaryDirectory() as tmp:
+    f_ = os.path.join(tmp, 'r.json')
+    Hm.write_once(f_, b'one')
+    try:
+        Hm.write_once(f_, b'two')
+        check(False, 'N3: write_once refuses an existing file')
+    except FileExistsError:
+        check(open(f_, 'rb').read() == b'one', 'N3: write_once refuses an existing file and leaves it unchanged (O_EXCL)')
+
 # held and STOP
 with tempfile.TemporaryDirectory() as tmp:
     w = World(tmp)
@@ -525,7 +607,7 @@ class SpikeWorld:
         deps = {'run': self.run, 'read': lambda p: open(p).read(), 'walk': os.walk, 'getpid': lambda: 4242}
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            code = Hm.spike_cgroups(env, deps, 'run1')
+            code = Hm.spike_cgroups(env, deps, 'run1', '9f' * 16)
         return code, json.load(open(os.path.join(Hm.state_dir(env, 'run1'), 'n5b-spike.json')))
 
 
@@ -571,7 +653,34 @@ for what, sj, verdict in (('established', {'schema': Hm.SPIKE_SCHEMA, 'verdict':
         w = World(tmp)
         w.spike_json = sj
         R, code = case(w, 'n5b-cgroups')
-        check(R['verdict'] == verdict and w.spiked == Hm.spike_unit_argv(w.env(), 'run1'), f'n5b case: {what} is {verdict}')
+        check(R['verdict'] == verdict and w.spiked == Hm.spike_unit_argv(w.env(), 'run1', '9f' * 16), f'n5b case: {what} is {verdict}')
+# N1 (#5204 review): a stale spike RESULT is refused before the spike starts; the unit must succeed; the RESULT must carry this invocation's nonce
+OKSJ = {'schema': Hm.SPIKE_SCHEMA, 'verdict': 'members-and-infra-under-unit', 'podRemoved': True, 'leftoverProcs': []}
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    os.makedirs(sd(w), 0o700)
+    open(os.path.join(sd(w), 'n5b-spike.json'), 'w').write(json.dumps(dict(OKSJ, nonce='9f' * 16)))
+    R, code = case(w, 'n5b-cgroups')
+    check(code == 5 and R['verdict'] == 'refused' and any('already exists' in e for e in R['errors']) and not getattr(w, 'spiked', None),
+          'N1: a spike RESULT that predates the invocation refuses the case before the spike unit starts (the reviewer\'s stale-spike probe)')
+for what, kw, verdict in (('the unit failed (rc 1)', dict(spike_rc=1), 'fail'), ('another invocation\'s nonce', dict(spike_json=dict(OKSJ, nonce='00' * 16)), 'fail'),
+                          ('another schema', dict(spike_json=dict(OKSJ, schema='other/1')), 'fail'), ('control: rc 0, this nonce, the schema', {}, 'pass')):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = World(tmp)
+        w.spike_json = OKSJ
+        for k_, v_ in kw.items():
+            setattr(w, k_, v_)
+        R, code = case(w, 'n5b-cgroups')
+        check(R['verdict'] == verdict, f'N1: {what} is {verdict}')
+for v_ in Hm.SPIKE_VERDICTS:
+    with tempfile.TemporaryDirectory() as tmp:
+        sw = SpikeWorld(tmp, **({'split_refused': True} if v_ == 'split-refused' else {'placement': {501: '/elsewhere'}} if v_ == 'not-under-unit' else {}))
+        code, S_ = sw.go()
+        check(S_['verdict'] == v_ and code == 0 and S_['nonce'] == '9f' * 16, f'N1: the spike exits 0 for the definite verdict {v_} and records its nonce')
+with tempfile.TemporaryDirectory() as tmp:
+    code, S_ = SpikeWorld(tmp, rm_fails=True).go()
+    check(code == 3 and S_['verdict'] == 'incomplete', 'N1: an incomplete spike exits 3, so its unit fails')
+raises(lambda: Hm.parse(['spike-cgroups', '--run-id', 'run1']), 'usage', 'the spike needs its nonce')
 
 # ============================================================ phase C: the synthetic op (scripted pod operator RESULTs and finalizer records)
 IDENT = 'ab' * 32
@@ -624,6 +733,11 @@ try:
         check(R['verdict'] == 'pass' and R['facts']['checkpoints'] == 5, f'syn-run: success record, synthetic, the feed alone with /in, five accepted checkpoints, ExecMainStatus 0, drive complete: {R.get("facts")}')
         R, code = case(w, 'syn-reuse', extra=SA)
         check(R['verdict'] == 'pass', 'syn-reuse: a second precheck of the same op id is refused (op id already used)')
+    with tempfile.TemporaryDirectory() as tmp:
+        w = syn_world(tmp)
+        w.pod_results[('--precheck-only', 1)]['inputProvenance'] = 'real'
+        R, code = case(w, 'syn-precheck', extra=SA)
+        check(R['verdict'] == 'fail', 'N3: a syn-precheck RESULT that is not synthetic fails the case')
     for what, kw in (('a real-provenance record', dict(rec_over={'inputProvenance': 'real'})), ('a killed-retired record', dict(rec_over={'schema': 'learn-op-pod-killed-retired/1'})),
                      ('input never read', dict(rec_over={'inputRead': False})), ('another container with /in', dict(rec_over={'containersStartedWithInput': [f'learn-pod-{OPID}-feed', 'x']})),
                      ('four checkpoints', dict(rec_over={'checkpoints': [{'roles': {'host': {'custody': {'verdict': 'accepted'}}}}] * 4})),
