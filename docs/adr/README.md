@@ -124,6 +124,7 @@ registry like any other, and this org gates its registries.
 | [0095](0095-utel-resource-containment-for-fresh-profiles.md) | Enforced resource containment for separately authorized fresh UTEL profiles; legacy physical-copy proof and holds remain unchanged | Accepted policy; implementation, production budgets and admission pending |
 | [0096](0096-proportionate-verification-and-unrecoverable-holds.md) | Ordinary local build/test of unpublished source needs no original-operation admission; the 439/46 unrecoverable inherited holds are released for isolated fresh operations | Accepted |
 | [0097](0097-one-org-wide-serialized-publication-writer.md) | One org-wide serialized publication writer: every publishing job takes a ticketed lock over the public Actions job list; the job's end releases it | Accepted |
+| [0098](0098-shared-algorithms-library-and-product-knowledge-pack.md) | A new leaf FS.GG.Algorithms repository owns the algorithms library and the `fs-gg-algorithms` product skill, whose knowledge pack is an Atlas archive materialized into game workspaces | Accepted |
 
 ## Supersession map
 
@@ -132,6 +133,8 @@ Which record currently rules, and where a decision was amended. Every edge below
 
 | Amended | § | By | What changed |
 |---|---|---|---|
+| [0022](0022-extract-fs-gg-game-as-an-sdd-driven-component.md) | D1 | [0098](0098-shared-algorithms-library-and-product-knowledge-pack.md) | `Game.Core` "reaches up to nothing" now admits one exact-pinned dependency on the leaf `FS.GG.Algorithms`. |
+| [0069](0069-fable-lockstep-is-a-profiled-game-core-package-contract.md) | Version and rollout rule | [0098](0098-shared-algorithms-library-and-product-knowledge-pack.md) | The recorded compatibility identity includes the pinned `FS.GG.Algorithms` version. |
 | [0093](0093-original-103-authentication-domain-policy.md) | §Decision, principal and private-custody selection | [0094](0094-separate-v3-and-utel-principals-and-custody.md) | Names prospective descriptor, phase-proof and ACK principals and custodians; actual provisioning, enrollment and original-effect admission remain pending. |
 | [0093](0093-original-103-authentication-domain-policy.md) | Resource acceptance, fresh profiles only | [0095](0095-utel-resource-containment-for-fresh-profiles.md) | Selects enforced resource containment for new profiles; the original 65,536-byte universal property remains unproved and all original-effect safeguards remain. |
 | [0093](0093-original-103-authentication-domain-policy.md) | Inherited 439-reservation fencing | [0096](0096-proportionate-verification-and-unrecoverable-holds.md) | The reservations remain history but no longer fence demonstrably isolated fresh operations; `.103` stays attempted-unknown and unreplayed. |
