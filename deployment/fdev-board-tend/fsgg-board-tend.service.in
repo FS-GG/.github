@@ -28,4 +28,4 @@ UMask=0077
 NoNewPrivileges=yes
 # Deliberately no PrivateTmp: during the transition the writers also take the legacy lock at the literal /tmp path.
 RuntimeMaxSec=@RUNTIME_MAX@
-ExecStart=/usr/bin/python3 -I @LIBEXEC@/fsgg-board-tend-run.py run --mode @MODE@ --engine @ENGINE@ --credentials @CREDENTIALS@ --workdir @WORKDIR@
+ExecStart=/usr/bin/python3 -I @LIBEXEC@/fsgg-board-tend-run.py run --mode @MODE@ --engine-path @ENGINE@ --credentials @CREDENTIALS@ --workdir @WORKDIR@

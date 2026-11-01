@@ -82,7 +82,7 @@ class FakeHome(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.home = pathlib.Path(tmp.name).resolve()
-        patch = mock.patch.dict(os.environ, {"HOME": str(self.home)})
+        patch = mock.patch.dict(os.environ, {"HOME": str(self.home), "XDG_CONFIG_HOME": str(self.home / ".config")})
         patch.start()
         self.addCleanup(patch.stop)
         self.tools = self.home / ".local/share/fs-gg/tools" / f"coord-{RELEASE}"
@@ -109,7 +109,7 @@ class FakeHome(unittest.TestCase):
 
 class UnitInstallTests(FakeHome):
     def install(self, *extra, expect=0):
-        argv = ["units", "--kit-root", str(self.kit), "--engine", str(self.engine), *extra]
+        argv = ["units", "--kit-root", str(self.kit), "--engine-path", str(self.engine), *extra]
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = INSTALL.main(argv)
@@ -138,7 +138,7 @@ class UnitInstallTests(FakeHome):
         self.assertIn("board-writer-PVT_kwDOEYAWY84Bldpa.lock", self.unit("fsgg-board-tend.service"))
         # Private outputs and the engine is the versioned path, not the moving link.
         self.assertIn("UMask=0077\n", service)
-        self.assertIn(f"--engine {self.engine}", service)
+        self.assertIn(f"--engine-path {self.engine}", service)
         self.assertNotIn(".local/bin", service)
         # The legacy /tmp lock must stay shared with the other writers.
         self.assertNotIn("PrivateTmp", service)
@@ -208,9 +208,9 @@ class UnitInstallTests(FakeHome):
         moving = self.home / ".local/bin/fsgg-coord-engine"
         moving.parent.mkdir(parents=True)
         moving.symlink_to(self.engine)
-        base = {"--kit-root": str(self.kit), "--engine": str(self.engine)}
+        base = {"--kit-root": str(self.kit), "--engine-path": str(self.engine)}
         cases = {
-            "the moving link, not a versioned engine": {"--engine": str(moving)},
+            "the moving link, not a versioned engine": {"--engine-path": str(moving)},
             "a kit root of another release": {"--kit-root": str(self.kit.parent / "kit-0.114.1")},
             "a path outside HOME": {"--workdir": "/opt/fsgg-board-tend"},
             "a path that needs unit escaping": {"--workdir": str(self.home / "a b")},
@@ -230,10 +230,10 @@ class UnitInstallTests(FakeHome):
         for mirror in INSTALL.MIRRORS:
             (empty / mirror).unlink()
         with contextlib.redirect_stderr(io.StringIO()) as err:
-            self.assertEqual(INSTALL.main(["units", "--kit-root", str(empty), "--engine", str(self.engine)]), 2)
+            self.assertEqual(INSTALL.main(["units", "--kit-root", str(empty), "--engine-path", str(self.engine)]), 2)
         (self.workdir / ".git").mkdir(parents=True)
         with contextlib.redirect_stderr(io.StringIO()) as err:
-            self.assertEqual(INSTALL.main(["units", "--kit-root", str(self.kit), "--engine", str(self.engine)]), 2)
+            self.assertEqual(INSTALL.main(["units", "--kit-root", str(self.kit), "--engine-path", str(self.engine)]), 2)
         self.assertIn("git checkouts", err.getvalue())
 
     def test_apply_mode_needs_an_enable_file_that_names_a_rule_and_renders_apply(self):
@@ -241,14 +241,14 @@ class UnitInstallTests(FakeHome):
         self.enable.write_text('{"apply": ["W1h"]}', encoding="utf-8")
         self.enable.chmod(0o644)
         with contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(INSTALL.main(["units", "--kit-root", str(self.kit), "--engine", str(self.engine), "--mode", "apply"]), 2)
+            self.assertEqual(INSTALL.main(["units", "--kit-root", str(self.kit), "--engine-path", str(self.engine), "--mode", "apply"]), 2)
         self.enable.chmod(0o600)
         self.install("--mode", "apply")
         self.assertIn(" run --mode apply ", self.directives("fsgg-board-tend.service"))
 
     def test_refuses_to_run_as_root(self):
         with mock.patch.object(INSTALL.os, "geteuid", return_value=0), contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(INSTALL.main(["units", "--kit-root", str(self.kit), "--engine", str(self.engine)]), 2)
+            self.assertEqual(INSTALL.main(["units", "--kit-root", str(self.kit), "--engine-path", str(self.engine)]), 2)
 
     @unittest.skipUnless(shutil.which("systemd-analyze"), "systemd-analyze is not available")
     def test_systemd_accepts_the_rendered_units(self):
@@ -365,7 +365,7 @@ class WrapperTests(FakeHome):
         (self.tools / "config.json").write_text(json.dumps(self.config), encoding="utf-8")
 
     def args(self, *extra):
-        return RUN.parser().parse_args(["run", "--engine", str(self.engine), "--credentials", str(self.credentials),
+        return RUN.parser().parse_args(["run", "--engine-path", str(self.engine), "--credentials", str(self.credentials),
                                         "--workdir", str(self.workdir), "--min-interval", "0", *extra])
 
     def go(self, *extra, env=None, cwd=None):

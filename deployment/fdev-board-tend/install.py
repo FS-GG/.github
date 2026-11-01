@@ -137,18 +137,18 @@ def command_units(args: argparse.Namespace) -> int:
     if os.geteuid() == 0:
         raise Refusal("run as the fdev user, not root")
     kit = user_path(args.kit_root, "--kit-root")
-    engine = user_path(args.engine, "--engine")
+    engine = user_path(args.engine, "--engine-path")
     workdir = user_path(args.workdir, "--workdir")
     credentials = user_path(args.credentials, "--credentials")
     unit_dir = user_path(args.unit_dir, "--unit-dir")
     libexec = user_path(args.libexec_dir, "--libexec-dir")
     engine_release, kit_release = version_of(engine.parent.name, "coord-"), version_of(kit.name, "kit-")
     if engine.name != "fsgg-coord-engine" or engine_release is None:
-        raise Refusal("--engine must be .../coord-<version>/fsgg-coord-engine, the versioned path, not the moving link")
+        raise Refusal("--engine-path must be .../coord-<version>/fsgg-coord-engine, the versioned path, not the moving link")
     if kit_release != engine_release:
         raise Refusal(f"--kit-root must be named kit-{engine_release} to match the engine release")
     if not engine.is_file() or not os.access(engine, os.X_OK):
-        raise Refusal("--engine is not an executable file")
+        raise Refusal("--engine-path is not an executable file")
     if not any((kit / mirror).is_file() for mirror in MIRRORS):
         raise Refusal("--kit-root carries no lifecycle-contract.md mirror; run the kit-root subcommand first")
     if workdir == kit:
@@ -240,7 +240,7 @@ def parser() -> argparse.ArgumentParser:
     sub = root.add_subparsers(dest="command", required=True)
     units = sub.add_parser("units")
     units.add_argument("--kit-root", required=True)
-    units.add_argument("--engine", required=True)
+    units.add_argument("--engine-path", dest="engine", required=True)
     units.add_argument("--mode", choices=("plan-only", "apply"), default="plan-only")
     units.add_argument("--workdir", default=str(h / ".local/share/fs-gg/board-tend"))
     units.add_argument("--credentials", default=str(h / ".config/fdev/credentials.json"))

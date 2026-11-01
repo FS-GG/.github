@@ -121,7 +121,7 @@ python3 -I deployment/fdev-board-tend/install.py enable-file
 # 3. The four user units and the wrapper; --enable also runs daemon-reload and enables both timers.
 python3 -I deployment/fdev-board-tend/install.py units \
   --kit-root ~/.local/share/fs-gg/board-tend/kit-0.114.2 \
-  --engine ~/.local/share/fs-gg/tools/coord-0.114.2/fsgg-coord-engine --enable
+  --engine-path ~/.local/share/fs-gg/tools/coord-0.114.2/fsgg-coord-engine --enable
 ```
 
 `units` writes exactly `~/.config/systemd/user/fsgg-board-tend{,-daily}.{service,timer}` and
