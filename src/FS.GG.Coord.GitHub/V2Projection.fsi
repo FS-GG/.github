@@ -115,7 +115,7 @@ module V2Projection =
     val previousProgrammeRowCap: int
 
     /// The CLI bounded transport's request ceiling (shared by inspect and refresh, scaled from inspect measurements
-    /// only; an unbatched refresh does not fit it above about 80 rows, #5131) for a binding that selects this many rows: never below the
+    /// only; a programme refresh is batched to fit it, plus one one-shot run per written row, #5131) for a binding that selects this many rows: never below the
     /// historical 500, and scaled by the selected population up to `maximumProgrammeRows`.
     val refreshRequestCeiling: selectedRows: int -> int
 

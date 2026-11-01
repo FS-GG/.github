@@ -27,7 +27,7 @@ module BoardV2Application =
     /// The bounded refresh/inspection transport: it stops before dispatch once the binding's scaled request ceiling
     /// (`V2Projection.refreshRequestCeiling`) or deadline (`V2Projection.refreshDeadlineSeconds`) is reached, reporting
     /// coverage Unknown, and never replays a durable mutation. `elapsed` is the invocation's own clock.
-    /// Both limits are scaled from inspect measurements; an unbatched refresh does not fit them above about 80 rows (#5131).
+    /// Both limits are scaled from inspect measurements; a programme refresh batches its reads to fit them (#5131).
     val boundedWith:
         elapsed: (unit -> System.TimeSpan) -> binding: V2Projection.Binding -> transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport -> FS.GG.Coord.GitHub.Transport.IGitHubTransport
     /// Emit an explicit report wire shape, including gaps and independent acceptance facts.

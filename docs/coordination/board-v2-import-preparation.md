@@ -553,9 +553,14 @@ counts-only summary are kept by the #5119 owner. The ceiling is now `V2Projectio
 selected row, never below 500 (1,064 at 500 rows). The deadline is `V2Projection.refreshDeadlineSeconds`: 60 seconds plus 0.7 per
 selected row, never below 270 (410 at 500 rows).
 
-Both values are derived from inspect measurements only. `refresh` is not batched: it takes about 6 sends per row in the fixture
-(1,243 at 207 rows), so it stops after about 80 rows inside this budget. Batching it, or refusing larger bindings before any send,
-is [#5131](https://github.com/FS-GG/.github/issues/5131). The
+Both values are derived from inspect measurements. A programme `refresh` now batches its reads the same way
+([#5131](https://github.com/FS-GG/.github/issues/5131)). Phase 1 runs every row's one-shot writer over the inspection acquisition
+with writes unavailable. That decides every Verified no-op, stale, archived or unreadable row from aliased reads. A Verified
+no-op's second source check is then confirmed by a separate batched phase with fresh reads; a changed revision refuses the no-op
+and retains the project value. Phase 2 reruns the one-shot writer, unbatched, only for the rows that reached a write: each keeps
+its own fresh preimage reads, one send and independent readback, and an uncertain send is never resent. Fixture sends at 207
+already-Verified rows fall from 1,864 to 42, and at 40 rows with 10 writes from 371 to 114. Legacy bindings keep the unbatched
+path. The
 complete-membership read refuses a board whose `totalCount` exceeds `maximumBoardItems` (500) on its first page, rather than paging
 up to the limit.
 
