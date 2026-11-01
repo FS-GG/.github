@@ -32,11 +32,11 @@ Home install journal `home-learn-install-journal/1` is therefore already live on
 | `files`: `/etc/fsgg/learn/seccomp-8bd52f8d.json`, `/etc/systemd/system/user-30034.slice.d/learn-limits.conf` | fdev's root disk, which comes from the fdev image | present and verified. Durable changes are **Home-only** (an image rebuild); a direct write would last only until the next image upgrade. This route changes neither file |
 | `journalDir` `/var/lib/fsgg-learn` | absent. `/var/lib` sits on the root disk and would not survive an image upgrade | replaced by `fdev-install-journal/` on the bulk disk (below) |
 | `installScriptSha256` and the `adds[].script` installers | Home's installer scripts. One is in custody but embeds private Home paths; four are not in custody | replaced by the Root-executed steps in this document, each recorded in the fdev journal with this document's sha256 |
-| `group` `fsgg-learn-evidence` (gid 699) | present; it has one member, the developer account | equivalent |
+| `group` `fsgg-learn-evidence` (gid 699) | present; it has one member, the Root operator account | equivalent |
 | `accountDirs`, `newDirs` (account home, `.local/state`, `learn-custody`, `learn-evidence`) | on the bulk disk at the original path, with the journal's owners and modes (`0710`, `0700`, `2710`) | equivalent |
 | `createdRootDirs` | `/usr/local/libexec/fsgg-learn/**` is on the bind; `/etc/**` is on the root disk | as above |
 | `python3` (path and sha256) | the same bytes | equivalent |
-| Hash-pinned sudoers entry (retired) | `developer` has full `NOPASSWD` sudo | authority is procedural: an admission comment plus the admission file (design section 10) |
+| Hash-pinned per-operator entry (retired) | Root-executed steps use the host's administrative route | authority is procedural (admission comment plus admission file, design §10) |
 
 ### Feasibility on fdev
 
@@ -48,7 +48,7 @@ Home install journal `home-learn-install-journal/1` is therefore already live on
 | cgroup delegation | `cpuset cpu io memory pids` | present. `io` is delegated on fdev; on Home it was not |
 | Loop volume per op | `CONFIG_BLK_DEV_LOOP=m`, module not loaded, `/dev/loop-control` (root:disk 0660) present, `losetup` and `mkfs.ext4` installed | feasible, root only (module autoload, `losetup`, `mount`) |
 | Root-owned copy route | `/srv/bulk/services/usr-local-libexec-fsgg-learn` is root:root 0755 and the bind view is read-only | feasible. Writes go through `/srv/bulk/services/…` |
-| Privilege | `sudo -n true` succeeds | available. Every privileged step is Root-executed |
+| Privilege | the host's administrative route | available to Root. Every privileged step is Root-executed |
 | Disk | bulk disk 3.9 TiB free; the qualification filesystem 154 GiB free; root disk 51 GiB free | sufficient |
 | Memory | `MemAvailable` about 27 GiB of 31 GiB | well above the 4 GiB guard |
 | PostgreSQL image pull | registry token and manifest fetch worked earlier (design Unknown 6); the pull has not been exercised | open; a Root-admitted acquisition |
@@ -188,7 +188,7 @@ repository's releases; the release API reports the same sha256 digests. The matc
    config Id from `podman image inspect`.
    *Admission inputs:* the index digest, plus Root's egress allowance for this one pull. Decision 1 (#5068) governs egress
    during runs, not this acquisition.
-2. **Root-executed.** Build the image: `sudo -n -u fsgg-learn-qual /usr/local/libexec/fsgg-learn/learn-build-pod-app-r1.py`.
+2. **Root-executed.** Build the image by running `/usr/local/libexec/fsgg-learn/learn-build-pod-app-r1.py` as uid 30034.
    Expect exit 0 and a `home-learn-build-pod-app/1` RESULT with the image Id and two `RUNTIME` lines at 10.0.12. Record the
    RESULT sha256 and the image Id in journal entry `0007-images`, together with the pg identities.
    *Admission inputs:* the builder sha256 and the context readback from step 6. The image Id is new. Root admits it after the
