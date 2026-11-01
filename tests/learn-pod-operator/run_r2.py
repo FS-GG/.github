@@ -754,6 +754,9 @@ class DriveWorld(World):
         self.ready_fail, self.term_ignored, self.hostuid_over, self.custody_break, self.no_complete = set(), set(), {}, None, set()
         self.ack_delay, self.finalized, self.order = 0, False, []
         self.euid = UID                                      # the credential root must belong to the running account
+        self.owned, self.locked = {}, []
+        self.trigger, self.archived, self.archive_s, self.fin_dead, self.partial_ack, self.no_cgroup_line = None, {}, 0, False, False, set()
+        self.term_late = set()
         self.cust = os.path.join(self.state, 'learn-custody', self.opid)
         self.ckdir = os.path.join(self.state, 'learn-checkpoint', self.opid)
         os.makedirs(self.cust)
@@ -762,6 +765,13 @@ class DriveWorld(World):
         open(os.path.join(self.state, 'learn-input', self.opid, 'input-read'), 'w').write('{}\n')
         self.admit(ttl=600)
         self.claim()
+
+    def unlock(self):
+        """read a chowned credential directory as the container (user namespace) would: the test's view inside"""
+        for d in self.locked:
+            if os.path.isdir(d):
+                os.chmod(d, 0o700)
+        return self
 
     def pdir(self, pid):
         return os.path.join(self.proc, str(pid))
@@ -786,7 +796,7 @@ class DriveWorld(World):
         hu = self.hostuid_over.get(c['slot'], str(UID))
         open(os.path.join(d, 'status'), 'w').write(f'Name: x\nUid:\t{hu}\t{hu}\t{hu}\t{hu}\n')
         cg = ('/user.slice/elsewhere' if c['slot'] in self.cg_outside else self.unit_cg) + f"/libpod-payload-{c['id'][:12]}-{pid}"
-        open(os.path.join(d, 'cgroup'), 'w').write(f'0::{cg}\n')
+        open(os.path.join(d, 'cgroup'), 'w').write(f'0::{cg}\n' if c['slot'] not in self.no_cgroup_line else '1:name=systemd:/\n')
         os.makedirs(self.cg + cg, exist_ok=True)
         open(self.cg + cg + '/cgroup.procs', 'w').write(f'{pid}\n')
         c['cg'], c['state'] = cg, 'running'
@@ -828,7 +838,8 @@ class DriveWorld(World):
                 self.status(c, phase='terminal', exit=1, reason='error', detail='rc=1')
                 open(os.path.join(out, '.done'), 'w').close()
             elif svc is None:
-                self.status(c, phase='terminal', exit=0, reason='ok', detail='rc=0')
+                bad = 'replay_fail' in self.fail
+                self.status(c, phase='terminal', exit=3 if bad else 0, reason='error' if bad else 'ok', detail='rc=3' if bad else 'rc=0')
                 open(os.path.join(out, '.done'), 'w').close()
             else:
                 self.status(c, phase='ready')
@@ -847,11 +858,18 @@ class DriveWorld(World):
             shutil.rmtree(os.path.join(self.pdir(c['pid']), 'root'), ignore_errors=True)        # the tmpfs dies with the container
             open(self.cg + c['cg'] + '/cgroup.procs', 'w').write('4321\n' if self.survivor and sig == 'KILL' else '')
             c['ports'] = set()
+        elif c['slot'] in M.ROLES and c['state'] == 'running' and os.path.exists(os.path.join(self.pdir(c['pid']), 'root', 'out', c['slot'], '.done')):
+            # the role contract: a role that is done blocks; a SECOND TERM makes it exit, and its tmpfs /out is lost with it
+            self.order.append(('second-term', name))
+            c['state'] = 'exited'
+            shutil.rmtree(os.path.join(self.pdir(c['pid']), 'root'), ignore_errors=True)
+            c['ports'] = set()
+        elif name in self.term_late:                       # this TERM is slow: the role ends only after the driver's 60 s bound
+            self.term_late.discard(name)
         elif name not in self.term_ignored:
             out = os.path.join(self.pdir(c['pid']), 'root', 'out', c['slot'])
-            if not os.path.exists(os.path.join(out, '.done')):
-                self.status(c, phase='terminal', exit=143, reason='signalled', detail='rc=143')
-                open(os.path.join(out, '.done'), 'w').close()
+            self.status(c, phase='terminal', exit=143, reason='signalled', detail='rc=143')
+            open(os.path.join(out, '.done'), 'w').close()
             c['ports'] = set()
         self.write_net()
         return 0
@@ -881,13 +899,21 @@ class DriveWorld(World):
                 if c is None:
                     roles[r_] = 'rejected:identity'
                     continue
-                shutil.copytree(os.path.join(self.pdir(c['pid']), 'root', 'out', r_), dest)
+                if not os.path.exists(dest):                        # a request served across two ticks (a half-written ack) is archived once
+                    shutil.copytree(os.path.join(self.pdir(c['pid']), 'root', 'out', r_), dest)
                 roles[r_] = self.ackmode.get(('role', r_), 'accepted')
             if self.custody_break:
                 self.custody_break(k)
             ack = {'n': k, 'requestSha256': self.ackmode.get('sha', sha(body)), 'ok': self.ackmode.get('ok', True), 'roles': roles, 'chainHead': H('e')}
-            fd = os.open(os.path.join(self.ckdir, f'ack-{k}'), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            os.write(fd, json.dumps(ack, sort_keys=True).encode())
+            ap = os.path.join(self.ckdir, f'ack-{k}')
+            data = json.dumps(ack, sort_keys=True).encode()
+            if self.partial_ack and not os.path.exists(ap):     # the driver may see the file before the finalizer finished writing it
+                fd = os.open(ap, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                os.write(fd, data[:10])
+                os.close(fd)
+                break
+            fd = os.open(ap, os.O_WRONLY | os.O_CREAT | (os.O_TRUNC if self.partial_ack else os.O_EXCL), 0o600)
+            os.write(fd, data)
             os.close(fd)
             self.order.append(('ack', k))
             self.served = k
@@ -895,9 +921,19 @@ class DriveWorld(World):
                       and os.path.exists(os.path.join(self.pdir(c['pid']), 'root', 'out', c['slot'], '.done'))]
         if self.pod and (len({c['slot'] for c in roles_done}) == 3 or self.clock >= 1800) and not self.finalized:      # trigger `done`, or the soft deadline `time`
             self.finalized = True
+            self.trigger = 'done' if len({c['slot'] for c in roles_done}) == 3 else 'time'
+            self.archived = {r_: any(c['slot'] == r_ and c['state'] == 'running' and os.path.exists(os.path.join(self.pdir(c['pid']), 'root', 'out', r_, '.status'))
+                                     for c in self.ctrs.values()) for r_ in M.ROLES}
             self.order.append(('finalizer-trigger',))
+            if self.archive_s:                               # the finalizer pauses and tars each role before it removes the pod
+                self.removal_at = self.clock + self.archive_s
+            else:
+                self.pod = False
+                self.ctrs.clear()
+        if self.finalized and self.pod and getattr(self, 'removal_at', None) is not None and self.clock >= self.removal_at and not self.fin_dead:
             self.pod = False
             self.ctrs.clear()
+            self.order.append(('finalizer-removed-pod',))
 
     def run(self, argv, timeout=60, cap=1 << 22):
         a = list(argv)
@@ -906,8 +942,27 @@ class DriveWorld(World):
             p = subprocess.run(a, capture_output=True, timeout=60)
             return p.returncode, '', p.stderr.decode()[-300:]
         if a[0] == 'chown':
-            return (1, '', 'x') if 'chown' in self.fail else (0, '', '')
+            # model `podman unshare chown -R U:U <dir>`: inside the user namespace the tree now belongs to U; seen from the account, it belongs to a
+            # subordinate uid and its 0700 directory can no longer be entered, so a host-side lstat inside it raises PermissionError
+            if 'chown' in self.fail:
+                return 1, '', 'x'
+            u, g = a[2].split(':')
+            d = a[3]
+            for root, _, fs in os.walk(d):
+                for pth in [root] + [os.path.join(root, f) for f in fs]:
+                    st_ = os.lstat(pth)
+                    self.owned[pth] = [u if 'chown_uid' not in self.fail else '0', g if 'chown_gid' not in self.fail else '0',
+                                       format(stat.S_IMODE(st_.st_mode) | (0o044 if 'chown_mode' in self.fail and pth != d else 0), 'o'),
+                                       'directory' if stat.S_ISDIR(st_.st_mode) else 'regular file']
+            os.chmod(d, 0o000)
+            self.locked.append(d)
+            return 0, '', ''
+        if a[0] == 'stat' and a[1:4] == ['-c', '%u %g %a %F', '--']:
+            if any(pth not in self.owned for pth in a[4:]):
+                return 1, '', 'cannot stat'
+            return 0, ''.join(' '.join(self.owned[pth]) + '\n' for pth in a[4:]), ''
         if a[:3] == ['rm', '-rf', '--one-file-system']:
+            self.unlock()
             shutil.rmtree(a[3], ignore_errors=True)
             return 0, '', ''
         if a[0] in ('cat', 'test'):
@@ -929,7 +984,7 @@ class DriveWorld(World):
             return 0, '', ''
         if a[:3] == ['podman', 'run', '-d']:
             name = a[a.index('--name') + 1]
-            if any(f'start_{x}' in self.fail and name.endswith('-' + x.split('-')[0]) for x in ('host', 'recv', 'feed', 'pg')):
+            if any(f'start_{x}' in self.fail and name.endswith('-' + x) for x in ('host', 'recv', 'feed', 'pg')) and M.HOLD[-1] not in a:   # the abort's hold still starts
                 return 126, '', 'Error: Operation not permitted'
             if name in self.ctrs:
                 return 125, '', 'name in use'
@@ -945,8 +1000,12 @@ class DriveWorld(World):
             return self.kill(a[4], a[3]), '', ''
         if a[:2] == ['podman', 'rm']:
             self.order.append(('rm', a[-1]))
+            if 'rm_stuck' in self.fail:
+                return 1, '', 'cannot remove'               # the container stays
             return (0 if self.ctrs.pop(a[-1], None) else 1), '', ''
         if a[:3] == ['podman', 'container', 'exists']:
+            if 'exists_err' in self.fail:
+                return 125, '', 'error'                     # neither "exists" (0) nor "does not exist" (1)
             return (0 if (a[3] in self.ctrs or 'rm_stuck' in self.fail) else 1), '', ''
         if a[:2] == ['podman', 'start']:
             c = self.ctrs[a[2]]
@@ -956,8 +1015,18 @@ class DriveWorld(World):
             self.order.append(('restart', a[2]))
             return 0, '', ''
         if a[:3] == ['podman', 'pod', 'exists']:
+            if self.finalized and 'exists_raise_once' in self.fail:
+                self.fail.discard('exists_raise_once')
+                raise RuntimeError('transient')
+            if self.finalized and 'exists_unknown' in self.fail:
+                return None, '', 'timeout'
             return (0 if self.pod else 1), '', ''
         if a[:3] == ['systemctl', '--user', 'is-active']:
+            if self.finalized and 'active_blip' in self.fail:   # a timed-out `systemctl is-active` during the archive: unknown, not ended
+                self.fail.discard('active_blip')
+                return None, '', 'timeout'
+            if self.fin_dead:
+                return 3, 'failed\n', ''
             return 0, ('active\n' if self.fin_active else 'inactive\n'), ''
         raise AssertionError(f'unexpected command {a}')
 
@@ -1028,11 +1097,12 @@ with tempfile.TemporaryDirectory() as tmp:
           'exactly one container, the feed replay, mounts the sealed snapshot at /in, read-only')
     allout = json.dumps(w.calls) + out + open(os.path.join(w.state, 'learn-drive', w.opid, 'drive.jsonl')).read()
     check(len(seen) == 6 and not any(x in allout for x in seen) and 'Password=' not in allout, 'no generated secret appears in any argv, the RESULT, the journal lines or the drive log')
-    check(set(r['credentials']['holders']['recv']) == {'server.pfx', 'server.password', 'collector.secret', 'host-config.json', 'browser-key-hash.json', 'ca.pem'}
-          and set(r['credentials']['holders']['pg']) == {'pg-password'} and 'collector.secret' not in r['credentials']['holders']['host'],
-          'each slot holds only the credential files its generations name (host never holds the collector grant)')
+    check(set(r['credentials']['holders']['recv-init']) == {'server.pfx', 'server.password', 'collector.secret', 'host-config.json', 'browser-key-hash.json', 'ca.pem'}
+          and r['credentials']['holders']['pg'] == ['pg-password'] and 'collector.secret' not in r['credentials']['holders']['host-init'],
+          'each generation holds only the credential files it names (host never holds the collector grant)')
 
 # ---- the credential generator, with the real openssl
+CRED_GENS = {gn: sorted(g['creds']) for gn, g in TP['generations'].items() if g.get('creds')}
 with tempfile.TemporaryDirectory() as tmp:
     w = DriveWorld(tmp)
     seen = []
@@ -1040,53 +1110,90 @@ with tempfile.TemporaryDirectory() as tmp:
     env, deps = w.env(), w.drive_deps(token=tok)
     rec = M.gen_credentials(env, deps, w.opid, [{'path': f'{M.REPLAY_SUBTREE}/a.ready', 'type': 'file', 'sha256': H('c')}])
     d = os.path.join(w.cred, w.opid)
-    modes_ok = all(stat.S_IMODE(os.lstat(os.path.join(d, s_)).st_mode) == 0o700 for s_ in M.SLOTS) and all(
-        stat.S_IMODE(os.lstat(os.path.join(d, s_, f)).st_mode) == 0o600 for s_ in M.SLOTS for f in os.listdir(os.path.join(d, s_)))
-    check(modes_ok and sorted(os.listdir(d)) == sorted(M.SLOTS), 'credentials: one 0700 directory per slot, every file 0600, nothing else (no work directory)')
+    if os.geteuid() != 0:
+        try:
+            os.lstat(os.path.join(d, 'pg', 'pg-password'))
+            check(False, 'B3 model: after the chown, a host-side lstat inside the directory fails')
+        except PermissionError:
+            check(True, 'B3 model: after the chown, a host-side lstat inside the directory raises PermissionError, and the generator still verifies (in the user namespace)')
+    stats = [c for c in w.calls if c[:4] == ['stat', '-c', '%u %g %a %F', '--']]
+    check(len(stats) == len(CRED_GENS) and all(c[4] == os.path.join(d, os.path.basename(c[4])) for c in stats),
+          'credentials: owner, group and mode are read inside the user namespace, once per generation directory')
+    w.unlock()
+    modes_ok = all(stat.S_IMODE(os.lstat(os.path.join(d, gn)).st_mode) == 0o700 for gn in CRED_GENS) and all(
+        stat.S_IMODE(os.lstat(os.path.join(d, gn, f)).st_mode) == 0o600 for gn in CRED_GENS for f in os.listdir(os.path.join(d, gn)))
+    check(modes_ok and sorted(os.listdir(d)) == sorted(CRED_GENS), 'credentials: one 0700 directory per generation that has credentials, every file 0600, nothing else (no work directory)')
+    check(all(sorted(os.listdir(os.path.join(d, gn))) == CRED_GENS[gn] for gn in CRED_GENS) and rec['holders'] == CRED_GENS, 'credentials: each generation holds exactly the files it names')
+    check('pg.connection' not in CRED_GENS['feed-replay'] and 'operator.token' not in CRED_GENS['feed-replay'] and 'collector.secret' not in CRED_GENS['feed-admin']
+          and not any('collector.secret' in CRED_GENS[gn] for gn in ('host-init', 'host-restart')) and 'hold' not in CRED_GENS,
+          'N4: the /in replay gets no pg connection or operator token, feed-admin no collector grant, host never the grant, hold nothing')
     check(not any(f.endswith(('.key', '.csr', '.ext')) for _, _, fs in os.walk(d) for f in fs), 'credentials: no private key, request or extension file survives')
     check(len(seen) == 6 and len(set(seen)) == 6 and all(len(x) >= 43 for x in seen), 'credentials: six distinct CSPRNG values (secrets.token_urlsafe), none shorter than 32 bytes of entropy')
     check(M.default_deps()['token'] is M.secrets.token_urlsafe, 'credentials: production draws from secrets.token_urlsafe')
-    recv = os.path.join(d, 'recv')
+    recv = os.path.join(d, 'recv-init')
     pv = subprocess.run([OPENSSL, 'pkcs12', '-in', os.path.join(recv, 'server.pfx'), '-passin', 'file:' + os.path.join(recv, 'server.password'), '-nokeys', '-clcerts'],
                         capture_output=True, text=True)
-    ca = os.path.join(d, 'feed', 'ca.pem')
+    ca = os.path.join(d, 'feed-replay', 'ca.pem')
     leaf = os.path.join(tmp, 'leaf.pem')
     open(leaf, 'w').write(pv.stdout)
     vr = subprocess.run([OPENSSL, 'verify', '-CAfile', ca, leaf], capture_output=True, text=True)
     san = subprocess.run([OPENSSL, 'x509', '-in', leaf, '-noout', '-ext', 'subjectAltName'], capture_output=True, text=True).stdout
     check(pv.returncode == 0 and vr.returncode == 0 and 'DNS:localhost' in san, 'credentials: the PFX opens with its password file and its certificate chains to the per-run CA, for DNS:localhost')
-    check(sha(open(ca, 'rb').read()) == rec['caCertSha256'] and open(os.path.join(d, 'host', 'ca.pem'), 'rb').read() == open(ca, 'rb').read(), 'credentials: every slot gets the same CA, recorded by digest')
+    check(sha(open(ca, 'rb').read()) == rec['caCertSha256'] and open(os.path.join(d, 'host-init', 'ca.pem'), 'rb').read() == open(ca, 'rb').read(), 'credentials: every generation gets the same CA, recorded by digest')
     hc = json.load(open(os.path.join(recv, 'host-config.json')))
     g = hc['Credentials'][0]
     check(hc['Schema'] == 'fsgg.telemetry.host-config/2' and hc['ListenUrl'] == f'https://localhost:{M.RECV_PORT}' and len(hc['Credentials']) == 1
           and (g['Role'], g['WorkspaceId'], g['ProducerId'], g['StreamId']) == ('native-collector', M.WS, M.PRODUCER, M.STREAM) and g['SecretFile'] == '/cred/collector.secret',
           'credentials: host-config/2 grants one native-collector principal for the single replay identity (design 2.3)')
-    pgc = open(os.path.join(d, 'host', 'pg.connection')).read()
+    pgc = open(os.path.join(d, 'host-init', 'pg.connection')).read()
     check(pgc.endswith('SSL Mode=Disable;Pooling=false') and f'Password={open(os.path.join(d, "pg", "pg-password")).read()};' in pgc, 'credentials: the host\'s connection string carries the pg password')
-    check(open(os.path.join(d, 'feed', 'spool.sha256')).read() == f'{H("c")}  /work/spool/{M.REPLAY_SUBTREE}/a.ready\n', 'credentials: the replay check list names the copy, not the snapshot')
+    check(open(os.path.join(d, 'feed-replay', 'spool.sha256')).read() == f'{H("c")}  /work/spool/{M.REPLAY_SUBTREE}/a.ready\n', 'credentials: the replay check list names the copy, not the snapshot')
     rec_s = json.dumps(rec)
     check(not any(x in rec_s for x in seen), 'credentials: the record carries no secret')
-    chowns = [c for c in w.calls if c[0] == 'chown']
-    check(sorted(c[2] for c in chowns) == ['1000:1000', '1000:1000', '1000:1000', '999:999'], 'credentials: pg\'s directory goes to container uid 999, the others to 1000')
+    chowns = sorted((os.path.basename(c[3]), c[2]) for c in w.calls if c[0] == 'chown')
+    check(chowns == sorted((gn, '999:999' if gn == 'pg' else '1000:1000') for gn in CRED_GENS), 'credentials: pg\'s directory goes to container uid 999, the others to 1000')
     check(not any(x in json.dumps(w.calls) for x in seen), 'credentials: no secret is passed in an argv (openssl reads the PFX password from a file)')
     raises(lambda: M.gen_credentials(env, deps, w.opid, []), M.Refuse, 'already exists', 'credentials: a second generation for the same op id refuses')
+    # write_private never follows or reuses: O_EXCL and O_NOFOLLOW
+    tgt = os.path.join(tmp, 'exists')
+    open(tgt, 'w').write('old')
+    raises(lambda: M.write_private(tgt, b'new'), FileExistsError, '', 'credentials: write_private refuses an existing file (O_EXCL)')
+    os.symlink(os.path.join(tmp, 'elsewhere'), os.path.join(tmp, 'link'))
+    raises(lambda: M.write_private(os.path.join(tmp, 'link'), b'x'), FileExistsError, '', 'credentials: write_private refuses a dangling symlink (no file is created through it)')
+    check(not os.path.exists(os.path.join(tmp, 'elsewhere')) and open(tgt).read() == 'old', '... and nothing was written through either')
 CRED_CASES = [
     ('a credential root not on a tmpfs', lambda w: (w.mounts.pop(os.path.dirname(w.cred)), w.write_mounts()), 'not on a tmpfs'),
     ('a credential root of mode 0755', lambda w: (os.makedirs(w.cred), os.chmod(w.cred, 0o755)), 'not a 0700 directory'),
+    ('a credential root of another account', lambda w: setattr(w, 'deps_over', {'geteuid': lambda: UID + 1}), 'not a 0700 directory of this account'),
     ('a failing openssl', lambda w: setattr(w, 'env_over', {'openssl': '/bin/false'}), 'openssl ca failed'),
-    ('a failing chown', lambda w: w.fail.add('chown'), 'not handed to its container uid'),
+    ('a failing chown', lambda w: w.fail.add('chown'), 'is not handed to container uid'),
+    ('a chown that leaves another owner', lambda w: w.fail.add('chown_uid'), 'is not handed to container uid'),
+    ('a chown that leaves another group', lambda w: w.fail.add('chown_gid'), 'is not handed to container uid'),
+    ('files readable by others after the chown', lambda w: w.fail.add('chown_mode'), 'is not handed to container uid'),
     ('an unsafe sealed path', lambda w: setattr(w, 'files_over', [{'path': '../x', 'type': 'file', 'sha256': H('c')}]), 'cannot carry'),
 ]
 for what, mut, needle in CRED_CASES:
     with tempfile.TemporaryDirectory() as tmp:
         w = DriveWorld(tmp)
-        w.env_over, w.files_over = {}, [{'path': 'a/b', 'type': 'file', 'sha256': H('c')}]
+        w.env_over, w.deps_over, w.files_over = {}, {}, [{'path': 'a/b', 'type': 'file', 'sha256': H('c')}]
         mut(w)
-        raises(lambda: M.gen_credentials(w.env(**w.env_over), w.drive_deps(), w.opid, w.files_over), M.Refuse, needle, f'credentials: {what} refuses')
+        raises(lambda: M.gen_credentials(w.env(**w.env_over), w.drive_deps(**w.deps_over), w.opid, w.files_over), M.Refuse, needle, f'credentials: {what} refuses')
+        w.unlock()
 with tempfile.TemporaryDirectory() as tmp:
     w = DriveWorld(tmp)
     M.gen_credentials(w.env(), w.drive_deps(), w.opid, [{'path': 'a/b', 'type': 'file', 'sha256': H('c')}])
     check(True, 'credentials: causal control, the same world generates')
+    w.unlock()
+# the mounts: read-only, per generation, none for a generation without credentials
+with tempfile.TemporaryDirectory() as tmp:
+    w = DriveWorld(tmp)
+    for gn, g in TP['generations'].items():
+        slot = g['slot'] if g['slot'] != '*' else 'feed'
+        cm = [m for m in M.mounts_of(M.ctr_argv(w.env(), w.opid, gn, slot, 'snap-1')) if m['destination'] == '/cred']
+        if g.get('creds'):
+            check(cm == [{'type': 'bind', 'source': os.path.join(w.cred, w.opid, gn), 'destination': '/cred', 'readOnly': True}], f'{gn}: /cred is its own directory, read-only')
+        else:
+            check(cm == [], f'{gn}: no credentials, no /cred mount')
 
 # ---- authority: each refusal leaves nothing behind
 AUTH_CASES = [
@@ -1116,7 +1223,7 @@ with tempfile.TemporaryDirectory() as tmp:
 # ---- fail closed: each abort stops before the destructive act, fills empty slots, stops every role, never removes evidence
 
 
-def abort_case(what, setup, needle, forbid=None, env=None):
+def abort_case(what, setup, needle, forbid=None, env=None, trigger='done'):
     with tempfile.TemporaryDirectory() as tmp:
         w = DriveWorld(tmp)
         setup(w)
@@ -1124,6 +1231,8 @@ def abort_case(what, setup, needle, forbid=None, env=None):
         ab = events(log, 'abort')
         ok = code == 3 and r['verdict'] == 'aborted' and ab and needle in ab[0]['reason'] and w.finalized and r['credentialsRemoved']
         check(ok, f'abort: {what} aborts ({needle}), every role is stopped so the finalizer retires, and the credentials are removed: {r["errors"]}')
+        check(w.trigger == trigger and all(w.archived.values()) and not any(o[0] == 'second-term' for o in w.order),
+              f'abort: {what}: the finalizer triggers on {trigger} with every role\'s /out still there; no done role got a second TERM')
         if forbid:
             i = next(i for i, e in enumerate(log) if e['event'] == 'abort')
             check(not any(forbid(e) for e in log[:i]) and not any(forbid(e) for e in log[i:] if e['event'] not in ('start', 'abort', 'abort-stopped', 'end')),
@@ -1165,7 +1274,8 @@ check(not any(e['event'] == 'remove' for e in log3[k3:]) and not any(e['event'] 
       'abort: a survivor of the SIGKILL stops the restart: host is neither removed nor started again')
 abort_case('a start refused with EPERM', lambda w: w.fail.add('start_recv'), 'start recv-init: EPERM', lambda e: e['event'] == 'checkpoint-request')
 abort_case('a removal that leaves the container', lambda w: w.fail.add('rm_stuck'), 'still exists', None)
-abort_case('a TERM that is ignored', lambda w: w.term_ignored.add(f'learn-pod-{w.opid}-host'), 'timed out: host done after TERM', lambda e: e['event'] == 'checkpoint-ack' and e['n'] >= 2)
+abort_case('a TERM that is ignored', lambda w: w.term_ignored.add(f'learn-pod-{w.opid}-host'), 'timed out: host done after TERM', lambda e: e['event'] == 'checkpoint-ack' and e['n'] >= 2,
+           trigger='time')                                 # host ignores every TERM: only the finalizer's own deadline ends it
 
 
 def slow_world(w):
@@ -1200,5 +1310,231 @@ with tempfile.TemporaryDirectory() as tmp:
     req = open(os.path.join(w.ckdir, 'req-1'), 'rb').read()
     check(json.loads(req) == {'label': 'x', 'n': 1} and len(req) <= 512 and stat.S_IMODE(os.stat(os.path.join(w.ckdir, 'req-1')).st_mode) == 0o600
           and not any(f.startswith('tmp-req') for f in os.listdir(w.ckdir)), 'requests are {"n","label"} JSON within 512 bytes, 0600, renamed into place (no partial request)')
+
+# ---- B1: abort never sends a second TERM to a done role (the role contract: it would exit and lose /out), and never removes a running container
+with tempfile.TemporaryDirectory() as tmp:
+    w = DriveWorld(tmp)
+    w.term_late.add(f'learn-pod-{w.opid}-recv')          # recv does not end within 60 s of its TERM in the clean restart; host is already done then
+    code, r, out, log = drive(w)
+    ab = events(log, 'abort')
+    check(code == 3 and ab and 'recv done after TERM' in ab[0]['reason'], 'B1: the clean-restart TERM of recv times out, so the driver aborts while host is done')
+    i = next(i for i, e in enumerate(log) if e['event'] == 'abort')
+    check(not any(o[0] == 'second-term' for o in w.order) and events(log, 'abort-stopped')[0]['termed'] == 'recv,feed',
+          'B1: abort TERMs only the roles that are not done (recv, and feed\'s hold); host, done and blocking, gets no second TERM')
+    check(w.trigger == 'done' and w.archived['host'] and w.archived['feed'],
+          'B1: the finalizer then triggers on done and finds host\'s /out (its terminal state) intact')
+    rms = [o for o in w.order if o[0] == 'rm']
+    check(not any(o[1].endswith(('-host', '-recv', '-feed')) for o in w.order[w.order.index(('kill', f'learn-pod-{w.opid}-recv', 'TERM')):] if o[0] == 'rm'),
+          'B1: abort removes no running container')
+
+# ---- B2: the final wait leaves only on a definite state, and an exception never ends it early
+with tempfile.TemporaryDirectory() as tmp:
+    w = DriveWorld(tmp)
+    w.archive_s = 60                                       # the finalizer pauses and tars each role for 60 s before it removes the pod
+    w.fail |= {'active_blip', 'exists_raise_once'}
+    code, r, out, log = drive(w)
+    check(code == 0 and r['podGone'] is True and not w.pod and ('finalizer-removed-pod',) in w.order and w.order.index(('finalizer-removed-pod',)) < len(w.order),
+          'B2: a timed-out is-active and a raised exception during the archive do not end the wait; the driver leaves when the pod is gone')
+    check(not os.path.exists(os.path.join(w.cred, w.opid)), 'B2: ... and only then removes the credentials')
+with tempfile.TemporaryDirectory() as tmp:
+    w = DriveWorld(tmp)
+    w.archive_s, w.fin_dead_at = 10 ** 6, True
+    orig_tick = w.fin_tick
+
+    def tick_then_die(w=w, orig=orig_tick):
+        orig()
+        if w.finalized:
+            w.fin_dead = True                              # the finalizer unit fails during the archive; the pod remains
+    w.fin_tick = tick_then_die
+    code, r, out, log = drive(w)
+    check(r['finalizerEnded'] is True and r['podGone'] is False and w.clock < M.FIN_RUNTIME_S,
+          'B2: a finalizer unit that reads `failed` ends the wait at once (the pod unit\'s ExecStop then removes the pod), well inside the bound')
+with tempfile.TemporaryDirectory() as tmp:
+    w = DriveWorld(tmp)
+    w.archive_s = 10 ** 6
+    w.fail.add('exists_unknown')
+    code, r, out, log = drive(w)
+    check(r.get('finalWaitTimedOut') is True and r['podGone'] is False and r['finalizerEnded'] is False and w.clock >= M.FIN_RUNTIME_S,
+          'B2: an answer that is never definite keeps the driver waiting until the finalizer\'s RuntimeMaxSec bound, and no longer')
+check(M.FIN_RUNTIME_S == F5.CUSTODY_DEADLINE_S + 90 and M.DRIVE_BUDGET_S + 300 <= F5.SOFT_S, 'the final wait is bounded by the finalizer unit\'s 1980 s; the drive budget leaves 300 s before the finalizer\'s soft deadline')
+with tempfile.TemporaryDirectory() as tmp:
+    w = DriveWorld(tmp)
+    w.mounts.pop(os.path.dirname(w.cred))
+    w.write_mounts()
+    code, r, out, log = drive(w)
+    check(code == 3 and r['verdict'] == 'aborted' and events(log, 'abort') and any('not on a tmpfs' in e for e in r['errors']),
+          'a refusal after the driver exists (credentials not on a tmpfs) is an abort with exit 3, never 0 and never without the abort')
+
+with tempfile.TemporaryDirectory() as tmp:
+    w = DriveWorld(tmp)
+    w.ackmode.update(ok=False)                              # an abort is needed
+    real_abort = M.Driver.abort
+
+    def broken_abort(self, why):
+        raise RuntimeError('abort itself failed')
+    M.Driver.abort = broken_abort
+    try:
+        code, r, out, log = drive(w)
+    finally:
+        M.Driver.abort = real_abort
+    check(code == 3 and any('abort: RuntimeError' in e for e in r['errors']) and r['credentialsRemoved'] is True and events(log, 'end'),
+          'B2: an abort that itself raises is caught: the driver still waits for the finalizer, removes the credentials and exits 3')
+
+# ---- N2: an ack seen half-written is read again until it parses
+with tempfile.TemporaryDirectory() as tmp:
+    w = DriveWorld(tmp)
+    w.partial_ack = True
+    code, r, out, log = drive(w)
+    check(code == 0 and r['checkpoints'] == 5, 'N2: a partially written ack-<n> is retried until it parses; the run completes')
+# ---- N3: the replay must end ok
+with tempfile.TemporaryDirectory() as tmp:
+    w = DriveWorld(tmp)
+    w.fail.add('replay_fail')
+    code, r, out, log = drive(w)
+    check(code == 3 and 'feed ended error' in events(log, 'abort')[0]['reason'], 'N3: a replay that ends error aborts the drive (wait-done reads feed\'s reason)')
+
+# ---- N5: a sealed path the replay check cannot carry refuses BEFORE the marker
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    w.admit()
+    w.claim(files=[{'path': '../escape', 'type': 'file', 'size': 1, 'sha256': H('c'), 'mtime_ns': 1}])
+    code, r, _ = go(w, RUN)
+    check(code == 5 and err(r, 'cannot carry') and not os.path.exists(os.path.join(w.state, 'learn-input', w.opid)) and not getattr(w, 'started', None),
+          'N5: an unsafe sealed path refuses the --run before the input-read marker and before any unit')
+
+# ---- N6: argv[0] rule
+for what, fn, needle in (('a relative step command', lambda p: p['generations']['recv-init']['steps'].append(('x', ['true'])), 'neither an absolute path nor a runner built-in'),
+                         ('a relative service', _gen('recv-init', service=['dotnet', 'x']), 'service argv[0] is not an absolute path'),
+                         ('a generation name that is not a slug', lambda p: p['generations'].__setitem__('Bad/Gen', {'slot': 'feed', 'creds': [], 'steps': [], 'service': None}),
+                          'not a valid name')):
+    check(has(mutate(fn), needle), f'N6 plan: {what} is refused')
+check(has(mutate(lambda p: None), 'x') is False and mutate(lambda p: p['generations']['recv-init']['steps'].append(('w', ['wait-tcp', '1', '1']))) == [],
+      'N6 plan: a built-in passes the argv[0] rule')
+
+# ---- N6: the step runner stops a step's whole process group on TERM, and checks its own writes
+with tempfile.TemporaryDirectory() as tmp:
+    out = os.path.join(tmp, 'out')
+    os.makedirs(os.path.join(out, 'host'))
+    script = M.STEP_RUNNER.replace('/out/', out + '/')
+    p = subprocess.Popen([SH, '-c', script, 'step-runner', 'host', 'long', '3', '/bin/sh', '-c', 'sleep 60 & sleep 60 & wait'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    pg = os.path.join(out, 'host', 'steps', '01-long', 'pgid')
+    for _ in range(100):
+        if os.path.exists(pg) and os.path.getsize(pg):
+            break
+        __import__('time').sleep(0.05)
+    __import__('time').sleep(0.3)
+    gid = int(open(pg).read())
+    alive_before = subprocess.run(['pgrep', '-g', str(gid)], capture_output=True, text=True).stdout.split()
+    t_term = __import__('time').monotonic()
+    p.send_signal(15)
+    rc = p.wait(timeout=30)
+    took = __import__('time').monotonic() - t_term
+    __import__('time').sleep(0.2)
+    alive_after = subprocess.run(['pgrep', '-g', str(gid)], capture_output=True, text=True).stdout.split()
+    check(len(alive_before) >= 3 and rc == 143 and alive_after == [], f'N6 runner: TERM stops the step\'s whole process group (the sleeps included) and exits 143 ({len(alive_before)} before, {alive_after} after)')
+    check(gid != os.getpgrp(), 'N6 runner: the step runs in its own process group (setsid)')
+    check(took < 5, f'N6 runner: the TERM reaches every member of the group at once (the runner is done in {took:.1f} s, not after its 15 s KILL fallback)')
+if os.geteuid() != 0:
+    with tempfile.TemporaryDirectory() as tmp:
+        rc, d, p = runner(tmp, 'host', ['a', '3', '/bin/chmod', '500', os.path.join(tmp, 'out', 'host', 'steps', '01-a')])
+        check(rc == 70 and not os.path.exists(os.path.join(d, '01-a', 'rc')), 'N6 runner: an rc file that cannot be written exits 70')
+    with tempfile.TemporaryDirectory() as tmp:
+        rc, d, p = runner(tmp, 'host', ['a', '3', '/bin/chmod', '500', os.path.join(tmp, 'out', 'host', 'steps')])
+        check(rc == 70 and not os.path.exists(os.path.join(d, 'complete')), 'N6 runner: a steps/complete that cannot be written exits 70')
+        os.chmod(d, 0o700)
+with tempfile.TemporaryDirectory() as tmp:
+    rc, d, p = runner(tmp, 'feed', ['a', '1', '/bin/true', 'service', '3', '/bin/sh', '-c', f'test -f {os.path.join(tmp, "out", "feed", "steps", "complete")} && echo SAW-COMPLETE'])
+    check(rc == 0 and 'SAW-COMPLETE' in p.stdout, 'runner: steps/complete exists before the service starts (it is written, then the service is exec\'d)')
+
+# ---- N8: authority survivors
+for what, mut, needle in (('an admission for another source identity', lambda w: (os.unlink(os.path.join(w.view, 'admissions', w.opid + '.admit')),
+                                                                                   setattr(w, 'ident', H('7')), w.admit(), setattr(w, 'ident', sha(b'source'))), 'does not name this op'),
+                          ('an admission for another op id', lambda w: (os.unlink(os.path.join(w.view, 'admissions', w.opid + '.admit')),
+                                                                         os.rename(w.admit(opid='op-pod-9')['admission'], os.path.join(w.view, 'admissions', w.opid + '.admit'))),
+                           'does not name this op'),
+                          ('the cgroup of another op\'s pod unit', lambda w: open(w.selfcg, 'w').write('0::/user.slice/x/app.slice/learn-pod-op-pod-11.service\n'), 'not running inside'),
+                          ('a cgroup below the pod unit\'s', lambda w: open(w.selfcg, 'w').write(f'0::{w.unit_cg}/sub\n'), 'not running inside')):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = DriveWorld(tmp)
+        mut(w)
+        code, r, out, log = drive(w)
+        check(code == 5 and any(needle in e for e in r['errors']) and not any(c[:3] == ['podman', 'pod', 'create'] for c in w.calls), f'N8 authority: {what} refuses')
+
+# ---- N8: reconcile, remove, checkpoint and readback survivors, driven action by action
+def driver_at(tmp):
+    w = DriveWorld(tmp)
+    env, deps = w.env(self_cgroup=w.selfcg), w.drive_deps()
+    os.makedirs(os.path.join(w.state, 'learn-drive', w.opid))
+    drv = M.Driver(env, deps, w.opid, w.ident, 'cd' * 16, 'snap-1')
+    drv.unit_cg = w.unit_cg
+    with contextlib.redirect_stdout(io.StringIO()):
+        M.gen_credentials(env, deps, w.opid, [])
+        w.run(['podman', 'pod', 'create'])
+        for g in ('pg', 'recv-init', 'host-init', 'feed-admin'):
+            drv.a_start(g)
+    return w, drv
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    w, drv = driver_at(tmp)
+    with contextlib.redirect_stdout(io.StringIO()):
+        drv.a_checkpoint('a')
+        drv.a_kill('host')
+        os.remove(w.cg + w.ctrs[f'learn-pod-{w.opid}-host']['cg'] + '/cgroup.procs')
+        os.mkdir(w.cg + w.ctrs[f'learn-pod-{w.opid}-host']['cg'] + '/cgroup.procs')
+        raises(lambda: drv.a_reconcile('host'), M.Abort, 'still has processes', 'N8 reconcile: an unreadable cgroup.procs is not "no process"')
+        os.rmdir(w.cg + w.ctrs[f'learn-pod-{w.opid}-host']['cg'] + '/cgroup.procs')
+        drv.a_reconcile('host')
+        check(True, 'N8 reconcile: causal control, a cgroup that is gone reconciles')
+        drv.slots['host']['cgroup'] = None
+        raises(lambda: drv.a_reconcile('host'), M.Abort, 'still has processes', 'N8 reconcile: a container whose cgroup was never read is not reconciled')
+        drv.slots['host']['cgroup'] = w.ctrs[f'learn-pod-{w.opid}-host']['cg']
+        w.ctrs[f'learn-pod-{w.opid}-host']['state'] = 'running'
+        raises(lambda: drv.a_reconcile('host'), M.Abort, 'not exited', 'N8 reconcile: a container that is not exited is not reconciled, even with an empty cgroup')
+with tempfile.TemporaryDirectory() as tmp:
+    w, drv = driver_at(tmp)
+    with contextlib.redirect_stdout(io.StringIO()):
+        drv.a_checkpoint('a')
+        w.fail.add('exists_err')
+        raises(lambda: drv.a_remove('recv'), M.Abort, 'still exists', 'N8 remove: an error from `podman container exists` is not "gone"')
+with tempfile.TemporaryDirectory() as tmp:
+    w, drv = driver_at(tmp)
+    drv.ck = M.MAX_CHECKPOINTS
+    raises(lambda: drv.a_checkpoint('ninth'), M.Abort, 'checkpoint budget exhausted', 'N8 checkpoint: a ninth checkpoint is refused before its request')
+    check(not os.path.exists(os.path.join(w.ckdir, f'req-{M.MAX_CHECKPOINTS + 1}')), '... and no request is written')
+body = b'{"label":"x","n":1}'
+good = {'n': 1, 'requestSha256': sha(body), 'ok': True, 'roles': {r_: 'accepted' for r_ in M.ROLES}, 'chainHead': H('e')}
+check(M.ack_problems(json.dumps(good).encode(), 1, body) == [], 'ack_problems: causal control, a complete ack passes')
+for what, mut in (('no chain head', lambda a: a.pop('chainHead')), ('a short chain head', lambda a: a.__setitem__('chainHead', 'e' * 10)), ('ok false', lambda a: a.__setitem__('ok', False)),
+                  ('a role missing', lambda a: a['roles'].pop('feed'))):
+    a_ = copy.deepcopy(good)
+    mut(a_)
+    check(M.ack_problems(json.dumps(a_).encode(), 1, body) != [], f'N8 ack: {what} is refused')
+with tempfile.TemporaryDirectory() as tmp:
+    gen = {'steps': [('x', ['/y'])], 'service': ['/s']}
+
+    def extract(st, complete=True):
+        d = tempfile.mkdtemp(dir=tmp)
+        open(os.path.join(d, '.status'), 'wb').write(json.dumps(st).encode().ljust(4096, b' '))
+        if complete:
+            os.makedirs(os.path.join(d, 'steps'))
+            open(os.path.join(d, 'steps', 'complete'), 'w').close()
+        return d
+    ok_st = {'schema': 'learn-pod-status/1', 'role': 'host', 'phase': 'ready'}
+    check(M.readback_extract(extract(ok_st), 'host', gen)['phase'] == 'ready', 'readback: causal control, a matching status with step evidence passes')
+    for what, st, complete, needle in (('another role', dict(ok_st, role='recv'), True, 'another status'), ('another schema', dict(ok_st, schema='x/1'), True, 'another status'),
+                                       ('signalled without step evidence', dict(ok_st, phase='terminal', reason='signalled', exit=143), False, 'no step evidence'),
+                                       ('ready without step evidence', ok_st, False, 'no step evidence')):
+        raises(lambda: M.readback_extract(extract(st, complete), 'host', gen), M.Abort, needle, f'N8 readback: {what} is refused')
+    check(M.readback_extract(extract(dict(ok_st, phase='terminal', reason='error', exit=1), False), 'host', gen)['phase'] == 'terminal',
+          'readback: a step that failed has no steps/complete, and its evidence is still read back')
+# ---- N8: the drive budget is enforced
+with tempfile.TemporaryDirectory() as tmp:
+    w = DriveWorld(tmp)
+    w.ack_delay = 400                                       # each ack within its own 600 s bound, but five of them exceed the 1500 s budget
+    code, r, out, log = drive(w)
+    ab = events(log, 'abort')
+    check(code == 3 and ab and ('budget' in ab[0]['reason'] or 'timed out' in ab[0]['reason']) and log[[e['event'] for e in log].index('abort')]['utc'] and w.clock < M.DRIVE_BUDGET_S + 700,
+          'N8: a drive that would run past its 1500 s budget aborts inside it')
 
 print(f'learn-pod-operator-r2: {n} assertions passed')

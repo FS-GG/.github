@@ -91,8 +91,10 @@ learn-pod-operator-r2.py --drive --id <op-id> --source-identity <64 hex>     (in
 The Host's section 5 one-shots (`init`, `verify-installed-adoption`, `prepare-main-admission`), the receiver's `init --root` and `enroll-producer`,
 and the producer's `activate-remote` and `drain` run as **step lists in the role containers**. Each role container keeps the image's entrypoint
 (`catatonit -- role <role> ... -- <command>`) and gets one command: `STEP_RUNNER`, a POSIX `sh` program pinned in this file. It runs an ordered
-list of argv vectors and writes each step's `stdout`, `stderr` and `rc` under `/out/<role>/steps/<k>-<name>/`, stops at the first failure with
-its exit code, writes `steps/complete`, and may end by `exec`'ing the role's service. Values are passed as positional parameters; `eval` only
+list of argv vectors and writes each step's `stdout`, `stderr` and `rc` under `/out/<role>/steps/<k>-<name>/` (a write that fails exits 70), runs
+each step through `setsid -w` in its own session and process group and, on TERM, stops that whole group (TERM, up to 15 s, then KILL) before it
+exits 143, stops at the first failure with its exit code, writes `steps/complete`, and may end by `exec`'ing the role's service. A step's `argv[0]`
+is an absolute path or a built-in (`validate_plan` checks it). Values are passed as positional parameters; `eval` only
 ever sees `"${N}"` references built from integers. Two built-ins: `wait-tcp PORT SECONDS` (a LISTEN socket in the pod's network namespace)
 and `env-file FSGG_TELEMETRY_CREDENTIAL_<REF> PATH` (exports a credential from a tmpfs file to later steps, never printed).
 
@@ -172,9 +174,20 @@ Replay: checkpoint `pre-replay`, remove `feed-admin`, start `feed-replay` (copy 
 digests, export the credential, `activate-remote`, `drain`), wait until done. End: TERM host and recv, so all three roles are done and the
 finalizer triggers. Five checkpoints of eight.
 
-**Fail closed.** On any failure the driver aborts: it never removes evidence, fills an empty or dead role slot with a hold container, and TERMs every
-role, so the finalizer archives each `/out` and retires; feed does not end `ok`, so the run cannot be a success. Its wait for the finalizer is
-bounded by the finalizer's `RuntimeMaxSec`. It then removes the credential directory. Exit 0 complete, 3 aborted, 5 refused before acting.
+**Fail closed.** On any failure after its authority check the driver aborts. It never removes evidence and replaces only a role container that no
+longer runs (its tmpfs is already gone), filling an empty slot with a hold container. It TERMs only the roles that are **not yet done**: a done role
+is blocking with its `/out` intact, and by the role contract a second TERM makes it exit and lose that `/out` before the finalizer archives it. So
+every role ends done, the finalizer triggers on `done`, archives each `/out` and retires.
+
+What an abort means for the record: before the replay, feed ends `signalled` and finalizer r5 cannot record `learn-op-pod-success/1`; after the
+replay (feed already `ok`) it can. An aborted drive is therefore always visible in `drive.jsonl` (`abort`) and in the pod unit's `ExecMainStatus`
+(3), which the finalizer records as `opUnit`, and Root's readback checks both. Changing the success rule is #5175's.
+
+The driver then waits for the finalizer and leaves only on a **definite** state: `podman pod exists` exits 1, or the finalizer unit reads exactly
+`inactive` or `failed`. A timeout, another exit code or an exception is unknown and the wait continues, bounded by the finalizer's `RuntimeMaxSec`
+from the driver's start; leaving early would let the pod unit's stop remove the pod in the middle of the archive. Every exception from the plan, the
+abort, the wait and the cleanup lands in the same tail. It then removes the credential directory. Exit 0 complete, 3 aborted, 5 refused before
+acting. Before acting on an ack it re-reads `ack-<n>` until it parses (within the same bound), and `wait-done` requires feed's reason `ok`.
 
 ### The credential generator
 
@@ -182,8 +195,11 @@ bounded by the finalizer's `RuntimeMaxSec`. It then removes the credential direc
 `<cred_root>` is on a tmpfs, a 0700 directory of this account, and `<id>` is new), CSPRNG values from `secrets.token_urlsafe` (pg password,
 operator and runner tokens, the collector grant, the PFX password), written `O_EXCL` 0600 and never printed, logged or passed in an argv; an
 ephemeral P-256 CA and a `localhost` server certificate signed for one day, exported to a PFX with `-passout file:`; the keys, request and work
-directory removed. One directory per slot holds exactly the files its generations name (host never holds the collector grant), handed to the
-container uid with `podman unshare chown` (999 for pg, 1000 for apps) and checked. `host-config.json` is `fsgg.telemetry.host-config/2` with one
+directory removed. **One directory per generation** holds exactly the files that generation names: the `/in` replay gets no pg connection or
+`operator.token`, `feed-admin` no collector grant, host never the grant, and a hold container no `/cred` at all. Each directory is handed to the
+container uid with `podman unshare chown` (999 for pg, 1000 for apps), and owner, group, mode and type of the directory and every file are read
+back **inside the user namespace** (`podman unshare stat`): after the chown the account cannot `lstat` inside it. The replay's check list is
+also validated by `--run` before the input-read marker, so an unsafe sealed path refuses before the claim is consumed. `host-config.json` is `fsgg.telemetry.host-config/2` with one
 `native-collector` grant for the replay identity. No podman secret is used: podman's file driver stores secrets on disk, not in tmpfs.
 
 ### Held in this revision
@@ -203,9 +219,8 @@ README with the baseline's identifier classes.
 ### What is NOT established
 
 - Whether `--cgroups=split` places pod members (and the infra container) under the pod unit's cgroup. The driver asserts it (`assert-cgroups`) and
-  aborts if not; the first harness run is the check.
+  aborts if not. Root routed this to a #5184 synthetic spike before the first real claim (N5b).
 - Seccomp applicability to PostgreSQL and the .NET applications, the CLI and Host wire compatibility, a Generic credential for the Host outbox,
-  `cp --preserve` and `sha256sum` in the base image, `openssl` on the host: pod-harness items.
+  `cp --preserve`, `sha256sum` and `setsid -w` (util-linux) in the base image, `openssl` on the host: pod-harness items.
 - That `docker-entrypoint.sh` of the pinned pg image honours `POSTGRES_PASSWORD_FILE` with a read-only root and `PGDATA` on the volume.
-- Finalizer r5's success does not read the pod unit's exit status, so a driver that aborts after the replay is visible only in the drive log and the
-  unit's `ExecMainStatus` (recorded by the finalizer as `opUnit`). Root's readback checks both.
+- Finalizer r5's success does not read the pod unit's exit status (see Fail closed above); the rule stays with #5175.
