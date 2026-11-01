@@ -1398,6 +1398,17 @@ class GhApi:
             raise RuntimeError("board item read is incomplete")
         return board_item_state(issue)
 
+    def board_done_when(self, ref: str) -> str | None:
+        """The Delivery issue's body, for its `## Done when` section (the delivery-marker warning)."""
+        repo, _, number = ref.partition("#")
+        owner, name = board_repo_parts(repo)
+        if not number.isdigit():
+            raise RuntimeError("board reference is malformed")
+        data = self._graphql("query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){body}}}",
+                             {"owner": owner, "name": name, "number": int(number)})
+        body = ((data.get("repository") or {}).get("issue") or {}).get("body")
+        return body if isinstance(body, str) else None
+
     def board_set_status(self, project_id: str, item_id: str, field_id: str, option_id: str) -> None:
         """Exactly one native single-select send. Never retried: a failure is reported, not resent."""
         command = ["gh", "project", "item-edit", "--id", item_id, "--project-id", project_id,
@@ -1434,10 +1445,18 @@ class Summary:
     boardGate: str = "not-applicable"
     boardGateReason: str | None = None
     boardTransition: str = "not-applicable"
+    # Result schema minor version within fsgg.routine-delivery/v1: 1 adds the optional deliveryMarker field
+    # (board-reconciler design §12 PR 5). A result without it is minor 0; readers ignore fields they do not use.
+    schemaMinor: int = 1
+    # The routine PR's declared relation to its Delivery: {"declared": "continues|completes|none|both",
+    # "advisory": bool, "warning": str | None}; None when the PR is not a routine PR.
+    deliveryMarker: dict | None = None
 
 
 # A result written before the board gate existed lacks these fields and stays a valid prior result.
 BOARD_RESULT_FIELDS = frozenset({"boardGate", "boardGateReason", "boardTransition"})
+# A result written before minor 1 lacks these, and stays a valid prior result too.
+MARKER_RESULT_FIELDS = frozenset({"schemaMinor", "deliveryMarker"})
 
 
 def installation_result_shape(value: Any) -> bool:
@@ -1445,10 +1464,11 @@ def installation_result_shape(value: Any) -> bool:
     if not isinstance(value, dict):
         return False
     keys = set(value)
-    if keys in (current, current - BOARD_RESULT_FIELDS):
+    shapes = [current - board - marker for board in (frozenset(), BOARD_RESULT_FIELDS) for marker in (frozenset(), MARKER_RESULT_FIELDS)]
+    if keys in shapes:
         return True
     evidence = value.get("deliveryEvidence")
-    return (keys - {"deliveryEvidence"} in (current, current - BOARD_RESULT_FIELDS)
+    return (keys - {"deliveryEvidence"} in shapes
             and "deliveryEvidence" in keys
             and isinstance(evidence, dict)
             and evidence.get("schema") == "fsgg.routine-delivery-evidence/1")
@@ -1807,6 +1827,11 @@ BOARD_NUMBER = 3
 BOARD_MAX_REFS = 20
 BOARD_ROUTINE_MARKER = "fsgg:routine-development/v1"
 BOARD_CONTINUES = "<!-- fsgg:delivery-continues/v1 -->"
+BOARD_COMPLETES = "<!-- fsgg:delivery-completes/v1 -->"
+# The routine PR's declaration check (board-reconciler design §12 PR 5, Root's ruling on #5150): advisory for its
+# first 7 days, then required, which Root turns on with --delivery-marker required.
+DELIVERY_MARKER_MODES = ("advisory", "required")
+_DONE_WHEN_STEP = re.compile(r"\b(?:releas\w*|install\w*|read-?back\w*|qualif\w*)\b", re.I)
 BOARD_WRITABLE_PREIMAGES = ("Backlog", "Ready", "In progress", "In review")
 BOARD_CUSTODY_SCHEMA = "fsgg.routine-board-custody/1"
 BOARD_ENFORCE_REPOSITORY = "fs-gg/.github"
@@ -2485,6 +2510,53 @@ def board_routine_body(body: Any) -> bool:
     return isinstance(body, str) and BOARD_ROUTINE_MARKER in body
 
 
+def delivery_declaration(rules: Any, body: Any) -> str:
+    """continues, completes, none or both: the delivery markers in the PR body outside code (raw text when the
+    rules module is unavailable)."""
+    text = body if isinstance(body, str) else ""
+    try:
+        visible = rules.visible_text(text) if rules is not None else text
+    except Exception:
+        visible = text
+    found = (BOARD_CONTINUES in visible, BOARD_COMPLETES in visible)
+    return {(True, False): "continues", (False, True): "completes", (True, True): "both"}.get(found, "none")
+
+
+def done_when_section(body: Any) -> str | None:
+    """The text of an issue body's `## Done when` section, or None."""
+    if not isinstance(body, str):
+        return None
+    lines = body.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    for index, line in enumerate(lines):
+        if line.strip().lower() == "## done when":
+            section = []
+            for following in lines[index + 1:]:
+                if following.startswith("## "):
+                    break
+                section.append(following)
+            return "\n".join(section).strip() or None
+    return None
+
+
+def delivery_marker_result(api: Any, rules: Any, body: Any, gate: Any, mode: str) -> dict:
+    declared = delivery_declaration(rules, body)
+    warning = None
+    if declared == "none":
+        warning = ("routine PR declares neither fsgg:delivery-continues/v1 nor fsgg:delivery-completes/v1; "
+                   "exactly one is required after the advisory period")
+    elif declared == "both":
+        warning = "routine PR declares both fsgg:delivery-continues/v1 and fsgg:delivery-completes/v1; exactly one is required"
+    elif declared == "completes" and getattr(gate, "verdict", None) == "linked" and getattr(gate, "delivery", None):
+        try:
+            done = done_when_section(api.board_done_when(gate.delivery))
+        except Exception:
+            done = None
+        if done is not None and _DONE_WHEN_STEP.search(done):
+            warning = ("routine PR declares fsgg:delivery-completes/v1 but its Delivery's Done when names a release, "
+                       "install or readback step; C1 would close the Delivery after this merge")
+    return {"declared": declared, "advisory": mode == "advisory", "warning": warning}
+
+
 def summarize(
     api: NativeApi,
     *,
@@ -2502,9 +2574,12 @@ def summarize(
     board_rules_loader: Callable[[], Any] | None = None,
     board_custody: BoardCustody | None = None,
     board_lock: BoardWriterLock | None = None,
+    delivery_marker: str = "advisory",
 ) -> tuple[int, Summary]:
     if board_gate not in BOARD_GATE_MODES:
         raise RuntimeError("board gate mode is not advisory or enforce")
+    if delivery_marker not in DELIVERY_MARKER_MODES:
+        raise RuntimeError("delivery marker mode is not advisory or required")
     if board_gate == "enforce" and not board_enforce_allowed():
         raise RuntimeError("board gate enforce runs only from the FS-GG/.github checkout")
     if producer_source is not None and repo == FOURD_REPOSITORY and merge_method != "squash":
@@ -2682,6 +2757,15 @@ def summarize(
         board_rules = (board_rules_loader or load_board_rules)()
         gate = evaluate_board_gate(api, board_rules, repo, pr_number, before.get("body"))
         board.update(boardGate=gate.verdict, boardGateReason=gate.reason)
+        # The delivery declaration: advisory records it with a warning and changes nothing; required refuses a PR
+        # that declares neither or both, before any merge attempt.
+        board["deliveryMarker"] = delivery_marker_result(api, board_rules, before.get("body"), gate, delivery_marker)
+        if delivery_marker == "required" and board["deliveryMarker"]["declared"] in ("none", "both"):
+            return 2, bound(
+                "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+                "refused", "not-delivered", publication, None, 0,
+                f"delivery-marker {board['deliveryMarker']['declared']}", disposition, coherent,
+            )
         if board_gate == "enforce" and gate.verdict == "refused":
             return 2, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
@@ -3050,6 +3134,9 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--watch-seconds", type=int, help="required watch budget, 1..600 seconds")
     result.add_argument("--evidence-run", type=int, help="append verified PR checkout evidence from this native run")
     result.add_argument("--apply", action="store_true")
+    result.add_argument("--delivery-marker", choices=DELIVERY_MARKER_MODES, default="advisory",
+                        help="routine PR delivery declaration (exactly one of fsgg:delivery-continues/v1 and "
+                             "fsgg:delivery-completes/v1): advisory records it with a warning; required refuses before merge")
     result.add_argument("--board-gate", choices=BOARD_GATE_MODES, default="advisory",
                         help="board-currency merge gate under --apply for routine PRs; advisory records only. "
                              "enforce runs only from the FS-GG/.github checkout")
@@ -3198,7 +3285,7 @@ def main(argv: list[str]) -> int:
             merge_method=args.merge_method, publication_required=args.publication == "required",
             apply=args.apply, coherent_workflow=args.coherent_workflow, candidate_observer=observer,
             producer_source=args.routine_producer_source if args.install_routine_producer else None,
-            installation_prior=prior, board_gate=args.board_gate,
+            installation_prior=prior, board_gate=args.board_gate, delivery_marker=args.delivery_marker,
             board_custody=(BoardCustody(pathlib.Path(args.board_gate_custody) if args.board_gate_custody
                                         else default_board_custody_root()) if args.board_gate == "enforce" else None),
             board_lock=board_lock_from_args(args),

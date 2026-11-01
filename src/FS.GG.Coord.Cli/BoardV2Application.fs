@@ -1022,7 +1022,18 @@ module BoardV2Application =
                                 let applied =
                                     V2TendWrite.apply c
                                         { Plan = plan; Snapshot = snapshot; OwnUncertain = ownUncertain; GateUncertain = gateUncertain; GateDeferred = gateDeferred }
-                                let all = gateOutcomes @ sweepOutcomes @ applied
+                                // Proposals to #4985 (design §6), when the enable file says so. The placeholder key is
+                                // the observer's BOARD_DRIFT_HMAC_KEY, held on fdev in a mode-0600 file.
+                                let proposed =
+                                    if not enable.Value.Propose then []
+                                    else
+                                        let keyPath = Path.Combine(deps.ConfigHome, "fsgg", "board-drift-hmac-key")
+                                        let key =
+                                            if not (File.Exists keyPath) || File.GetAttributes(keyPath).HasFlag FileAttributes.ReparsePoint then None
+                                            elif not (OperatingSystem.IsWindows()) && File.GetUnixFileMode keyPath &&& privateModeBits <> enum<UnixFileMode> 0 then None
+                                            else Some(Text.Encoding.UTF8.GetBytes((File.ReadAllText keyPath).TrimEnd('\r', '\n')))
+                                        V2TendPropose.run c deps.SyncDirectory (Path.Combine(deps.StateHome, "fsgg", "board-tend", "proposals.json")) key plan.Propose
+                                let all = gateOutcomes @ sweepOutcomes @ applied @ proposed
                                 privateJson deps.SyncDirectory (command.PlanPath + ".outcomes.json") (V2TendWrite.encodeOutcomes all + Environment.NewLine)
                                 all
                         let count result = outcomes |> List.filter (fun (o: V2TendWrite.Outcome) -> o.Result = result) |> List.length

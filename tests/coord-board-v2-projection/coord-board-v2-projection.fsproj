@@ -27,6 +27,7 @@
     <Compile Include="V2TendReadsTests.fs" />
     <Compile Include="TendFakeGitHub.fs" />
     <Compile Include="V2TendWriteTests.fs" />
+    <Compile Include="V2TendProposeTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

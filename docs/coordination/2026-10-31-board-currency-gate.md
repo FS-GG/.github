@@ -168,6 +168,7 @@ override below.
 | `<!-- fsgg:outcome-closure-proposed/v1 -->` | Root or a worker proposes closure; the finding stays, tagged pending (R5, R6). |
 | `<!-- fsgg:blocked-on/v1 OWNER/REPO#N … -->` | The blockers that are not native links. The newest marker wins, and an empty marker clears (R3). |
 | `<!-- fsgg:delivery-continues/v1 -->` | In a PR body: after this merge the Delivery stays In progress instead of In review (§2b). |
+| `<!-- fsgg:delivery-completes/v1 -->` | In a PR body: this merge completes the Delivery's PR work, so rule C1 of the board reconciler may close it ([Root's ruling](https://github.com/FS-GG/.github/pull/5150#issuecomment-6552391470)). Every routine PR declares exactly one of the two markers; the merge gate records the declaration in `deliveryMarker` (advisory, then required with `--delivery-marker required`). |
 | `<!-- fsgg:board-gate-override/v1 rule=R1 reason="…" -->` | In a PR body: a recorded override of the R1 gate. Exact grammar below. |
 
 **Override grammar, exactly.** The PR body, with CRLF and lone CR line endings first normalised to LF
@@ -300,7 +301,14 @@ Outcome is never rolled up automatically.
 result carries `boardGate` (`linked`, `overridden`, `refused`, `unknown`, `unavailable` or
 `not-applicable`), a fixed-vocabulary `boardGateReason`, and `boardTransition` (`noop`, `written`,
 `refused-preimage`, `uncertain`, `not-applicable`, or advisory `would-write:<Status>` and
-`would-refuse-preimage`, plus `refused-custody` in enforce). These points refine the steps above:
+`would-refuse-preimage`, plus `refused-custody` in enforce). Since schema minor 1 (`schemaMinor: 1` within
+`fsgg.routine-delivery/v1`), a routine PR's result also carries the optional top-level `deliveryMarker`:
+`{"declared": "continues|completes|none|both", "advisory": true|false, "warning": <text or null>}`. Under the
+default `--delivery-marker advisory` it records the declaration and a warning (neither or both markers, or
+`completes` on a Delivery whose `## Done when` names a release, install or readback step) and never changes
+the outcome or the attempts; `--delivery-marker required`, which Root turns on after 7 advisory days, refuses
+a PR declaring neither or both before any merge attempt, with reason `delivery-marker none|both`. Readers ignore
+fields they do not use, and a result without the field is minor 0. These points refine the steps above:
 
 - `scripts/board-currency-rules.py` is not distributed to receiver workspaces. Where it is absent the
   gate reports `unavailable`: advisory records it, and enforce returns `indeterminate` (fail-closed).

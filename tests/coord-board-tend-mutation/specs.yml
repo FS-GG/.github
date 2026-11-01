@@ -1,5 +1,5 @@
-# Mutation legs for board-v2 tend and its shared write discipline (FS-GG/.github#5136 phase 2 PRs 2-4, #5123; design §3, §5, §6, §8, §10).
-# Each leg reverts ONE guard in V2Tend.fs, V2TendReads.fs, V2TendWrite.fs, V2Migration.fs or the board-v2 CLI and requires the V2Tend
+# Mutation legs for board-v2 tend and its shared write discipline (FS-GG/.github#5136 phase 2 PRs 2-5, #5123; design §3, §5, §6, §8, §10).
+# Each leg reverts ONE guard in V2Tend.fs, V2TendReads.fs, V2TendWrite.fs, V2TendPropose.fs, V2Migration.fs or the board-v2 CLI and requires the V2Tend
 # tests (derivation, reads, writer; `leg.sh`), the tend CLI tests (`leg.sh cli`) or the migration-apply tests
 # (`leg.sh migration`) to fail.
 #     TMPDIR=<private> scripts/gate-mutate.py --specs tests/coord-board-tend-mutation/specs.yml
@@ -1058,6 +1058,118 @@ mutations:
       | None when false ->
     breaks: >-
       a Delivery is closed in the same run as an uncertain field write on its card
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: P1/private-placeholder
+    gate: "a private or unknown-visibility subject is published only as its placeholder"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendPropose.fs
+    find: |-
+      | Some repo when isPublic repo -> p.Ref
+    replace: |-
+      | Some _ -> p.Ref
+    breaks: >-
+      a private repository's issue reference is published on #4985
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: P2/status-suggestions-only
+    gate: "a suggestion is published only when it is a Status name"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendPropose.fs
+    find: |-
+      Suggested = p.Suggested |> Option.filter statusNames.Contains })
+    replace: |-
+      Suggested = p.Suggested })
+    breaks: >-
+      free text from a card reaches the public comment
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: P3/posted-once
+    gate: "an ID already in the ledger is never posted again"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendPropose.fs
+    find: |-
+      let fresh = current |> List.filter (fun e -> not (ledger.Ids.ContainsKey e.Id) && not (pendingIds.Contains e.Id))
+    replace: |-
+      let fresh = current |> List.filter (fun e -> not (pendingIds.Contains e.Id))
+    breaks: >-
+      every run reposts every live proposal
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: P4/pending-before-post
+    gate: "the run and its IDs are recorded before the post"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendPropose.fs
+    find: |-
+      save withPending
+    replace: |-
+      ignore withPending
+    breaks: >-
+      an uncertain post is repeated on the next run
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: P5/pending-blocks
+    gate: "an unresolved pending post blocks new posts"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendPropose.fs
+    find: |-
+      if fresh.IsEmpty || ledger.Pending.IsSome then
+    replace: |-
+      if fresh.IsEmpty then
+    breaks: >-
+      a new comment is posted while an earlier post may exist
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: P6/marker-owner
+    gate: "a pending post is found only among Root's comments after the custody time"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendPropose.fs
+    find: |-
+      body.Contains marker && context.Settings.RootLogins.Contains author
+    replace: |-
+      body.Contains marker
+    breaks: >-
+      someone else's comment carrying the marker resolves the pending post
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: P7/route-body-exact
+    gate: "the proposals route admits a body of exactly {body}"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      && (root.EnumerateObject() |> Seq.map (fun p -> p.Name) |> List.ofSeq) = [ "body" ]
+    replace: |-
+      && true
+    breaks: >-
+      the proposals comment route carries other REST parameters
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: P8/key-length
+    gate: "no post without a key of at least 16 bytes"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendPropose.fs
+    find: |-
+      | Some key when key.Length < 16 ->
+    replace: |-
+      | Some key when false ->
+    breaks: >-
+      placeholders are computed under a guessable short key
     anchor:
       pattern: 'board-tend leg: \d+ passed, \d+ failed'
       produced_by: tests/coord-board-tend-mutation/leg.sh

@@ -55,6 +55,11 @@ type Board() =
     member val BeforeMutation: (Request -> unit) = ignore with get, set
     member val FailMutation = false with get, set
     member val LoseResponse = false with get, set
+    /// Comments on #4985: node id, body, createdAt, author.
+    member val ProposalComments = Collections.Generic.List<string * string * string * string>() with get
+    member val PrivateRepos = Collections.Generic.HashSet<string>() with get
+    member val LoseProposalResponse = false with get, set
+    member val Now = "2026-11-01T12:00:00Z" with get, set
 
     member _.AddItem(itemId: string, item: FakeItem) = items.[itemId] <- item
     member _.AddPr(reference: string, pr: FakePr) = prs.[reference] <- pr
@@ -126,7 +131,20 @@ type Board() =
         let document, variables = match request.Body with Query(d, v) -> d, v | _ -> failwith "query expected"
         calls.Add { Kind = "query"; Subject = request.Subject; Document = document }
         let data = JsonObject()
-        if document.Contains "node(id: $item)" then
+        if document.Contains "node(id: $comment)" && not (document.Contains "$issue") then
+            let id = this.Text(variables, "comment")
+            let body = this.ProposalComments |> Seq.tryFind (fun (i, _, _, _) -> i = id) |> Option.map (fun (_, b, _, _) -> b)
+            data["node"] <- (match body with Some b -> JsonObject(dict [ "body", JsonValue.Create b :> JsonNode ]) :> JsonNode | None -> null)
+        elif document.Contains "isPrivate" then
+            let mutable i = 0
+            while document.Contains(sprintf "r%d:" i) do
+                let repo = this.Text(variables, sprintf "o%d" i) + "/" + this.Text(variables, sprintf "n%d" i)
+                data[sprintf "r%d" i] <- JsonObject(dict [ "isPrivate", JsonValue.Create(this.PrivateRepos.Contains repo) :> JsonNode ])
+                i <- i + 1
+        elif document.Contains "issue(number: 4985)" then
+            let nodes = [| for id, body, created, author in this.ProposalComments -> JsonObject(dict [ "id", JsonValue.Create id :> JsonNode; "body", JsonValue.Create body :> JsonNode; "createdAt", JsonValue.Create created :> JsonNode; "author", JsonObject(dict [ "login", JsonValue.Create author :> JsonNode ]) :> JsonNode ]) :> JsonNode |]
+            data["repository"] <- JsonObject(dict [ "issue", JsonObject(dict [ "comments", JsonObject(dict [ "totalCount", JsonValue.Create nodes.Length :> JsonNode; "pageInfo", JsonObject(dict [ "hasNextPage", JsonValue.Create false :> JsonNode; "endCursor", null ]) :> JsonNode; "nodes", JsonArray(nodes) :> JsonNode ]) :> JsonNode ]) :> JsonNode ])
+        elif document.Contains "node(id: $item)" then
             data["node"] <- this.ItemNode(this.Text(variables, "item"))
             let mutable i = 0
             while document.Contains(sprintf "pr%d:" i) do
@@ -175,6 +193,16 @@ type Board() =
         this.Respond data
 
     member this.Mutate(request: Request) : Errors.IoResult<Response> =
+      match request.Body with
+      | Json json ->
+        // The proposals REST route: POST repos/FS-GG/.github/issues/4985/comments.
+        calls.Add { Kind = "mutation"; Subject = request.Subject; Document = request.Path }
+        use parsed = System.Text.Json.JsonDocument.Parse json
+        let id = sprintf "IC_proposal_%d" (this.ProposalComments.Count + 1)
+        this.ProposalComments.Add((id, parsed.RootElement.GetProperty("body").GetString(), this.Now, "EHotwagner"))
+        if this.LoseProposalResponse then Error(Errors.Malformed(request.Subject, "response lost after the send"))
+        else Ok { Status = 201; ETag = None; NextLink = None; Headers = Map.empty; Body = JsonObject(dict [ "id", JsonValue.Create(this.ProposalComments.Count) :> JsonNode; "node_id", JsonValue.Create id :> JsonNode ]).ToJsonString() }
+      | _ ->
         let document, variables = match request.Body with Query(d, v) -> d, v | _ -> failwith "query expected"
         calls.Add { Kind = "mutation"; Subject = request.Subject; Document = document }
         this.BeforeMutation request

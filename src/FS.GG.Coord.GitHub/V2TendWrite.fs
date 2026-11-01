@@ -92,8 +92,27 @@ module V2TendWrite =
     let private declaredVariable = Regex(@"\$(\w+)\s*:")
     let private stateReason = Regex(@"\bstateReason\s*:\s*(\w+)")
 
+    // The proposals route (design §5 route 2): one comment on #4985 whose JSON body is exactly {"body": text}
+    // and whose text carries the proposals marker once.
+    let proposalsPath = "repos/FS-GG/.github/issues/4985/comments"
+    let proposalsMarker = "<!-- fsgg:board-tend-proposals/v1 run="
+
+    let private proposalsBody (json: string) =
+        try
+            use document = JsonDocument.Parse json
+            let root = document.RootElement
+            root.ValueKind = JsonValueKind.Object
+            && (root.EnumerateObject() |> Seq.map (fun p -> p.Name) |> List.ofSeq) = [ "body" ]
+            && root.GetProperty("body").ValueKind = JsonValueKind.String
+            && (let text = root.GetProperty("body").GetString()
+                let first = text.IndexOf(proposalsMarker, StringComparison.Ordinal)
+                first >= 0 && text.IndexOf(proposalsMarker, first + 1, StringComparison.Ordinal) < 0)
+        with _ -> false
+
     let admits (projectId: string) (closable: string -> bool) (request: Request) : Result<unit, string> =
         match request.Method, request.Path, request.Body with
+        | "POST", path, Json json when path = proposalsPath ->
+            if proposalsBody json then Ok() else Error "the proposals comment body must be exactly {body} carrying its marker once"
         | "POST", "graphql", Query(document, variables) ->
             match V2TendReads.parseDocument document with
             | None -> Error "the mutation document does not parse"
@@ -306,7 +325,7 @@ module V2TendWrite =
 
     // Atomic durable replace: a private temporary file written through and flushed, renamed over the record,
     // then the directory synced.
-    let private atomicWrite (syncDirectory: string -> unit) (path: string) (json: string) =
+    let atomicWrite (syncDirectory: string -> unit) (path: string) (json: string) =
         let directory = Path.GetDirectoryName path
         privateDirectory directory
         let temporary = Path.Combine(directory, "." + Path.GetFileName path + "." + Guid.NewGuid().ToString("N"))

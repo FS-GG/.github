@@ -18,7 +18,7 @@ import unittest
 import warnings
 import zipfile
 import zlib
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from datetime import datetime, timezone
 from unittest import mock
 
@@ -3347,8 +3347,9 @@ class BoardApi(FakeApi):
     """FakeApi plus the gate's four board methods, each counted, each able to fail."""
 
     def __init__(self, reads, writes=None, *, body: str, author: str = "agent", edited: bool = False,
-                 editor: str | None = None, pr_meta=None, cards=None, items=(), send=None):
+                 editor: str | None = None, pr_meta=None, cards=None, items=(), send=None, delivery_body=None):
         super().__init__(reads, writes)
+        self.delivery_body = delivery_body
         self.pr_meta = pr_meta if pr_meta is not None else {
             "repo": "FS-GG/.github", "number": 1, "state": "OPEN", "body": body,
             "author": author, "edited": edited, "editor": editor}
@@ -3379,6 +3380,12 @@ class BoardApi(FakeApi):
         if isinstance(value, BaseException):
             raise value
         return copy.deepcopy(value)
+
+    def board_done_when(self, ref):
+        self.calls.append("board_done_when")
+        if isinstance(self.delivery_body, BaseException):
+            raise self.delivery_body
+        return self.delivery_body
 
     def board_set_status(self, project_id, item_id, field_id, option_id):
         self.calls.append("board_set_status")
@@ -3433,6 +3440,80 @@ class BoardGateTests(unittest.TestCase):
     def holding(self, body: str, **kwargs) -> BoardApi:
         pr = board_routine_pr(body)
         return BoardApi([pr, pr], body=body, **kwargs)
+
+    # ---- the delivery declaration (board-reconciler design §12 PR 5) ----
+
+    def marker_gate(self, body: str, *, mode: str = "advisory", **kwargs):
+        api = self.merging(body, items=[board_item("In progress")], **kwargs)
+        with contextlib.redirect_stderr(io.StringIO()), mock.patch.object(MODULE, "board_enforce_allowed", return_value=True):
+            code, result = MODULE.summarize(
+                api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD, merge_method="squash",
+                publication_required=False, apply=True, board_gate="advisory",
+                board_rules_loader=lambda: BOARD_RULES, delivery_marker=mode)
+        return api, code, result
+
+    def test_advisory_marker_records_the_declaration_and_never_changes_the_outcome(self):
+        cases = {
+            "none": (board_body("Refs #900"), "neither"),
+            "both": (board_body("Refs #900", MODULE.BOARD_CONTINUES, MODULE.BOARD_COMPLETES), "both"),
+            "continues": (board_body("Refs #900", MODULE.BOARD_CONTINUES), None),
+            "completes": (board_body("Refs #900", MODULE.BOARD_COMPLETES), None),
+            # A marker quoted in code does not count.
+            "none-quoted": (board_body("Refs #900", "`" + MODULE.BOARD_COMPLETES + "`"), "neither"),
+        }
+        for name, (body, warning) in cases.items():
+            with self.subTest(name):
+                api, code, result = self.marker_gate(body)
+                marker = result.deliveryMarker
+                self.assertEqual(marker["declared"], name.split("-")[0])
+                self.assertTrue(marker["advisory"])
+                if warning is None:
+                    self.assertIsNone(marker["warning"])
+                else:
+                    self.assertIn(warning, marker["warning"])
+                self.assertEqual((code, result.outcome, result.attempts), (0, "delivered", 1))
+                self.assertEqual(result.schemaMinor, 1)
+
+    def test_completes_on_a_delivery_whose_done_when_names_a_release_warns(self):
+        delivery = "Work level: Delivery\n\n## Done when\nThe engine is released and installed on fdev, with readback.\n\n## Owner\nRoot\n"
+        api, code, result = self.marker_gate(board_body("Refs #900", MODULE.BOARD_COMPLETES), delivery_body=delivery)
+        self.assertIn("release, install or readback", result.deliveryMarker["warning"])
+        self.assertEqual((code, result.outcome), (0, "delivered"))
+        # A source-only Done when, or an unreadable Delivery, gives no warning.
+        _, _, quiet = self.marker_gate(board_body("Refs #900", MODULE.BOARD_COMPLETES), delivery_body="## Done when\nThe parser change is merged.\n")
+        self.assertIsNone(quiet.deliveryMarker["warning"])
+        _, _, unreadable = self.marker_gate(board_body("Refs #900", MODULE.BOARD_COMPLETES), delivery_body=RuntimeError("down"))
+        self.assertIsNone(unreadable.deliveryMarker["warning"])
+        # The warning names no private text.
+        self.assertNotIn("fdev", json.dumps(asdict(result)))
+
+    def test_required_marker_refuses_an_undeclared_or_double_declaration_before_merge(self):
+        for name, body in (("none", board_body("Refs #900")),
+                           ("both", board_body("Refs #900", MODULE.BOARD_CONTINUES, MODULE.BOARD_COMPLETES))):
+            with self.subTest(name):
+                pr = board_routine_pr(body)
+                api = BoardApi([pr, pr], body=body)
+                with contextlib.redirect_stderr(io.StringIO()), mock.patch.object(MODULE, "board_enforce_allowed", return_value=True):
+                    code, result = MODULE.summarize(
+                        api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD, merge_method="squash",
+                        publication_required=False, apply=True, board_gate="advisory",
+                        board_rules_loader=lambda: BOARD_RULES, delivery_marker="required")
+                self.assertEqual((code, result.outcome, result.attempts, result.reason), (2, "refused", 0, f"delivery-marker {name}"))
+                self.assertFalse(result.deliveryMarker["advisory"])
+                self.assertEqual(api.attempts, 0)  # no merge attempt
+        _, code, result = self.marker_gate(board_body("Refs #900", MODULE.BOARD_COMPLETES), mode="required")
+        self.assertEqual((code, result.outcome), (0, "delivered"))
+
+    def test_marker_is_absent_for_a_pr_that_is_not_routine_and_prior_results_keep_their_shape(self):
+        current = {field.name for field in fields(MODULE.Summary)}
+        prior = {name: None for name in current - MODULE.MARKER_RESULT_FIELDS - MODULE.BOARD_RESULT_FIELDS}
+        self.assertTrue(MODULE.installation_result_shape(prior))
+        self.assertTrue(MODULE.installation_result_shape({name: None for name in current - MODULE.MARKER_RESULT_FIELDS}))
+        self.assertFalse(MODULE.installation_result_shape({**prior, "unexpected": 1}))
+        self.assertIsNone(MODULE.Summary("s", "r", 1, HEAD, None, "ready", "not-delivered", "not-required", None, 0, None, "current", "not-required").deliveryMarker)
+        with self.assertRaises(RuntimeError):
+            MODULE.summarize(BoardApi([], body=""), repo="FS-GG/.github", pr_number=1, expected_head=HEAD, merge_method="squash",
+                             publication_required=False, apply=True, delivery_marker="strict")
 
     # ---- verdict x mode ----
 
