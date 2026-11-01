@@ -128,7 +128,8 @@ directories. New:
 - **13 container precheck**: a precheck pod `learn-pre-<id>` (`--network=none`, net shared), its four containers built by the same `ctr_argv` as
   the run (no credentials, volume or input; default cgroups because the operator is not in the pod unit) with a probe command. From each it asserts
   the start (EPERM and ENOSYS named), uid/gid, the five capability sets 0, NoNewPrivs 1, tmpfs owners, only `lo` and no route, the socket probe
-  (AF_VSOCK errno from the profile, app containers), the payload's host uid (pg 428678, apps 428679, never 0 or 30034), the image Id, CapAdd empty,
+  (AF_VSOCK errno from the profile, app containers), `setsid -w true` in the role image (app containers: the step runner needs util-linux
+  `setsid -w`, so a missing one refuses here, before the input-read marker, instead of consuming a claim), the payload's host uid (pg 428678, apps 428679, never 0 or 30034), the image Id, CapAdd empty,
   read-only root, memory and pids limits, the seccomp option, and OCI seccomp rule-set equality (operator r6's `expected_set`/`effective_set`,
   verbatim). The pod is removed and the removal read back, on every path.
 
@@ -221,6 +222,6 @@ README with the baseline's identifier classes.
 - Whether `--cgroups=split` places pod members (and the infra container) under the pod unit's cgroup. The driver asserts it (`assert-cgroups`) and
   aborts if not. Root routed this to a #5184 synthetic spike before the first real claim (N5b).
 - Seccomp applicability to PostgreSQL and the .NET applications, the CLI and Host wire compatibility, a Generic credential for the Host outbox,
-  `cp --preserve`, `sha256sum` and `setsid -w` (util-linux) in the base image, `openssl` on the host: pod-harness items.
+  `cp --preserve` and `sha256sum` in the base image, `openssl` on the host: pod-harness items. (`setsid -w` is asserted by the precheck.)
 - That `docker-entrypoint.sh` of the pinned pg image honours `POSTGRES_PASSWORD_FILE` with a read-only root and `PGDATA` on the volume.
 - Finalizer r5's success does not read the pod unit's exit status (see Fail closed above); the rule stays with #5175.

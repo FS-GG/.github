@@ -23,7 +23,7 @@ Gates (the first refusal wins; nothing is started or written before the lock exc
                 (428678:428678 0700) and recv (428679:428679 0700) and at most lost+found, on the same filesystem.
  13 containers  the PRECHECK pod learn-pre-<id>: every container started with the run's own options (cgroup mode aside) and a probe command, then
                 asserted: start succeeded (EPERM and ENOSYS named), uid/gid, five capability sets 0, NoNewPrivs 1, tmpfs owners, only `lo` and no
-                route, the socket probe (AF_VSOCK errno from the profile), the host uid of the payload (pg 428678, apps 428679, never 0 or 30034),
+                route, the socket probe (AF_VSOCK errno from the profile), `setsid -w true` in the role image (the step runner needs it), the host uid of the payload (pg 428678, apps 428679, never 0 or 30034),
                 CapAdd empty, read-only root, memory and pids limits, the seccomp path, and OCI seccomp rule-set equality (operator r6's
                 expected_set/effective_set, verbatim). The precheck pod is removed and its removal read back.
 --precheck-only exits 0 when 1-13 hold (the RESULT shows inputMounted false and no container with /in), so Root may take the claim from it.
@@ -227,7 +227,7 @@ for p in "$@"; do echo "OWN $(stat -c %u "$p") $p"; done
 while read -r l; do case $l in *:*) echo "IF ${l%%:*}" ;; esac; done < /proc/net/dev
 n=0; while read -r i _; do [ "$i" = Iface ] || n=$((n + 1)); done < /proc/net/route; echo "ROUTE4 $n"
 n=0; while read -r _ _ _ _ _ _ _ _ _ i; do [ "$i" = lo ] || n=$((n + 1)); done < /proc/net/ipv6_route; echo "ROUTE6 $n"
-if [ "$k" = app ]; then /opt/fsgg/pod/probe "$e"; fi
+if [ "$k" = app ]; then /opt/fsgg/pod/probe "$e"; if setsid -w true < /dev/null > /dev/null 2>&1; then echo "SETSID ok"; else echo "SETSID absent"; fi; fi
 echo END
 if [ "$k" = pg ]; then exec sleep 120; fi
 '''
@@ -927,7 +927,7 @@ def start_errno(err):
 
 
 def parse_probe(text):
-    p = {'id': None, 'status': {}, 'own': {}, 'ifs': [], 'route4': None, 'route6': None, 'probe': [], 'end': False}
+    p = {'id': None, 'status': {}, 'own': {}, 'ifs': [], 'route4': None, 'route6': None, 'probe': [], 'setsid': None, 'end': False}
     for line in text.splitlines():
         w = line.split()
         if not w:
@@ -944,6 +944,8 @@ def parse_probe(text):
             p[w[0].lower()] = w[1]
         elif w[0] == 'PROBE':
             p['probe'].append(line.strip())
+        elif w[0] == 'SETSID' and len(w) == 2:
+            p['setsid'] = w[1]
         elif line.strip() == 'END':
             p['end'] = True
     return p
@@ -999,6 +1001,7 @@ def assess(env, deps, name, slot, log, exp, src):
         'tmpfsOwners': sorted(p['own']) == sorted(paths_) and all(u == want[0] for u in p['own'].values()),
         'loopbackOnly': p['ifs'] == ['lo'] and p['route4'] == '0' and p['route6'] == '0',
         'socketProbe': kind == 'pg' or p['probe'] == ['PROBE ok'],
+        'setsidWait': kind == 'pg' or p['setsid'] == 'ok',          # the step runner needs util-linux `setsid -w` in the role image
         'running': state.get('Status') == 'running',
         'hostUid': len(uids) == 4 and all(u.isdigit() and int(u) == env['host_uid'][kind] and int(u) not in (0, env['uid']) for u in uids),
         'image': j.get('Image') == (env['pg_image'] if kind == 'pg' else env['app_image']),
@@ -1010,7 +1013,7 @@ def assess(env, deps, name, slot, log, exp, src):
         'seccompDefault': sc.get('defaultAction') == src.get('defaultAction') and 'defaultErrnoRet' in sc and sc.get('defaultErrnoRet') == src.get('defaultErrnoRet'),
         'seccompEqual': bool(exp) and eff == exp,
     }
-    return {'checks': checks, 'hostUids': uids, 'probe': {k: p[k] for k in ('id', 'ifs', 'route4', 'route6', 'probe')},
+    return {'checks': checks, 'hostUids': uids, 'probe': {k: p[k] for k in ('id', 'ifs', 'route4', 'route6', 'probe', 'setsid')},
             'seccomp': {'expected': len(exp), 'effective': len(eff), 'missing': sorted(map(str, exp - eff))[:20], 'extra': sorted(map(str, eff - exp))[:20]}}
 
 

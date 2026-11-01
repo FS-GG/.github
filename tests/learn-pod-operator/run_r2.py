@@ -382,6 +382,7 @@ class World:
         lines += [f'IF {i}' for i in o.get('ifs', ['lo'])] + [f'ROUTE4 {o.get("r4", 0)}', f'ROUTE6 {o.get("r6", 0)}']
         if kind == 'app':
             lines.append(o.get('probe', 'PROBE ok'))
+            lines.append(o.get('setsid', 'SETSID ok'))
         if not o.get('noend'):
             lines.append('END')
         return '\n'.join(lines) + '\n'
@@ -1392,6 +1393,33 @@ with tempfile.TemporaryDirectory() as tmp:
     w.fail.add('replay_fail')
     code, r, out, log = drive(w)
     check(code == 3 and 'feed ended error' in events(log, 'abort')[0]['reason'], 'N3: a replay that ends error aborts the drive (wait-done reads feed\'s reason)')
+
+# ---- the role image must have `setsid -w` (the step runner's process groups): checked by the precheck, before the marker
+with tempfile.TemporaryDirectory() as tmp:
+    w = World(tmp)
+    w.admit()
+    w.claim()
+    w.probe_over['feed'] = {'setsid': 'SETSID absent'}
+    code, r, _ = go(w, RUN)
+    check(code == 5 and err(r, 'feed.setsidWait') and r['gates']['inputMounted'] is False and not os.path.exists(os.path.join(w.state, 'learn-input', w.opid))
+          and not getattr(w, 'started', None) and r['gates']['podPrecheck']['retired'], 'a role image without `setsid -w` refuses the --run in the precheck: no marker, no unit, the claim stays voidable')
+    w.probe_over['feed'] = {'setsid': 'garbage'}
+    code, r, _ = go(w, PRE)
+    check(code == 5 and err(r, 'feed.setsidWait'), 'an unreadable setsid answer refuses too (only "SETSID ok" passes)')
+    w.probe_over.clear()
+    code, r, _ = go(w, RUN)
+    check(code == 0 and r['gates']['podPrecheck']['containers']['feed']['probe']['setsid'] == 'ok', 'causal control: with `setsid -w` present the same --run starts')
+with tempfile.TemporaryDirectory() as tmp:
+    fake = os.path.join(tmp, 'bin')
+    os.makedirs(fake)
+    for tool in ('id', 'stat', 'cat'):
+        if shutil.which(tool):
+            os.symlink(shutil.which(tool), os.path.join(fake, tool))
+    out = subprocess.run([SH, '-c', M.PROBE_SH.replace('/opt/fsgg/pod/probe', 'true'), 'probe', 'app', '97', tmp], capture_output=True, text=True, timeout=30,
+                         env={'PATH': fake}).stdout
+    real = subprocess.run([SH, '-c', M.PROBE_SH.replace('/opt/fsgg/pod/probe', 'true'), 'probe', 'app', '97', tmp], capture_output=True, text=True, timeout=30).stdout
+    check(M.parse_probe(out)['setsid'] == 'absent' and M.parse_probe(real)['setsid'] == 'ok',
+          'the real probe script reports SETSID absent on a PATH without setsid, and ok where util-linux setsid -w exists')
 
 # ---- N5: a sealed path the replay check cannot carry refuses BEFORE the marker
 with tempfile.TemporaryDirectory() as tmp:
