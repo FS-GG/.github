@@ -48,7 +48,7 @@ tally "$TOOL" "the BoardV2Import end-to-end test"
 BUILD="$PRIVATE_TMP/engine-build.log"
 ARTIFACTS="$PRIVATE_TMP/engine-artifacts"
 dotnet build "$ROOT/src/FS.GG.Coord.Cli" -c Release --nologo --artifacts-path "$ARTIFACTS" >"$BUILD" 2>&1 || not_measured "the engine did not build" "$BUILD"
-ENGINE_BIN="$(find "$ARTIFACTS/bin/FS.GG.Coord.Cli" -name fsgg-coord-engine -type f -perm -u+x | head -1)"
+ENGINE_BIN="$(find "$ARTIFACTS/bin/FS.GG.Coord.Cli" -name fsgg-coord-engine -type f -perm -u+x -print -quit)"
 [ -n "$ENGINE_BIN" ] || not_measured "the engine build produced no fsgg-coord-engine" "$BUILD"
 ENGINE="$PRIVATE_TMP/engine.log"
 FSGG_COORD_ENGINE_BIN="$ENGINE_BIN" python3 "$ROOT/tests/board-v2-import/run.py" --no-build \
