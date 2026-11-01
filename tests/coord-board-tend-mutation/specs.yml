@@ -1047,3 +1047,17 @@ mutations:
     anchor:
       pattern: 'board-tend leg: \d+ passed, \d+ failed'
       produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: W28/uncertain-in-run
+    gate: "a field write uncertain in this run skips the item's close in the same run"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      | None when uncertainNow.Contains closure.ItemId ->
+    replace: |-
+      | None when false ->
+    breaks: >-
+      a Delivery is closed in the same run as an uncertain field write on its card
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh

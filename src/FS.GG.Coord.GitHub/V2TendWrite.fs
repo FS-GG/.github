@@ -966,6 +966,8 @@ module V2TendWrite =
             order [] grouped
         // An effect is sent only after every effect it depends on (outside its own item) was written.
         let succeeded = Collections.Generic.HashSet<string>()
+        // Items whose field write came back uncertain in this run: their close is skipped in the same run too.
+        let uncertainNow = Collections.Generic.HashSet<string>()
         let mutable items = 0
         let fieldOutcomes =
             [ for itemId, effects in groups do
@@ -988,11 +990,14 @@ module V2TendWrite =
                     items <- items + 1
                     let outcome, ok = applyItem context card.Value effects
                     if ok then for e in effects do succeeded.Add e.Id |> ignore
+                    if outcome.Result = "uncertain" then uncertainNow.Add itemId |> ignore
                     yield outcome ]
         let closeOutcomes =
             [ for closure in input.Plan.Close do
                 match blocked closure.ItemId with
                 | Some reason -> yield { Subject = closure.ItemId; Ref = closure.Ref; Kind = "close"; Result = "refused"; Detail = reason }
+                | None when uncertainNow.Contains closure.ItemId ->
+                    yield { Subject = closure.ItemId; Ref = closure.Ref; Kind = "close"; Result = "refused"; Detail = "uncertain-custody" }
                 | None when items >= context.Settings.MaxItemsPerRun -> yield { Subject = closure.ItemId; Ref = closure.Ref; Kind = "close"; Result = "deferred"; Detail = "budget" }
                 | None ->
                     items <- items + 1
