@@ -1,0 +1,8 @@
+{"schema":"fsgg.board-tend-snapshot/1","observedAt":"2026-11-01T12:00:00Z",
+ "cards":[
+  {"itemId":"D-fill","ref":"FS-GG/x#120","workLevel":"Delivery","track":"Follow-up","status":"Ready","enrolled":true,"enrolledRoadmap":"https://github.com/FS-GG/.github/blob/main/docs/roadmaps/a.md"},
+  {"itemId":"D-differs","ref":"FS-GG/x#121","workLevel":"Delivery","track":"Follow-up","status":"Ready","enrolled":true,"roadmap":"https://example.invalid/other","enrolledRoadmap":"https://github.com/FS-GG/.github/blob/main/docs/roadmaps/a.md"},
+  {"itemId":"D-unenrolled","ref":"FS-GG/x#122","workLevel":"Delivery","track":"Follow-up","status":"Ready","enrolledRoadmap":"https://github.com/FS-GG/.github/blob/main/docs/roadmaps/a.md"},
+  {"itemId":"P-card","ref":"FS-GG/x#123","kind":"pullRequest"},
+  {"itemId":"X-card","kind":"unreadable"}
+ ]}

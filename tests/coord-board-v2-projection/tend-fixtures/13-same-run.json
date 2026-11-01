@@ -1,0 +1,5 @@
+{"schema":"fsgg.board-tend-snapshot/1","observedAt":"2026-11-01T12:00:00Z",
+ "cards":[
+  {"itemId":"O-new","ref":"FS-GG/x#80","intendedLine":"Work level: Outcome · Track: Active delivery","subIssues":[{"ref":"FS-GG/x#81","open":true}]},
+  {"itemId":"D-new","ref":"FS-GG/x#81","parent":"FS-GG/x#80","prs":[{"id":"PR-81","state":"open"}]}
+ ]}

@@ -1,0 +1,332 @@
+# Mutation legs for the board-tend pure derivation (FS-GG/.github#5136 phase 2 PR 2; design §3, §10).
+# Each leg reverts ONE guard in src/FS.GG.Coord.GitHub/V2Tend.fs and requires the V2Tend tests to fail.
+#
+#     TMPDIR=<private> scripts/gate-mutate.py --specs tests/coord-board-tend-mutation/specs.yml
+#
+# On demand (each leg rebuilds and runs the V2Tend tests); tests/coord-board-tend-mutation/run.sh checks on every
+# PR that each leg's `find` still matches. Later phase 2 PRs add legs for the writer, the lock and the enable file.
+mutations:
+  - id: T1/strict-linkage
+    gate: "S3 and S3b move a card only on strict linkage"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      let strictOpen = c.Prs |> List.filter (fun pr -> pr.Linkage = Strict && pr.State = PrOpen && not pr.Draft)
+    replace: |-
+      let strictOpen = c.Prs |> List.filter (fun pr -> pr.State = PrOpen && not pr.Draft)
+    breaks: >-
+      a loosely linked PR (several Deliveries, no parent Outcome) moves the card to In review
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T2/blocked-moved-by-open-pr
+    gate: "Blocked is never moved by an open PR"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | Some (Backlog | Ready | InProgress) when not (List.isEmpty strictOpen) -> Change("S3", "In review", false, [])
+    replace: |-
+      | Some (Backlog | Ready | InProgress | Blocked) when not (List.isEmpty strictOpen) -> Change("S3", "In review", false, [])
+    breaks: >-
+      an open PR overturns Root's Blocked judgement
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T3/done-settle-window
+    gate: "S1 waits doneSettleMinutes after closure"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | _, Some closed when (now - closed).TotalMinutes >= parameters.DoneSettleMinutes -> Change("S1", "Done", false, [])
+    replace: |-
+      | _, Some closed when (now - closed).TotalMinutes >= 0.0 -> Change("S1", "Done", false, [])
+    breaks: >-
+      the backstop races the built-in Done workflow on every fresh closure
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T4/review-settle-window
+    gate: "S4 waits reviewSettleHours"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | Some updated when hoursBetween now updated >= parameters.ReviewSettleHours -> Change("S4", "In progress", false, [])
+    replace: |-
+      | Some updated -> Change("S4", "In progress", false, [])
+    breaks: >-
+      a card just put In review is moved back before its PR opens
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T5/s4-ignores-merged-and-loose
+    gate: "S4 fires only when nothing is linked"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | Some InReview when noOpen && List.isEmpty strictMerged && List.isEmpty loose ->
+    replace: |-
+      | Some InReview when noOpen ->
+    breaks: >-
+      a merged Delivery awaiting acceptance is moved back to In progress (D4)
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T6/track-overwritten
+    gate: "Track is filled only when absent"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      if c.Track.IsSome then NoChange
+    replace: |-
+      if false then NoChange
+    breaks: >-
+      a Track people set is overwritten
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T7/s9r-without-root
+    gate: "S9r needs a Root-authored intended-fields line"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    occurrences: 2
+    find: |-
+      | Some Ready when c.Intended.Value.RootAuthored -> Change("S9r", "Ready", false, [])
+    replace: |-
+      | Some Ready -> Change("S9r", "Ready", false, [])
+    breaks: >-
+      any author's intended-fields line admits Ready
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T8/w1-conflict-hidden
+    gate: "a leaf declaring Outcome is refused, never hidden"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      if declared = Some Outcome then Refuse("W1h", "work-level-conflict")
+    replace: |-
+      if false then Refuse("W1h", "work-level-conflict")
+    breaks: >-
+      W1h writes Delivery over a declaration that says Outcome
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T9/leaf-settle-window
+    gate: "W1h waits leafSettleHours on a leaf"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      elif hoursBetween now c.CreatedAt < parameters.LeafSettleHours then Defer("W1h", SettleWindow)
+    replace: |-
+      elif false then Defer("W1h", SettleWindow)
+    breaks: >-
+      a just-filed issue about to receive sub-issues is called a Delivery
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T10/within-round-visibility
+    gate: "an effect is visible to later cards in the same run"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      state <- state.Add(item, withValue now before field target)
+    replace: |-
+      ()
+    breaks: >-
+      a child cannot see its parent's fill, so the run never settles
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T11/expiry-runs
+    gate: "an input-pending deferral expires on its third run"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | Some entry -> entry.Runs >= parameters.ExpiryRuns - 1 || hoursBetween now entry.FirstDeferredAt >= parameters.ExpiryHours
+    replace: |-
+      | Some entry -> entry.Runs >= parameters.ExpiryRuns || hoursBetween now entry.FirstDeferredAt >= parameters.ExpiryHours
+    breaks: >-
+      a pending field stays unproposed for a fourth run
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T12/expiry-hours
+    gate: "an input-pending deferral expires after 24 hours"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | Some entry -> entry.Runs >= parameters.ExpiryRuns - 1 || hoursBetween now entry.FirstDeferredAt >= parameters.ExpiryHours
+    replace: |-
+      | Some entry -> entry.Runs >= parameters.ExpiryRuns - 1
+    breaks: >-
+      a slow cadence never proposes a stuck field
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T13/settle-window-counted
+    gate: "a settle-window deferral does not count toward expiry"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | SettleWindow -> false
+    replace: |-
+      | SettleWindow -> true
+    breaks: >-
+      a young leaf is proposed as undetermined during its own settle window
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T14/dependencies-dropped
+    gate: "effects record what they depend on"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | None -> { Preimage = valueOf original.[item] field; Rules = [ rule ]; Target = target; Deps = Set.ofList deps }
+    replace: |-
+      | None -> { Preimage = valueOf original.[item] field; Rules = [ rule ]; Target = target; Deps = Set.empty }
+    breaks: >-
+      the writer may send a child's inherited Track before its parent's fill
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T15/rollup-incomplete-children
+    gate: "an incomplete child list withholds the roll-up"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      elif not c.SubIssuesComplete then Refuse("O1", "children-incomplete")
+    replace: |-
+      elif false then Refuse("O1", "children-incomplete")
+    breaks: >-
+      a truncated sub-issue list rolls the Outcome up from a partial view
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T16/rollup-overturns-blocked
+    gate: "O1 never moves an Outcome off Blocked"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      let writable = function None | Some Backlog | Some Ready | Some InProgress -> true | _ -> false
+    replace: |-
+      let writable = function Some InReview | Some Done -> false | _ -> true
+    breaks: >-
+      the roll-up overturns Root's Blocked judgement on an Outcome
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T17/dependants-not-transitive
+    gate: "dependants of a refused effect are found transitively"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      close (found + Set.ofList direct) (rest @ direct)
+    replace: |-
+      close (found + Set.ofList direct) rest
+    breaks: >-
+      a refused fill defers its child but not its grandchild
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T18/intent-from-final-state
+    gate: "P-INTENT reads the original Status"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      let first = original.[c.ItemId]
+    replace: |-
+      let first = c
+    breaks: >-
+      a declared In progress or Blocked intent is never proposed because S9 already filled Backlog
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T19/disabled-rule-applied
+    gate: "only enabled rules are applied"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | Change(rule, target, fallback, deps) when enabled rule && valueOf (card item) field <> Some target ->
+    replace: |-
+      | Change(rule, target, fallback, deps) when valueOf (card item) field <> Some target ->
+    breaks: >-
+      the starting set writes every rule
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T20/roadmap-unenrolled
+    gate: "Roadmap is written only on enrolled cards"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      if not c.Enrolled then NoChange
+    replace: |-
+      if false then NoChange
+    breaks: >-
+      an unenrolled card gets a Roadmap write (D6)
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T21/t1f-ignores-pending-work-level
+    gate: "T1f waits while the card's own Work level is pending"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      if workLevelPending c then Defer("T1f", InputPending)
+    replace: |-
+      if false then Defer("T1f", InputPending)
+    breaks: >-
+      a card whose Work level is still deferring takes the Follow-up default it may never have needed
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T22/disabled-rule-expires
+    gate: "only disabled T1d, T1i and W1d count toward expiry"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      | RuleDisabled -> expiringWhenDisabled.Contains rule
+    replace: |-
+      | RuleDisabled -> true
+    breaks: >-
+      every disabled rule expires into a public, mislabelled proposal after three runs
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: T23/settle-window-after-expiry-clock
+    gate: "the leaf settle window runs before the off-board parent's expiry clock"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2Tend.fs
+    find: |-
+      elif hoursBetween now c.CreatedAt < parameters.LeafSettleHours then Defer("W1h", SettleWindow)
+                              elif (lookup parent).IsNone then Defer("W1h", InputPending)
+    replace: |-
+      elif (lookup parent).IsNone then Defer("W1h", InputPending)
+                              elif hoursBetween now c.CreatedAt < parameters.LeafSettleHours then Defer("W1h", SettleWindow)
+    breaks: >-
+      a young leaf under an off-board parent starts its expiry clock inside its own settle window
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh

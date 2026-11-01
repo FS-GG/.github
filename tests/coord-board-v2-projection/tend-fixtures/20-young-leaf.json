@@ -1,0 +1,5 @@
+{"schema":"fsgg.board-tend-snapshot/1","observedAt":"2026-11-01T12:00:00Z",
+ "cards":[
+  {"itemId":"O-parent","ref":"FS-GG/x#90","workLevel":"Outcome","track":"Active delivery","status":"Ready","subIssues":[{"ref":"FS-GG/x#91","open":true}]},
+  {"itemId":"D-young","ref":"FS-GG/x#91","parent":"FS-GG/x#90","status":"Ready","createdAt":"2026-11-01T10:00:00Z"}
+ ]}

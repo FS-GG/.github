@@ -1,0 +1,9 @@
+{"schema":"fsgg.board-tend-snapshot/1","observedAt":"2026-11-01T12:00:00Z",
+ "cards":[
+  {"itemId":"I-enrolled","ref":"FS-GG/x#50","workLevel":"Delivery","track":"Follow-up","status":"Backlog","blockedOn":"Nothing external.","enrolled":true},
+  {"itemId":"I-unenrolled","ref":"FS-GG/x#51","workLevel":"Delivery","track":"Follow-up","status":"Backlog","blockedOn":"Nothing"},
+  {"itemId":"I-has-blocker","ref":"FS-GG/x#52","workLevel":"Delivery","track":"Follow-up","status":"Backlog","blockedOn":"Nothing","blockers":[{"ref":"FS-GG/x#99","open":true}]},
+  {"itemId":"I-blocked-free","ref":"FS-GG/x#53","workLevel":"Delivery","track":"Follow-up","status":"Blocked","blockers":[{"ref":"FS-GG/x#98","open":false}]},
+  {"itemId":"I-blocked-none","ref":"FS-GG/x#54","workLevel":"Delivery","track":"Follow-up","status":"Blocked"},
+  {"itemId":"I-blocked-unread","ref":"FS-GG/x#55","workLevel":"Delivery","track":"Follow-up","status":"Blocked","markerBlockers":null}
+ ]}
