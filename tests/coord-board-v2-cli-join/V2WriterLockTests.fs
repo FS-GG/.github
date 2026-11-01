@@ -107,9 +107,9 @@ let ``only the production composition resolves the production lock and no test r
     let count (text: string) (needle: string) = (text.Length - text.Replace(needle, "").Length) / needle.Length
     // One resolver wraps V2WriterLock.production, and only tryRun (the installed command) uses it.
     Assert.Equal(1, count application "V2WriterLock.production ")
-    Assert.Equal(3, count application "productionWriterLock") // definition plus the two tryRun arms
+    Assert.Equal(4, count application "productionWriterLock") // definition plus the three tryRun arms (migration, refresh, tend)
     let tryRun = application.Substring(application.IndexOf("let tryRun arguments", StringComparison.Ordinal))
-    Assert.Equal(2, count tryRun "productionWriterLock")
+    Assert.Equal(3, count tryRun "productionWriterLock")
     // Every engine source that touches a lock goes through V2WriterLock: no direct GetTempPath lock remains.
     for file in Directory.EnumerateFiles(Path.Combine(root, "src"), "*.fs", SearchOption.AllDirectories) do
         let text = File.ReadAllText file

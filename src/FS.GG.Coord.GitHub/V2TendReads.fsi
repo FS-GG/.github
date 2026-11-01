@@ -48,9 +48,20 @@ module V2TendReads =
     /// The read ceiling of design §2: 8 + ceil(rows/50) + ceil(rows/25) requests.
     val readCeiling: rows: int -> int
 
-    /// The kinds of a GraphQL document's top-level definitions (`query`, `mutation`, `subscription`,
-    /// `fragment`; a bare selection set is `query`), skipping comments and strings; None when the document
-    /// does not lex or its braces and parentheses do not balance.
+    /// One top-level definition of a GraphQL document: its kind (`query`, `mutation`, `subscription`,
+    /// `fragment`; a bare selection set is `query`) and its root fields, by field name after any alias
+    /// (`...` for a fragment spread or inline fragment).
+    type Operation = { Kind: string; RootFields: string list }
+
+    /// A parsed GraphQL document. `HasStringLiteral` says a string or block string appears anywhere in it.
+    type Document = { Operations: Operation list; HasStringLiteral: bool }
+
+    /// Parse a GraphQL document far enough to know every definition's kind and root fields: comments,
+    /// commas, strings and block strings are lexed; selection sets, arguments and directives must balance.
+    /// None when it does not parse that far.
+    val parseDocument: document: string -> Document option
+
+    /// The kinds of a document's top-level definitions (`parseDocument`); None when it does not parse.
     val operationKinds: document: string -> string list option
 
     /// A transport that refuses every mutation and every request that is not a GraphQL document of
