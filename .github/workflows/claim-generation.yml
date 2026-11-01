@@ -1,0 +1,236 @@
+# claim-generation — the REQUIRED `claim-generation` merge fence (.github#2342, armed by .github#1858),
+# in its own workflow (.github#4730, CI load).
+#
+# WHY IT MOVED OUT OF `coherence.yml`. `claim-generation` is the one job in that workflow that reads the
+# PULL REQUEST BODY (the `fsgg:pr-authorization` marker), so it is the only job that needs the `edited`
+# trigger (.github#2488, below). While it shared a file with the other five jobs, every PR body edit
+# re-ran all of them (the `contract-coherence` reusable gate, `projection`, `v2-ci-ordinary-policy`,
+# `engine-build-siting` and `roster-closure`) to the same verdicts, on a runner pool that had become the binding constraint on
+# delivery (#4730: about 10 jobs per body edit repository-wide, about 870 jobs a day).
+# Here `edited` costs one job; `coherence.yml` now subscribes to the three GitHub defaults only.
+#
+# THE REQUIRED CONTEXT IS UNCHANGED. A job's check-run name is its `name:` if it has one, else its job
+# id, with no workflow-file prefix — so the job id `claim-generation` here reports exactly the context
+# `claim-generation` that `main`'s branch protection requires. Do not give this job a `name:` and do not
+# rename the job id.
+#
+# HOW THE MOVE LEAVES NO WINDOW AND NO SECOND PRODUCER (.github#4730). A `pull_request` workflow runs
+# from the PR's MERGE commit, so every pull-request event evaluates exactly one tree: the one that has
+# the job in `coherence.yml` (before this change merged), or the one that has it here (after). They never
+# overlap, because the removal from `coherence.yml` and the addition of this file are ONE commit and the
+# static check below sees exactly one producer in each tree. `scripts/check-required-contexts.py` proves
+# in both trees that the context is reported on EVERY pull request, and the producer count is pinned in
+# `tests/claim-generation/run.sh`. The pre-existing second writer of this context, `claim-freshness-sweep`,
+# is unchanged: it only ever revokes a standing green.
+#
+# This workflow carries NO `paths:` filter (.github#1508: GitHub never creates the check run for a
+# path-filtered required check, so branch protection would wait forever), and NO job-level `if:`: it
+# triggers on `pull_request` only, so the job always runs, and it decides its own applicability from the
+# BRANCH SHAPE (`item/<n>-*`) inside the script.
+#
+# WHY `edited` IS HERE AND ONLY HERE (.github#2488). `claim-generation` reads `Client.ensureAuthorization`'s
+# `fsgg:pr-authorization` marker, which a worker's own live `delivery <ref> --pr N` call PATCHes into the
+# PR body FROM OUTSIDE THIS WORKFLOW (see the job's comment for why the write cannot happen IN CI). A PATCH
+# is edited, never a push, so without `edited` nothing ever re-evaluates the gate against a marker such a
+# call just wrote, and every `item/<n>-*` PR the fleet opens stays fenced on the `opened` event's
+# ALREADY-STALE `github.event.pull_request.body` forever (measured: five for five real PRs, #2488's
+# evidence table).
+#
+# THERE IS DELIBERATELY NO `schedule:` HERE (.github#2656). `claim-generation` fences a merge on a claim
+# whose LEASE EXPIRES, and a lease expiring is not an event. A cron is the only Actions trigger that is a
+# function of time, but a required context whose every producer carries a job-level `if:` that
+# `scripts/check-required-contexts.py` cannot PROVE runs on a normal pull request may silently never
+# report, so the sweep lives in `.github/workflows/claim-freshness-sweep.yml`, on its own cron, with its
+# own `checks: write`.
+name: claim-generation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  issues: read     # reads fsgg:claim marker comments on the item the PR's branch names — a valid
+                   # GITHUB_TOKEN scope, unlike `administration` (.github#2342).
+
+# Head-keyed concurrency (#4730 CI-load, #5159), the SAME shape scripts/check-pr-concurrency.py governs on
+# the other workflows a body edit starts. A head action (opened, synchronize, reopened) keys on the pull
+# request, so a newer head cancels the superseded head's run. `edited` keys on `github.run_id`, which is
+# unique to the run: a body edit never cancels the head run for the SAME head and is never cancelled
+# itself. That matters most here, because this is a REQUIRED context: a cancelled required check on a live
+# head reads as failing, and a re-run replays the stale body (#5159). Each edit's run settles on its own
+# payload, which is exactly what `edited` is for (#2488). The cancel is pull_request-only so a trigger
+# added later cannot make other events cancel. tests/claim-generation/run.sh pins this block exactly, and
+# check-pr-concurrency.py (GOVERNED) derives the required shape from the `edited` trigger above.
+concurrency:
+  group: claim-generation-${{ contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Merge fence, slice 1 (.github#2342 — slice 1 of .github#1858's replacement-plan step 2, "fence
+  # merges"; design gate .github#2210,
+  # docs/reports/2026-08-04-github-native-executor-fencing-design.md). Reads the LIVE `fsgg:claim`
+  # generation for the item this PR's own branch (`item/<n>-*`) declares it delivers, and compares it
+  # against an explicit `fsgg:pr-authorization` marker in the PR body. See
+  # scripts/check-claim-generation.py's own docstring for the four diagnoses this gate distinguishes
+  # (missing / stale / mismatched / unreadable) and for exactly how this slice is narrower than the
+  # full design (it does not yet ground the marker against a merge election — that is a later slice,
+  # out of this item's `Paths:`).
+  #
+  # ARMED, AND MERGE-BLOCKING TODAY (armed by .github#1858; this paragraph restored by .github#2526).
+  # `claim-generation` IS one of `main`'s required status checks, so a red verdict here BLOCKS the merge.
+  # Read live on 2026-08-13:
+  #
+  #   $ gh api repos/FS-GG/.github/branches/main/protection \
+  #       --jq '.required_status_checks.contexts'
+  #   ["contract-coherence / coherence","projection","roster-closure","drift","reconcile",
+  #    "claim-generation"]
+  #
+  # HOW IT GOT THERE, AS HISTORY (.github#2342 AC6). This job shipped OBSERVE-ONLY, and nothing in this
+  # file adds a context to branch protection — arming is a deliberate, separate, administrative action,
+  # correctly deferred at the time until design slice 3 (`delivery` writing the marker automatically) had
+  # landed and a full claim-lease window had passed with zero unmarked in-flight `item/<n>-*` pull
+  # requests (design doc §9.1's migration sequence). Slice 3 landed (.github#2395), the window passed,
+  # and an admin ran the `PUT` that arming needs, alongside this repo's five other contexts:
+  #
+  #   gh api -X PUT repos/FS-GG/.github/branches/main/protection/required_status_checks/contexts \
+  #     -f "contexts[]=contract-coherence / coherence" -f "contexts[]=projection" \
+  #     -f "contexts[]=roster-closure" -f "contexts[]=drift" -f "contexts[]=reconcile" \
+  #     -f "contexts[]=claim-generation"
+  #
+  # The armed state is a fact about the BRANCH, not about this file, which is why this comment — and the
+  # live read above — is the only place it can be recorded here.
+  #
+  # THIS JOB'S RED WAS BLOCKING BEFORE THAT, THROUGH A DIFFERENT DOOR (.github#2373). While branch
+  # protection still did not enforce it, `scripts/fsgg-coord landable`, the merge gate `pnext-item` names
+  # as authoritative, scored every LIVE check-run unconditionally and did not know this one was meant to
+  # be advisory, so a FINDING here (the ordinary shape for a PR opened before its worker knew to write the
+  # `fsgg:pr-authorization` marker) read `landable` RED anyway — reproduced live across three PRs in one
+  # wave. #2373's repair was a NAMED exemption for this check in `Landable.fs` (`advisoryCheckNames`), and
+  # this paragraph used to instruct that BOTH that name and this comment's deferral be removed in the same
+  # change that armed the job. NEITHER REMOVAL IS OUTSTANDING, AND NO NAME REMAINS TO REMOVE: .github#2517
+  # deleted that literal and made `Landable.fs`'s advisory set the DERIVED COMPLEMENT of the base branch's
+  # own required contexts (`Landable.advisoryFrom`). `claim-generation` is in that required set, so the
+  # engine's own rollup now scores it `Blocking` as well — the two subsystems agree by construction rather
+  # than by remembering to edit them together, and arming or disarming this job needs no source edit here.
+  #
+  # No `paths:` filter — inherited from this workflow's own `on:` above, which is deliberately
+  # unfiltered (.github#1508: a required context must report on EVERY pull request, and GitHub never
+  # skips a path-filtered required check — it never creates the check run at all, so branch protection
+  # waits forever). This job decides its own applicability from the BRANCH SHAPE
+  # (`item/<n>-*`) rather than from a trigger filter, so an unrelated PR still gets a real `success`.
+  #
+  # DOES NOT SELF-HEAL ITS OWN MARKER IN CI, AND THAT IS A DELIBERATE, MEASURED CHOICE (.github#2488
+  # round 1 repair). An earlier draft of this job ran `who --json` here to find the live claim holder,
+  # then re-invoked `delivery <ref> --pr N` under that identity to PATCH the body. Both calls' FIRST
+  # action is a live Coordination Projects (v2) board bootstrap (`Board.bootstrapCached`,
+  # `src/FS.GG.Coord.GitHub/Board.fs`) — and this org's CI credential inventory does not carry that
+  # read. This is not a bug this job could route around: `coherence.yml`'s `roster-closure`,
+  # a sibling workflow, and `docs/adr/0019-org-repo-roster-registry-and-coordination-kit.md`'s 2026-08-11
+  # amendment (`.github#2332`) already record it as an ACCEPTED org decision — `FSGG_DISPATCH_APP_ID`/
+  # `_PRIVATE_KEY`, `GITHUB_TOKEN`, and `NUGET_USER` are this org's whole CI credential inventory, and
+  # NONE of them carries organization or Projects (v2) read. A self-heal step built on either call
+  # would red identically to a missing one, every time, under any credential already available here —
+  # measured live: `who --json` failed `not found: no Projects v2 board titled 'Coordination' in
+  # FS-GG` on this PR's own first head (`da310d55`, run 31655633573/job 94309337287).
+  #
+  # ITS GREEN IS PERISHABLE, AND SOMETHING ELSE HAS TO NOTICE (.github#2656). What this job asserts is
+  # "at the instant it ran, the item was held under generation G" — and the claim lease it read expires.
+  # None of this workflow's triggers fires on that expiry, so a green computed before a lapse stays
+  # green with nothing to re-compute it, and branch protection (the only fence on a merge made from the
+  # GitHub UI or a bare `gh pr merge`, since `delivery --apply` re-reads the winning claim itself) would
+  # admit the merge on a lapsed premise. `.github#2571`'s chain came within one ordering of showing that
+  # live: the lease lapsed mid-review and was caught ONLY because it lapsed BEFORE `pnext-item` §6's
+  # `delivery` call rather than after this job went green.
+  #
+  # `.github/workflows/claim-freshness-sweep.yml` is what notices. On its own cron it re-runs THIS
+  # script over every open `item/<n>-*` PR and publishes a fresh `claim-generation` check run when this
+  # job's green has stopped being true — so a revoked green blocks the merge exactly as this job's own
+  # red would. It only ever REVOKES: it cannot turn this check green, deliberately, because clearing a
+  # required merge gate should not be something a cron can do with no repository event behind it. Every
+  # OK this job prints now carries the instant it stops being true (`verdict-expires-at=`), derived from
+  # the winning claim marker's own `lease=`.
+  #
+  # THE EMISSION POINT, NAMED (.github#2488 AC2) AND WHERE IT ACTUALLY LIVES: `Client.ensureAuthorization`,
+  # reached through a plain LIVE `delivery <ref> --pr N` status read — no `--apply`, so it can never merge
+  # or close anything (see that function's own doc comment in `Client.fs`). That call is NOT made from
+  # this workflow; it is made from a WORKER's own shell, which already holds a working board/GitHub
+  # credential (the same one every other coordination-engine command in that worker's session uses) —
+  # exactly the credential this job's own token cannot be given under the accepted decision above. The
+  # `edited` type this workflow's `on:` block now carries exists FOR that external write: a worker's
+  # `delivery` call PATCHes the PR body from outside this job entirely, and `edited` is what makes THIS
+  # job re-evaluate against it, automatically, with no human intervention and no close/reopen — see the
+  # `on:` block's own comment for the "why `edited`" half of this story.
+  claim-generation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+
+      - name: Run the claim-generation fixture (no network)
+        run: bash tests/claim-generation/run.sh
+
+      - name: Run the claim-producer fixture (no network)
+        run: bash tests/claim-producer/run.sh
+
+      # The body AND the branch name go through the ENVIRONMENT, never interpolated into a `run:`
+      # block. Both are attacker-controlled text — closing-keywords.yml states the same rule for the
+      # PR body, and a branch name can carry shell metacharacters just as readily as a body can.
+      - name: Assert the live claim generation authorizes this merge
+        id: check
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$PR_BODY" > pr-body.md
+          rc=0
+          out="$(python scripts/check-claim-generation.py \
+                   --repo "${{ github.repository }}" --head-ref "$HEAD_REF" --head-sha "$HEAD_SHA" \
+                   --body pr-body.md 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code — "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266). The exit code is the contract; nothing here greps the gate's prose.
+      - name: 'OK: authorization is current, or this PR does not deliver a board item'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "claim-generation: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: missing, stale, expired, or mismatched claim-generation authorization'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### claim-generation: this PR's authorization does not name the current live claim"
+            echo
+            echo 'See the job log above for which of the four — missing, stale, expired, or mismatched'
+            echo '— and why. This check is REQUIRED on `main` (.github#1858 armed it), so this red BLOCKS'
+            echo 'the merge; see scripts/check-claim-generation.py for the `fsgg:pr-authorization` marker'
+            echo 'a PR body needs to carry, and `pnext-item` §6 for the `delivery` call that writes it.'
+            echo '`[expired]` is the one that is NOT a lost race (.github#2656): the claim marker is'
+            echo 'still there and still names its holder, and the lease simply ran out. `heartbeat`'
+            echo 'renews the SAME generation, and this check goes green again without re-authorizing.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=claim-generation: authorization is missing, stale, expired, or mismatched::See the job log for which, and why."
+          exit 1
+
+      - name: 'NO VERDICT (retryable): the live claim state could not be read'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '2' }}
+        run: |
+          echo "::error title=claim-generation: no verdict (retryable)::A rate limit or outage kept this job from reading the live claim state (#266: a failed read is never a pass). Re-run the job."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): a permission or input failure'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          echo "::error title=claim-generation: no verdict (permanent)::See the job log — a credential problem or an unusable input kept this job from establishing a verdict. Retrying will not help."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","2","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=claim-generation: inconclusive::check-claim-generation.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1

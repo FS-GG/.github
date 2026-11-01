@@ -1,9 +1,9 @@
 # Re-evaluate the `claim-generation` merge fence on a clock, because its premise expires on one
 # (.github#2656).
 #
-# THE DEFECT THIS CLOSES. `claim-generation` — `coherence.yml`'s job, one of `main`'s REQUIRED status
+# THE DEFECT THIS CLOSES. `claim-generation` — `claim-generation.yml`'s job (moved out of `coherence.yml`, .github#4730), one of `main`'s REQUIRED status
 # checks — asserts a PERISHABLE fact: "at the instant this ran, the item this PR delivers was held
-# under claim generation G". The claim it read carries a LEASE, and that lease expires. `coherence.yml`
+# under claim generation G". The claim it read carries a LEASE, and that lease expires. `claim-generation.yml`
 # runs the job on `opened`/`synchronize`/`reopened`/`edited`, and a lease lapsing is none of those: it
 # is the passage of time. So the green verdict survives the claim it fences on, and nothing in GitHub
 # re-computes it.
@@ -84,7 +84,7 @@ jobs:
   # rather than intended:
   #
   #   * IT NEVER ORIGINATES A VERDICT. A head with no standing `claim-generation` check run is left
-  #     entirely alone. Everything this can ever do is CHANGE an answer `coherence.yml`'s own job
+  #     entirely alone. Everything this can ever do is CHANGE an answer `claim-generation.yml`'s own job
   #     already gave, so a cron can never be the first thing to judge a pull request.
   #   * IT ONLY EVER REVOKES. The one transition it publishes is `success` -> `failure`. A live claim
   #     under a standing red is left alone, deliberately. Round 1 of this PR's review measured the

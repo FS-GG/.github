@@ -28,7 +28,7 @@ strong, deliberate convention in nearly every `*-coherence.yml`), `coherence` (5
 `selftest` (3), `audit`/`dogfood`/`freshness`/`monopoly` (2 each). None of them is in this repo's
 required status checks today (`projection`, `roster-closure`, `drift`, `reconcile`, and the nested
 `contract-coherence / coherence` — verified via `gh api repos/FS-GG/.github/branches/main/protection`,
-also quoted in `coherence.yml`'s `claim-generation` job comment), so none is exploitable YET — but an
+also quoted in `claim-generation.yml`'s job comment), so none is exploitable YET — but an
 absolute gate would still be born red, on ~65 jobs, for a hazard nobody introduced today. Worse: it
 would then RED EVERY FUTURE PR THAT TOUCHES ANY WORKFLOW FILE AT ALL, for a pre-existing shared name
 that PR never touched — the `#266` fail-open class turned inside out into a fail-SHUT that trains

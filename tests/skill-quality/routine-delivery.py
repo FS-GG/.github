@@ -403,7 +403,10 @@ class DeliveryEvidenceTests(unittest.TestCase):
             self.assertIn(".github/workflows/coherence.yml", suite["on"][event]["paths"])
         _, _, workflow, job, capture = emitters[0]
         self.assertEqual(set(workflow["on"]["pull_request"]), {"types"})
-        self.assertEqual(workflow["on"]["pull_request"]["types"], ["opened", "synchronize", "reopened", "edited"])
+        # .github#4730: `edited` moved to claim-generation.yml with the only job that reads the PR body. The
+        # tested-checkout fact records head/base/PR number, none of which a body edit changes, so the
+        # producer's run for the current head is still the one delivery evidence selects.
+        self.assertEqual(workflow["on"]["pull_request"]["types"], ["opened", "synchronize", "reopened"])
         self.assertNotIn("if", job)
         self.assertEqual(capture["if"], "github.event_name == 'pull_request'")
         self.assertEqual(capture["continue-on-error"], "true")
