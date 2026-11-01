@@ -132,6 +132,12 @@ module SkillTelemetryReaders =
           // Modification time of the opened descriptor, in Unix seconds, used only to recognize a quiescent source.
           ModifiedAtUnixSeconds: int64 }
 
+    // A selected Claude source that is a subagent transcript, identified from its path alone.
+    type ClaudeSubagentSource =
+        { SessionId: string
+          AgentId: string
+          InvocationId: string }
+
     type NativeCounters =
         {
             Input: int64
@@ -1609,6 +1615,154 @@ module SkillTelemetryReaders =
 
         let scanPassive (codexHome: string) (path: string) (prior: PassiveCursor option) (maximumBytes: int) (maximumRecords: int) =
             scanPassiveFrom (CodexHome codexHome) path prior maximumBytes maximumRecords
+
+        // Subagent dispatch evidence. Claude Code writes `<project>/<session>/subagents/agent-<id>.jsonl`, its sibling
+        // `agent-<id>.meta.json`, and the launch result in the spawning transcript. Every read uses the same no-follow
+        // opener below the selected projects root, is bounded, and returns only allowlisted values.
+        let private subagentFileName =
+            Regex("^agent-([A-Za-z0-9_-]{1,128})\\.jsonl$", RegexOptions.CultureInvariant)
+
+        let claudeSubagentSource (claudeHome: string) (path: string) =
+            try
+                let full = Path.GetFullPath path
+                let subagents = Path.GetDirectoryName full
+                let session = Path.GetDirectoryName subagents
+                let project = Path.GetDirectoryName session
+                let named = subagentFileName.Match(Path.GetFileName full)
+                let sessionId = Path.GetFileName session
+
+                match Guid.TryParseExact(sessionId, "D") with
+                | true, parsed when
+                    named.Success
+                    && Path.GetFileName subagents = "subagents"
+                    && parsed <> Guid.Empty
+                    && parsed.ToString("D") = sessionId
+                    && Path.GetDirectoryName project = Path.GetFullPath(Path.Combine(claudeHome, "projects"))
+                    ->
+                    Some
+                        { SessionId = sessionId
+                          AgentId = named.Groups[1].Value
+                          InvocationId = FS.GG.Coord.RuntimeUsage.ClaudeTranscript.subagentThreadId sessionId named.Groups[1].Value }
+                | _ -> None
+            with _ -> None
+
+        let private claudeProjects (claudeHome: string) = Path.Combine(claudeHome, "projects")
+
+        let private readBounded (claudeHome: string) (path: string) (maximum: int) =
+            match openUnder (claudeProjects claudeHome) path with
+            | Error error -> Error error.Message
+            | Ok opened ->
+                use source = opened
+                if source.Length > int64 maximum then Error "subagent evidence exceeds its bound"
+                else
+                    let bytes = Array.zeroCreate<byte> (int source.Length)
+                    source.ReadExactly(bytes, 0, bytes.Length)
+                    Ok bytes
+
+        let readClaudeSubagentMeta (claudeHome: string) (path: string) =
+            let directory = Path.GetDirectoryName(Path.GetFullPath path)
+            let meta (agent: string) =
+                try
+                    readBounded claudeHome (Path.Combine(directory, $"agent-%s{agent}.meta.json")) 65536
+                    |> Result.bind FS.GG.Coord.RuntimeUsage.ClaudeTranscript.decodeSubagentMeta
+                with _ -> Error "subagent metadata is unavailable"
+            match claudeSubagentSource claudeHome path with
+            | None -> Error "not a subagent transcript"
+            | Some source ->
+                meta source.AgentId
+                |> Result.bind (fun own ->
+                    match own.ParentAgentId with
+                    | None -> Ok(own, None)
+                    | Some parent ->
+                        meta parent
+                        |> Result.map (fun spawning -> own, Some spawning.ToolUseId)
+                        |> Result.mapError (fun _ -> "spawning subagent metadata is unavailable"))
+
+        let private trimLine (bytes: byte array) (length: int) =
+            let mutable length = length
+            if length > 0 && bytes[length - 1] = byte '\n' then length <- length - 1
+            if length > 0 && bytes[length - 1] = byte '\r' then length <- length - 1
+            bytes[.. length - 1]
+
+        // Ok None while the opening record is still being written.
+        let readClaudeSubagentOpening (claudeHome: string) (path: string) =
+            try
+                match openUnder (claudeProjects claudeHome) path with
+                | Error error -> Error error.Message
+                | Ok opened ->
+                    use source = opened
+                    use line = new MemoryStream()
+                    let buffer = Array.zeroCreate<byte> 65536
+                    let mutable result = None
+                    while result.IsNone do
+                        let count = source.Read(buffer, 0, buffer.Length)
+                        if count = 0 then result <- Some(Ok None)
+                        else
+                            let newline = Array.IndexOf(buffer, byte '\n', 0, count)
+                            let take = if newline >= 0 then newline + 1 else count
+                            if line.Length + int64 take > int64 FS.GG.Coord.RuntimeUsage.ClaudeTranscript.MaximumLineBytes then
+                                result <- Some(Error "subagent opening record exceeds its bound")
+                            else
+                                line.Write(buffer, 0, take)
+                                if newline >= 0 then
+                                    let bytes = line.ToArray()
+                                    result <-
+                                        Some(FS.GG.Coord.RuntimeUsage.ClaudeTranscript.decodeSubagentOpening (trimLine bytes bytes.Length)
+                                             |> Result.map Some)
+                    result.Value
+            with _ -> Error "subagent opening record is unavailable"
+
+        // The launch-resolved model from the spawning transcript, when its launch result is present.
+        let findClaudeSubagentLaunch (claudeHome: string) (path: string) (meta: FS.GG.Coord.RuntimeUsage.ClaudeTranscript.SubagentMeta) =
+            match claudeSubagentSource claudeHome path with
+            | None -> None
+            | Some source ->
+                let subagents = Path.GetDirectoryName(Path.GetFullPath path)
+                let spawning =
+                    match meta.ParentAgentId with
+                    | Some parent -> Path.Combine(subagents, $"agent-%s{parent}.jsonl")
+                    | None -> Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName subagents), source.SessionId + ".jsonl")
+                try
+                    match openUnder (claudeProjects claudeHome) spawning with
+                    | Error _ -> None
+                    | Ok opened ->
+                        use stream = opened
+                        let agentNeedle = Text.Encoding.UTF8.GetBytes source.AgentId
+                        let toolNeedle = Text.Encoding.UTF8.GetBytes meta.ToolUseId
+                        use line = new MemoryStream()
+                        let buffer = Array.zeroCreate<byte> 65536
+                        let mutable discarding = false
+                        let mutable read = 0L
+                        let mutable found = None
+                        let mutable finished = false
+                        let candidate () =
+                            let length = int line.Length
+                            let span = ReadOnlySpan<byte>(line.GetBuffer(), 0, length)
+                            if span.IndexOf(ReadOnlySpan agentNeedle) >= 0 && span.IndexOf(ReadOnlySpan toolNeedle) >= 0 then
+                                match FS.GG.Coord.RuntimeUsage.ClaudeTranscript.decodeSubagentLaunch source.AgentId meta.ToolUseId (trimLine (line.ToArray()) length) with
+                                | Ok(Some model) -> found <- Some model
+                                | _ -> ()
+                        while found.IsNone && not finished do
+                            let count = stream.Read(buffer, 0, buffer.Length)
+                            read <- read + int64 count
+                            if count = 0 || read > int64 FS.GG.Coord.RuntimeUsage.ClaudeTranscript.MaximumFileBytes then finished <- true
+                            else
+                                let mutable start = 0
+                                while start < count && found.IsNone do
+                                    let newline = Array.IndexOf(buffer, byte '\n', start, count - start)
+                                    let stop = if newline >= 0 then newline + 1 else count
+                                    if not discarding then
+                                        if line.Length + int64 (stop - start) > int64 FS.GG.Coord.RuntimeUsage.ClaudeTranscript.MaximumLineBytes then
+                                            discarding <- true
+                                            line.SetLength 0L
+                                        else line.Write(buffer, start, stop - start)
+                                    if newline >= 0 then
+                                        if not discarding then candidate ()
+                                        line.SetLength 0L
+                                        discarding <- false
+                                    start <- stop
+                        found
+                with _ -> None
 
         type private UsageRecord =
             {

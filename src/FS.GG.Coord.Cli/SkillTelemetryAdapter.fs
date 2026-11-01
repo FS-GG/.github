@@ -1079,7 +1079,8 @@ module SkillTelemetryAdapter =
         jsonObject [ "schema", node "fsgg.telemetry.original-binding-result/1"; "status", node "applied" ]
 
     // The passive producer reuses the private atomic writer and intent-before-effect discipline.
-    // It has no dispatch, admission, requested model, programme item or authority-service dependency.
+    // It has no authority-service dependency. Its only dispatch, admission, requested-model and item facts are the
+    // Claude Code subagent attribution below, derived from files Claude Code already wrote.
     [<Literal>]
     let private maximumPassiveIdentities = 256
     let private passiveStateSchema = "fsgg.telemetry.passive-producer-state/1"
@@ -1259,6 +1260,80 @@ module SkillTelemetryAdapter =
                 savePassive directory state
                 hook "after-cursor-write"
                 true
+
+    // Claude Code subagent dispatch attribution. It reuses the expected-dispatch, invocation-lineage, runtime-admission
+    // and runtime-gap kinds the receiver already admits. Identities and contents are deterministic, so a re-read replays
+    // the same facts and never mints a new dispatch. The item comes only from the brief's first-line marker; every
+    // other case is an explicit gap. A source's status lives in its cursor ("dispatch") and retired entry ("d").
+    [<Literal>]
+    let private claudeSubagentRuntime = "claude-code-subagent"
+
+    module Claude = FS.GG.Coord.RuntimeUsage.ClaudeTranscript
+
+    let private claudeDispatchStep (claudeHome: string) (path: string) (status: string option) (retiring: bool) =
+        match status, NativeUsage.claudeSubagentSource claudeHome path with
+        | Some "complete", _
+        | _, None -> [], status, []
+        | _, Some source ->
+            let session, invocation = source.SessionId, source.InvocationId
+            match NativeUsage.readClaudeSubagentMeta claudeHome path with
+            | Error _ when status.IsNone ->
+                [ event "diagnostic" ("claude-subagent-dispatch-unavailable-" + invocation) None
+                      [ "code", node "dispatch-identity-unavailable"; "severity", node "warning" ] ],
+                Some "complete", [ "claude-dispatch-identity-unavailable" ]
+            | Error _ -> [], (if retiring then Some "complete" else status), []
+            | Ok(meta, spawningToolUse) ->
+                let dispatch = Claude.subagentDispatchId session meta.ToolUseId
+                let parentDispatch, parentInvocation =
+                    match meta.ParentAgentId, spawningToolUse with
+                    | Some parent, Some tool -> Claude.subagentDispatchId session tool, Claude.subagentThreadId session parent
+                    | _ -> Claude.sessionDispatchId session, session
+                let unattributed reason =
+                    if status.IsSome then [], (if retiring then Some "complete" else status), []
+                    else
+                        // The reason is part of the identity: after a producer-state reset, a re-read that finds a
+                        // different reason is a new fact, never an identity conflict that would quarantine the batch.
+                        [ event "diagnostic" ($"claude-subagent-item-unattributed-{dispatch}-{invocation}-{reason}") None
+                              [ "code", node ("item-unattributed:" + reason); "severity", node "warning" ] ],
+                        Some "complete", [ "claude-dispatch-item-unattributed" ]
+                match NativeUsage.readClaudeSubagentOpening claudeHome path with
+                | Ok None when not retiring -> [], status, []
+                | Ok None
+                | Error _ -> unattributed "prompt-unavailable"
+                | Ok(Some opening) ->
+                    match opening.Marker with
+                    | Claude.MissingMarker -> unattributed "missing-marker"
+                    | Claude.MalformedMarker -> unattributed "malformed-marker"
+                    | Claude.Marked marker ->
+                        let item = Some marker.Item
+                        let declared =
+                            if status.IsSome then []
+                            else
+                                [ event "expected-dispatch" ("expected-dispatch-" + dispatch) item
+                                      [ "dispatchId", node dispatch; "activationId", node (Claude.sessionActivationId session)
+                                        "relation", node "child"; "parentDispatchId", node parentDispatch
+                                        "runtime", node claudeSubagentRuntime; "expectedAt", node opening.StartedAt
+                                        "clockProvenance", node "host-wall" ]
+                                  event "invocation-lineage" ("invocation-lineage-" + invocation) item
+                                      [ "dispatchId", node dispatch; "invocationId", node invocation; "relation", node "child"
+                                        "parentInvocationId", node parentInvocation; "rootInvocationId", node session
+                                        "runtime", node claudeSubagentRuntime ] ]
+                        match NativeUsage.findClaudeSubagentLaunch claudeHome path meta with
+                        | Some model ->
+                            declared
+                            @ [ event "runtime-admission" ("runtime-admission-" + invocation) item
+                                    [ "invocationId", node invocation; "featureId", node marker.Item; "attemptId", node dispatch
+                                      "parentAttemptId", (if meta.ParentAgentId.IsSome then node parentDispatch else nullNode)
+                                      "producerStream", node (claudeSubagentRuntime + ":" + marker.Role)
+                                      "requestedModel", node model; "requestedEffort", nullNode
+                                      "backend", node claudeSubagentRuntime ] ],
+                            Some "complete", []
+                        | None when retiring ->
+                            declared
+                            @ [ event "runtime-gap" ($"runtime-gap-{invocation}-launch-result") item
+                                    [ "invocationId", node invocation; "code", node "claude-launch-result-unavailable" ] ],
+                            Some "complete", [ "claude-dispatch-launch-result-unavailable" ]
+                        | None -> declared, Some "awaiting-launch", []
 
     // One bounded pass over explicit sources. The production caller always supplies its selected association root.
     // Same-owner state cloning/reinitialization/root migration requires original-state/fence reconciliation;
@@ -1441,6 +1516,10 @@ module SkillTelemetryAdapter =
                                             if previousCursor.IsSome then
                                                 events.Add(event "diagnostic" (sourceKey + "-gap") None
                                                     [ "code", node "passive-source-continuity-gap"; "severity", node "warning" ])
+                                        let priorDispatch =
+                                            if active then stringValue (sources[key]["dispatch"])
+                                            elif not (isNull closed) then stringValue (closed["d"])
+                                            else None
                                         if not (isNull closed) then retired.Remove key |> ignore
                                         let cursor = cursorNode scan.Cursor
                                         let latest =
@@ -1448,16 +1527,27 @@ module SkillTelemetryAdapter =
                                             |> List.append (Option.toList highWater)
                                             |> List.sortByDescending parseInstant |> List.tryHead
                                         latest |> Option.iter (fun value -> cursor["highWater"] <- node value)
-                                        sources[key] <- cursor
                                         let quiescent =
                                             scan.Cursor.Offset = scan.SourceLength && not scan.Cursor.SkippingOversized
                                             && nowUnix - scan.ModifiedAtUnixSeconds >= passiveQuietSeconds
                                             && not (scan.Diagnostics |> List.exists (fun code ->
                                                 code = "line-boundary-deferred" || code = "partial-tail-deferred"
                                                 || code = "response-boundary-deferred" || code = "observation-pass-budget"))
+                                        let dispatchStatus =
+                                            match sourceRoot with
+                                            | ClaudeHome claudeHome ->
+                                                let added, status, gaps = claudeDispatchStep claudeHome path priorDispatch quiescent
+                                                added |> List.iter events.Add
+                                                gaps |> List.iter (passiveGap state)
+                                                status
+                                            | CodexHome _ -> None
+                                        dispatchStatus |> Option.iter (fun value -> cursor["dispatch"] <- node value)
+                                        sources[key] <- cursor
                                         if quiescent then
                                             sources.Remove key |> ignore
-                                            retired[key] <- retiredNode scan.Cursor capturedAt scan.ModifiedAtUnixSeconds
+                                            let entry = retiredNode scan.Cursor capturedAt scan.ModifiedAtUnixSeconds
+                                            dispatchStatus |> Option.iter (fun value -> entry["d"] <- node value)
+                                            retired[key] <- entry
                                             retireInstance scan.Cursor.SourceInstance None
                     for pair in sources |> Seq.toList do
                         let cursor = (passiveCursor pair.Value).Value

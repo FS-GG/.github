@@ -46,6 +46,8 @@ For an admitted routine item, the board is an asynchronous view rather than merg
    ambiguous candidate PRs refuse routine admission. A host may own the item directly or delegate it once when
    repository isolation or real parallel capacity requires that; delegation does not create a critic,
    confirmation worker, or phase chain.
+   A delegation or review brief starts with the exact line `fsgg-dispatch: item=OWNER/REPO#N role=worker|critic|analyst|report`
+   for this Delivery; telemetry attributes the subagent's usage from that line only, never from prose.
 2. Do not create or require an issue, claim, worker identity, lifecycle ledger, delivery-route receipt,
    SDD artifact family, independent critic, review marker, feedback artifact, cycle envelope, delivery
    receipt or projection PR. Keep any existing native issue and its full acceptance; do not manufacture a new record.

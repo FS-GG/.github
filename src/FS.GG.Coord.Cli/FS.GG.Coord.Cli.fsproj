@@ -137,12 +137,11 @@ once more than 250 rows are enrolled: the 0.114.0 reader refuses a population ab
 associations retired by 0.113.0 must not be rolled back to 0.112.0: the older reader would re-read
 closed sources.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.114.2 — Patch release of the coherent set: Kit, Drivers and CLI advance together; existing verbs keep their contracts.
-`board-v2 tend --apply` writes through an allowlisted, item-scoped guarded writer under the shared writer lock (adjacent re-read, possible-send custody, one send, readback, never a resend), only for rules a mode-0600 enable file lists, and replays the merge gate's deferred transitions; contract-gated rules stay dropped from the enable file (#5158). Tend posts each new proposal ID once to the board-currency findings issue, and the merge gate (`tools/routine-delivery.py`) records each routine PR's `fsgg:delivery-continues/v1` or `fsgg:delivery-completes/v1` declaration in an advisory `deliveryMarker` result field, with `--delivery-marker required` to refuse neither or both (#5161).
-`board-v2 migration-apply` re-reads and reads back only the item of each planning initialization, in bounded groups with `--max-effects` (#5160). Enrollment `route-preflight` admits a later main whose constructor closure is unchanged (#5147), and `enrollment rebind-reader` rebinds the reader identity after a coherent upgrade (#5152).
-Packaged `pnext-item`: every routine PR declares exactly one of `fsgg:delivery-continues/v1` and `fsgg:delivery-completes/v1`, and the work-board lifecycle contract carries the board-tend amendment (#5136).
-Carried forward from 0.114.1: the 500-row programme cap, archived-card handling, batched refresh, the shared writer lock and `board-v2 tend --plan-file`.
-VALIDATOR: qualify 0.114.2 inspections with `scripts/board_v2_native_results.py` from main at or after #5132.
+    <PackageReleaseNotes>0.114.3 — Patch release of the coherent set: Kit, Drivers and CLI advance together; existing verbs keep their contracts.
+`telemetry passive capture` attributes Claude Code subagent transcripts to a deterministic dispatch, invocation and Delivery from the brief's first-line `fsgg-dispatch:` marker, reusing expected-dispatch, invocation-lineage and runtime-admission; a missing marker, metadata or launch result is an explicit gap (#5171).
+Packaged `pnext-item` and the work-board driver: every dispatch brief starts with the exact `fsgg-dispatch: item=OWNER/REPO#N role=...` line, the only source of telemetry item attribution (#5171).
+Carried forward from 0.114.2: the guarded `board-v2 tend --apply` writer and its findings-issue proposals, item-scoped `board-v2 migration-apply`, content-based ConstructorIdentity, `enrollment rebind-reader` and the routine-PR delivery-continues/completes declaration.
+VALIDATOR: qualify 0.114.3 inspections with `scripts/board_v2_native_results.py` from main at or after #5132.
 Source, installed adoption and native acceptance remain distinct. See STANDING ADVISORIES for the rollback limits.
 
 $(FsggStandingAdvisories)

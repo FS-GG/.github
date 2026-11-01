@@ -362,6 +362,197 @@ module RuntimeUsage =
             | :? DecoderFallbackException
             | :? ArgumentException as error -> Error error.Message
 
+        // Subagent dispatch attribution. Every value below is read from records Claude Code already writes; the
+        // prompt text itself never leaves these decoders, only the parsed marker does.
+        type DispatchMarker = { Item: string; Role: string }
+
+        type MarkerReading =
+            | Marked of DispatchMarker
+            | MissingMarker
+            | MalformedMarker
+
+        type SubagentMeta =
+            {
+                ToolUseId: string
+                SpawnDepth: int
+                ParentAgentId: string option
+            }
+
+        type SubagentOpening = { StartedAt: string; Marker: MarkerReading }
+
+        let private markerPattern =
+            Regex(
+                "^fsgg-dispatch: item=([A-Za-z0-9][A-Za-z0-9-]{0,38})/([A-Za-z0-9._-]{1,100})#([1-9][0-9]{0,9}) role=(worker|critic|analyst|report)$",
+                RegexOptions.CultureInvariant
+            )
+
+        let readDispatchMarker (prompt: string) =
+            let first =
+                let index = prompt.IndexOf '\n'
+                (if index >= 0 then prompt.Substring(0, index) else prompt).TrimEnd(' ', '\t', '\r')
+
+            if not (first.StartsWith("fsgg-dispatch:", StringComparison.Ordinal)) then
+                MissingMarker
+            else
+                let matched = markerPattern.Match first
+
+                if matched.Success && matched.Length = first.Length then
+                    Marked
+                        {
+                            Item = $"%s{matched.Groups[1].Value}/%s{matched.Groups[2].Value}#%s{matched.Groups[3].Value}"
+                            Role = matched.Groups[4].Value
+                        }
+                else
+                    MalformedMarker
+
+        let private strictRoot (label: string) (line: byte array) =
+            let text = UTF8Encoding(false, true).GetString line
+            let document = JsonDocument.Parse(text, options)
+
+            if document.RootElement.ValueKind <> JsonValueKind.Object then
+                document.Dispose()
+                invalidOp $"%s{label} must be an object"
+
+            rejectDuplicates document.RootElement
+            document
+
+        let private decoding (action: unit -> 'T) : Result<'T, string> =
+            try
+                Ok(action ())
+            with
+            | :? JsonException
+            | :? InvalidOperationException
+            | :? DecoderFallbackException
+            | :? ArgumentException as error -> Error error.Message
+
+        let decodeSubagentMeta (bytes: byte array) : Result<SubagentMeta, string> =
+            decoding (fun () ->
+                if bytes.Length > 65536 then
+                    invalidOp "subagent metadata exceeds its bound"
+
+                use document = strictRoot "subagent metadata" bytes
+                let root = document.RootElement
+                let toolUse = requiredString "meta" "toolUseId" root
+
+                if not (identityPattern.IsMatch toolUse) then
+                    invalidOp "meta.toolUseId is not a bounded identity"
+
+                let depth =
+                    match property "spawnDepth" root with
+                    | Some value when value.ValueKind = JsonValueKind.Number ->
+                        match value.TryGetInt32() with
+                        | true, number when number >= 1 && number <= 16 -> number
+                        | _ -> invalidOp "meta.spawnDepth must be an integer from 1 to 16"
+                    | _ -> invalidOp "meta.spawnDepth must be an integer from 1 to 16"
+
+                let parent = optionalString "meta" "parentAgentId" root
+
+                if parent |> Option.exists (agentPattern.IsMatch >> not) then
+                    invalidOp "meta.parentAgentId is not a bounded identity"
+
+                if (depth > 1) <> parent.IsSome then
+                    invalidOp "meta.parentAgentId must be present exactly when spawnDepth exceeds one"
+
+                { ToolUseId = toolUse; SpawnDepth = depth; ParentAgentId = parent })
+
+        let decodeSubagentOpening (line: byte array) : Result<SubagentOpening, string> =
+            decoding (fun () ->
+                if line.Length > MaximumLineBytes then
+                    invalidOp "subagent opening record exceeds its bound"
+
+                use document = strictRoot "subagent opening record" line
+                let root = document.RootElement
+
+                match property "type" root with
+                | Some kind when kind.ValueKind = JsonValueKind.String && kind.GetString() = "user" -> ()
+                | _ -> invalidOp "subagent opening record must be a user prompt"
+
+                let timestamp = requiredString "opening" "timestamp" root
+
+                let startedAt =
+                    match
+                        timestampPattern.IsMatch timestamp,
+                        DateTimeOffset.TryParse(timestamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+                    with
+                    | true, (true, parsed) -> parsed.ToUniversalTime().ToString("O").Replace("+00:00", "Z")
+                    | _ -> invalidOp "opening.timestamp must be an RFC 3339 timestamp"
+
+                let content =
+                    match property "message" root |> Option.bind (property "content") with
+                    | Some value when value.ValueKind = JsonValueKind.String -> value.GetString()
+                    | Some value when value.ValueKind = JsonValueKind.Array && value.GetArrayLength() > 0 ->
+                        let first = value[0]
+
+                        match first.ValueKind, property "type" first, property "text" first with
+                        | JsonValueKind.Object, Some kind, Some text when
+                            kind.ValueKind = JsonValueKind.String
+                            && kind.GetString() = "text"
+                            && text.ValueKind = JsonValueKind.String
+                            ->
+                            text.GetString()
+                        | _ -> invalidOp "opening.message.content must begin with text"
+                    | _ -> invalidOp "opening.message.content must be text"
+
+                { StartedAt = startedAt; Marker = readDispatchMarker content })
+
+        // Ok(Some resolvedModel) only for the parent record that is the launch result of this tool use and agent.
+        let decodeSubagentLaunch (agentId: string) (toolUseId: string) (line: byte array) : Result<string option, string> =
+            decoding (fun () ->
+                if line.Length > MaximumLineBytes then
+                    invalidOp "launch record exceeds its bound"
+
+                use document = strictRoot "launch record" line
+                let root = document.RootElement
+
+                let result =
+                    match property "type" root, property "toolUseResult" root with
+                    | Some kind, Some result when
+                        kind.ValueKind = JsonValueKind.String
+                        && kind.GetString() = "user"
+                        && result.ValueKind = JsonValueKind.Object
+                        ->
+                        Some result
+                    | _ -> None
+
+                let launchedFor (result: JsonElement) =
+                    match property "agentId" result with
+                    | Some value when value.ValueKind = JsonValueKind.String -> value.GetString() = agentId
+                    | _ -> false
+
+                let answersToolUse () =
+                    match property "message" root |> Option.bind (property "content") with
+                    | Some content when content.ValueKind = JsonValueKind.Array ->
+                        content.EnumerateArray()
+                        |> Seq.exists (fun block ->
+                            block.ValueKind = JsonValueKind.Object
+                            && (match property "type" block, property "tool_use_id" block with
+                                | Some kind, Some id ->
+                                    kind.ValueKind = JsonValueKind.String
+                                    && kind.GetString() = "tool_result"
+                                    && id.ValueKind = JsonValueKind.String
+                                    && id.GetString() = toolUseId
+                                | _ -> false))
+                    | _ -> false
+
+                match result with
+                | Some result when launchedFor result && answersToolUse () ->
+                    Some(requiredString "toolUseResult" "resolvedModel" result)
+                | _ -> None)
+
+        let private derivedIdentity (label: string) (values: string list) =
+            SHA256.HashData(Encoding.UTF8.GetBytes(String.Join("\u001f", label :: values)))
+            |> Convert.ToHexString
+            |> fun hex -> hex.Substring(0, 32).ToLowerInvariant()
+
+        let subagentDispatchId (sessionId: string) (toolUseId: string) =
+            derivedIdentity "claude-code-subagent-dispatch/1" [ sessionId; toolUseId ]
+
+        let sessionDispatchId (sessionId: string) =
+            derivedIdentity "claude-code-session-dispatch/1" [ sessionId ]
+
+        let sessionActivationId (sessionId: string) =
+            derivedIdentity "claude-code-session-activation/1" [ sessionId ]
+
     let private text (label: string) (node: JsonElement) (name: string) =
         match node.TryGetProperty name with
         | true, value when

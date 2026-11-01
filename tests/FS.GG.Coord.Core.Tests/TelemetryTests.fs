@@ -1332,3 +1332,71 @@ None.
             RoadmapProjection.render digest (bytes ambiguous) (closure digest)
             |> Result.isError
         )
+
+    // Subagent dispatch attribution (#5171): synthetic records only; the item comes from the exact first-line marker.
+    [<Fact>]
+    let ``dispatch marker grammar parses only the exact first line`` () =
+        let read = RuntimeUsage.ClaudeTranscript.readDispatchMarker
+        let marked item role : RuntimeUsage.ClaudeTranscript.MarkerReading =
+            RuntimeUsage.ClaudeTranscript.Marked { Item = item; Role = role }
+        Assert.Equal(marked "FS-GG/.github#5171" "worker", read "fsgg-dispatch: item=FS-GG/.github#5171 role=worker\nbody")
+        Assert.Equal(marked "FS-GG/FS.GG.SDD#1148" "critic", read "fsgg-dispatch: item=FS-GG/FS.GG.SDD#1148 role=critic \r\nbody")
+        Assert.Equal(marked "o/r#1" "report", read "fsgg-dispatch: item=o/r#1 role=report")
+        Assert.Equal(marked "o/r#9" "analyst", read "fsgg-dispatch: item=o/r#9 role=analyst")
+        let missing = RuntimeUsage.ClaudeTranscript.MissingMarker
+        let malformed = RuntimeUsage.ClaudeTranscript.MalformedMarker
+        Assert.Equal(missing, read "")
+        Assert.Equal(missing, read "Work on FS-GG/.github#5171.\nfsgg-dispatch: item=FS-GG/.github#5171 role=worker")
+        Assert.Equal(missing, read " fsgg-dispatch: item=FS-GG/.github#5171 role=worker")
+        Assert.Equal(missing, read "FSGG-DISPATCH: item=FS-GG/.github#5171 role=worker")
+        for text in [ "fsgg-dispatch: item=FS-GG/.github#5171 role=boss"
+                      "fsgg-dispatch: item=FS-GG/.github#5171"
+                      "fsgg-dispatch: item=FS-GG/.github role=worker"
+                      "fsgg-dispatch: item=FS-GG/.github#0 role=worker"
+                      "fsgg-dispatch: item=FS-GG/.github#5171 role=worker extra"
+                      "fsgg-dispatch: role=worker item=FS-GG/.github#5171"
+                      "fsgg-dispatch:item=FS-GG/.github#5171 role=worker"
+                      "fsgg-dispatch: item=FS-GG/.github#5171  role=worker" ] do
+            Assert.Equal(malformed, read text)
+
+    [<Fact>]
+    let ``subagent metadata opening and launch decoders keep only allowlisted values`` () =
+        let decodeMeta (text: string) = RuntimeUsage.ClaudeTranscript.decodeSubagentMeta (bytes text)
+        let meta = decodeMeta """{"agentType":"x","description":"d","toolUseId":"toolu_01A","spawnDepth":1,"finished":true}""" |> unwrap
+        Assert.Equal("toolu_01A", meta.ToolUseId)
+        Assert.Equal(1, meta.SpawnDepth)
+        Assert.Equal(None, meta.ParentAgentId)
+        let nested = decodeMeta """{"toolUseId":"toolu_01B","parentAgentId":"a2","spawnDepth":2}""" |> unwrap
+        Assert.Equal(Some "a2", nested.ParentAgentId)
+        for refused in [ """{"spawnDepth":1}"""
+                         """{"toolUseId":"toolu 01","spawnDepth":1}"""
+                         """{"toolUseId":"toolu_01A","spawnDepth":2}"""
+                         """{"toolUseId":"toolu_01A","spawnDepth":1,"parentAgentId":"a2"}"""
+                         """{"toolUseId":"toolu_01A","spawnDepth":0}"""
+                         """{"toolUseId":"toolu_01A","toolUseId":"toolu_01B","spawnDepth":1}"""
+                         "[]" ] do
+            Assert.True(decodeMeta refused |> Result.isError, refused)
+        let opening (content: string) =
+            RuntimeUsage.ClaudeTranscript.decodeSubagentOpening (bytes ($"""{{"type":"user","timestamp":"2026-11-01T10:00:00.5+01:00","message":{{"role":"user","content":{content}}}}}"""))
+        let fromString = opening "\"fsgg-dispatch: item=o/r#2 role=worker\\nbody\"" |> unwrap
+        Assert.Equal("2026-11-01T09:00:00.5000000Z", fromString.StartedAt)
+        Assert.Equal(RuntimeUsage.ClaudeTranscript.Marked { Item = "o/r#2"; Role = "worker" }, fromString.Marker)
+        let fromBlocks = opening "[{\"type\":\"text\",\"text\":\"fsgg-dispatch: item=o/r#3 role=critic\"}]" |> unwrap
+        Assert.Equal(RuntimeUsage.ClaudeTranscript.Marked { Item = "o/r#3"; Role = "critic" }, fromBlocks.Marker)
+        Assert.True(opening "[{\"type\":\"image\"}]" |> Result.isError)
+        Assert.True(RuntimeUsage.ClaudeTranscript.decodeSubagentOpening (bytes """{"type":"assistant","timestamp":"2026-11-01T10:00:00Z"}""") |> Result.isError)
+        let launch (agent: string) (tool: string) =
+            bytes ($"""{{"type":"user","message":{{"content":[{{"type":"tool_result","tool_use_id":"{tool}"}}]}},"toolUseResult":{{"agentId":"{agent}","status":"async_launched","resolvedModel":"claude-sonnet-5-5"}}}}""")
+        let decodeLaunch = RuntimeUsage.ClaudeTranscript.decodeSubagentLaunch "a1" "toolu_01A"
+        Assert.Equal(Some "claude-sonnet-5-5", decodeLaunch (launch "a1" "toolu_01A") |> unwrap)
+        Assert.Equal(None, decodeLaunch (launch "a9" "toolu_01A") |> unwrap)
+        Assert.Equal(None, decodeLaunch (launch "a1" "toolu_01Z") |> unwrap)
+        Assert.Equal(None, decodeLaunch (bytes """{"type":"assistant","toolUseResult":{"agentId":"a1"}}""") |> unwrap)
+        Assert.True(decodeLaunch (bytes ((Text.Encoding.UTF8.GetString(launch "a1" "toolu_01A")).Replace(",\"resolvedModel\":\"claude-sonnet-5-5\"", ""))) |> Result.isError)
+        // Identities are deterministic, distinct per label, and 32 lowercase hexadecimal characters.
+        let session = "7d3c1a2b-4e5f-4a6b-9c8d-0e1f2a3b4c5d"
+        let dispatch = RuntimeUsage.ClaudeTranscript.subagentDispatchId session "toolu_01A"
+        Assert.Equal(dispatch, RuntimeUsage.ClaudeTranscript.subagentDispatchId session "toolu_01A")
+        Assert.Matches("^[0-9a-f]{32}$", dispatch)
+        Assert.NotEqual<string>(dispatch, RuntimeUsage.ClaudeTranscript.subagentDispatchId session "toolu_01B")
+        Assert.NotEqual<string>(RuntimeUsage.ClaudeTranscript.sessionDispatchId session, RuntimeUsage.ClaudeTranscript.sessionActivationId session)
