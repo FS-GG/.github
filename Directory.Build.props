@@ -635,10 +635,11 @@
   <!-- 0.113.0 -> 0.114.0: user-selected recovery custody, early interface composition,
        scoped binding/cache continuation and current owning-issue guidance change packaged behavior.
        SOURCE preparation only; published113, installed callers and operational acceptance stay separate. -->
-  <!-- 0.114.0 -> 0.114.1 (#5109): coherent PATCH. Packaged pnext-item guidance and the fsgg-critic
-       agents point to the lifecycle-contract fixture rule, which the work-board skill states once.
-       No member, destination or command identity changes. SOURCE preparation only; published114
-       is unchanged and the release stays a separate step. -->
+  <!-- 0.114.0 -> 0.114.1 (#5109): coherent PATCH. The CLI raises the programme row cap to 500 and cuts
+       inspection reads per row (#5122, #5127), handles archived enrolled cards (#5132, #5154), batches
+       refresh (#5146), shares one flock writer lock (#5141) and lets a strict PR Refs a Delivery (#5138);
+       packaged pnext-item and the fsgg-critic agents point to the lifecycle-contract fixture rule.
+       SOURCE preparation only; published114 is unchanged and the release is a separate step. -->
   <PropertyGroup>
     <FsggCoherentSetVersion>0.114.1</FsggCoherentSetVersion>
   </PropertyGroup>

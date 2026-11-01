@@ -128,10 +128,21 @@ published to both feeds, and `FS.GG.Coord.Cli` published to the org feed before 
 its 37,279-character `PackageReleaseNotes`. NuGet versions are immutable and re-packing corrected
 bytes under 0.52.0 would make the same version identify different artifacts. Adopt 0.53.0, the next
 coherent set cut from corrected source. All three partial sets are recorded in
-`registry/dependencies.yml`.</FsggStandingAdvisories>
+`registry/dependencies.yml`.
 
-    <PackageReleaseNotes>0.114.1 — Patch: packaged `pnext-item` and the reviewer agents point to the lifecycle-contract fixture rule (fixtures and release controls derive dates and versions from observed state). No command, member or destination changes; the 0.114.0 behavior carries forward unchanged. The programme enrollment row ceiling the board-v2 reader enforces rose from 100 to 250 rows in 0.114.0 (#4980); a population above 100 rows is refused by every earlier reader, so do not roll the installed CLI back below 0.114.0 once one is enrolled. Kit, Drivers and CLI advance as one coherent set. Source, installed adoption and native acceptance remain distinct.
-Claude associations retired by 0.113.0 must not be rolled back to 0.112.0: the older reader would re-read closed sources.
+ROLLBACK LIMITS. An older reader refuses a population it cannot represent, so do not roll the installed
+CLI back past these once the population exists. Do not roll back below 0.114.0 once more than 100 rows
+are enrolled: every earlier reader refuses a population above 100 rows. Do not roll back below 0.114.1
+once more than 250 rows are enrolled: the 0.114.0 reader refuses a population above 250 rows. Claude
+associations retired by 0.113.0 must not be rolled back to 0.112.0: the older reader would re-read
+closed sources.</FsggStandingAdvisories>
+
+    <PackageReleaseNotes>0.114.1 — Patch release of the coherent set: Kit, Drivers and CLI advance together; existing verbs keep their contracts.
+Board reads: the programme row cap rises from 250 to 500 and the refresh request ceiling scales with the selected rows (#5122); inspection makes fewer reads per row and scales its deadline (#5127). Archived enrolled cards are explicit: the planning reads carry `isArchived`, inspection cross-checks them against the complete project membership and reports an `Archived` health instead of silently dropping the row (#5132), and the v1 per-issue `projectItems` reads refuse or account for an archived card rather than treating it as live (#5154). `board-v2 refresh` is batched like inspect while keeping each write's preimage and readback (#5146).
+Writers: the engine's Project 3 writers and the merge gate share one `flock` writer lock under `XDG_RUNTIME_DIR`, and the merge gate records deferred transitions for replay (#5141). A strict PR may `Refs` one open native sub-issue Delivery of its item instead of closing it (#5138).
+Carried forward from 0.114.0: `context-view` (a bounded scoped view of an owning issue), `enrollment` (`resolve-issues`, `plan`, `prepare`, `bind-runtime`, `render-carrier`) and `route-preflight`. Packaged `pnext-item` and the reviewer agents point to the lifecycle-contract fixture rule (#5109).
+VALIDATOR: qualify 0.114.1 inspections with `scripts/board_v2_native_results.py` from main at or after #5132; an older validator refuses every 0.114.1 inspection as `unsupported-result-shape`.
+Source, installed adoption and native acceptance remain distinct. See STANDING ADVISORIES for the rollback limits.
 
 $(FsggStandingAdvisories)
 
