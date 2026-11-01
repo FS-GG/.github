@@ -1,0 +1,714 @@
+# always-gates — the tiny always-run gates of this repository, as ONE job (.github#5182, CI fan-out).
+#
+# WHAT THIS IS. Eight gates used to be eight workflows and thirteen jobs, every one of them started on
+# every pull-request push and none of them a required context: engine-flag-narrative, pipefail-assertions,
+# signature-coverage, signature-doc-siting, prose-citations, telemetry-git-safety,
+# v1-writer-census-advisory and wizard-graph-seal. Measured over 2026-11-01 00:00-12:00Z (2,006 PR runs,
+# 3,262 jobs): each of those jobs did a median 9-28 s of work after a median 82-131 s in the org's
+# hosted-runner queue, so the queue slot, the checkout and the Python setup cost more than the gate.
+# Here they share one checkout, one Python and one runner: one run and one job per push instead of eight
+# and thirteen, and the signature-doc mutation sweep still gets its own job, now only when its classifier
+# says the diff touches its subject.
+#
+# WHAT IS UNCHANGED. Every gate's steps are copied verbatim from its old workflow (the section headers
+# below carry each one's own rationale), including the one-named-step-per-exit-code verdict legs. Each
+# gate still has NO `paths:` filter, for the reasons its section gives: the subject is the whole tree.
+# None of them was a required status check on main (check-required-contexts.py derives the required set
+# from the live protection, and none of these job names was in it), so no context moves.
+#
+# WHAT CHANGED, AND WHY IT IS SAFE.
+#   * Every step carries `!cancelled()`, so a red gate never skips the next gate's steps: one job reports
+#     every gate's verdict, as eight workflows did. The job fails if any gate fails.
+#   * Inside one gate the check now also runs when its own fixture failed (it used to `needs:` the
+#     fixture). The job is red either way; the extra verdict is information, not a pass.
+#   * Each gate keeps its old event set through the step guard: telemetry-git-safety did not run on
+#     workflow_dispatch, v1-writer-census-advisory ran on pull_request only, wizard-graph-seal had no
+#     push trigger.
+#   * One checkout at fetch-depth 0 serves the gates that needed depth 0 (telemetry-git-safety, the
+#     sweep classifier) and depth 2 (v1-writer-census-advisory, wizard-graph-seal: both read HEAD^1 of the
+#     PR merge commit). One shared policy Python (Python 3.x plus pinned PyYAML) replaces the plain
+#     `actions/setup-python` 3.x the others used.
+#   * Concurrency is the governed PR-keyed block (scripts/check-pr-concurrency.py). Six of the eight
+#     keyed on `github.ref` with an unconditional cancel, which also let two quick main pushes cancel
+#     each other's run; the governed key gives each non-PR run its own group.
+name: always-gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR-keyed concurrency (#4730 CI-load): a newer run for the same pull request cancels the superseded
+# one. Any other event keys on `github.run_id`, which is unique to the run (the governed block; see
+# scripts/check-pr-concurrency.py).
+concurrency:
+  group: always-gates-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    # The thirteen jobs this replaces each did a median 9-28 s of work (2026-11-01 sample); the old
+    # per-job bounds were 5-10 minutes each. Twenty minutes bounds the sequence with room for a slow
+    # runner without approaching the old six-hour default.
+    timeout-minutes: 20
+    outputs:
+      signature_doc_sweep: ${{ steps.sds_impact.outputs.run }}
+      signature_doc_sweep_reason: ${{ steps.sds_impact.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-policy-python
+
+      # The signature-doc mutation sweep's classifier runs FIRST, so the sweep job below can start in
+      # parallel with the gates rather than after them. It fails closed: missing revisions, an
+      # unreadable diff or an undecodable path select the sweep (scripts/ci-gate-impact.py).
+      - name: Classify whether this diff changes the signature-doc mutation subject
+        id: sds_impact
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python3 scripts/ci-gate-impact.py signature-doc --base "$BASE_SHA" --head "$HEAD_SHA"
+
+      - name: Record measured omission of the signature-doc mutation sweep for an unrelated diff
+        if: ${{ !cancelled() && steps.sds_impact.outputs.run == 'false' }}
+        run: |
+          echo "signature-doc mutation sweep: omitted — ${{ steps.sds_impact.outputs.reason }}" >> "$GITHUB_STEP_SUMMARY"
+
+      # ================================================================================================
+      # engine-flag-narrative (was .github/workflows/engine-flag-narrative.yml; job(s) fixture, no-live-flag)
+      # ================================================================================================
+      # engine-flag-narrative — the retired `--engine` flag may survive only where it is HISTORY.
+      #
+      # .github#917, epic #266 (the rule nothing asserts).
+      #
+      # ADR-0040 finished the port: the engine BECAME the client, and `--engine` went with the choice it
+      # existed to express. `Options.fs` does not parse it; `OptionsTests.fs` pins it as the specimen of an
+      # unknown flag that must be NAMED and refused. Yet doc comments went on stating a present-tense
+      # consequence "under `--engine=fs`", describing a mode no worker can select.
+      #
+      # THIS IS THE FOURTH HAND-REPAIR OF ONE CLASS — the narrative outlived the thing it described:
+      #
+      #   #836        kit skills, the design doc, the `Divergence` code   — missed the next tier: its Paths
+      #   #866/#910   docs/architecture.md                                — missed the next tier: its Paths
+      #   #912        .github/workflows/                                  — missed the next tier: its Paths
+      #   #917        src/ + tests/ doc comments                          — this one
+      #
+      # Every pass was scoped by a `Paths:` touch-set that structurally could not see the next tier, so
+      # every tier was found BY ACCIDENT, by whoever read the file months later. #912's own title is the
+      # sentence this item would otherwise write about #912, forever. A rule enforced by whoever happens to
+      # remember it is a rule that decays — and this one decayed three times before anybody gated it.
+      #
+      # NO `paths:` FILTER, AND THAT IS THE POINT. Every other gate here narrows its trigger to its inputs.
+      # This gate's subject is THE WHOLE TREE — tier five is by definition the directory nobody thought to
+      # list — so any `paths:` filter would omit a real input, which is exactly the live defect .github#930
+      # describes: the filter omits a real input, both copies agree, set-equality is satisfied, and the gate
+      # stays green while a PR reintroduces the regression it was written to catch. A filter here would make
+      # this gate the fifth instance of the bug it closes. It is a Python walk of the tree and costs seconds;
+      # running it on every PR is the cheap half of the trade. `coherence.yml` and `touch-set-drift.yml`
+      # already run filter-less for the same reason: their subject is the tree, not a file list.
+      #
+      # No `schedule:` — the subject is committed files in this repo, so every change that could falsify it
+      # arrives as a PR, and a nightly re-run would prove only that the tree did not change on its own.
+
+      - name: Run the engine-flag-narrative fixture (no network)
+        if: ${{ !cancelled() }}
+        run: bash tests/engine-flag-narrative/run.sh
+
+      - name: Assert the retired flag appears only where it is history
+        if: ${{ !cancelled() }}
+        id: efn
+        run: |
+          rc=0
+          out="$(python scripts/check-engine-flag-narrative.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the
+      # contract; nothing here greps the gate's prose.
+      #
+      # There is no exit-2 leg because this gate is PURE — working tree only, no API, no network — so
+      # it has no retryable failure to report. A leg for a verdict the gate can never mean would be a
+      # lie about the contract; the INCONCLUSIVE leg below catches a 2 if one ever appears.
+      - name: 'OK: the flag survives only as history'
+        if: ${{ !cancelled() && steps.efn.outputs.rc == '0' }}
+        run: |
+          echo "engine-flag-narrative: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a dead flag is being described as live'
+        if: ${{ !cancelled() && steps.efn.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### engine-flag-narrative: the retired flag is being described as live"
+            echo
+            echo "A file names \`--engine\` as something a worker can select. **It cannot.**"
+            echo "ADR-0040 finished the port — the engine became the client — and the flag went with"
+            echo "the choice it expressed: \`Options.fs\` does not parse it, and \`OptionsTests.fs\`"
+            echo "pins it as the specimen of an unknown flag that must be refused."
+            echo
+            echo "**Reword it in the past tense**, naming the flag as removed — or drop the clause"
+            echo "entirely: since the engine **is** the client, the consequence is no longer"
+            echo "conditional on anything."
+            echo
+            echo "If the file is a genuine historical RECORD — an ADR, a dated disposition manifest —"
+            echo "then it is right to name the flag, and the fix is to add it to the allowlist in"
+            echo "\`scripts/check-engine-flag-narrative.py\` **with a line saying why**. Do not"
+            echo "reword a record: a record edited to remove what it recorded is falsified, which is"
+            echo "a worse defect than the one this gate closes."
+            echo
+            echo "This narrative has been retired **by hand four times** (#836, #866/#910, #912,"
+            echo "#917), each pass blind past its own \`Paths:\` touch-set, each tier found by"
+            echo "accident months later. That is what this gate is for."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=engine-flag-narrative: a retired flag described as live::See the job log for the file and line."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): the gate could not audit its subject'
+        if: ${{ !cancelled() && steps.efn.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### engine-flag-narrative: no verdict"
+            echo
+            echo "The root was unreadable, or the audit found **no mention of \`--engine\` anywhere**"
+            echo "— which means the walker or the pattern is broken, not that the tree is clean. The"
+            echo "ADRs and the rejection test are built out of this flag."
+            echo
+            echo "Examining nothing is a failure to audit, not a clean audit. Retrying will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=engine-flag-narrative: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.efn.outputs.rc) }}
+        run: |
+          echo "::error title=engine-flag-narrative: inconclusive::check-engine-flag-narrative.py exited ${{ steps.efn.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
+
+      # ================================================================================================
+      # pipefail-assertions (was .github/workflows/pipefail-assertions.yml; job(s) fixture, no-discarded-status)
+      # ================================================================================================
+      # pipefail-assertions — no shell file may consume the status of a pipeline that ends in an
+      # early-exiting reader.
+      #
+      # .github#2689, generalising the single-file source guard .github#2668 shipped in
+      # tests/coord-engine-e2e/run.sh. Epic #266 (the rule nothing asserts).
+      #
+      # Under `set -o pipefail`, `printf '%s' "$out" | grep -q PATTERN` does not answer "does $out contain
+      # PATTERN?". `grep -q` exits the instant it matches; if the writer still had bytes to deliver it
+      # takes SIGPIPE, the pipeline's status becomes 141, and `if` reads 141 as "the pattern was NOT
+      # found" — for output that plainly contains it. The verdict is a buffer-size and scheduling fact,
+      # not a fact about the haystack, and the hole opens past roughly 16 KB. `.github#2668` measured it
+      # with 30-run repeatability across five haystack sizes.
+      #
+      # `.github#2681` proposed converting the ~1,200 existing sites and was closed under the board's
+      # filing bar: it would have declared most of `tests/` on a board already reporting `CEILING: 0
+      # worker(s) can start right now`. The guard is the alternative — every FUTURE site reds on arrival,
+      # and the existing ones convert opportunistically inside whatever touch-set already owns each file.
+      #
+      # NO `paths:` FILTER, AND THAT IS DELIBERATE — the same decision, for the same reason, that
+      # .github/workflows/shell-lint.yml makes. This gate's subject is EVERY shell file in the repo, and
+      # it decides membership by SHEBANG, not by extension: four of this repo's shell files are spelled as
+      # commands with no `.sh` on the end, and `scripts/fsgg-coord` is the kit itself. A `paths:` filter
+      # over `**.sh` would not match one of them, so the filter would silently shrink the subject to less
+      # than the gate scans — which is #648's shape, and #996's, one layer up. A filter is also what would
+      # let a new shell file land in a directory nobody thought to list.
+      #
+      # No `schedule:` — the subject is committed files in this repo, so every change that could falsify
+      # the gate arrives as a push or a pull request, and a nightly re-run would prove only that the tree
+      # did not change on its own.
+
+      - name: Run the pipefail-assertions fixture (no network)
+        if: ${{ !cancelled() }}
+        run: bash tests/pipefail-assertions/run.sh
+
+      - name: Assert every shell file matches the discarded-status baseline exactly
+        if: ${{ !cancelled() }}
+        id: pfa
+        run: |
+          rc=0
+          out="$(python scripts/check-pipefail-assertions.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the
+      # contract; nothing here greps the gate's prose.
+      #
+      # There is no exit-2 leg because this gate is PURE — working tree only, no API, no network, no
+      # shellcheck — so it has no retryable failure to report. A leg for a verdict the gate can never
+      # mean would be a lie about the contract; the INCONCLUSIVE leg below catches a 2 if one ever
+      # appears.
+      - name: 'OK: every file matches its baseline exactly'
+        if: ${{ !cancelled() && steps.pfa.outputs.rc == '0' }}
+        run: |
+          echo "pipefail-assertions: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a new discarded-status site, or a stale baseline'
+        if: ${{ !cancelled() && steps.pfa.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### pipefail-assertions: an assertion can discard the status it claims to check"
+            echo
+            echo "A shell file setting \`pipefail\` gained a site whose verdict comes from a pipeline"
+            echo "ending in an early-exiting reader (\`grep -q\`, \`grep -m N\`, \`head\`) — or the"
+            echo "baseline still claims sites that are no longer there."
+            echo
+            echo "\`grep -q\` exits the instant it matches. If the writer still had bytes to deliver"
+            echo "it takes SIGPIPE, the pipeline's status becomes **141**, and \`if\` reads that as"
+            echo "*\"not found\"* for output that plainly contains the pattern. It is green today only"
+            echo "because the output is short: the hole opens past roughly **16 KB** (.github#2668)."
+            echo
+            echo "Use a spelling with no live writer to kill. All three run as printed:"
+            echo
+            echo '```sh'
+            echo 'case "$haystack" in *"$needle"*) found=1 ;; *) found=0 ;; esac'
+            echo 'grep -qE -- "$re" <<<"$haystack"'
+            echo 'prefix="${haystack:0:200}"'
+            echo '```'
+            echo
+            echo "If the baseline is **stale**, the gate prints the lower number to write — lower it"
+            echo "in the same commit as the repair. The baseline only ever shrinks, and that is what"
+            echo "makes it a true statement about the tree rather than a list nobody maintains."
+            echo
+            echo "If a site genuinely must keep the pipeline, annotate the line with a **reason**:"
+            echo
+            echo '```sh'
+            echo '... | grep -q PATTERN   # discarded-status-ok: <why this one cannot mislead>'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=pipefail-assertions: an assertion can discard the status it checks::A new site, an unbaselined file, or a stale baseline entry. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): the gate could not read a valid subject'
+        if: ${{ !cancelled() && steps.pfa.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### pipefail-assertions: no verdict"
+            echo
+            echo "The gate discovered **zero** shell files, found **no file setting \`pipefail\`**, or"
+            echo "could not read \`tests/pipefail-assertions/baseline.txt\`."
+            echo
+            echo "This repo demonstrably contains ~140 shell files and ~130 of them set \`pipefail\`,"
+            echo "so this means **discovery or the baseline broke** — not that the tree is clean."
+            echo "Scanning nothing is a failure to scan, and without the baseline the gate cannot"
+            echo "tell a pre-existing site from a new one. Retrying will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=pipefail-assertions: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.pfa.outputs.rc) }}
+        run: |
+          echo "::error title=pipefail-assertions: inconclusive::check-pipefail-assertions.py exited ${{ steps.pfa.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
+
+      # ================================================================================================
+      # signature-coverage (was .github/workflows/signature-coverage.yml; job(s) fixture, every-implementation-has-a-signature)
+      # ================================================================================================
+      # signature-coverage — every compiled F# implementation states a contract, and states a real one.
+      #
+      # .github#2731, epic #266 (the rule nothing asserts).
+      #
+      # TWO LEGS, ONE INSTRUMENT. `scripts/check-signature-coverage.py` fails when a `.fs` under the
+      # subject roots has no sibling `.fsi` (an ERROR), and reports a signature file whose substantive size
+      # is under 10% of its implementation's (a WARNING). The second leg is the reason the gate exists:
+      # existence alone is satisfiable by a token file, and at `d1632c4e` four of them already did satisfy
+      # it — `CycleLedgerApplication.fsi` stated one `val` and no contract against 258 lines. A gate that
+      # counted that as covered would report a clean tree while the convention had been hollowed out.
+      #
+      # NO `paths:` FILTER, AND THAT IS DELIBERATE — the same decision, for the same reason,
+      # `.github/workflows/signature-doc-siting.yml`, `pipefail-assertions.yml` and `shell-lint.yml` make.
+      # This gate's subject is every `.fs` under `src/` and `scripts/`, and the offence it exists to catch
+      # ARRIVES WITH A NEW FILE. A filter over `src/**/*.fs` would fire on that one, but the exemption
+      # table is falsified by edits that touch no `.fs` at all: deleting an entry point, or removing its
+      # `[<EntryPoint>]`, turns a valid exemption into a stale or unjustified one. A gate that does not run
+      # reports nothing while looking exactly like one that passed, which is the #266 shape itself.
+      #
+      # THIS IS ALSO WHY THE GATE IS NOT HOSTED IN AN EXISTING FIXTURE. `tests/source-coherence/` was the
+      # obvious home and is wrong: `source-coherence.yml`'s `paths:` filter is six patterns and contains no
+      # `src/**`, so a signature-coverage check sited there would not fire on the pull request that
+      # introduced the offence — it would wait for the 06:53 cron and report after the merge.
+      #
+      # No `schedule:` — the subject is committed files in this repository, so every change that could
+      # falsify the verdict arrives as a push or a pull request. A nightly re-run would prove only that the
+      # tree did not change on its own.
+      #
+      # NO MUTATION SWEEP HERE, AND THAT IS A DECISION RATHER THAN AN OMISSION.
+      # `signature-doc-siting.yml` carries one because its gate is a hand-written lexer whose branches are
+      # invisible from its output. This gate is 336 lines with two comparisons and a table, and
+      # `tests/signature-coverage/run.sh` closes the same hole directly: it tests the ratio predicate at
+      # its BOUNDARY (exactly 10.0% must not warn, 9.0% must — so `<` vs `<=` and the constant are both
+      # pinned), and its third harness control neuters the gate's existence leg in a copy and requires the
+      # offending tree to then pass. If this gate grows branches that those legs do not reach, a sweep
+      # becomes the right answer and should be added.
+
+      - name: Run the signature-coverage fixture (no network)
+        if: ${{ !cancelled() }}
+        run: bash tests/signature-coverage/run.sh
+
+      - name: Assert every compiled F# implementation has a signature file
+        if: ${{ !cancelled() }}
+        id: sgc
+        run: |
+          rc=0
+          out="$(python scripts/check-signature-coverage.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the
+      # contract; nothing here greps the gate's prose.
+      #
+      # There is no exit-2 leg because this gate is PURE — working tree only, no API, no network, no
+      # build — so it has no retryable failure to report. The INCONCLUSIVE leg below catches a 2 if
+      # one ever appears.
+      - name: "OK: every implementation has a signature file"
+        if: ${{ !cancelled() && steps.sgc.outputs.rc == '0' }}
+        run: |
+          echo "signature-coverage: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "FINDING: a missing signature file, or an exemption that does not hold up"
+        if: ${{ !cancelled() && steps.sgc.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### signature-coverage: an implementation states no contract"
+            echo
+            echo "Either a \`.fs\` under \`src/\` or \`scripts/\` has no sibling \`.fsi\`, or one of"
+            echo "the gate's listed entry-point exemptions no longer holds. The log above names"
+            echo "which, and every finding names its own remedy."
+            echo
+            echo "**A missing \`.fsi\`.** Add it, and state what each exported value *promises* and"
+            echo "*refuses* — not a list of names. A signature that only repeats the types is the"
+            echo "token file this gate's second leg exists to report. Write the prose in the"
+            echo "\`.fsi\`: a \`///\` in an implementation that has a sibling signature is discarded"
+            echo "by the compiler and reaches no consumer (.github#2730), so moving it there is not"
+            echo "a stylistic preference."
+            echo
+            echo "**A composition root.** If the file genuinely has no callable surface — an"
+            echo "\`[<EntryPoint>]\` \`main\` and nothing else — add it to \`EXEMPT\` in"
+            echo "\`scripts/check-signature-coverage.py\` **with the reason written out**. The gate"
+            echo "validates its own exemptions: a listed path that does not exist, carries no"
+            echo "\`[<EntryPoint>]\`, or has a blank reason is itself a finding, so an exemption is a"
+            echo "claim this gate can falsify rather than a hole in it."
+            echo
+            echo "**A stale exemption.** An entry point was deleted or renamed. Delete the entry, or"
+            echo "correct the path."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      - name: "NO VERDICT: the gate could not check"
+        if: ${{ !cancelled() && steps.sgc.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### signature-coverage: NO VERDICT"
+            echo
+            echo "No subject root exists, discovery found no \`.fs\` at all, or a file that had to be"
+            echo "read could not be. **Scanning nothing is a failure to scan**, so this is not a"
+            echo "pass — it is a distinct exit code precisely so it cannot be read as one."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      - name: "INCONCLUSIVE: unexpected exit code"
+        if: ${{ !cancelled() && steps.sgc.outputs.rc != '0' && steps.sgc.outputs.rc != '1' && steps.sgc.outputs.rc != '3' }}
+        run: |
+          echo "::error::signature-coverage exited ${{ steps.sgc.outputs.rc }}, which is not one of its three documented codes (0, 1, 3)."
+          exit 1
+
+      # ================================================================================================
+      # signature-doc-siting (was .github/workflows/signature-doc-siting.yml; job(s) fixture, no-discarded-doc-comments)
+      # ================================================================================================
+      # signature-doc-siting — no F# XML documentation comment may sit in an implementation file whose
+      # sibling signature file makes the compiler discard it.
+      #
+      # .github#2730, epic #266 (the rule nothing asserts).
+      #
+      # When an F# module has a signature file, the `///` comments in the IMPLEMENTATION are discarded: the
+      # signature's documentation is what reaches the generated XML file, the IDE tooltip, and every
+      # downstream reader. Measured at `0ddd4b88`: 2,511 substantive doc-comment lines were written only in
+      # implementation files that had a sibling `.fsi`, and NOT ONE reached a consumer. The compiler cannot
+      # warn — `///` binds silently to the next declaration, so a block whose subject moved re-binds to
+      # whatever now follows it, and the Release build of all three projects emitted zero warnings over
+      # 3,913 such lines.
+      #
+      # THE GATE DECIDES ON THE MARKER, NEVER THE CONTENT, and that is what makes it safe to enforce. It
+      # never asks what a comment says, so it can form no opinion about whether a sentence is contract prose
+      # or prose about the implementation — and a `//` comment is invisible to it entirely. Prose explaining
+      # why THIS loop, this ordering constraint, the incident that produced this branch, is correctly placed
+      # in the `.fs` and is never reported. The only thing refused is a `///` whose content the compiler
+      # provably discards, which is wrong independently of what it says. A gate that had to classify prose
+      # would be one contributors learn to suppress; this one has nothing to suppress.
+      #
+      # NO `paths:` FILTER, AND THAT IS DELIBERATE — the same decision, for the same reason, that
+      # `.github/workflows/pipefail-assertions.yml` and `.github/workflows/shell-lint.yml` make. This gate's
+      # subject is every `.fs` under `src/` that has a sibling `.fsi`, and BOTH halves of that membership
+      # test can be changed by a commit that touches no `.fs` at all: ADDING a `Foo.fsi` beside an existing
+      # `Foo.fs` silently converts that file's whole doc-comment population into offenders. A filter over
+      # `src/**/*.fs` would not fire on such a commit, and a gate that does not run reports nothing while
+      # looking exactly like one that passed.
+      #
+      # No `schedule:` — the subject is committed files in this repository, so every change that could
+      # falsify the verdict arrives as a push or a pull request. A nightly re-run would prove only that the
+      # tree did not change on its own.
+
+      - name: Run the signature-doc-siting fixture (no network)
+        if: ${{ !cancelled() }}
+        run: bash tests/signature-doc-siting/run.sh
+
+      - name: Assert no implementation file with a signature file carries a doc comment
+        if: ${{ !cancelled() }}
+        id: sds
+        run: |
+          rc=0
+          out="$(python scripts/check-signature-doc-siting.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the contract;
+      # nothing here greps the gate's prose.
+      #
+      # There is no exit-2 leg because this gate is PURE — working tree only, no API, no network, no
+      # build — so it has no retryable failure to report. A leg for a verdict the gate can never mean
+      # would be a lie about the contract; the INCONCLUSIVE leg below catches a 2 if one ever appears.
+      - name: 'OK: every implementation file matches its baseline exactly'
+        if: ${{ !cancelled() && steps.sds.outputs.rc == '0' }}
+        run: |
+          echo "signature-doc-siting: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a doc comment the compiler discards, or a stale baseline'
+        if: ${{ !cancelled() && steps.sds.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### signature-doc-siting: a doc comment sits where the compiler discards it"
+            echo
+            echo "An \`.fs\` file with a sibling \`.fsi\` gained an F# XML documentation comment"
+            echo "(\`///\`) — or the baseline still claims comments that are no longer there."
+            echo
+            echo "When a module has a signature file, the signature's documentation is what reaches"
+            echo "the generated XML, the IDE tooltip, and every downstream reader. The"
+            echo "implementation's is **discarded**, and the compiler cannot warn: \`///\` binds"
+            echo "silently to the next declaration (.github#2730)."
+            echo
+            echo "Ask one question of the comment: **could a caller who never opens the \`.fs\` act"
+            echo "on this sentence?**"
+            echo
+            echo "* **Yes** — it is contract prose. Move it to the sibling \`.fsi\`, where the"
+            echo "  compiler keeps it. If the \`.fsi\` already says it, delete the duplicate."
+            echo "* **No** — it is about *this* implementation (the ordering constraint, the"
+            echo "  fail-closed branch, the API quirk being worked around, the incident that produced"
+            echo "  this branch). It is correctly placed exactly where it is. Write it \`//\`, with"
+            echo "  its wording unchanged. This gate never looks at a \`//\` comment."
+            echo
+            echo "If the baseline is **stale**, the gate prints the number to write — write it in the"
+            echo "same commit as the repair. The baseline only ever shrinks, and that is what makes"
+            echo "it a true statement about the tree rather than a list nobody maintains."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=signature-doc-siting: a doc comment the compiler discards::A new doc comment in an implementation file that has a signature file, or a stale baseline. See the job log."
+          exit 1
+
+      # "FIVE causes" IS READER-FACING AND CORRECT; the gate has SIX `EX_NO_VERDICT` returns, and the
+      # sixth is deliberately folded rather than missing. `main` refuses separately when `src/` is not
+      # a directory at all and when it is one holding no `.fs` file, but those are one cause to the
+      # person reading this summary — discovery did not find a subject set — with one repair, the
+      # harness or the checkout. Splitting them here would make the reader choose between two rows
+      # that lead to the same place. The five named causes cover all six returns; the job log still
+      # prints the exact one. Recorded at .github#2730 round 3 so the count is not re-raised as a
+      # defect: it was checked, and the grouping is the intent.
+      - name: 'NO VERDICT (permanent): the gate could not read or lex a valid subject'
+        if: ${{ !cancelled() && steps.sds.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### signature-doc-siting: no verdict"
+            echo
+            echo "Exit 3 has **five** causes. The gate found no \`.fs\` file under \`src/\`, found"
+            echo "none with a sibling \`.fsi\`, could not **read** a subject file, could not **lex**"
+            echo "one, or could not read/parse \`tests/signature-doc-siting/baseline.txt\`."
+            echo
+            echo "**Which one it was is in the job log**, naming the cause and the file. They fall"
+            echo "into two groups, and they need different repairs:"
+            echo
+            echo "* **Discovery or the baseline broke.** This repository demonstrably contains 66"
+            echo "  \`.fs\` files under \`src/\`, 62 of them with a sibling \`.fsi\`, so an empty"
+            echo "  subject set is a break in the harness rather than a fact about the tree."
+            echo "  Scanning nothing is a failure to scan, and without the baseline the gate cannot"
+            echo "  tell a recorded residue from a new offender."
+            echo "* **A subject file could not be read, or could not be lexed.** That one is a fact"
+            echo "  about the *source*, and the named file is the repair: it is not valid UTF-8, or"
+            echo "  it ends inside an unterminated string or an unclosed block comment, so the pass"
+            echo "  lost its place and every line after that point was scanned in the wrong state."
+            echo "  A count taken after a mis-parse is worse than no count, because it looks like"
+            echo "  one — which is why the gate refuses here rather than resetting and carrying on."
+            echo
+            echo "In none of the five does this mean the tree is clean, and in none of them will"
+            echo "retrying help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=signature-doc-siting: no verdict (permanent)::The gate could not reach a verdict it can trust — discovery, the baseline, or a subject file it could not read or lex. See the job log for which."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.sds.outputs.rc) }}
+        run: |
+          echo "::error title=signature-doc-siting: inconclusive::check-signature-doc-siting.py exited ${{ steps.sds.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
+
+      # ================================================================================================
+      # prose-citations (was .github/workflows/prose-citations.yml; job(s) live-prose)
+      # ================================================================================================
+      # The subject is every tracked Markdown file, including a future top-level root. An unfiltered
+      # trigger is the only closed-world selection; a hand-maintained roots list would recreate #2587.
+
+      - name: Prove the gate can reject a genuine offender
+        if: ${{ !cancelled() }}
+        run: bash tests/prose-citations/run.sh
+
+      - name: Check tracked live prose
+        if: ${{ !cancelled() }}
+        id: prc
+        run: |
+          rc=0
+          python3 scripts/check-prose-citations.py --root . || rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      - name: 'OK: every local citation resolves'
+        if: ${{ !cancelled() && steps.prc.outputs.rc == '0' }}
+        run: echo "prose-citations OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a local citation names no tracked file'
+        if: ${{ !cancelled() && steps.prc.outputs.rc == '1' }}
+        run: exit 1
+
+      - name: 'NO VERDICT: subject or corpus is empty'
+        if: ${{ !cancelled() && steps.prc.outputs.rc == '3' }}
+        run: exit 1
+
+      - name: 'INCONCLUSIVE: unknown exit code'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.prc.outputs.rc) }}
+        run: exit 1
+
+      # ================================================================================================
+      # telemetry-git-safety (was .github/workflows/telemetry-git-safety.yml; job(s) telemetry-git-safety)
+      # ================================================================================================
+      # Inspects the candidate's Git blobs (base..head), never host telemetry. It ran on pull_request and
+      # main push only, so it is skipped on workflow_dispatch, where there is no base to measure from.
+
+      - name: Inspect candidate Git blobs without reading host telemetry
+        if: ${{ !cancelled() && github.event_name != 'workflow_dispatch' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python3 scripts/check-telemetry-git-safety.py --base "$BASE_SHA"
+
+      # ================================================================================================
+      # v1-writer-census-advisory (was .github/workflows/v1-writer-census-advisory.yml; job(s) census-advisory)
+      # ================================================================================================
+      # v1-writer-census-advisory: tell the author of a PR that the v1 writer census needs a rehash, on that PR.
+      #
+      # Refs #4730 (Root decision, option 2). Three drifts in two days (#4991, #5017, #5096) were each found a day
+      # late by the nightly canary or a release, because `check-v1-writer-census.py --structural` ran on no pull
+      # request. ADR-0091 keeps backward-validity proofs out of ordinary delivery, so this is ADVISORY: it is not a
+      # required status check, it never blocks a merge, and it does nothing at all unless the PR touches a file
+      # the census tracks (the list is read from docs/coordination/v1-writer-census.json at run time; there is no
+      # second list). A PR that touches none ends in a few seconds on one checkout and one python start.
+
+      - name: Run the structural census check only if the PR touches a census-tracked file
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        run: python3 scripts/check-v1-writer-census-advisory.py
+
+      # ================================================================================================
+      # wizard-graph-seal (was .github/workflows/wizard-graph-seal.yml; job(s) seal)
+      # ================================================================================================
+      # wizard-graph-seal — KNOWN_GRAPH_SEAL must not go stale unnoticed (.github#4730, #3010).
+      #
+      # `KNOWN_GRAPH_SEAL` in scripts/new_sdd_workspace_successor_admission.py seals the whole non-report
+      # source graph of this repository. It goes stale whenever any non-report file changes, and nothing said
+      # so: the successor suite's `known_source_fixture` falls back to an earlier matching commit, so a stale
+      # seal looked current until a person recomputed it by hand during a Wizard publication.
+      #
+      # scripts/check-wizard-graph-seal.py recomputes the seal with the suite's own readers and compares it
+      # with the pin. Because the seal is MEANT to change with every non-report change to main, it is not an
+      # always-red gate:
+      #   - a stale seal on a PR that touches the Wizard release surface FAILS this job. The surface is
+      #     RELEASE_SURFACE in scripts/check-wizard-graph-seal.py: the creator current/frozen coord-dependency
+      #     helpers and creator0*-coord-dependencies.json pins, creator_source_qualification.py, the
+      #     new-sdd-workspace-*.py manifest/publisher scripts, new_sdd_workspace_successor_*.py (admission, which
+      #     holds the seal, execution, provider), new_sdd_workspace_promote_recovery.py, and the
+      #     release-new-sdd-workspace*.yml workflows;
+      #   - a stale seal on any other PR that touches the sealed graph is an annotation and a job-summary
+      #     line, and the job passes;
+      #   - a PR that touches only admitted progress reports does not touch the sealed graph.
+      #
+      # NO `paths:` FILTER, AND THAT IS DELIBERATE — the same decision pipefail-assertions.yml and
+      # shell-lint.yml make. The sealed graph is every tracked non-report file, so any filter would silently
+      # shrink the subject to less than the seal covers. The script decides applicability from the diff; the
+      # job costs seconds (no SDK, no restore, no network beyond checkout and the YAML pin).
+      #
+      # The PR is checked as the MERGE tree (the default pull_request checkout), because that is the tree
+      # main will hold after the merge and the one the next release will seal. depth 2 is enough: the first
+      # parent of the merge commit (HEAD^1) is the base the change is measured against. It is read from the
+      # checked-out commit, not from the event payload, whose base.sha can be stale; the step refuses to
+      # measure anything that is not a two-parent merge commit.
+      #
+      # No `push:` trigger: a post-merge failure could not be acted on by the change that caused it, and the
+      # annotation on the PR is the visibility this gate exists to provide.
+
+      # Prove the gate can still say NO (and "warn, pass") before believing it when it says yes.
+      - name: Prove the seal gate's controls (stale on release surface fails, stale elsewhere warns, current passes)
+        if: ${{ !cancelled() && github.event_name != 'push' }}
+        run: python3 tests/wizard-graph-seal/run.py
+
+      - name: Check the Wizard graph seal against this change
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        run: |
+          set -euo pipefail
+          parents="$(git rev-list --parents -n1 HEAD)"
+          if [ "$(wc -w <<<"$parents")" -ne 3 ]; then
+            echo "::error::HEAD is not a pull_request merge commit; the change cannot be measured"
+            exit 2
+          fi
+          python3 scripts/check-wizard-graph-seal.py --base HEAD^1
+
+      - name: Report the Wizard graph seal (no change information)
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+        run: python3 scripts/check-wizard-graph-seal.py
+
+
+  # signature-doc-siting's MUTATION SWEEP (was job `mutation-sweep` of signature-doc-siting.yml; same job id,
+  # so the `mutation-sweep` check context still exists on every run, as a skipped one when omitted).
+  #
+  # THE FIXTURE PROVES THE GATE CAN SAY NO. THIS JOB PROVES THE FIXTURE CAN. It enumerates mutations from
+  # the gate's own AST and requires the fixture to fail on each; `mutants.py` also proves its own
+  # enumeration is whole, operator by operator, and that every operator is read at a non-zero count
+  # (.github#2730). Survivors are justified in `tests/signature-doc-siting/mutants-allowed.txt`.
+  #
+  # It starts only when the `gates` job's classifier did not positively prove the diff unrelated
+  # (`!= 'false'`, so an empty or unknown classification runs it). It needs `gates` only for that
+  # output; its own first control is that the UNMUTATED fixture passes, so it refuses to report anything
+  # if the fixture is broken, whatever `gates` concluded.
+  mutation-sweep:
+    needs: gates
+    if: ${{ !cancelled() && needs.gates.outputs.signature_doc_sweep != 'false' }}
+    runs-on: ubuntu-latest
+    # Historical runs measured15m11s/385 and19m3s/432; these are not current margins.
+    # Exact2f785 run37748881439 exceeded30m on2026-10-08. Stop each real mutant
+    # only after its first explicit fixture assertion failure; keep complete controls,
+    # every dynamically enumerated subject/operator and eight workers. Improvement
+    # remains unmeasured until a complete fresh hosted sweep; timeout stays30m.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      # `--jobs 8` on a 4-vCPU runner deliberately oversubscribes: each mutant is one `bash` fixture
+      # that spends most of its wall clock waiting on ~100 short-lived `python3` spawns rather than
+      # computing, so more in-flight work than cores is the right shape here. The default is
+      # `min(16, cpu_count)`, which would be 4.
+      - name: Check mutation fixture result protocol before the sweep
+        run: python tests/signature-doc-siting/test_mutation_protocol.py
+      - name: Assert the fixture fails on every mutation of the gate (no network)
+        run: python tests/signature-doc-siting/mutants.py --jobs 8

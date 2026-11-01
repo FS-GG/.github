@@ -1,4 +1,4 @@
-# Gates the advisory v1-writer-census PR check (v1-writer-census-advisory.yml), Refs #4730.
+# Gates the advisory v1-writer-census PR check (its step in always-gates.yml since .github#5182), Refs #4730.
 #
 # Drives scripts/check-v1-writer-census-advisory.py against a throwaway clone of this repository: a tracked-file
 # edit without a rehash is flagged, the rehashed edit passes, an untouched PR is a no-op, a new non-executable
@@ -14,7 +14,7 @@ on:
       - "scripts/check-v1-writer-census-advisory.py"
       - "scripts/check-v1-writer-census.py"
       - "tests/v1-writer-census-advisory/**"
-      - ".github/workflows/v1-writer-census-advisory.yml"
+      - ".github/workflows/always-gates.yml"
       - ".github/workflows/v1-writer-census-advisory-selftest.yml"
   push:
     branches: [main]
@@ -22,7 +22,7 @@ on:
       - "scripts/check-v1-writer-census-advisory.py"
       - "scripts/check-v1-writer-census.py"
       - "tests/v1-writer-census-advisory/**"
-      - ".github/workflows/v1-writer-census-advisory.yml"
+      - ".github/workflows/always-gates.yml"
       - ".github/workflows/v1-writer-census-advisory-selftest.yml"
   workflow_dispatch:
 

@@ -23,7 +23,7 @@ SUBJECTS = {
         "scripts/check-signature-doc-siting.py",
         "scripts/ci-gate-impact.py",
         "tests/signature-doc-siting/",
-        ".github/workflows/signature-doc-siting.yml",
+        ".github/workflows/always-gates.yml",
     ),
     "shell-fixture": (
         "scripts/ci-gate-impact.py",

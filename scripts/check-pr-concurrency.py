@@ -92,8 +92,12 @@ WHY THESE (the basis, recorded rather than implied).
   * `landed-revert-guard` (landed by #5008) already had the PR-only block; it is listed in PR_ONLY so the gate
     pins it. `claim-generation` (#5004) moved out of coherence.yml in its own workflow, which keeps `edited` (it reads
     the PR body) and is therefore head-keyed like `fsgg-claim-fence`; it is in GOVERNED.
-  * `wizard-graph-seal` already declares `<name>-${{ github.ref }}`, cancel true, and is one of the 73 PR
-    workflows with a block of their own (many `<name>-${{ github.ref }}`, which also cancels main pushes).
+  * `wizard-graph-seal` declared `<name>-${{ github.ref }}`, cancel true, as one of the 73 PR workflows
+    with a block of their own (many `<name>-${{ github.ref }}`, which also cancels main pushes).
+  * #5182 (CI fan-out) folds eight tiny always-run, non-required gates into `always-gates`: telemetry-git-safety
+    and v1-writer-census-advisory (governed here before) and engine-flag-narrative, pipefail-assertions,
+    signature-coverage, signature-doc-siting, prose-citations and wizard-graph-seal (each had its own
+    `github.ref` block). The combined workflow is born governed.
   On that tree 136 workflows trigger on pull_request or pull_request_target: 60 governed here, 74 with their
   own block, 2 with none (the exclusions). Extending the list means reading each workflow first.
 
@@ -125,11 +129,11 @@ except ImportError:  # pragma: no cover - the policy bootstrap installs PyYAML
     print("check-pr-concurrency: PyYAML is required", file=sys.stderr)
     sys.exit(3)
 
-# The workflows #4730 PR-1 governs. wizard-graph-seal.yml already declares `<name>-${{ github.ref }}`
-# with cancel-in-progress true (PR-keyed through refs/pull/N/merge, and it has no push trigger), so it
-# is deliberately NOT listed. routine-eligibility.yml is held back until #4994 merges.
+# The workflows #4730 PR-1 governs. routine-eligibility.yml is held back until #4994 merges.
+# #5182 folds telemetry-git-safety, v1-writer-census-advisory, wizard-graph-seal and five other tiny
+# always-run gates into one workflow, `always-gates`, which carries the governed block.
 GOVERNED = [
-    "architecture-map", "atlas", "board-paths-live-selftest", "board-v2-import-preflight",
+    "always-gates", "architecture-map", "atlas", "board-paths-live-selftest", "board-v2-import-preflight",
     "c3-audio-ordinary-enrollment-bridge-selftest",
     "c3-coordination-ordinary-enrollment-bridge-selftest",
     "c3-game-ordinary-enrollment-bridge-selftest", "c3-governance-ordinary-enrollment-bridge-selftest",
@@ -146,8 +150,8 @@ GOVERNED = [
     "repos-registry-selftest", "rest-budget-preflight-selftest", "routine-eligibility-selftest",
     "skill-quality", "skill-registry-autofix", "skill-registry-coherence", "skill-roots-selfcheck",
     "skill-union-selftest", "skill-view", "skill-view-parity", "skillmirror-redrive",
-    "surface-impact-selftest", "sync-build-config-selftest", "telemetry-git-safety", "touch-set-drift",
-    "touch-set-drift-selftest", "usage-census-selftest", "closing-keywords", "v1-writer-census-advisory", "v1-writer-census-advisory-selftest", "work-programme",
+    "surface-impact-selftest", "sync-build-config-selftest", "touch-set-drift",
+    "touch-set-drift-selftest", "usage-census-selftest", "closing-keywords", "v1-writer-census-advisory-selftest", "work-programme",
 ]
 
 # Workflows whose ONLY pull-request trigger is the single event they run on (`pull_request_target`, or
