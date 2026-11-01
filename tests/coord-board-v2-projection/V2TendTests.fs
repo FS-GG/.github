@@ -408,6 +408,12 @@ let ``liveness: after max(k, 3) runs every field is filled, refused or proposed`
                 plan <- V2Tend.derive parameters snapshot
             for d in plan.Deferred do
                 Assert.True(d.Expired || not d.Counts, sprintf "seed %d: %s still deferred and not expired" seed d.Key)
+                // Only settle windows and rules that are not enabled may stay pending, and the latter never expire.
+                if not d.Counts then
+                    Assert.True(d.Reason = SettleWindow || (d.Reason = RuleDisabled && not (enabled.Contains d.Rule)), d.Key)
+                if d.Reason = RuleDisabled && not ([ "T1d"; "T1i"; "W1d" ] |> List.contains d.Rule) then
+                    Assert.Equal("rule-disabled:" + d.Rule, d.Label)
+                    Assert.False(d.Expired, d.Key)
 
 [<Fact>]
 let ``safety: Apply never overwrites a fill field, writes Blocked, leaves Blocked or Done, or closes the loop on an open card`` () =
@@ -463,6 +469,7 @@ let ``fallbacks wait for settled inputs: T1f waits while the card's own Work lev
     let card =
         { (generate 1).Cards.Head with
             ItemId = "L"; Ref = "FS-GG/f#2"; Parent = Some "FS-GG/f#999"; SubIssues = []; Open = true; Status = Some Ready
+            CreatedAt = observed.AddDays -10.0
             WorkLevel = None; Track = None; Prs = []; Intended = None; Blockers = []; BlockedOn = None
             Enrolled = false; EnrolledRoadmap = None; SubIssuesComplete = true; TimelineComplete = true }
     let pending = V2Tend.derive all { ObservedAt = observed; Cards = [ card ]; Ledger = [] }
@@ -473,3 +480,68 @@ let ``fallbacks wait for settled inputs: T1f waits while the card's own Work lev
     let parentless = V2Tend.derive all { ObservedAt = observed; Cards = [ { card with Parent = None } ]; Ledger = [] }
     Assert.True(proposed parentless "FS-GG/f#2" "work-level-undetermined")
     Assert.Equal(Some ("Follow-up", [ "T1f" ]), effectOn parentless "L" TrackField |> Option.map (fun e -> e.Target, e.Rules))
+
+[<Fact>]
+let ``disabled S1 and S3 under the starting set never become proposals across many runs`` () =
+    let basis = (generate 1).Cards.Head
+    let plain =
+        { basis with
+            Parent = None; SubIssues = []; WorkLevel = Some Delivery; Track = Some FollowUp; Intended = None; Blockers = []
+            BlockedOn = None; AcceptanceEvidence = None; Enrolled = false; EnrolledRoadmap = None; SubIssuesComplete = true
+            TimelineComplete = true; CreatedAt = observed.AddDays -10.0 }
+    let closed = { plain with ItemId = "S1-card"; Ref = "FS-GG/s#1"; Open = false; Status = Some InProgress; ClosedAt = Some(observed.AddHours -2.0); Prs = [] }
+    let reviewable =
+        { plain with
+            ItemId = "S3-card"; Ref = "FS-GG/s#2"; Open = true; Status = Some Backlog; ClosedAt = None
+            Prs = [ { Id = "PR-s"; State = PrOpen; Draft = false; Linkage = Strict; UpdatedAt = observed } ] }
+    let mutable snapshot = { ObservedAt = observed; Cards = [ closed; reviewable ]; Ledger = [] }
+    for run in 1 .. 10 do
+        let plan = V2Tend.derive starting snapshot
+        Assert.Empty(plan.Propose)
+        Assert.Empty(plan.Apply)
+        Assert.Contains(plan.WouldApply, fun e -> e.ItemId = "S1-card" && e.Rules = [ "S1" ])
+        Assert.Contains(plan.WouldApply, fun e -> e.ItemId = "S3-card" && e.Rules = [ "S3" ])
+        for d in plan.Deferred do
+            Assert.False(d.Counts, d.Key)
+            Assert.StartsWith("rule-disabled:", d.Label)
+        snapshot <- { V2Tend.applyPlan plan snapshot with Ledger = V2Tend.nextLedger plan snapshot.Ledger snapshot.ObservedAt; ObservedAt = snapshot.ObservedAt.AddHours 6.0 }
+    Assert.Empty(snapshot.Ledger)
+
+[<Fact>]
+let ``a disabled T1i still expires into track-undetermined`` () =
+    let snapshot = fixture "20-young-leaf.json"
+    let off = V2Tend.derive (without [ "T1i" ]) snapshot
+    let d = (deferredOn off "D-young" TrackField).Value
+    Assert.Equal((RuleDisabled, true, "track-undetermined"), (d.Reason, d.Counts, d.Label))
+    let expired = V2Tend.derive (without [ "T1i" ]) { snapshot with Ledger = [ { Key = d.Key; FirstDeferredAt = snapshot.ObservedAt.AddHours -25.0; Runs = 1 } ] }
+    Assert.True(proposed expired "FS-GG/x#91" "track-undetermined")
+
+[<Fact>]
+let ``a closed card without closedAt is refused as Unknown, not skipped`` () =
+    let card = { (generate 1).Cards.Head with ItemId = "C"; Ref = "FS-GG/c#1"; Parent = None; SubIssues = []; Open = false; ClosedAt = None; Status = Some InProgress; WorkLevel = Some Delivery; Track = Some FollowUp }
+    let plan = V2Tend.derive all { ObservedAt = observed; Cards = [ card ]; Ledger = [] }
+    Assert.True(refused plan "FS-GG/c#1" "closed-at-unread")
+    Assert.Equal(None, effectOn plan "C" StatusField)
+
+[<Fact>]
+let ``a young leaf under an off-board parent waits out its settle window before the expiry clock starts`` () =
+    let snapshot = fixture "23-expiry.json"
+    let young = { snapshot with Cards = snapshot.Cards |> List.map (fun c -> { c with CreatedAt = snapshot.ObservedAt.AddHours -2.0 }) }
+    let plan = V2Tend.derive all young
+    let d = (deferredOn plan "D-offboard" WorkLevelField).Value
+    Assert.Equal((SettleWindow, false), (d.Reason, d.Counts))
+    // Even an old ledger entry cannot expire it while the window runs.
+    let ledgered = V2Tend.derive all { young with Ledger = [ { Key = d.Key; FirstDeferredAt = young.ObservedAt.AddHours -30.0; Runs = 5 } ] }
+    Assert.False(proposed ledgered "FS-GG/x#100" "work-level-undetermined")
+
+[<Fact>]
+let ``an Outcome's intended Status is never proposed, and a childless Outcome is proposed, not filled`` () =
+    let outcome =
+        { (generate 1).Cards.Head with
+            ItemId = "O"; Ref = "FS-GG/o#1"; Parent = None; SubIssues = []; Open = true; Status = None; WorkLevel = Some Outcome
+            Track = Some ActiveDelivery; Intended = Some { WorkLevel = None; Track = None; Status = Some InProgress; RootAuthored = true }
+            SubIssuesComplete = true; Prs = [] }
+    let plan = V2Tend.derive all { ObservedAt = observed; Cards = [ outcome ]; Ledger = [] }
+    Assert.False(plan.Propose |> List.exists (fun p -> p.Rule = "P-INTENT"))
+    Assert.True(proposed plan "FS-GG/o#1" "no-open-delivery")
+    Assert.Equal(None, effectOn plan "O" StatusField)

@@ -156,10 +156,14 @@ module V2Tend =
           Field: Field
           Rule: string
           Reason: DeferralReason
-          /// Settle-window deferrals do not count toward expiry.
+          /// Counts toward expiry: input-pending deferrals, and disabled T1d, T1i and W1d. Settle windows and every
+          /// other disabled rule never count and never become proposals.
           Counts: bool
           /// Past 3 runs or 24 hours: the field is also proposed (and still applied later if it settles).
-          Expired: bool }
+          Expired: bool
+          /// The proposal reason on expiry (`track-declared-pending`, `track-undetermined`, ...), or
+          /// `rule-disabled:<rule>` / `settle-window:<rule>` for an entry that never expires.
+          Label: string }
 
     type Proposal =
         { Id: string
@@ -191,6 +195,10 @@ module V2Tend =
     val ruleset: string
 
     /// Derive the plan. Pure; deterministic in the order of cards, PRs, sub-issues and blockers.
+    /// Liveness holds over the enabled rules: after max(k, 3) runs or 24 hours every field is filled, refused,
+    /// proposed, or waiting only on a rule that is not enabled (a would-apply entry, never a proposal).
+    /// A closed card without `closedAt` is refused as Unknown. An Outcome with no sub-issues and an empty Status
+    /// is proposed (`no-open-delivery`) and never filled; an Outcome's intended Status is never proposed.
     val derive: parameters: Parameters -> snapshot: Snapshot -> Plan
 
     /// Apply a plan's Apply effects to a snapshot in memory, as a successful send and readback would.

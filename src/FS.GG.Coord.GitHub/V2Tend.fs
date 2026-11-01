@@ -143,7 +143,8 @@ module V2Tend =
           Rule: string
           Reason: DeferralReason
           Counts: bool
-          Expired: bool }
+          Expired: bool
+          Label: string }
 
     type Proposal =
         { Id: string
@@ -346,8 +347,9 @@ module V2Tend =
                     match c.Parent with
                     | Some parent ->
                         if declared = Some Outcome then Refuse("W1h", "work-level-conflict")
-                        elif (lookup parent).IsNone then Defer("W1h", InputPending)
+                        // The settle window runs before the expiry clock, also for a leaf whose parent is off the board.
                         elif hoursBetween now c.CreatedAt < parameters.LeafSettleHours then Defer("W1h", SettleWindow)
+                        elif (lookup parent).IsNone then Defer("W1h", InputPending)
                         else Change("W1h", "Delivery", false, [])
                     | None ->
                         match declared with
@@ -387,7 +389,8 @@ module V2Tend =
                 match c.Status, c.ClosedAt with
                 | Some Done, _ -> NoChange
                 | _, Some closed when (now - closed).TotalMinutes >= parameters.DoneSettleMinutes -> Change("S1", "Done", false, [])
-                | _ -> NoChange
+                | _, Some _ -> NoChange
+                | _, None -> Refuse("S1", "closed-at-unread") // closed with no closedAt: Unknown, never skipped
             else
                 let strictOpen = c.Prs |> List.filter (fun pr -> pr.Linkage = Strict && pr.State = PrOpen && not pr.Draft)
                 let strictDraft = c.Prs |> List.filter (fun pr -> pr.Linkage = Strict && pr.State = PrOpen && pr.Draft)
@@ -578,16 +581,28 @@ module V2Tend =
         let refuse rule ref reason =
             let id = rule + ":" + ref + ":" + reason
             refusals.[id] <- { Id = id; Ref = ref; Rule = rule; Reason = reason }
+        // A rule that is not enabled expires into a proposal only for T1d, T1i and W1d, whose pending field
+        // people must decide. Every other disabled rule stays a would-apply entry: never counted, never posted.
+        let expiringWhenDisabled = set [ "T1d"; "T1i"; "W1d" ]
         let addDeferred item field rule reason =
             let key = rule + ":" + item + ":" + fieldName field
-            let counts = reason <> SettleWindow
+            let counts =
+                match reason with
+                | SettleWindow -> false
+                | RuleDisabled -> expiringWhenDisabled.Contains rule
+                | InputPending -> true
+            let label =
+                match reason with
+                | RuleDisabled when not counts -> "rule-disabled:" + rule
+                | SettleWindow -> "settle-window:" + rule
+                | _ -> expiryReason rule field reason
             let expired =
                 counts
                 && (match ledger |> Map.tryFind key with
                     | Some entry -> entry.Runs >= parameters.ExpiryRuns - 1 || hoursBetween now entry.FirstDeferredAt >= parameters.ExpiryHours
                     | None -> false)
-            deferred.Add { Key = key; ItemId = item; Ref = reference item; Field = field; Rule = rule; Reason = reason; Counts = counts; Expired = expired }
-            if expired then propose rule (reference item) (expiryReason rule field reason) None
+            deferred.Add { Key = key; ItemId = item; Ref = reference item; Field = field; Rule = rule; Reason = reason; Counts = counts; Expired = expired; Label = label }
+            if expired then propose rule (reference item) label None
         evaluate finalRound (fun item field decision ->
             match decision with
             | Change(rule, target, _, deps) when not (enabled rule) && valueOf (card item) field <> Some target ->
@@ -602,7 +617,8 @@ module V2Tend =
             | Refuse(rule, reason) -> refuse rule (reference item) reason)
         for item in topDown do
             let c = card item
-            match intentProposal c with
+            // The roll-up decides an Outcome's Status, so its intended Status is never proposed.
+            match (if isOutcomeLike original.[item] then None else intentProposal c) with
             | Some(rule, reason, suggested) -> propose rule c.Ref reason suggested
             | None -> ()
             if isOutcomeLike c then
