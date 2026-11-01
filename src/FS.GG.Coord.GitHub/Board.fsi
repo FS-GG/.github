@@ -201,6 +201,11 @@ module Board =
         number: int ->
             IoResult<AddOutcome>
 
+    /// The 409 message every per-issue `projectItems` read (`itemId`, `itemStatus`, the Blocked by reads) returns for an
+    /// archived card on this board (#5119): issue-side `projectItems` include archived cards by default, board scans do
+    /// not, so the reads refuse an archived card explicitly instead of answering as for a live row.
+    val archivedCardRefusal: string
+
     /// Read ONE item's `Status` column — the pre-claim column of #481, so `release`/`reap` can restore what
     /// a claim overwrote instead of guessing `Ready`.
     ///
