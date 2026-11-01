@@ -495,7 +495,7 @@ module RuntimeUsage =
 
                 { StartedAt = startedAt; Marker = readDispatchMarker content })
 
-        /// Ok(Some resolvedModel) only for the parent record that is the launch result of this tool use and agent.
+        // Ok(Some resolvedModel) only for the parent record that is the launch result of this tool use and agent.
         let decodeSubagentLaunch (agentId: string) (toolUseId: string) (line: byte array) : Result<string option, string> =
             decoding (fun () ->
                 if line.Length > MaximumLineBytes then

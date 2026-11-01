@@ -1684,7 +1684,7 @@ module SkillTelemetryReaders =
             if length > 0 && bytes[length - 1] = byte '\r' then length <- length - 1
             bytes[.. length - 1]
 
-        /// Ok None while the opening record is still being written.
+        // Ok None while the opening record is still being written.
         let readClaudeSubagentOpening (claudeHome: string) (path: string) =
             try
                 match openUnder (claudeProjects claudeHome) path with
@@ -1712,7 +1712,7 @@ module SkillTelemetryReaders =
                     result.Value
             with _ -> Error "subagent opening record is unavailable"
 
-        /// The launch-resolved model from the spawning transcript, when its launch result is present.
+        // The launch-resolved model from the spawning transcript, when its launch result is present.
         let findClaudeSubagentLaunch (claudeHome: string) (path: string) (meta: FS.GG.Coord.RuntimeUsage.ClaudeTranscript.SubagentMeta) =
             match claudeSubagentSource claudeHome path with
             | None -> None
