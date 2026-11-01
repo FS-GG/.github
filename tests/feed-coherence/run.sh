@@ -50,6 +50,7 @@ contracts:
   - { id: game-sim-core,                 version: "0.2.0",           package-version: "0.2.0" }
   - { id: game-scene-adapter,            version: "0.2.0",           package-version: "0.2.0" }
   - { id: game-physics-box2d,            version: "0.17.0",          package-version: "0.17.0" }
+  - { id: game-render-browser,           version: "0.18.0",          package-version: "0.18.0" }
   - { id: wasm-shared-runtime,           version: "0.1.1",           package-version: "0.1.1" }
   - { id: fs-gg-audio,                   version: "0.1.0-preview.1", package-version: "0.1.0-preview.1" }
   # .github's own engine (.github#1067). Carried here because the gate's ORPHAN check is live: a
@@ -87,6 +88,7 @@ cat > "$FEED" <<'JSON'
   "FS.GG.Game.Core":                   ["0.2.0", "0.1.0-preview.1"],
   "FS.GG.Game.Render":                 ["0.2.0", "0.1.0-preview.1"],
   "FS.GG.Game.Physics.Box2D":          ["0.17.0"],
+  "FS.GG.Game.Render.Browser":         ["0.18.0"],
   "FS.GG.Wasm.Contracts":              ["0.1.1"],
   "FS.GG.Wasm.Browser":                ["0.1.1"],
   "FS.GG.Audio.Core":                  ["0.1.0-preview.1"],

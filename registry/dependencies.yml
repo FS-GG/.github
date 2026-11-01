@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-10-30"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-11-01"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   fsquint: { name: FsQuint, role: "Independent public Quint–F# decoding, replay and optional tooling" }
@@ -870,8 +870,8 @@ contracts:
       condition gates the enforcing flip; it now waits on the typed validator assertion shipping and a
       green skill-registry-coherence. See coherence id `skill-registry-published`.
   - id: game-sim-core
-    version: "0.17.0" # Optional Box2D and area/portal support; immutable v0.17.0 source 8cd158db8cb0836968df3f695fad75366434886c.
-    package-version: "0.17.0" # Both-feed payloads and fresh public-only two-scene consumer verified by release 37237849417; custody 11315758497, readback 11316676562. Product adoption remains separate.
+    version: "0.18.0" # Coherent Game 0.18.0 set (no Core source change; moves with the set); immutable v0.18.0 source 71b3210b3c0c4e6f1127e90ee0a6be85bf6c1b65. PRIOR: 0.17.0 optional Box2D and area/portal support, source 8cd158db8cb0836968df3f695fad75366434886c.
+    package-version: "0.18.0" # Published by release 41324010304 (tag v0.18.0 at 71b3210b3c0c4e6f1127e90ee0a6be85bf6c1b65; FS.GG.Game#745): custody before publication, new identity first on both feeds, hosted both-feed payload readback, public Box2D consumer; nuget.org independently re-read (payload equal to custody, signed). PRIOR: 0.17.0 release 37237849417.
     owner: game
     # ADR-0022: the platform's new BOTTOM layer. A BCL-only (FSharp.Core-only) deterministic simulation
     # core that reaches up to nothing — holds the primitives extracted from FS.GG.UI.Canvas (Rng /
@@ -913,22 +913,31 @@ contracts:
         qualifier: "Current0.7 package/SDK/manifest/tag and original publisher executor are immutable P=15e287d7c8884f088b7db41140f108f3f0136043. A new exact installed qualifier is still required. Last accepted installed0.6 qualifier, unchanged: 0.6 package/SDK/manifest/tag and original publisher executor are immutable P=8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e; exact finite installed qualifier Q=9a98f5da4043ec5d231acca97edfeebba7d4efb2 is separately accepted. Historical0.5 Q=c938e9158542e3a0572b62dd09c01ad01cbb344f qualifies only producer80540027623d9b1a8aa7715d0591de48455403b7; no arbitrary qualifier, overlay, rebuild, replay or receipt transfer follows."
         unqualified: "Additional browsers, npm/bundler permutations, OS support, WASI execution, deterministic fuel/replay, product adoption and native authority"
   - id: game-physics-box2d
-    version: "0.17.0"
-    package-version: "0.17.0" # Release 37237849417 at 8cd158db8cb0836968df3f695fad75366434886c; both-feed payload comparison and fresh package-only consumer passed.
+    version: "0.18.0" # Coherent Game 0.18.0 set; API-validated against published 0.17.0. PRIOR: 0.17.0 first release.
+    package-version: "0.18.0" # Published by release 41324010304 (tag v0.18.0 at 71b3210b3c0c4e6f1127e90ee0a6be85bf6c1b65; FS.GG.Game#745); both-feed payload comparison and fresh public package-only consumer passed. PRIOR: 0.17.0 release 37237849417 at 8cd158db8cb0836968df3f695fad75366434886c.
     owner: game
     surface: "FS.GG.Game.Physics.Box2D — optional owned Box2D.NET 3.1.654 worlds, immutable snapshots/events, pinned-profile replay and rigid local-area transfers; no rendering dependency"
     consumers: [] # Explicit product/Template adoption remains pending; public package-only qualification is not fleet adoption.
 
   - id: game-scene-adapter
-    version: "0.17.0" # Optional Box2D and area/portal support; immutable v0.17.0 source 8cd158db8cb0836968df3f695fad75366434886c.
-    package-version: "0.17.0" # Both-feed payloads and fresh public-only two-scene consumer verified by release 37237849417; custody 11315758497, readback 11316676562. Product adoption remains separate.
+    version: "0.18.0" # Additive MINOR (GAME-RENDER-ADOPT-01.1/.2/.3/.4, Game#745/#750/#751/#752): three-adapter authoring kit (SceneRenderers, RendererConformance), RendererRegistry.create, SceneInteraction, PresentFailed with bounded recovery, viewport remount rule; the bounded Fable source view is published for the first time, listing its sources unconditionally (an unreleased conditional form compiled nothing for a Fable package consumer and was fixed before publication; 0.17.0 carries no Fable view). API-validated against 0.17.0. PRIOR: 0.17.0 source 8cd158db8cb0836968df3f695fad75366434886c.
+    package-version: "0.18.0" # Published by release 41324010304 (tag v0.18.0 at 71b3210b3c0c4e6f1127e90ee0a6be85bf6c1b65; FS.GG.Game#745); both-feed payload readback; public browser-host consumer re-run independently after the in-run check raced nuget.org listing (NU1102). PRIOR: 0.17.0 release 37237849417.
     owner: game
     # ADR-0022 §2: the render edge. A pure Scene adapter projecting FS.GG.Game.Core primitives
     # (Point/Rect/Cell, pathfinding routes) onto FS.GG.UI.Scene drawables. The ONE place in FS.GG.Game
     # that reaches UP to Rendering (Game.Core reaches up to nothing); FSharp.Core-only, Skia-free.
     # Establishes the game -> rendering dependency edge (see dependencies:).
-    surface: "FS.GG.Game.Render package — Adapter (sim-state -> FS.GG.UI.Scene drawables)"
+    surface: "FS.GG.Game.Render package — Adapter (sim-state -> FS.GG.UI.Scene drawables), default keymap, and the renderer-selection core: RendererSelection/RendererRegistry, SceneRenderers, SceneInteraction and the RendererConformance kit, the last four also as a bounded Fable source view"
     consumers: [game]        # consumed within the game component (Game.Render.Tests / game products) today; the P6 game scaffold provider adds the cross-repo consumer
+  - id: game-render-browser
+    version: "0.18.0" # First release (GAME-RENDER-ADOPT-01.1, FS.GG.Game#745, packaging #760, release path #763): the Fable browser host, source 71b3210b3c0c4e6f1127e90ee0a6be85bf6c1b65; no API baseline on a first release.
+    package-version: "0.18.0" # Published by release 41324010304 (tag v0.18.0 at 71b3210b3c0c4e6f1127e90ee0a6be85bf6c1b65; FS.GG.Game#745): pushed FIRST and alone on each feed (new identity; nuget.org verify-key answers 400, Atlas github/nuget-trusted-publishing-policy-scope); hosted both-feed payload readback; nuget.org independently re-read (payload equal to custody, signed); clean public consumer (generated three-adapter module, .NET build and Fable compile) passed on independent re-run.
+    owner: game
+    # Fable library package: fable/ carries the host modules plus the PixiJS 8.22.0 and BabylonJS 9.33.1 bindings
+    # generated from the FS.GG.Templates commit pinned in FS.GG.Game eng/js-bindings/pin.env (sha256-pinned source,
+    # not a compiled bindings assembly). Depends on FS.GG.Game.Render at the same version.
+    surface: "FS.GG.Game.Render.Browser package — Fable browser host for renderer selection: RendererDriver, SvgSurface, RetainedSvgSurface, PixiSurface and BabylonSurface over the shared FS.GG.UI.Scene, the canvas SceneInteraction input host, BrowserRenderers and BrowserConformance; npm @babylonjs/core 9.33.1 and pixi.js 8.22.0"
+    consumers: []   # Template (FS.GG.Templates#834) and product (FourD, SC2, FSBarV2) adoption pending; package publication is not adoption.
   - id: fs-gg-audio
     version: "0.6.0"          # → 0.5.0 (2026-07-26, Audio#114/.github#1440, tag v0.5.0, merge bb2b4f2, release run 30182380163): additive MINOR; coherent Core/Host/Engine/Elmish set. PRIOR: → 0.4.0 (2026-07-21 coordinated milestone republish train, tag v0.4.0): an additive MINOR on the 0.x line (NOT 1.0); the four-package coherent set (Core/Host/Engine/Elmish) shares one <FsGgAudioVersion> and moves together. VERIFIED LIVE on the org feed (FS.GG.Audio.Core newest == 0.4.0); publish-before-flip FR-007 — feed first, this row after; `feed-coherence` had gone RED on main (registry 0.3.0 behind the 0.4.0 feed) and this flip clears it. PRIOR: → 0.3.0 (2026-07-16 full-platform release, additive API + hardening; Wav.PcmData gained a FormatTag field — source-compat only for external constructors, accepted as minor; four-package set moves together). PRIOR: ADVANCED 0.1.0 → 0.2.0: an additive minor on the 0.x line (NOT 1.0), cut as part of the coordinated full-platform release (2026-07-11, tag v0.2.0). The coherent set (Core/Host/Engine/Elmish) shares one version (<FsGgAudioVersion>) and moved together. PRIOR: ADVANCED 0.1.0-preview.1 → 0.1.0: the CHANNEL PROMOTION off -preview (FS.GG.Audio#4). Audio was the org's LAST -preview producer. 0.1.0 carried byte-identical src/ to 0.1.0-preview.1 — the last src/ commit (1a708d5) predated the preview tag; the only commits between them were CI config and the coordination kit. So that promoted finished bits (work items 001-core/002-host/003-elmish/004-engine all complete) rather than inventing content.
     package-version: "0.6.0"  # → 0.5.0 PUBLISHED on both feeds; GitHub Packages bytes match release assets and nuget.org payloads match excluding .signature.p7s. PRIOR: → 0.4.0 PUBLISHED all four on both feeds (2026-07-21 coordinated milestone republish train, FR-007, tag v0.4.0). FEED newest, VERIFIED LIVE on the org feed 2026-07-21 (scripts/check-feed-coherence.py: FS.GG.Audio.Core/.Host/.Engine/.Elmish newest == 0.4.0). publish-before-flip FR-007: all four live on the feed before this row flipped; `feed-coherence` was RED on main (0.3.0 behind the 0.4.0 feed) until this flip. NU5104 does NOT bite: Audio is a bottom layer with no FS-GG dependency. PRIOR 0.3.0 — PUBLISHED all four on both feeds (2026-07-16 full-platform release, FR-007, tag v0.3.0). PRIOR 0.2.0 on the org feed + nuget.org — ADVANCED 0.1.0 → 0.2.0 (tag v0.2.0, coordinated full-platform release 2026-07-11). package-version == version == feed(newest) == 0.2.0 (publish-before-flip FR-007: all four published live before this row flipped). NU5104 does NOT bite: Audio is a bottom layer with no FS-GG dependency. PRIOR 0.1.0: PUBLISHED on the org feed (release run 29043991855, tag v0.1.0); publish-before-flip FR-007 (all four "Your package was pushed" at 2026-07-09T19:22Z, that row flipped after). Dual-published to nuget.org via ADR-0012/0013 OIDC Trusted Publishing (policy fs-gg-audio-publishing) — the policy went live in cdb1604 and that was its first exercise; NuGet/login@v1 exchanged the OIDC token and all four returned Created.
@@ -1229,7 +1238,8 @@ dependencies:
   # ADR-0022 §2: the render edge. FS.GG.Game.Render (the Scene adapter) reaches UP to Rendering's Scene.
   # Public Game.Render 0.16.0 retains the actual Scene/KeyboardInput 0.10.0 dependencies.
   # A producer availability bump does not advance these consumer pins; verified from source and release metadata.
-  - { from: game,      to: rendering,  via: "game-scene-adapter@0.16.0 -> FS.GG.UI.Scene@0.10.0 (adapter projects sim state onto Scene drawables; a Game -> Rendering edge)" }
+  - { from: game,      to: rendering,  via: "game-scene-adapter@0.18.0 -> FS.GG.UI.Scene@0.31.0 (adapter projects sim state onto Scene drawables; a Game -> Rendering edge)" }
+  - { from: game,      to: rendering,  via: "game-render-browser@0.18.0 -> FS.GG.UI.Scene@0.31.0 + FS.GG.UI.Scene.SvgBrowser@0.31.0 (the browser host's retained SVG surface and shared Scene; FS.GG.Game#745)" }
   - { from: game,      to: rendering,  via: "keyboard-input@0.10.0 -> FS.GG.UI.KeyboardInput@0.10.0 (FS.GG.Game.Render default command→key keymap consumes the Keymap surface; FS.GG.Game#109 / PR #115, merged against the published stable 0.5.0; .github#365, ADR-0028)" }
   - { from: templates, to: sdd,        via: "scaffold-provider@1 + SDD skeleton (min fsgg-sdd 0.4.0, orchestrator axis — ADR-0008)" }
   - { from: templates, to: governance, via: "governance-policy@1 / capabilities@2 / tooling@1 config" }

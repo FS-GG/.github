@@ -1,5 +1,34 @@
 # Registry changelog
 
+## 2026-11-01 — reconcile published FS.GG.Game 0.18.0 and register FS.GG.Game.Render.Browser (FS-GG/FS.GG.Game#745)
+
+Flip `game-sim-core`, `game-scene-adapter` and `game-physics-box2d` `version` and `package-version` to **0.18.0**, and register the new contract **`game-render-browser`** (`FS.GG.Game.Render.Browser` 0.18.0). The tag `v0.18.0` points at FS.GG.Game main `71b3210b3c0c4e6f1127e90ee0a6be85bf6c1b65`, which carries the packaging change (Game#760), the release-path change (Game#763) and the renderer work of Game#750, #751 and #752 (#755, #757, #758).
+
+- **Admission:** dry run [41323784032](https://github.com/FS-GG/FS.GG.Game/actions/runs/41323784032) passed.
+  - The Core 0.17.0 org-feed sentinel returned 200, and all five ids returned 404 at 0.18.0 on both feeds.
+  - nuget.org verify-key answered HTTP 400 for all five ids. Since Game#763 that is recorded as `unverifiable`, with a warning citing Atlas `github/nuget-trusted-publishing-policy-scope`. An earlier dry run, [41323090013](https://github.com/FS-GG/FS.GG.Game/actions/runs/41323090013), refused on the same answer.
+- **Publication:** [41324010304](https://github.com/FS-GG/FS.GG.Game/actions/runs/41324010304) ran verify, pack, the release-contract package checks, both candidate consumers and custody artifact `game-release-custody-71b3210b…-0.18.0`.
+  - It pushed the org feed, then nuget.org, with the new identity `FS.GG.Game.Render.Browser` first and alone on each feed, then Core, Harness, Physics.Box2D and Render.
+  - The hosted both-feed payload readback and the public Box2D consumer passed.
+  - The run concluded **failure**, at its last step: the public browser-host consumer got `NU1102` (nearest 0.17.0) at 16:07:09Z. Readback had just fetched the 0.18.0 blobs, but nuget.org's version listing lagged them. All five ids were listed at about 16:08Z.
+  - The readback evidence artifact was therefore not retained.
+- **Custody SHA-256:**
+  - Core `bd0290c9…`
+  - Harness `edd42aae…`
+  - Physics.Box2D `38aa8767…`
+  - Render `8afe52d4…`
+  - Render.Browser `57def7a2…`
+- **Independent readback:** nuget.org archives (signed) are Core `a0bac254…`, Harness `4b4f4752…`, Physics.Box2D `21a28361…`, Render `d9a8d68c…` and Render.Browser `da28d5cb…`. Each payload equals custody when `.signature.p7s` is excluded. The GitHub Packages feed was not read directly (the local token is refused, 403), so its bytes rest on the hosted readback step.
+- **Consumer:** an independent `tests/release/test-render-browser-package-consumer.sh --public` run at `v0.18.0` restored Render `d9a8d68c…` and Render.Browser `da28d5cb…` from nuget.org alone. It built the generated three-adapter module with .NET and compiled it with Fable.
+
+Edges: `game-scene-adapter -> FS.GG.UI.Scene` now names 0.18.0/0.31.0 (it read 0.16.0/0.10.0), and a `game-render-browser -> FS.GG.UI.Scene + FS.GG.UI.Scene.SvgBrowser 0.31.0` edge is added. The `fable-lockstep` profile stays at its qualified `FS.GG.Game.Core@0.17.0` identity; Core's source is unchanged in 0.18.0.
+
+Limits:
+- `FS.GG.Game.Render` 0.17.0 carries no Fable view. The conditional view that compiled nothing for a Fable package consumer existed only in unreleased source (from Game#733) and was fixed before 0.18.0, so it is no reason to deprecate 0.17.0.
+- Template (FS.GG.Templates#834) and product adoption of the browser host remain separate, so `consumers: []`.
+- The in-run public browser consumer should wait for the nuget.org listing; that is a follow-up.
+- Architecture-map shape is unaffected.
+
 ## 2026-10-30 — reconcile published NewSddWorkspace 0.23.1 (FS-GG/.github#4964)
 
 Flip `new-sdd-workspace` `package-version` and `package-tag` to **0.23.1** and `new-sdd-workspace/v0.23.1`. The `version` line already read 0.23.1 as source/release-route preparation; it now records accepted publication, with the preparation text kept as a PRIOR chain. The tag points at source `e922a7c6d2ae09d5e3c6dae20761071507fa0920`, the #4966 merge.
@@ -232,6 +261,8 @@ review M4). The typed validator (`fsgg-sdd registry validate`) never saw that co
 no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
+
+- **2026-11-01** — - **2026-11-01** — GAME 0.18.0 PUBLICATION RECONCILED (game; FS-GG/FS.GG.Game#745, FS-GG/.github#5179): flip game-sim-core, game-scene-adapter and game-physics-box2d version/package-version 0.17.0 -> 0.18.0 and register game-render-browser (FS.GG.Game.Render.Browser 0.18.0, consumers []). Tag v0.18.0 -> 71b3210b; admission 41323784032; publisher 41324010304 pushed both feeds new-identity-first and passed hosted both-feed readback, then failed only its last step (public browser consumer NU1102 against nuget.org's lagging listing); nuget.org independently re-read (payloads equal custody) and the public browser consumer passed on independent re-run. Edges: game-scene-adapter -> UI.Scene 0.18.0/0.31.0, new game-render-browser -> UI.Scene + SvgBrowser 0.31.0. See the dated section above.
 
 - **2026-10-30** — CREATOR0231 PUBLICATION ACCEPTED (github; #4964): record candidate 41085337428/a1 (package a84e6614, 93 entries, producer payload c1d9b9f8…) and original publisher 41088019847/a1, all eight effects/final17 on fresh journal board-v2-product-creator-0231, promoted release 429241547 (not latest) with tag new-sdd-workspace/v0.23.1 -> e922a7c6. Release asset and signed public NuGet cc36936e… share the producer payload (nuget.org adds only .signature.p7s); hosted GitHub-feed observation retained. Executor set verify_nuget_login=false on the publish run after passing preflight 41086734028 (recorded deviation, no effect identity change). Advances package-version/tag from 0.23.0; the four-provider default-coordination rerun against the installed published tool passed (82 checks, receipts manifest 2e6a4afb9703c95e507e7652523d1f5577658c1e01e0eeea63d21e5b07ce4a00); see the dated section above.
 
