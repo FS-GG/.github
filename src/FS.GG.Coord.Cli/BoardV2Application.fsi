@@ -27,7 +27,7 @@ module BoardV2Application =
     /// The bounded refresh/inspection transport: it stops before dispatch once the binding's scaled request ceiling
     /// (`V2Projection.refreshRequestCeiling`) or deadline (`V2Projection.refreshDeadlineSeconds`) is reached, reporting
     /// coverage Unknown, and never replays a durable mutation. `elapsed` is the invocation's own clock.
-    /// Both limits are scaled from inspect measurements; an unbatched refresh does not fit them above about 80 rows (#5131).
+    /// Both limits are scaled from inspect measurements; a programme refresh batches its reads to fit them (#5131).
     val boundedWith:
         elapsed: (unit -> System.TimeSpan) -> binding: V2Projection.Binding -> transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport -> FS.GG.Coord.GitHub.Transport.IGitHubTransport
     /// Emit an explicit report wire shape, including gaps and independent acceptance facts.
@@ -55,15 +55,18 @@ module BoardV2Application =
     /// V4 file acquisition is bounded on one opened handle; binding/report parents must be private and
     /// nonsymlink. Reports are exclusive0600 with the supported directory barrier, never raw payload/nonce.
     /// Missing runtime suppliers and relevant native gaps remain attributed Unknown, without blocking inspection.
+    /// `lockDirectory` holds the shared writer lock refresh takes; fixtures pass a private directory so no test
+    /// opens the production lock (#5126). Production (`tryRun`) uses `$XDG_RUNTIME_DIR/fsgg` (`V2WriterLock`).
     val runWithTransportAndInput:
-        transport: Transport.IGitHubTransport -> reader: System.IO.TextReader -> arguments: string list -> int
+        lockDirectory: string -> transport: Transport.IGitHubTransport -> reader: System.IO.TextReader -> arguments: string list -> int
     /// Fixed refresh or read-only inspect command against an injected transport, for offline fixtures.
-    val runWithTransport: transport: Transport.IGitHubTransport -> arguments: string list -> int
+    val runWithTransport: lockDirectory: string -> transport: Transport.IGitHubTransport -> arguments: string list -> int
     /// Trusted inert custody/time seam for the same actual migration caller. Production command
     /// composition always binds the real supported directory barrier and TimeProvider.System.
     /// A callback is test/provider infrastructure, never approval or a filesystem qualification claim.
+    /// `lockDirectory` holds the shared writer lock migration-apply takes, as for refresh.
     val runMigrationWithCustody:
-        connection: V2MigrationTransport.IConnection -> syncDirectory: (string -> unit) -> clock: System.TimeProvider -> arguments: string list -> int
+        lockDirectory: string -> connection: V2MigrationTransport.IConnection -> syncDirectory: (string -> unit) -> clock: System.TimeProvider -> arguments: string list -> int
     /// Actual packaged migration composition against an inert/provider connection.
     /// Commands (without the board-v2 prefix):
     /// migration-prepare --scope-file PATH --report-file NEW_PATH;
@@ -95,6 +98,6 @@ module BoardV2Application =
     /// fresh native preconditions. Private exclusive evidence precedes every send; retained invocations
     /// permit readback only. Owner/reference text is accountability, not authentication or a JSON grant.
     val runMigrationWithConnection:
-        connection: V2MigrationTransport.IConnection -> arguments: string list -> int
+        lockDirectory: string -> connection: V2MigrationTransport.IConnection -> arguments: string list -> int
     /// Recognize board-v2 after validation; refresh composes the qualified writer, inspect only canonical reads.
     val tryRun: arguments: string list -> int option

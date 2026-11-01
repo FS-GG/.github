@@ -4,7 +4,7 @@
     {
       "id": "check-board",
       "supplied-by": ".claude/skills/check-board",
-      "tree-sha256": "27e48fe97a296686b7503d0abbbadc70b92d7f7695b11ce7a53899d6db3ba553",
+      "tree-sha256": "868816da1ab570246913a89d7dbecc43c42cd5e443177cffc6b0bee4fe7b4c67",
       "files": [
         {
           "path": "SKILL.md",
@@ -33,7 +33,7 @@
         },
         {
           "path": "references/organization-v2-inspection.md",
-          "sha256": "e911c9aadc5fe3c44323ebe6643fce9592c17feb2bac528c260540b59f78421e",
+          "sha256": "9bdd341afaeeb0770c77970a744da1b61f5f364047f5958e18b1ce814324bb6e",
           "executable": false
         },
         {
@@ -132,11 +132,11 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "2cd25a30f7d708825e70deaa3b458ef86965a52662ec9f440b2cbec958af66af",
+      "tree-sha256": "7a8d968a6ce107d55d76947813ed80d9003b3c4d1d00467cccec5912e991b43d",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "2c114dd529a4f72f93b2bdbcc39163ca899fa869466913a730cbd5b1151a7f19",
+          "sha256": "3fe9947338a287758a039be161e6acad9d31ad7fa01253936cc5e8b8c6ed70cc",
           "executable": false
         },
         {

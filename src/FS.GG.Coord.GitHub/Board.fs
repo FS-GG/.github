@@ -554,11 +554,24 @@ module Board =
         | _ ->
             Error(Malformed("the board bootstrap", "unknown FSGG_COORD_BOOTSTRAP_MODE; refusing to fall back to project enumeration"))
 
+    // ---- archived cards (#5119) --------------------------------------------------------------------
+
+    // The explicit refusal for an archived card on this board; documented in the .fsi. `Issue.projectItems` includes
+    // archived cards by default, while every board scan (`items`) excludes them, so these per-issue reads decide
+    // explicitly. Done retention archives only Done cards; a v1 writer that reached one would write an invisible card
+    // (or, through `item-add`, unarchive it), so the per-issue reads refuse it rather than answer as for a live row.
+    let archivedCardRefusal = "the board card is archived (Done retention); refusing to treat it as a live row"
+
+    let private archived (node: JsonElement) =
+        match node.TryGetProperty "isArchived" with
+        | true, value when value.ValueKind = JsonValueKind.True -> true
+        | _ -> false
+
     // ---- the item id -------------------------------------------------------------------------------
 
     [<Literal>]
     let private ItemIdDoc =
-        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { id project { number } } } } } rateLimit { cost remaining } }"
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { id project { number } isArchived } } } } rateLimit { cost remaining } }"
 
     // The window EVERY issue-side `projectItems` selection in this module asks for — `ItemIdDoc` here,
     // `ItemStatusDoc` and `ItemBlockedByDoc` below — and therefore the one the guard must see. ONE literal
@@ -629,18 +642,18 @@ module Board =
                                 // no-op here and like vandalism over there.
                                 if onThisBoard then
                                     match n.TryGetProperty "id" with
-                                    | true, i when i.ValueKind = JsonValueKind.String -> Some(i.GetString())
+                                    | true, i when i.ValueKind = JsonValueKind.String -> Some(i.GetString(), archived n)
                                     | _ -> None
                                 else
                                     None)
 
                         match found with
+                        | Some(_, true) -> Error(Http(409, archivedCardRefusal))
+                        | Some(id, false) -> Ok(Some id)
                         // FOUND IS FOUND. Truncation cannot unmake an answer we already have, so the completeness
                         // question is only asked on the miss — the same rule `externalItemId`'s walk follows when it
                         // returns on a hit without consulting `pageInfo`, and the reason this guard costs nothing on
                         // the hot path.
-                        | Some _ -> Ok found
-
                         | None ->
                             // **`None` HERE IS A SUCCESSFUL READ, AND `.github#2535` IS WHAT MAKES THAT TRUE ON THE
                             // SECOND AXIS.** We reached the board, we walked its items, and this issue is not among
@@ -1057,7 +1070,7 @@ module Board =
 
     [<Literal>]
     let private ItemStatusDoc =
-        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { project { number } fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } } } rateLimit { cost remaining } }"
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { project { number } fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } isArchived } } } } rateLimit { cost remaining } }"
 
     // Read ONE item's `Status` column — the column a `claim` is about to overwrite, so `release` can put it
     // back rather than guess `Ready` (#481).
@@ -1143,6 +1156,7 @@ module Board =
                             with
                             | Error e -> Error e
                             | Ok() -> Ok None
+                        | Some node when archived node -> Error(Http(409, archivedCardRefusal))
                         | Some node ->
                             match node.TryGetProperty "fieldValueByName" with
                             // `fieldValueByName` is null when the item is on the board with NO Status set. On board, no
@@ -1171,7 +1185,7 @@ module Board =
             externalItemField transport board owner repo number "Status" statusOfFieldValue
 
     let private ItemBlockedByDoc =
-        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { project { number } fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } } } } } rateLimit { cost remaining } }"
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { project { number } fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } isArchived } } } } rateLimit { cost remaining } }"
 
     // Read ONE item's live `Blocked by` column. `itemStatus`'s twin over the TEXT fragment — see the
     // `.fsi` for why this is a resolver read and what `Ok None` covers.
@@ -1239,6 +1253,7 @@ module Board =
                             with
                             | Error e -> Error e
                             | Ok() -> Ok None
+                        | Some node when archived node -> Error(Http(409, archivedCardRefusal))
                         | Some node ->
                             match node.TryGetProperty "fieldValueByName" with
                             // `fieldValueByName` is null when the item is on the board with the field genuinely
@@ -1253,7 +1268,7 @@ module Board =
                     Error(Malformed(subject, "the item-blocked-by response is missing `repository.issue.projectItems`"))
 
     let private ItemBlockedByObservationDoc =
-        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { updatedAt project { number } fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } } } } } rateLimit { cost remaining } }"
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { updatedAt project { number } fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } isArchived } } } } rateLimit { cost remaining } }"
 
     let private repositoryItemBlockedByObservation
         (transport: IGitHubTransport)
@@ -1307,6 +1322,7 @@ module Board =
                                 ProjectItemsWindow
                                 projectItems
                             |> Result.map (fun () -> { Value = None; Revision = None })
+                        | Some node when archived node -> Error(Http(409, archivedCardRefusal))
                         | Some node ->
                             match node.TryGetProperty "updatedAt" with
                             | true, revision when revision.ValueKind = JsonValueKind.String ->

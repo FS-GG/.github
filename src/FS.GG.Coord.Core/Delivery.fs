@@ -6,6 +6,7 @@ module Delivery =
     open System.Security.Cryptography
     open System.Text
     open System.Text.Json
+    open System.Text.RegularExpressions
     open Types
 
     type Stage =
@@ -178,6 +179,7 @@ module Delivery =
             Freshness: Freshness
             ItemBranchCanonical: bool
             ClosingLinkageCanonical: bool
+            DeliveryReferenceLinkage: bool
             PathsVerified: bool
             InReview: bool
             Review: Driver.ReviewChain option
@@ -997,17 +999,119 @@ module Delivery =
                 =
                 1)
 
-    // Canonical closing linkage is the ordinary authority. The sole exception is the exact live
-    // single-item two-phase receipt shape; callers at a write boundary must invoke this over freshly
-    // re-read linkage, obligation, claim, issue, and board facts rather than an inspected snapshot.
+    // A strict PR may `Refs` its Delivery instead of closing its item (.github#5100), matching the
+    // routine dispatch rule: the PR never closes the Delivery, Root's acceptance does. The Delivery is
+    // proved live, from both sides of the native edge, and every doubt refuses.
+    type DeliveryReferenceFacts =
+        {
+            Candidate: Ref
+            Open: bool
+            Parent: Ref option
+            ListedUnderTarget: bool
+        }
+
+    let maxDeliveryReferenceCandidates = 8
+
+    // `scripts/board-currency-rules.py` `_FENCE`/`_INLINE`/`_REFS`/`_ONE_REF`, restated exactly.
+    let private fencePattern = Regex("```.*?```|~~~.*?~~~", RegexOptions.Singleline)
+    let private inlinePattern = Regex("`[^`\n]*`")
+
+    let private refsPattern =
+        Regex(
+            @"\bRefs\s+((?:[\w.-]+/[\w.-]+)?#\d+(?:\s*(?:,|and|&)\s*(?:[\w.-]+/[\w.-]+)?#\d+)*)",
+            RegexOptions.IgnoreCase
+        )
+
+    let private oneRefPattern = Regex(@"(?:([\w.-]+/[\w.-]+))?#(\d+)")
+
+    let private sameRef (left: Ref) (right: Ref) =
+        left.Number = right.Number
+        && String.Equals(left.Owner, right.Owner, StringComparison.OrdinalIgnoreCase)
+        && String.Equals(left.Repo, right.Repo, StringComparison.OrdinalIgnoreCase)
+
+    let declaredReferences (prOwner: string) (prRepo: string) (body: string) =
+        let visible =
+            inlinePattern.Replace(fencePattern.Replace((if isNull body then "" else body), " "), " ")
+
+        [
+            for line in refsPattern.Matches visible do
+                for one in oneRefPattern.Matches(line.Groups.[1].Value) do
+                    let owner, repo =
+                        if one.Groups.[1].Success then
+                            let parts = one.Groups.[1].Value.Split('/')
+                            parts.[0], parts.[1]
+                        else
+                            prOwner, prRepo
+
+                    match Int32.TryParse(one.Groups.[2].Value, NumberStyles.None, CultureInfo.InvariantCulture) with
+                    | true, number ->
+                        yield
+                            {
+                                Owner = owner
+                                Repo = repo
+                                Number = number
+                            }
+                    | _ -> ()
+        ]
+        |> List.fold (fun seen ref -> if List.exists (sameRef ref) seen then seen else seen @ [ ref ]) []
+
+    let deliveryReferenceLinkage target closing prOwner prRepo body read =
+        match closing with
+        | Some (closed: Ref) ->
+            Error $"the pull request closes %s{closed.Canonical}; a Delivery reference requires a PR that closes nothing"
+        | None ->
+            let candidates =
+                declaredReferences prOwner prRepo body |> List.filter (fun ref -> not (sameRef ref target))
+
+            if List.isEmpty candidates then
+                Error "the pull request names no `Refs` candidate other than the item itself"
+            elif List.length candidates > maxDeliveryReferenceCandidates then
+                Error
+                    $"the pull request names %d{List.length candidates} `Refs` candidates; at most %d{maxDeliveryReferenceCandidates} are read"
+            else
+                let reads = candidates |> List.map read
+
+                match reads |> List.tryPick (function Error reason -> Some reason | Ok _ -> None) with
+                | Some reason -> Error $"a `Refs` candidate could not be verified: %s{reason}"
+                | None ->
+                    let deliveries =
+                        reads
+                        |> List.choose (function Ok facts -> Some facts | Error _ -> None)
+                        |> List.filter (fun facts ->
+                            not (sameRef facts.Candidate target)
+                            && facts.Open
+                            && facts.ListedUnderTarget
+                            && facts.Parent |> Option.exists (sameRef target))
+
+                    match deliveries with
+                    | [ delivery ] -> Ok delivery.Candidate
+                    | [] -> Error $"no `Refs` candidate is an open native sub-issue of %s{target.Canonical}"
+                    | many ->
+                        Error
+                            $"%d{List.length many} `Refs` candidates are open native sub-issues of %s{target.Canonical}; exactly one Delivery is required"
+
+    // Canonical closing linkage is the ordinary authority. A verified Delivery reference (.github#5100)
+    // is the second; the remaining exception is the exact live single-item two-phase receipt shape.
+    // Callers at a write boundary must invoke this over freshly re-read linkage, Delivery, obligation,
+    // claim, issue, and board facts rather than an inspected snapshot.
     let landingLinkageAuthorized snapshot =
-        snapshot.ClosingLinkageCanonical || twoPhaseReceiptLanding snapshot
+        snapshot.ClosingLinkageCanonical
+        || snapshot.DeliveryReferenceLinkage
+        || twoPhaseReceiptLanding snapshot
+
+    // Terminal completion closes and stamps the item, so it keeps requiring canonical closing linkage.
+    // A Refs-only Delivery landing (.github#5100) is told where its completion lives instead.
+    let private terminalLinkageRefusal snapshot =
+        if snapshot.DeliveryReferenceLinkage then
+            "terminal completion requires canonical closing linkage; a Refs-only Delivery landing ends at merge: the Delivery stays open until Root's acceptance closes it, and the Outcome's claim and Status follow the board rules, so the engine releases nothing"
+        else
+            "terminal completion requires canonical closing linkage; a markerless two-phase implementation must complete through its later receipt pull request"
 
     let private handoffProblem snapshot =
         if not snapshot.ItemBranchCanonical then
             Some "item branch is not canonical"
         elif not (landingLinkageAuthorized snapshot) then
-            Some "canonical closing linkage is missing"
+            Some "neither canonical closing linkage nor a verified Delivery reference is present"
         elif not snapshot.PathsVerified then
             Some "declared paths are not verified"
         else
@@ -1119,14 +1223,12 @@ module Delivery =
                         (AwaitPostMergeVerification reason)
                 | CompletionDecision.ProjectCompletion ->
                     if not snapshot.ClosingLinkageCanonical then
-                        NoVerdict
-                            "terminal completion requires canonical closing linkage; a markerless two-phase implementation must complete through its later receipt pull request"
+                        NoVerdict(terminalLinkageRefusal snapshot)
                     else
                         nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations Complete
                 | CompletionDecision.CleanupCompletedDelivery ->
                     if not snapshot.ClosingLinkageCanonical then
-                        NoVerdict
-                            "terminal completion requires canonical closing linkage; a markerless two-phase implementation must complete through its later receipt pull request"
+                        NoVerdict(terminalLinkageRefusal snapshot)
                     else
                         nextWithPostMergeVerification postMergeVerification snapshot Done CleanupWorktree
             | _ when Option.isNone snapshot.Freshness.PullRequest -> next snapshot Implementation ContinueImplementation

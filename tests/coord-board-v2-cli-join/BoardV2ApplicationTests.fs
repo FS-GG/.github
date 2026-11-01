@@ -1,3 +1,5 @@
+// Shares a collection with V2WriterLockTests: both mutate XDG_RUNTIME_DIR, so they never run in parallel.
+[<Xunit.Collection("xdg-runtime-dir")>]
 module FS.GG.Coord.GitHub.Tests.BoardV2ApplicationTests
 
 open System
@@ -62,8 +64,8 @@ let ``invalid loaded artifact and unknown flags perform no transport calls or re
                 member _.SendMutation mutation = calls <- calls + 1; Error(Errors.Unauthorized mutation.Request.Subject)
                 member _.RetryMutation effect = calls <- calls + 1; Error(Errors.Unauthorized effect) }
         let args = ["refresh"; "--binding-file"; bindingPath; "--report-file"; reportPath]
-        Assert.Equal(1, BoardV2Application.runWithTransport transport args)
-        Assert.Equal(1, BoardV2Application.runWithTransport transport (args @ ["--current"; "true"]))
+        Assert.Equal(1, BoardV2Application.runWithTransport (TestLock.fresh ()) transport args)
+        Assert.Equal(1, BoardV2Application.runWithTransport (TestLock.fresh ()) transport (args @ ["--current"; "true"]))
         Assert.Equal(0, calls)
         Assert.False(File.Exists reportPath)
     finally Directory.Delete(directory, true)
@@ -106,7 +108,7 @@ let ``successor actual CLI reconciles twenty two items before its unchanged requ
     try
         let input, output = Path.Combine(directory, "binding.json"), Path.Combine(directory, "report.json")
         File.WriteAllText(input, ProgrammeFixture.bindingJsonFor selected)
-        let code = BoardV2Application.runWithTransport reads ["inspect"; "--binding-file"; input; "--report-file"; output]
+        let code = BoardV2Application.runWithTransport (TestLock.fresh ()) reads ["inspect"; "--binding-file"; input; "--report-file"; output]
         use report = JsonDocument.Parse(File.ReadAllText output)
         let root = report.RootElement
         let sends = reads.GraphQlCalls + reads.RestCalls
@@ -145,7 +147,7 @@ let ``actual CLI inspects a full 500-row cohort inside its scaled request ceilin
     try
         let input, output = Path.Combine(directory, "binding.json"), Path.Combine(directory, "report.json")
         File.WriteAllText(input, ProgrammeFixture.bindingJsonFor selected)
-        let code = BoardV2Application.runWithTransport reads ["inspect"; "--binding-file"; input; "--report-file"; output]
+        let code = BoardV2Application.runWithTransport (TestLock.fresh ()) reads ["inspect"; "--binding-file"; input; "--report-file"; output]
         use report = JsonDocument.Parse(File.ReadAllText output)
         let root = report.RootElement
         let sends = reads.GraphQlCalls + reads.RestCalls
@@ -182,7 +184,7 @@ let ``actual CLI reports an archived enrolled card as an explicit archived membe
     try
         let input, output = Path.Combine(directory, "binding.json"), Path.Combine(directory, "report.json")
         File.WriteAllText(input, ProgrammeFixture.bindingJsonFor selected)
-        let code = BoardV2Application.runWithTransport reads ["inspect"; "--binding-file"; input; "--report-file"; output]
+        let code = BoardV2Application.runWithTransport (TestLock.fresh ()) reads ["inspect"; "--binding-file"; input; "--report-file"; output]
         use report = JsonDocument.Parse(File.ReadAllText output)
         let root = report.RootElement
         let membershipGap = root.GetProperty("membershipGap").ToString()
@@ -207,7 +209,7 @@ let ``actual CLI refuses a 501-row binding before any send`` () =
     try
         let input, output = Path.Combine(directory, "binding.json"), Path.Combine(directory, "report.json")
         File.WriteAllText(input, ProgrammeFixture.bindingJsonFor selected)
-        let code = BoardV2Application.runWithTransport reads ["inspect"; "--binding-file"; input; "--report-file"; output]
+        let code = BoardV2Application.runWithTransport (TestLock.fresh ()) reads ["inspect"; "--binding-file"; input; "--report-file"; output]
         Assert.NotEqual(0, code)
         Assert.Equal(0, reads.GraphQlCalls + reads.RestCalls)
         Assert.False(File.Exists output)
@@ -308,7 +310,8 @@ let ``partial CLI report is truthful and local lock releases after report failur
                 member _.Send request = calls <- calls + 1; Error(Errors.Unauthorized request.Subject)
                 member _.SendMutation _ = failwith "partial source must never dispatch"
                 member _.RetryMutation _ = failwith "no retry" }
-        let run path = BoardV2Application.runWithTransport transport [ "refresh"; "--binding-file"; bindingPath; "--report-file"; path ]
+        let lockDirectory = TestLock.fresh ()
+        let run path = BoardV2Application.runWithTransport lockDirectory transport [ "refresh"; "--binding-file"; bindingPath; "--report-file"; path ]
         let missingParent = Path.Combine(directory, "missing", "report.json")
         Assert.Equal(1, run missingParent)
         let reportPath = Path.Combine(directory, "report.json")
@@ -321,9 +324,39 @@ let ``partial CLI report is truthful and local lock releases after report failur
         Assert.NotEqual(JsonValueKind.Null, root.GetProperty("populationGap").ValueKind)
         Assert.Equal(0, root.GetProperty("nativeDispatch").GetArrayLength())
         Assert.Contains("released", root.GetProperty("cleanup").GetString())
-        use lease = new FileStream(Path.Combine(Path.GetTempPath(), "fsgg-v2-observation-PVT_coord_v2.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
-        Assert.True(lease.CanRead)
+        // The refresh released the shared writer lock (and its legacy companion) in its injected directory.
+        match V2WriterLock.tryAcquire (V2WriterLock.inDirectory lockDirectory "PVT_coord_v2" (V2WriterLock.observationLegacyName "PVT_coord_v2")) with
+        | Ok lease -> lease.Dispose()
+        | Error reason -> failwithf "writer lock still held: %s" reason
+        Assert.True(File.Exists(Path.Combine(lockDirectory, V2WriterLock.fileName "PVT_coord_v2")))
     finally Directory.Delete(directory, true)
+
+[<Fact>]
+let ``refresh takes the writer lock in the injected directory and never in the production one`` () =
+    // Causal control for #5126: XDG_RUNTIME_DIR points at a sentinel. If the seam ignored the injected directory
+    // and resolved the production lock, the sentinel would receive fsgg/board-writer-*.lock.
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-lock-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    let sentinel = Path.Combine(directory, "runtime")
+    Directory.CreateDirectory(sentinel, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    let saved = Environment.GetEnvironmentVariable "XDG_RUNTIME_DIR"
+    try
+        Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR", sentinel)
+        let bindingPath = Path.Combine(directory, "binding.json")
+        File.WriteAllText(bindingPath, bindingJson (loadedDigest ()))
+        let transport =
+            { new IGitHubTransport with
+                member _.Send request = Error(Errors.Unauthorized request.Subject)
+                member _.SendMutation _ = failwith "partial source must never dispatch"
+                member _.RetryMutation _ = failwith "no retry" }
+        let lockDirectory = TestLock.fresh ()
+        Assert.Equal(3, BoardV2Application.runWithTransport lockDirectory transport [ "refresh"; "--binding-file"; bindingPath; "--report-file"; Path.Combine(directory, "report.json") ])
+        Assert.True(File.Exists(Path.Combine(lockDirectory, V2WriterLock.fileName "PVT_coord_v2")))
+        Assert.True(File.Exists(Path.Combine(lockDirectory, V2WriterLock.observationLegacyName "PVT_coord_v2")))
+        Assert.Empty(Directory.EnumerateFileSystemEntries sentinel)
+    finally
+        Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR", saved)
+        Directory.Delete(directory, true)
 
 [<Fact>]
 let ``inspect emits unknown population evidence without any mutation dispatch`` () =
@@ -340,7 +373,7 @@ let ``inspect emits unknown population evidence without any mutation dispatch`` 
                 member _.Send request = reads <- reads + 1; Error(Errors.Unauthorized request.Subject)
                 member _.SendMutation _ = mutations <- mutations + 1; failwith "inspect attempted mutation"
                 member _.RetryMutation _ = mutations <- mutations + 1; failwith "inspect attempted retry" }
-        Assert.Equal(3, BoardV2Application.runWithTransport transport ["inspect"; "--binding-file"; bindingPath; "--report-file"; reportPath])
+        Assert.Equal(3, BoardV2Application.runWithTransport (TestLock.fresh ()) transport ["inspect"; "--binding-file"; bindingPath; "--report-file"; reportPath])
         Assert.Equal(1, reads)
         Assert.Equal(0, mutations)
         use document = JsonDocument.Parse(File.ReadAllText reportPath)
@@ -405,7 +438,7 @@ let ``product inspect missing receiver provenance stays Unknown and never querie
                         Error(Errors.Unauthorized "receiver provenance unavailable")
                     member _.SendMutation _ = failwith "inspect is structurally read-only"
                     member _.RetryMutation _ = failwith "inspect cannot retry" }
-            Assert.Equal(3, BoardV2Application.runWithTransport transport [ "inspect"; "--binding-file"; input; "--report-file"; output ])
+            Assert.Equal(3, BoardV2Application.runWithTransport (TestLock.fresh ()) transport [ "inspect"; "--binding-file"; input; "--report-file"; output ])
             Assert.Equal(1, calls)
             use document = JsonDocument.Parse(File.ReadAllText output)
             let root = document.RootElement
@@ -426,7 +459,7 @@ let ``actual programme CLI caller joins native PR facts and retains attributed s
         File.WriteAllText(bindingPath, ProgrammeFixture.bindingJson ())
         let transport = ProgrammeFixture.transport ProgrammeFixture.unchanged
         use unusedInput = unreadableInput ()
-        Assert.Equal(0, BoardV2Application.runWithTransportAndInput transport unusedInput [ "inspect"; "--binding-file"; bindingPath; "--report-file"; reportPath ])
+        Assert.Equal(0, BoardV2Application.runWithTransportAndInput (TestLock.fresh ()) transport unusedInput [ "inspect"; "--binding-file"; bindingPath; "--report-file"; reportPath ])
         Assert.Empty transport.Mutations
         use document = JsonDocument.Parse(File.ReadAllText reportPath)
         let root = document.RootElement
@@ -451,13 +484,13 @@ let ``actual programme CLI caller joins native PR facts and retains attributed s
         let missingReads =
             ProgrammeFixture.transport (fun request response ->
                 if request.Subject = "complete V2 project memberships" then Error(Errors.Unauthorized "membership unavailable") else response)
-        Assert.Equal(3, BoardV2Application.runWithTransport missingReads [ "inspect"; "--binding-file"; bindingPath; "--report-file"; missingPath ])
+        Assert.Equal(3, BoardV2Application.runWithTransport (TestLock.fresh ()) missingReads [ "inspect"; "--binding-file"; bindingPath; "--report-file"; missingPath ])
         use missingDocument = JsonDocument.Parse(File.ReadAllText missingPath)
         Assert.Equal(JsonValueKind.Null, missingDocument.RootElement.GetProperty("nativeIntegrator").GetProperty("observedAt").ValueKind)
         Assert.Empty missingReads.Mutations
         let refreshPath = Path.Combine(directory, "refresh.json")
         use refreshInput = unreadableInput ()
-        Assert.Equal(1, BoardV2Application.runWithTransportAndInput transport refreshInput [ "refresh"; "--binding-file"; bindingPath; "--report-file"; refreshPath; "--integrator-stdin" ])
+        Assert.Equal(1, BoardV2Application.runWithTransportAndInput (TestLock.fresh ()) transport refreshInput [ "refresh"; "--binding-file"; bindingPath; "--report-file"; refreshPath; "--integrator-stdin" ])
         Assert.Equal(0, refreshInput.Reads)
         Assert.Empty transport.Mutations
     finally Directory.Delete(directory, true)
@@ -498,11 +531,11 @@ let ``actual product CLI retains closed schema one top level and item property s
                 member _.RetryMutation _ = failwith "product inspect cannot retry" }
         use rejectedInput = unreadableInput ()
         let rejectedOutput = Path.Combine(directory, "rejected.json")
-        Assert.Equal(1, BoardV2Application.runWithTransportAndInput transport rejectedInput [ "inspect"; "--binding-file"; input; "--report-file"; rejectedOutput; "--integrator-stdin" ])
+        Assert.Equal(1, BoardV2Application.runWithTransportAndInput (TestLock.fresh ()) transport rejectedInput [ "inspect"; "--binding-file"; input; "--report-file"; rejectedOutput; "--integrator-stdin" ])
         Assert.Equal(0, reads)
         Assert.Equal(0, rejectedInput.Reads)
         Assert.False(File.Exists rejectedOutput)
-        Assert.Equal(3, BoardV2Application.runWithTransport transport [ "inspect"; "--binding-file"; input; "--report-file"; output ])
+        Assert.Equal(3, BoardV2Application.runWithTransport (TestLock.fresh ()) transport [ "inspect"; "--binding-file"; input; "--report-file"; output ])
         use document = JsonDocument.Parse(File.ReadAllText output)
         let root = document.RootElement
         let names (value: JsonElement) = value.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
@@ -533,7 +566,7 @@ let private inspectProgrammeBindingInput (selectedBinding: string) (json: string
             [ "inspect"; "--binding-file"; binding; "--report-file"; output ]
             @ (if json.IsSome then [ "--integrator-stdin" ] else [])
         use reader = new StringReader(json |> Option.defaultValue "must not be read")
-        let code = BoardV2Application.runWithTransportAndInput transport reader arguments
+        let code = BoardV2Application.runWithTransportAndInput (TestLock.fresh ()) transport reader arguments
         let report =
             if File.Exists output then
                 Assert.Equal<UnixFileMode>(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode output)
@@ -562,7 +595,7 @@ let private inspectDeclaredPopulation (rows: (string * IssueRef * string) list) 
         let transport = ProgrammeFixture.populationTransport selected rows (fun request response ->
             requests.Add request
             change request response)
-        let code = BoardV2Application.runWithTransport transport [ "inspect"; "--binding-file"; bindingPath; "--report-file"; reportPath ]
+        let code = BoardV2Application.runWithTransport (TestLock.fresh ()) transport [ "inspect"; "--binding-file"; bindingPath; "--report-file"; reportPath ]
         use document = JsonDocument.Parse(File.ReadAllText reportPath)
         Assert.Empty transport.Mutations
         code, document.RootElement.Clone(), List.ofSeq requests
@@ -1239,7 +1272,7 @@ let ``actual programme refresh caller updates only Observation then independentl
         for index in [ 1; 2 ] do
             let output = Path.Combine(directory, $"refresh-{index}.json")
             use input = unreadableInput ()
-            Assert.Equal(0, BoardV2Application.runWithTransportAndInput guarded input [ "refresh"; "--binding-file"; bindingPath; "--report-file"; output ])
+            Assert.Equal(0, BoardV2Application.runWithTransportAndInput (TestLock.fresh ()) guarded input [ "refresh"; "--binding-file"; bindingPath; "--report-file"; output ])
             Assert.Equal(0, input.Reads)
             use document = JsonDocument.Parse(File.ReadAllText output)
             Assert.Equal(1, document.RootElement.GetProperty("verified").GetInt32())
@@ -1253,9 +1286,41 @@ let ``actual programme refresh caller updates only Observation then independentl
             V2ObservationTransport.compose binding oldReads (fun _ -> failwith "old native schema must refuse before mutation")
             |> Result.defaultWith (Errors.explain >> failwith)
         let oldOutput = Path.Combine(directory, "old-schema.json")
-        Assert.Equal(3, BoardV2Application.runWithTransport oldGuard [ "refresh"; "--binding-file"; bindingPath; "--report-file"; oldOutput ])
+        Assert.Equal(3, BoardV2Application.runWithTransport (TestLock.fresh ()) oldGuard [ "refresh"; "--binding-file"; bindingPath; "--report-file"; oldOutput ])
         Assert.Equal(1, writes)
 
+    finally Directory.Delete(directory, true)
+
+[<Fact>]
+let ``refresh refuses while the writer lock is held and sends no mutation`` () =
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-refresh-locked-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    try
+        let bindingPath = Path.Combine(directory, "binding.json")
+        File.WriteAllText(bindingPath, ProgrammeFixture.bindingJson ())
+        let binding = ProgrammeFixture.binding ()
+        let mutable observation = "Unknown"
+        let reads = ProgrammeFixture.transport (fun request response -> ProgrammeFixture.observation observation request response)
+        let mutable writes = 0
+        let guarded =
+            V2ObservationTransport.compose binding reads (fun _ ->
+                writes <- writes + 1
+                observation <- "Verified"
+                Ok { Status = 200; ETag = None; NextLink = None; Headers = Map.empty; Body = """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" })
+            |> Result.defaultWith (Errors.explain >> failwith)
+        let lockDirectory = TestLock.fresh ()
+        let location = V2WriterLock.inDirectory lockDirectory binding.ProjectId (V2WriterLock.observationLegacyName binding.ProjectId)
+        let lockedOutput = Path.Combine(directory, "locked.json")
+        (
+            use _held = match V2WriterLock.tryAcquire location with Ok lease -> lease | Error reason -> failwith reason
+            use input = unreadableInput ()
+            Assert.Equal(1, BoardV2Application.runWithTransportAndInput lockDirectory guarded input [ "refresh"; "--binding-file"; bindingPath; "--report-file"; lockedOutput ])
+            Assert.Equal(0, writes)
+            Assert.False(File.Exists lockedOutput))
+        // Non-vacuous: once the lock is free the same refresh sends its one Observation update.
+        use input = unreadableInput ()
+        Assert.Equal(0, BoardV2Application.runWithTransportAndInput lockDirectory guarded input [ "refresh"; "--binding-file"; bindingPath; "--report-file"; Path.Combine(directory, "free.json") ])
+        Assert.Equal(1, writes)
     finally Directory.Delete(directory, true)
 
 [<Fact>]
@@ -1455,7 +1520,7 @@ let ``actual refresh reauthenticates public commitment before Observation send a
                     writes <- writes + 1
                     failwith "revoked public enrollment must never dispatch")
                 |> Result.defaultWith (Errors.explain >> failwith)
-            Assert.Equal(3, BoardV2Application.runWithTransport guarded [ "refresh"; "--binding-file"; input; "--report-file"; output ])
+            Assert.Equal(3, BoardV2Application.runWithTransport (TestLock.fresh ()) guarded [ "refresh"; "--binding-file"; input; "--report-file"; output ])
             Assert.Equal(2, publicReads)
             Assert.Equal(0, writes)
             Assert.Equal<UnixFileMode>(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode output)
@@ -1503,7 +1568,7 @@ let ``successor actual CLI requires versioned hierarchy join and emits scope wit
             let output = Path.Combine(directory, $"report-{index}.json")
             let reads = ProgrammeFixture.successorTransport selected (Some "Delivery") ProgrammeFixture.unchanged
             use reader = new StringReader(json)
-            let code = BoardV2Application.runWithTransportAndInput reads reader ["inspect"; "--binding-file"; bindingPath; "--report-file"; output; "--integrator-stdin"]
+            let code = BoardV2Application.runWithTransportAndInput (TestLock.fresh ()) reads reader ["inspect"; "--binding-file"; bindingPath; "--report-file"; output; "--integrator-stdin"]
             Assert.Equal(0, code)
             use report = JsonDocument.Parse(File.ReadAllText output)
             let root = report.RootElement

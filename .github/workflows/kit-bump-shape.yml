@@ -76,6 +76,7 @@ on:
       # facts the audio/net pin-ground legs stand on.
       - "registry/repos.yml"
       - "scripts/sync-build-config.sh"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

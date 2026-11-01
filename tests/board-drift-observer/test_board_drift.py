@@ -32,6 +32,7 @@ def load(name: str, filename: str):
 
 OBS = load("board_drift_observer", "board-drift-observer.py")
 FETCH = load("board_drift_fetch", "board-drift-fetch.py")
+SCHED = load("board_drift_schedule_fetch", "board-drift-schedule-fetch.py")
 
 TEST_KEY = "unit-test-hmac-key-0123456789abcdef"
 os.environ["BOARD_DRIFT_HMAC_KEY"] = TEST_KEY
@@ -1247,6 +1248,473 @@ class CurrencyConvergence(unittest.TestCase):
         self.assertLess(run.index("board-currency-rules.py check"), run.index("board-drift-observer.py check"))
         self.assertIn('--currency "$SCRATCH/currency.json"', run)
         self.assertFalse((ROOT / ".github/workflows/board-currency-shadow.yml").exists())
+
+
+# ---- rule s: a watched workflow's cron stopped firing --------------------------------------------
+
+PEER, SELF_WF = "main-health-observer.yml", "board-drift-observer.yml"
+DISPATCHER = "EHotwagner"
+
+
+def sched_entry(file, newest_hours=None, created_hours=24 * 30, state="ok", workflow_state="active", dispatched_hours=None):
+    return {"file": file, "state": state, "workflowState": workflow_state, "createdAt": hours_ago(created_hours),
+            "newestScheduleRunAt": hours_ago(newest_hours) if newest_hours is not None else None,
+            "newestScheduleRunId": 1 if newest_hours is not None else None,
+            "newestDispatchRunAt": hours_ago(dispatched_hours) if dispatched_hours is not None else None,
+            "newestDispatchRunId": 2 if dispatched_hours is not None else None}
+
+
+def sched_doc(peer=None, self_=None):
+    return {"schema": OBS.SCHEDULE_SCHEMA, "fetchedAt": hours_ago(0), "currentRunId": "9",
+            "workflows": [peer or sched_entry(PEER, 20), self_ or sched_entry(SELF_WF, 1)]}
+
+
+def s_findings(doc):
+    return [(f["ref"], f["key"].rsplit("|", 1)[1]) for f in OBS.schedule_findings(doc, NOW)]
+
+
+class RuleS(unittest.TestCase):
+    def test_negative_fresh_schedules_are_silent(self):
+        self.assertEqual(s_findings(sched_doc()), [])
+
+    def test_the_limits_are_two_days_for_the_peer_and_two_hours_for_the_self_check(self):
+        self.assertEqual(OBS.SCHEDULE_WATCH[PEER][0], dt.timedelta(days=2))
+        self.assertEqual(OBS.SCHEDULE_WATCH[SELF_WF][0], dt.timedelta(hours=2))
+
+    def test_peer_boundary_is_strictly_more_than_two_days(self):
+        self.assertEqual(s_findings(sched_doc(peer=sched_entry(PEER, 48))), [])
+        self.assertEqual(s_findings(sched_doc(peer=sched_entry(PEER, 48.1))), [(f"workflow:{PEER}", "stale")])
+
+    def test_self_boundary_is_strictly_more_than_two_hours(self):
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, 2))), [])
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, 2.1))), [(f"workflow:{SELF_WF}", "stale")])
+
+    def test_positive_both_stale_are_two_findings_and_say_which_is_the_self_check(self):
+        found = OBS.schedule_findings(sched_doc(peer=sched_entry(PEER, 72), self_=sched_entry(SELF_WF, 5)), NOW)
+        self.assertEqual(sorted(f["ref"] for f in found), [f"workflow:{SELF_WF}", f"workflow:{PEER}"])
+        self_one = [f for f in found if f["role"] == "self"][0]
+        self.assertIn("previous fulfilling run", self_one["text"])
+
+    def test_a_fresh_dispatcher_run_fulfils_a_stale_or_dropped_schedule(self):
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, 30, dispatched_hours=0.9))), [])
+        self.assertEqual(s_findings(sched_doc(peer=sched_entry(PEER, 72, dispatched_hours=20))), [])
+        # A cron that never fired but is covered by the dispatcher is not "never-ran".
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, None, created_hours=24 * 30, dispatched_hours=1))), [])
+
+    def test_the_dispatcher_run_is_judged_against_the_same_limit_strictly(self):
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, 30, dispatched_hours=2))), [])
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, 30, dispatched_hours=2.1))), [(f"workflow:{SELF_WF}", "stale")])
+        self.assertEqual(s_findings(sched_doc(peer=sched_entry(PEER, 72, dispatched_hours=49))), [(f"workflow:{PEER}", "stale")])
+
+    def test_the_newest_of_the_two_kinds_is_the_one_judged(self):
+        # A fresh schedule run is not made stale by an older dispatcher run, and the text names both kinds.
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, 0.5, dispatched_hours=40))), [])
+        found = OBS.schedule_findings(sched_doc(self_=sched_entry(SELF_WF, 30, dispatched_hours=5)), NOW)
+        self.assertIn("2026-10-30T13:00:00Z", found[0]["text"])
+        self.assertIn("scheduled or dispatcher run", found[0]["text"])
+
+    def test_an_unparsable_dispatcher_timestamp_is_unreadable_not_fresh(self):
+        bad = sched_entry(SELF_WF, 30)
+        bad["newestDispatchRunAt"] = "not-a-date"
+        self.assertEqual(s_findings(sched_doc(self_=bad)), [(f"workflow:{SELF_WF}", "unreadable")])
+
+    def test_a_document_without_dispatch_fields_still_judges_the_schedule_alone(self):
+        old = sched_entry(SELF_WF, 5)
+        del old["newestDispatchRunAt"], old["newestDispatchRunId"]
+        self.assertEqual(s_findings(sched_doc(self_=old)), [(f"workflow:{SELF_WF}", "stale")])
+
+    def test_never_ran_is_a_finding_only_after_the_allowance_since_registration(self):
+        young = sched_doc(peer=sched_entry(PEER, None, created_hours=30))
+        old = sched_doc(peer=sched_entry(PEER, None, created_hours=49))
+        self.assertEqual(s_findings(young), [])
+        self.assertEqual(s_findings(old), [(f"workflow:{PEER}", "never-ran")])
+
+    def test_absent_disabled_and_unreadable_are_findings_never_silence(self):
+        self.assertEqual(s_findings(sched_doc(peer=sched_entry(PEER, state="absent"))), [(f"workflow:{PEER}", "absent")])
+        self.assertEqual(s_findings(sched_doc(peer=sched_entry(PEER, 1, workflow_state="disabled_manually"))),
+                         [(f"workflow:{PEER}", "disabled")])
+        self.assertEqual(s_findings(sched_doc(self_=sched_entry(SELF_WF, 1, state="unreadable"))),
+                         [(f"workflow:{SELF_WF}", "unreadable")])
+
+    def test_a_watched_workflow_missing_from_the_document_is_unreadable(self):
+        doc = sched_doc()
+        doc["workflows"] = [e for e in doc["workflows"] if e["file"] != PEER]
+        self.assertEqual(s_findings(doc), [(f"workflow:{PEER}", "unreadable")])
+
+    def test_an_unparsable_timestamp_is_unreadable_not_fresh(self):
+        bad = sched_entry(PEER, 1)
+        bad["newestScheduleRunAt"] = "not-a-date"
+        self.assertEqual(s_findings(sched_doc(peer=bad)), [(f"workflow:{PEER}", "unreadable")])
+
+    def test_a_malformed_document_is_no_verdict(self):
+        for doc in (None, {}, {"schema": "x", "workflows": []}, {"schema": OBS.SCHEDULE_SCHEMA}):
+            with self.assertRaises(OBS.NoVerdict):
+                OBS.schedule_findings(doc, NOW)
+
+    def test_the_key_excludes_ages_so_a_growing_gap_does_not_rewrite_the_issue(self):
+        a = OBS.schedule_findings(sched_doc(peer=sched_entry(PEER, 60)), NOW)[0]
+        b = OBS.schedule_findings(sched_doc(peer=sched_entry(PEER, 90)), NOW)[0]
+        self.assertEqual(a["key"], b["key"])
+        self.assertNotEqual(a["text"], b["text"])
+
+    def test_rule_s_has_no_ack_route_and_the_report_line_says_when_it_clears(self):
+        f = OBS.schedule_findings(sched_doc(peer=sched_entry(PEER, 72)), NOW)[0]
+        self.assertNotIn("ack", f)
+        self.assertIn("Clears when the schedule fires again", OBS.finding_line(f))
+        self.assertNotIn("Ack:", OBS.finding_line(f))
+
+    def test_analyze_merges_rule_s_without_a_card_and_is_off_without_a_schedule(self):
+        snap = snapshot([item(status="Done", state="CLOSED")])
+        self.assertEqual(analyze(snap, NOW), [])
+        merged = analyze(snap, NOW, schedule=sched_doc(peer=sched_entry(PEER, 72)))
+        self.assertEqual([(f["rule"], f["ref"]) for f in merged], [("s", f"workflow:{PEER}")])
+
+    def test_the_body_lists_rule_s_in_its_own_section(self):
+        merged = analyze(snapshot([item(status="Done", state="CLOSED")]), NOW, schedule=sched_doc(self_=sched_entry(SELF_WF, 5)))
+        body = OBS.render_body(merged, {"number": 3, "fetchedAt": "x", "items": 1})
+        self.assertIn("### " + OBS.RULE_TITLES["s"], body)
+        self.assertIn(f"`workflow:{SELF_WF}`", body)
+
+    def test_a_schedule_finding_creates_and_then_clears_the_single_issue(self):
+        found = analyze(snapshot([item(status="Done", state="CLOSED")]), NOW, schedule=sched_doc(peer=sched_entry(PEER, 72)))
+        meta = {"number": 3, "fetchedAt": "x", "items": 1}
+        self.assertEqual(OBS.plan_report(found, None, meta)["action"], "create")
+        existing = {"number": 7, "state": "open", "body": OBS.render_body(found, meta)}
+        self.assertEqual(OBS.plan_report(found, existing, meta)["action"], "noop")
+        self.assertEqual(OBS.plan_report([], existing, meta)["action"], "close")
+
+
+class ScheduleCheckCli(unittest.TestCase):
+    def run_check(self, schedule_doc, extra=()):
+        with tempfile.TemporaryDirectory() as d:
+            snap, found, sch = Path(d, "s.json"), Path(d, "f.json"), Path(d, "sch.json")
+            snap.write_text(json.dumps(snapshot([item(status="Done", state="CLOSED")])))
+            args = ["check", "--snapshot", str(snap), "--out", str(found), "--now", hours_ago(0), *extra]
+            if schedule_doc is not None:
+                sch.write_text(schedule_doc if isinstance(schedule_doc, str) else json.dumps(schedule_doc))
+                args += ["--schedule", str(sch)]
+            err = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                rc = OBS.main(args)
+            return rc, (json.loads(found.read_text()) if found.exists() else None)
+
+    def test_a_stale_peer_reaches_findings_json(self):
+        rc, out = self.run_check(sched_doc(peer=sched_entry(PEER, 72)))
+        self.assertEqual(rc, 0)
+        self.assertEqual([f["rule"] for f in out["findings"]], ["s"])
+
+    def test_fresh_schedules_leave_findings_empty(self):
+        rc, out = self.run_check(sched_doc())
+        self.assertEqual((rc, out["findings"]), (0, []))
+
+    def test_an_unusable_schedule_file_is_no_verdict_and_writes_nothing(self):
+        for bad in ("not json", {"schema": "wrong"}):
+            rc, out = self.run_check(bad)
+            self.assertEqual((rc, out), (OBS.NO_VERDICT, None))
+
+    def test_a_missing_schedule_file_is_no_verdict(self):
+        with tempfile.TemporaryDirectory() as d:
+            snap = Path(d, "s.json")
+            snap.write_text(json.dumps(snapshot([item(status="Done", state="CLOSED")])))
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                rc = OBS.main(["check", "--snapshot", str(snap), "--out", str(Path(d, "f.json")),
+                               "--schedule", str(Path(d, "absent.json"))])
+            self.assertEqual(rc, OBS.NO_VERDICT)
+
+
+class ScheduleConvergence(unittest.TestCase):
+    """Rule s next to the converged board-currency findings (#5103): one report, one digest, one writer."""
+
+    KEY = TEST_KEY.encode()
+    META = {"number": 3, "fetchedAt": "2026-10-31T09:00:00Z", "items": 1, "currencyRuleset": "fsgg:board-currency-rules/v1"}
+
+    def merged(self, with_s=True):
+        found = analyze(snapshot([item(status="Done", state="CLOSED")]), NOW,
+                        schedule=sched_doc(peer=sched_entry(PEER, 72)) if with_s else None)
+        return found + OBS.currency_findings(currency_doc(cfind()), self.KEY)
+
+    def test_only_rule_s_says_it_clears_when_the_schedule_fires(self):
+        by_rule = {f["rule"]: OBS.finding_line(f) for f in self.merged()}
+        self.assertIn("Clears when the schedule fires again.", by_rule["s"])
+        self.assertNotIn("schedule", by_rule["R3"])
+        self.assertNotIn("Ack:", by_rule["R3"])
+
+    def test_the_body_names_rule_s_and_orders_it_before_the_currency_rules(self):
+        body = OBS.render_body(self.merged(), self.META)
+        self.assertIn("rules a-e, s and x", body)
+        self.assertLess(body.index("### " + OBS.RULE_TITLES["s"]), body.index("### " + OBS.RULE_TITLES["R3"]))
+        self.assertIn("Rule s (a schedule that stopped firing) has no ack", body)
+
+    def test_a_new_rule_s_finding_is_commented_like_a_drift_finding_not_folded_into_the_body_only(self):
+        before = self.merged(with_s=False)
+        existing = {"number": 4985, "state": "open", "title": OBS.REPORT_TITLE, "body": OBS.render_body(before, self.META)}
+        plan = OBS.plan_report(self.merged(), existing, self.META)
+        self.assertEqual(plan["action"], "update")
+        self.assertTrue(plan.get("comment"), "a new rule s finding must raise a comment")
+        self.assertEqual(OBS.plan_report(before, existing, self.META)["action"], "noop")
+
+    def test_check_merges_schedule_and_currency_together_and_records_the_ruleset(self):
+        with tempfile.TemporaryDirectory() as d:
+            snap, cur, sch, out = (Path(d, n) for n in ("s.json", "c.json", "sch.json", "f.json"))
+            snap.write_text(json.dumps(snapshot([item(status="Done", state="CLOSED")])))
+            cur.write_text(json.dumps(currency_doc(cfind())))
+            sch.write_text(json.dumps(sched_doc(peer=sched_entry(PEER, 72))))
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = OBS.main(["check", "--snapshot", str(snap), "--currency", str(cur), "--schedule", str(sch),
+                               "--out", str(out), "--now", iso_now()])
+            self.assertEqual(rc, 0)
+            doc = json.loads(out.read_text())
+            self.assertEqual([f["rule"] for f in doc["findings"]], ["s", "R3"])
+            self.assertEqual(doc["meta"]["currencyRuleset"], "fsgg:board-currency-rules/v1")
+
+    def test_a_bad_schedule_file_stays_no_verdict_when_the_currency_file_is_good(self):
+        with tempfile.TemporaryDirectory() as d:
+            snap, cur, sch, out = (Path(d, n) for n in ("s.json", "c.json", "sch.json", "f.json"))
+            snap.write_text(json.dumps(snapshot([item(status="Done", state="CLOSED")])))
+            cur.write_text(json.dumps(currency_doc(cfind())))
+            sch.write_text("{}")
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                rc = OBS.main(["check", "--snapshot", str(snap), "--currency", str(cur), "--schedule", str(sch),
+                               "--out", str(out), "--now", iso_now()])
+            self.assertEqual((rc, out.exists()), (OBS.NO_VERDICT, False))
+
+    def test_the_keyed_step_passes_both_inputs_and_the_schedule_read_precedes_it(self):
+        import yaml
+        doc = yaml.safe_load((ROOT / ".github/workflows/board-drift-observer.yml").read_text())
+        steps = doc["jobs"]["board-drift-read"]["steps"]
+        names = [s.get("name", "") for s in steps]
+        run = steps[names.index("Evaluate the drift rules")]["run"]
+        self.assertIn('--currency "$SCRATCH/currency.json"', run)
+        self.assertIn('--schedule "$SCRATCH/schedule.json"', run)
+        fetch_run = steps[names.index("Read the schedule history of the watched workflows")]["run"]
+        self.assertIn("--dispatcher-login EHotwagner", fetch_run)
+        self.assertLess(names.index("Read the schedule history of the watched workflows"), names.index("Evaluate the drift rules"))
+        self.assertLess(names.index("Read Project 3 for the board-currency rules (read-only)"), names.index("Evaluate the drift rules"))
+
+    def test_the_report_title_and_single_issue_are_unchanged_by_rule_s(self):
+        self.assertEqual(OBS.REPORT_TITLE, "Board findings: Project 3")
+        text = (ROOT / ".github/workflows/board-drift-observer.yml").read_text()
+        self.assertNotIn("schedule.json", "".join(l for l in text.splitlines() if "upload" in l.lower()))
+
+    def test_the_schedule_fetch_makes_no_comment_or_board_read(self):
+        text = (ROOT / "scripts/board-drift-schedule-fetch.py").read_text()
+        for forbidden in ("graphql", "/comments", "/issues", "/pulls", "projects"):
+            self.assertNotIn(forbidden, text.replace("Project 3 App token", ""), forbidden)
+
+
+FAKE_ACTIONS_GH = r"""#!/usr/bin/env python3
+import json, os, sys
+state = json.load(open(os.environ["FAKE_SCHED_STATE"]))
+path = sys.argv[2]
+state["calls"].append(path)
+json.dump(state, open(os.environ["FAKE_SCHED_STATE"], "w"))
+reply = state["replies"].get(path)
+if reply is None:
+    sys.stderr.write("gh: Not Found (HTTP 404)\n"); sys.exit(1)
+if reply == "FAIL":
+    sys.stderr.write("gh: server error (HTTP 502)\n"); sys.exit(1)
+sys.stdout.write(reply if isinstance(reply, str) else json.dumps(reply))
+"""
+
+
+class ScheduleFetch(unittest.TestCase):
+    def stub(self, replies):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        gh = Path(d.name, "gh")
+        gh.write_text(FAKE_ACTIONS_GH)
+        gh.chmod(gh.stat().st_mode | stat.S_IXUSR)
+        self.state = Path(d.name, "state.json")
+        replies = dict(replies)
+        for path in [k for k in replies if "/actions/workflows/" in k and "/runs" not in k]:
+            replies.setdefault(path + "/runs?event=workflow_dispatch&branch=main&per_page=10", {"total_count": 0, "workflow_runs": []})
+        self.state.write_text(json.dumps({"calls": [], "replies": replies}))
+        env = {"BOARD_DRIFT_GH": str(gh), "FAKE_SCHED_STATE": str(self.state), "GITHUB_RUN_ID": "9"}
+        prev = {k: os.environ.get(k) for k in env}
+        self.addCleanup(GhStub.restore, prev)
+        os.environ.update(env)
+
+    def fetch(self, *files):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d, "schedule.json")
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                rc = SCHED.main(["--repo", REPO, "--out", str(out), "--now", iso_now(), "--dispatcher-login", DISPATCHER,
+                                 *[a for f in files for a in ("--workflow", f)]])
+            return rc, (json.loads(out.read_text()) if out.exists() else None)
+
+    @staticmethod
+    def wf(file, state="active"):
+        return f"repos/{REPO}/actions/workflows/{file}", {"state": state, "created_at": hours_ago(500)}
+
+    @staticmethod
+    def runs(file, rows, total=None):
+        return (f"repos/{REPO}/actions/workflows/{file}/runs?event=schedule&per_page=5",
+                {"total_count": len(rows) if total is None else total, "workflow_runs": rows})
+
+    @staticmethod
+    def row(rid, hours, event="schedule", actor=DISPATCHER, triggering=None, branch="main"):
+        return {"id": rid, "event": event, "created_at": hours_ago(hours), "head_branch": branch, "actor": {"login": actor},
+                "triggering_actor": {"login": triggering or actor}}
+
+    @staticmethod
+    def dispatch(file, rows):
+        return (f"repos/{REPO}/actions/workflows/{file}/runs?event=workflow_dispatch&branch=main&per_page=10",
+                {"total_count": len(rows), "workflow_runs": rows})
+
+    def replies(self, *pairs):
+        return dict(pairs)
+
+    def test_reads_three_calls_per_workflow_and_picks_the_newest_schedule_run(self):
+        self.stub(self.replies(self.wf(PEER), self.runs(PEER, [self.row(5, 30), self.row(4, 6), self.row(3, 50)])))
+        rc, doc = self.fetch(PEER)
+        self.assertEqual(rc, 0)
+        e = doc["workflows"][0]
+        self.assertEqual((e["state"], e["newestScheduleRunId"], e["newestScheduleRunAt"]), ("ok", 4, hours_ago(6)))
+        self.assertEqual(len(json.loads(self.state.read_text())["calls"]), 3)
+
+    def test_the_recorded_clock_is_the_injected_one_and_a_bad_clock_fails_closed(self):
+        self.stub(self.replies(self.wf(PEER), self.runs(PEER, [self.row(5, 6)])))
+        _, doc = self.fetch(PEER)
+        self.assertEqual(doc["fetchedAt"], iso_now())
+        err = io.StringIO()
+        with tempfile.TemporaryDirectory() as d, contextlib.redirect_stderr(err):
+            for bad in ("yesterday", "2026-10-30T18:00:00"):
+                self.assertEqual(SCHED.main(["--repo", REPO, "--dispatcher-login", DISPATCHER, "--workflow", PEER, "--out", str(Path(d, "x.json")), "--now", bad]), 1, bad)
+        self.assertEqual(err.getvalue().count("--now is not an ISO timestamp"), 2)
+
+    def test_the_current_run_is_excluded_so_the_self_check_judges_the_previous_one(self):
+        self.stub(self.replies(self.wf(SELF_WF), self.runs(SELF_WF, [self.row(9, 0), self.row(8, 3.5)])))
+        _, doc = self.fetch(SELF_WF)
+        self.assertEqual(doc["workflows"][0]["newestScheduleRunId"], 8)
+        found = OBS.schedule_findings(doc | {"workflows": [doc["workflows"][0], sched_entry(PEER, 1)]}, NOW)
+        self.assertEqual([(f["ref"], f["key"].rsplit("|", 1)[1]) for f in found], [(f"workflow:{SELF_WF}", "stale")])
+
+    def test_without_the_exclusion_a_stalled_cron_would_look_fresh(self):
+        # The current (dispatched or late) run is the only recent one; the previous scheduled run is old.
+        self.stub(self.replies(self.wf(SELF_WF), self.runs(SELF_WF, [self.row(9, 0)])))
+        _, doc = self.fetch(SELF_WF)
+        e = doc["workflows"][0]
+        self.assertEqual((e["state"], e["newestScheduleRunAt"]), ("ok", None))
+
+    def test_a_dispatch_by_the_dispatcher_is_recorded_and_excludes_the_current_run(self):
+        self.stub(self.replies(self.wf(SELF_WF), self.runs(SELF_WF, [self.row(7, 30)]),
+                               self.dispatch(SELF_WF, [self.row(9, 0, "workflow_dispatch"), self.row(8, 0.9, "workflow_dispatch"),
+                                                      self.row(6, 1.9, "workflow_dispatch")])))
+        _, doc = self.fetch(SELF_WF)
+        e = doc["workflows"][0]
+        self.assertEqual((e["state"], e["newestDispatchRunId"], e["newestDispatchRunAt"]), ("ok", 8, hours_ago(0.9)))
+        self.assertEqual(s_findings(doc | {"workflows": [e, sched_entry(PEER, 1)]}), [])
+
+    def test_only_the_dispatcher_fulfils_by_actor_and_triggering_actor_and_event(self):
+        rows = [self.row(3, 0.5, "workflow_dispatch", actor="someone-else"),
+                self.row(4, 0.4, "workflow_dispatch", actor=DISPATCHER, triggering="someone-else"),
+                self.row(5, 0.3, "workflow_dispatch", actor="someone-else", triggering=DISPATCHER),
+                self.row(6, 0.2, "push"),
+                {"id": 7, "event": "workflow_dispatch", "created_at": hours_ago(0.1)}]
+        self.stub(self.replies(self.wf(SELF_WF), self.runs(SELF_WF, [self.row(2, 30)]), self.dispatch(SELF_WF, rows)))
+        _, doc = self.fetch(SELF_WF)
+        e = doc["workflows"][0]
+        self.assertEqual((e["state"], e["newestDispatchRunAt"]), ("ok", None))
+        self.assertEqual(s_findings(doc | {"workflows": [e, sched_entry(PEER, 1)]}), [(f"workflow:{SELF_WF}", "stale")])
+
+    def test_a_dispatch_on_another_branch_does_not_fulfil_the_schedule_and_the_read_is_filtered_to_main(self):
+        rows = [self.row(3, 0.2, "workflow_dispatch", branch="feature/dry-run"),
+                {"id": 4, "event": "workflow_dispatch", "created_at": hours_ago(0.1), "actor": {"login": DISPATCHER},
+                 "triggering_actor": {"login": DISPATCHER}}]
+        self.stub(self.replies(self.wf(SELF_WF), self.runs(SELF_WF, [self.row(2, 30)]), self.dispatch(SELF_WF, rows)))
+        _, doc = self.fetch(SELF_WF)
+        e = doc["workflows"][0]
+        self.assertEqual((e["state"], e["newestDispatchRunAt"]), ("ok", None))
+        self.assertEqual(s_findings(doc | {"workflows": [e, sched_entry(PEER, 1)]}), [(f"workflow:{SELF_WF}", "stale")])
+        self.assertTrue([c for c in json.loads(self.state.read_text())["calls"] if "event=workflow_dispatch&branch=main&" in c])
+
+    def test_a_failed_or_malformed_dispatch_read_is_unreadable_never_a_stale_schedule(self):
+        path = self.dispatch(SELF_WF, [])[0]
+        for bad in ("FAIL", "not json", {"total_count": 0}):
+            self.stub(self.replies(self.wf(SELF_WF), self.runs(SELF_WF, [self.row(2, 30)]), (path, bad)))
+            self.assertEqual(self.fetch(SELF_WF)[1]["workflows"][0]["state"], "unreadable", bad)
+
+    def test_a_full_page_of_other_peoples_dispatches_is_not_an_error(self):
+        rows = [self.row(i, 0.1 * i, "workflow_dispatch", actor="someone-else") for i in range(10, 20)]
+        self.stub(self.replies(self.wf(SELF_WF), self.runs(SELF_WF, [self.row(2, 0.5)]),
+                               (self.dispatch(SELF_WF, [])[0], {"total_count": 40, "workflow_runs": rows})))
+        self.assertEqual(self.fetch(SELF_WF)[1]["workflows"][0]["state"], "ok")
+
+    def test_a_non_schedule_row_is_ignored(self):
+        self.stub(self.replies(self.wf(PEER), self.runs(PEER, [self.row(5, 1, event="workflow_dispatch")], total=1)))
+        _, doc = self.fetch(PEER)
+        self.assertIsNone(doc["workflows"][0]["newestScheduleRunAt"])
+
+    def test_404_is_absent_and_other_failures_are_unreadable_and_neither_fails_the_step(self):
+        self.stub({})
+        rc, doc = self.fetch(PEER)
+        self.assertEqual((rc, doc["workflows"][0]["state"]), (0, "absent"))
+        self.stub(self.replies((self.wf(PEER)[0], "FAIL")))
+        rc, doc = self.fetch(PEER)
+        self.assertEqual((rc, doc["workflows"][0]["state"]), (0, "unreadable"))
+
+    def test_a_failed_run_list_or_a_partial_page_is_unreadable_not_never_ran(self):
+        self.stub(self.replies(self.wf(PEER), (self.runs(PEER, [])[0], "FAIL")))
+        self.assertEqual(self.fetch(PEER)[1]["workflows"][0]["state"], "unreadable")
+        self.stub(self.replies(self.wf(PEER), self.runs(PEER, [self.row(9, 0)], total=40)))
+        self.assertEqual(self.fetch(PEER)[1]["workflows"][0]["state"], "unreadable")
+        self.stub(self.replies(self.wf(PEER), (self.runs(PEER, [])[0], "not json")))
+        self.assertEqual(self.fetch(PEER)[1]["workflows"][0]["state"], "unreadable")
+
+    def test_unreadable_flows_to_a_finding_end_to_end(self):
+        self.stub({})
+        _, doc = self.fetch(PEER, SELF_WF)
+        self.assertEqual(sorted(k for _, k in s_findings(doc)), ["absent", "absent"])
+
+    def test_a_missing_repository_fails_closed(self):
+        self.stub({})
+        prev = os.environ.pop("GITHUB_REPOSITORY", None)
+        self.addCleanup(lambda: prev and os.environ.__setitem__("GITHUB_REPOSITORY", prev))
+        with tempfile.TemporaryDirectory() as d, contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(SCHED.main(["--workflow", PEER, "--dispatcher-login", DISPATCHER, "--out", str(Path(d, "x.json"))]), 1)
+
+    def test_failure_text_never_carries_a_response_body(self):
+        text = (ROOT / "scripts/board-drift-schedule-fetch.py").read_text()
+        self.assertNotIn("proc.stderr)", text.replace('(proc.stdout + proc.stderr)', ""))
+
+
+class ScheduleWorkflowShape(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import yaml
+        cls.text = (ROOT / ".github/workflows/board-drift-observer.yml").read_text()
+        cls.doc = yaml.safe_load(cls.text)
+
+    def test_the_watched_files_in_the_workflow_are_exactly_the_observers_watch_list(self):
+        step = [s for s in self.doc["jobs"]["board-drift-read"]["steps"] if "board-drift-schedule-fetch.py" in s.get("run", "")]
+        self.assertEqual(len(step), 1)
+        self.assertEqual(sorted(re.findall(r"--workflow (\S+)", step[0]["run"])), sorted(OBS.SCHEDULE_WATCH))
+
+    def test_the_schedule_read_uses_the_run_token_with_actions_read_not_the_app_token(self):
+        read = self.doc["jobs"]["board-drift-read"]
+        self.assertEqual(read["permissions"], {"contents": "read", "actions": "read"})
+        step = [s for s in read["steps"] if "board-drift-schedule-fetch.py" in s.get("run", "")][0]
+        self.assertEqual(step["env"]["GH_TOKEN"], "${{ github.token }}")
+        self.assertNotIn("app-token", json.dumps(step))
+        self.assertEqual(self.doc["jobs"]["board-drift-report"]["permissions"], {"contents": "read", "issues": "write"})
+        scopes = [k for s in read["steps"] if "create-github-app-token" in s.get("uses", "") for k in s["with"] if k.startswith("permission-")]
+        self.assertEqual(sorted(scopes), ["permission-issues", "permission-organization-projects", "permission-pull-requests"])
+
+    def test_the_schedule_read_precedes_the_check_and_the_check_receives_it(self):
+        steps = self.doc["jobs"]["board-drift-read"]["steps"]
+        names = [s.get("name", "") for s in steps]
+        self.assertLess(names.index("Read the schedule history of the watched workflows"), names.index("Evaluate the drift rules"))
+        check = steps[names.index("Evaluate the drift rules")]
+        self.assertIn('--schedule "$SCRATCH/schedule.json"', check["run"])
+
+    def test_schedule_json_is_not_uploaded_and_the_fetch_is_in_the_selftest_paths(self):
+        uploads = [s for j in self.doc["jobs"].values() for s in j["steps"] if "upload-artifact" in s.get("uses", "")]
+        self.assertNotIn("schedule", json.dumps(uploads))
+        import yaml
+        triggers = yaml.safe_load((ROOT / ".github/workflows/board-drift-observer-selftest.yml").read_text())
+        triggers = triggers.get(True) or triggers.get("on")
+        for event in ("pull_request", "push"):
+            self.assertIn("scripts/board-drift-schedule-fetch.py", triggers[event]["paths"], event)
 
 
 if __name__ == "__main__":

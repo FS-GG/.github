@@ -40,6 +40,7 @@ on:
       - "tests/ignored-author-coherence/**"
       - "default.json"
       - ".github/workflows/**"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

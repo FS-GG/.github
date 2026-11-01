@@ -34,6 +34,7 @@ on:
       - "src/FS.GG.Coord.Core/Types.fs"
       - "tests/project-field-options/**"
       - ".github/workflows/project-field-options.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

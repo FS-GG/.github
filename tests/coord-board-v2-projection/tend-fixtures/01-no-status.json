@@ -1,0 +1,8 @@
+{"schema":"fsgg.board-tend-snapshot/1","observedAt":"2026-11-01T12:00:00Z",
+ "cards":[
+  {"itemId":"I-plain","ref":"FS-GG/x#1","workLevel":"Delivery","track":"Follow-up"},
+  {"itemId":"I-ready-root","ref":"FS-GG/x#2","workLevel":"Delivery","track":"Follow-up","intendedLine":"Work level: Delivery · Track: Follow-up · Intended Status: **Ready**","rootAuthored":true},
+  {"itemId":"I-ready-other","ref":"FS-GG/x#3","workLevel":"Delivery","track":"Follow-up","intendedLine":"Work level: Delivery · Track: Follow-up · Intended Status: Ready","rootAuthored":false},
+  {"itemId":"I-progress","ref":"FS-GG/x#4","workLevel":"Delivery","track":"Follow-up","intendedLine":"Intended Status: In progress","rootAuthored":true},
+  {"itemId":"I-with-pr","ref":"FS-GG/x#5","workLevel":"Delivery","track":"Follow-up","prs":[{"id":"PR-5","state":"open"}]}
+ ]}

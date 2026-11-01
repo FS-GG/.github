@@ -167,7 +167,7 @@ production writer qualification remains .3.
 | `.agents` and `.claude` driving/board/init skills | .4 prepares gated work-unified-roadmap, drive-board/normal/best and check-board organization inspection. work-roadmap/pnext-item retain routine/native delivery; work-board/init/generated product bindings remain .5–.6. Both tracked skill roots and manifest projections are kept coherent; no current adoption claimed. |
 | `NewSddWorkspace` / configuration / generated guidance | Product-specific owner/project/repository scope and portable commands belong to .5/.6 publication and installed adoption; generated defaults unchanged here. |
 | `coord-board-reconcile.yml` | Manual credential-free legacy diagnostic, no board writes. |
-| `coord-board-archive.yml` / `coord-board-archive.py` | Separate still-scheduled legacy Project 1 archive using its App. Retain exact scope. |
+| `coord-board-archive.yml` / `coord-board-archive.py` | Replaced by the Project 3 Done-retention archiver ([#5119](https://github.com/FS-GG/.github/issues/5119)): keep the newest 200 Done by close time, archive older ones. The workflow is a counts-only dry run until Root accepts the first real run. The Project 1 sweeper (30 days, 100 visible) was disabled and retired on 2026-10-31. |
 | `scripts/fsgg-coord` / shared metered transport | Default shared Projects route. The explicit user-authorized native one-shot exception below applies only to this .2 pilot; .3 retains production composition and qualification. |
 
 Only the selected .2 pilot is closed. The .3 adapter still needs actual automatic-writer composition,
@@ -553,9 +553,14 @@ counts-only summary are kept by the #5119 owner. The ceiling is now `V2Projectio
 selected row, never below 500 (1,064 at 500 rows). The deadline is `V2Projection.refreshDeadlineSeconds`: 60 seconds plus 0.7 per
 selected row, never below 270 (410 at 500 rows).
 
-Both values are derived from inspect measurements only. `refresh` is not batched: it takes about 6 sends per row in the fixture
-(1,243 at 207 rows), so it stops after about 80 rows inside this budget. Batching it, or refusing larger bindings before any send,
-is [#5131](https://github.com/FS-GG/.github/issues/5131). The
+Both values are derived from inspect measurements. A programme `refresh` now batches its reads the same way
+([#5131](https://github.com/FS-GG/.github/issues/5131)). Phase 1 runs every row's one-shot writer over the inspection acquisition
+with writes unavailable. That decides every Verified no-op, stale, archived or unreadable row from aliased reads. A Verified
+no-op's second source check is then confirmed by a separate batched phase with fresh reads; a changed revision refuses the no-op
+and retains the project value. Phase 2 reruns the one-shot writer, unbatched, only for the rows that reached a write: each keeps
+its own fresh preimage reads, one send and independent readback, and an uncertain send is never resent. Fixture sends at 207
+already-Verified rows fall from 1,864 to 42, and at 40 rows with 10 writes from 371 to 114. Legacy bindings keep the unbatched
+path. The
 complete-membership read refuses a board whose `totalCount` exceeds `maximumBoardItems` (500) on its first page, rather than paging
 up to the limit.
 

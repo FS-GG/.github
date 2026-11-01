@@ -1,0 +1,17 @@
+{"schema":"fsgg.board-tend-snapshot/1","observedAt":"2026-11-01T12:00:00Z",
+ "cards":[
+  {"itemId":"O-active","ref":"FS-GG/x#60","workLevel":"Outcome","track":"Active delivery","status":"Ready","subIssues":[{"ref":"FS-GG/x#61","open":true},{"ref":"FS-GG/x#62","open":true},{"ref":"FS-GG/x#63","open":false}]},
+  {"itemId":"D-61","ref":"FS-GG/x#61","workLevel":"Delivery","track":"Active delivery","status":"In progress","parent":"FS-GG/x#60"},
+  {"itemId":"D-62","ref":"FS-GG/x#62","workLevel":"Delivery","track":"Active delivery","status":"Ready","parent":"FS-GG/x#60"},
+  {"itemId":"O-review","ref":"FS-GG/x#64","workLevel":"Outcome","track":"Active delivery","status":"Backlog","subIssues":[{"ref":"FS-GG/x#65","open":true}]},
+  {"itemId":"D-65","ref":"FS-GG/x#65","workLevel":"Delivery","track":"Active delivery","status":"In review","parent":"FS-GG/x#64","prs":[{"id":"PR-65","state":"open"}]},
+  {"itemId":"O-blocked","ref":"FS-GG/x#66","workLevel":"Outcome","track":"Active delivery","status":"Blocked","subIssues":[{"ref":"FS-GG/x#67","open":true}]},
+  {"itemId":"D-67","ref":"FS-GG/x#67","workLevel":"Delivery","track":"Active delivery","status":"Ready","parent":"FS-GG/x#66"},
+  {"itemId":"O-partial","ref":"FS-GG/x#68","workLevel":"Outcome","track":"Active delivery","status":"Ready","subIssuesComplete":false,"subIssues":[{"ref":"FS-GG/x#69","open":true}]},
+  {"itemId":"D-69","ref":"FS-GG/x#69","workLevel":"Delivery","track":"Active delivery","status":"In progress","parent":"FS-GG/x#68"},
+  {"itemId":"O-empty","ref":"FS-GG/x#70","workLevel":"Outcome","track":"Active delivery","subIssues":[{"ref":"FS-GG/x#71","open":true}]},
+  {"itemId":"D-71","ref":"FS-GG/x#71","workLevel":"Delivery","track":"Active delivery","status":"Blocked","parent":"FS-GG/x#70","blockers":[{"ref":"FS-GG/x#99","open":true}]},
+  {"itemId":"O-done-child","ref":"FS-GG/x#72","workLevel":"Outcome","track":"Active delivery","status":"Ready","subIssues":[{"ref":"FS-GG/x#73","open":true}]},
+  {"itemId":"D-73","ref":"FS-GG/x#73","workLevel":"Delivery","track":"Active delivery","status":"Done","parent":"FS-GG/x#72"},
+  {"itemId":"O-finished","ref":"FS-GG/x#74","workLevel":"Outcome","track":"Active delivery","status":"In progress","subIssues":[{"ref":"FS-GG/x#75","open":false}]}
+ ]}

@@ -1,0 +1,9 @@
+{"schema":"fsgg.board-tend-snapshot/1","observedAt":"2026-11-01T12:00:00Z",
+ "cards":[
+  {"itemId":"I-open-pr","ref":"FS-GG/x#40","workLevel":"Delivery","track":"Follow-up","status":"In progress","prs":[{"id":"PR-40","state":"open"}]},
+  {"itemId":"I-idle","ref":"FS-GG/x#41","workLevel":"Delivery","track":"Follow-up","status":"In progress","updatedAt":"2026-10-29T00:00:00Z","statusUpdatedAt":"2026-10-29T00:00:00Z"},
+  {"itemId":"I-busy","ref":"FS-GG/x#42","workLevel":"Delivery","track":"Follow-up","status":"In progress","updatedAt":"2026-11-01T10:00:00Z"},
+  {"itemId":"I-finished","ref":"FS-GG/x#43","workLevel":"Delivery","track":"Follow-up","status":"In progress","prs":[{"id":"PR-43","state":"merged"}],"acceptanceEvidence":"merge def"},
+  {"itemId":"I-draft","ref":"FS-GG/x#44","workLevel":"Delivery","track":"Follow-up","status":"Ready","prs":[{"id":"PR-44","state":"open","draft":true}]},
+  {"itemId":"I-blocked-pr","ref":"FS-GG/x#45","workLevel":"Delivery","track":"Follow-up","status":"Blocked","prs":[{"id":"PR-45","state":"open"}],"blockers":[{"ref":"FS-GG/x#99","open":true}]}
+ ]}

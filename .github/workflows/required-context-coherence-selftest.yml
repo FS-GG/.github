@@ -48,6 +48,7 @@ on:
       - ".github/workflows/required-context-coherence-selftest.yml"
       - ".github/workflows/lock-range-coherence.yml"
       - ".github/workflows/kit-materialize.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

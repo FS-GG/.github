@@ -237,3 +237,106 @@ let ``a 500-row successor inspection folds blockers and Work level and stays ins
     let perRow = (report.Items |> List.sumBy _.Evidence.Reads) / rows.Length
     Assert.InRange(perRow, 1, 13)
     Assert.Empty reads.Mutations
+
+// ---- programme refresh batching (#5131) ----
+
+/// A programme refresh fixture: the successor population plus a per-item Observation value and a recorded writer.
+type private RefreshFixture(count: int, initial: int -> string, ?failWrite: string -> bool) =
+    let rows = [1..count] |> List.map (fun number -> $"I_refresh_{number}", { ProgrammeFixture.issue with Number = 6000 + number }, "docs/coordination/programme.md")
+    let selected = ProgrammeFixture.enroll { ProgrammeFixture.successorBinding () with SelectedIssues = rows |> List.map (fun (id, issue, _) -> id, $"{issue.Owner}/{issue.Repository}#{issue.Number}") |> Map.ofList } rows
+    let values = Collections.Generic.Dictionary<string, string>()
+    do rows |> List.iteri (fun index (id, _, _) -> values["synthetic-member-" + id] <- initial (index + 1))
+    let writes = Collections.Generic.List<string>()
+    let mutable sourceReads = 0
+    let change (request: Request) (result: Errors.IoResult<Response>) =
+        match request.Body with
+        | Query(document, _) when document.Contains("updatedAt state") && document.Contains("blockedBy(") ->
+            sourceReads <- sourceReads + 1
+            result
+        | Query(document, variables) when document.Contains("fieldValueByName(name: \"Observation\")") && not (document.Contains "status:") ->
+            let itemId = variables |> List.pick (function "itemId", VId id -> Some id | _ -> None)
+            let id, issue, _ = rows |> List.find (fun (id, _, _) -> "synthetic-member-" + id = itemId)
+            let body =
+                Text.Json.JsonSerializer.Serialize
+                    {| data = {| node = {| id = itemId; project = {| id = selected.ProjectId |}
+                                           content = {| id = id; number = issue.Number; repository = {| nameWithOwner = issue.Owner + "/" + issue.Repository |} |}
+                                           fieldValueByName = {| name = values[itemId] |} |} |} |}
+            Ok { Status = 200; Body = body; Headers = Map.empty; ETag = None; NextLink = None }
+        | _ -> result
+    let reads = ProgrammeFixture.successorTransportFor selected rows (Some "Delivery") change
+    let transport =
+        { new IGitHubTransport with
+            member _.Send request = (reads :> IGitHubTransport).Send request
+            member _.SendMutation intent =
+                let itemId = match intent.Request.Body with Query(_, variables) -> variables |> List.pick (function "itemId", VId id -> Some id | _ -> None) | _ -> failwith "mutation"
+                writes.Add itemId
+                if (defaultArg failWrite (fun _ -> false)) itemId then Error(Errors.Transport "response unavailable")
+                else
+                    values[itemId] <- "Verified"
+                    Ok { Status = 200; Body = """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""; Headers = Map.empty; ETag = None; NextLink = None }
+            member _.RetryMutation effect = Error(Errors.Malformed(effect, "no retry")) }
+    member _.Selected = selected
+    member _.Transport = transport
+    member _.Reads = reads
+    member _.Writes = List.ofSeq writes
+    member _.SourceReads = sourceReads
+
+[<Fact>]
+let ``a programme refresh of already-Verified rows is batched and writes nothing`` () =
+    let fixture = RefreshFixture(207, fun _ -> "Verified")
+    let report = V2ProjectionSource.runFixed fixture.Transport fixture.Selected None
+    Assert.True(report.PopulationGap.IsNone, string report.PopulationGap)
+    Assert.Equal(207, report.Verified)
+    Assert.Empty(fixture.Writes)
+    // Every Verified no-op is confirmed by a fresh second source read in its own phase: two native reads per row.
+    Assert.Equal(2 * 207, fixture.SourceReads)
+    let sends = fixture.Reads.GraphQlCalls + fixture.Reads.RestCalls
+    let capture = Environment.GetEnvironmentVariable "FSGG_TEST_REFRESH_COUNTS"
+    if not (String.IsNullOrWhiteSpace capture) then IO.File.AppendAllText(capture, $"verified rows=207 sends={sends}\n")
+    // Unbatched this was about 6 sends per row (1,243 at 207 rows, #5131); batched it fits the historical 500.
+    Assert.InRange(sends, 1, 150)
+    Assert.InRange(sends, 1, V2Projection.refreshRequestCeiling 207)
+
+[<Fact>]
+let ``a programme refresh writes only the rows that change, each with its own preimage, one send and readback`` () =
+    let fixture = RefreshFixture(40, fun index -> if index % 4 = 0 then "Unknown" else "Verified")
+    let report = V2ProjectionSource.runFixed fixture.Transport fixture.Selected None
+    Assert.True(report.PopulationGap.IsNone, string report.PopulationGap)
+    Assert.Equal(40, report.Verified)
+    let expected = [ for index in 1 .. 40 do if index % 4 = 0 then yield $"synthetic-member-I_refresh_{index}" ]
+    Assert.Equal<string list>(expected, fixture.Writes)
+    for item in report.Items do
+        let written = item.Issue.Number % 4 = 0
+        Assert.Equal((if written then 1 else 0), item.MutationAttempts)
+        let itemId = $"synthetic-member-I_refresh_{item.Issue.Number - 6000}"
+        Assert.Equal(Some(if written then V2Projection.Updated itemId else V2Projection.AlreadyCurrent itemId), item.Projection |> Option.map _.Outcome)
+        // A written row's report comes from its own unbatched one-shot run: fresh preimage reads, the send and the readback.
+        if written then Assert.InRange(item.Reads, 8, 20)
+    let capture = Environment.GetEnvironmentVariable "FSGG_TEST_REFRESH_COUNTS"
+    if not (String.IsNullOrWhiteSpace capture) then IO.File.AppendAllText(capture, $"mixed rows=40 writes={fixture.Writes.Length} sends={fixture.Reads.GraphQlCalls + fixture.Reads.RestCalls}\n")
+
+[<Fact>]
+let ``an uncertain programme refresh write is never resent and leaves its row unverified`` () =
+    let failed = "synthetic-member-I_refresh_3"
+    let fixture = RefreshFixture(6, (fun index -> if index = 3 || index = 5 then "Unknown" else "Verified"), (fun itemId -> itemId = failed))
+    let report = V2ProjectionSource.runFixed fixture.Transport fixture.Selected None
+    Assert.Equal<string list>([ failed; "synthetic-member-I_refresh_5" ], fixture.Writes)
+    let health = report.Items |> List.map (fun item -> item.Issue.Number - 6000, item.Health) |> Map.ofList
+    Assert.Equal("Unknown", health[3])
+    Assert.Equal("Verified", health[5])
+    Assert.Equal(5, report.Verified)
+
+[<Fact>]
+let ``a programme refresh at the 500-row cap fits the scaled budget`` () =
+    let fixture = RefreshFixture(V2Projection.maximumProgrammeRows, fun index -> if index % 50 = 0 then "Unknown" else "Verified")
+    let report = V2ProjectionSource.runFixed fixture.Transport fixture.Selected None
+    let sends = fixture.Reads.GraphQlCalls + fixture.Reads.RestCalls
+    let capture = Environment.GetEnvironmentVariable "FSGG_TEST_REFRESH_COUNTS"
+    if not (String.IsNullOrWhiteSpace capture) then IO.File.AppendAllText(capture, $"cap rows=500 writes={fixture.Writes.Length} sends={sends}\n")
+    Assert.True(report.PopulationGap.IsNone, string report.PopulationGap)
+    Assert.Equal(500, report.Verified)
+    Assert.Equal(10, fixture.Writes.Length)
+    // No-op rows: first check plus the fresh confirmation. Written rows: phase 1 plus their own run's two checks.
+    Assert.Equal(2 * 490 + 3 * 10, fixture.SourceReads)
+    Assert.InRange(sends, 1, V2Projection.refreshRequestCeiling 500)
+    Assert.InRange(sends, 1, 500)

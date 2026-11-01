@@ -56,6 +56,7 @@ on:
       - ".agents/skills/**"
       - ".agent-skill-roots"
       - ".github/workflows/skill-view.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

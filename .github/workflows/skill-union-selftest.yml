@@ -38,6 +38,7 @@ on:
       - "docs/adr/**"
       - "docs/roadmaps/utel-release-successor.md"
       - ".github/workflows/skill-union-selftest.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

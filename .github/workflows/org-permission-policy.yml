@@ -26,6 +26,7 @@ on:
       - "Directory.Packages.props"
       - "global.json"
       - ".github/workflows/org-permission-policy.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

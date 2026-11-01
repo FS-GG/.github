@@ -113,6 +113,9 @@ module Delivery =
             Freshness: Freshness
             ItemBranchCanonical: bool
             ClosingLinkageCanonical: bool
+            /// The PR closes nothing and `Refs` exactly one open Delivery that live sub-issue and parent
+            /// reads prove is a native sub-issue of this item (`deliveryReferenceLinkage`, .github#5100).
+            DeliveryReferenceLinkage: bool
             PathsVerified: bool
             InReview: bool
             Review: Driver.ReviewChain option
@@ -132,8 +135,42 @@ module Delivery =
             ParkedReason: string option
         }
 
+    /// Live facts for one issue a PR body names with `Refs`, read at the IO boundary (.github#5100).
+    type DeliveryReferenceFacts =
+        {
+            Candidate: Ref
+            /// The candidate's own state is exactly OPEN (an unreadable state is a failed read).
+            Open: bool
+            /// The candidate's native parent, from its parent read. None is a measured "no parent".
+            Parent: Ref option
+            /// The candidate appears in the item's complete (untruncated) native sub-issue list.
+            ListedUnderTarget: bool
+        }
+
+    /// The most `Refs` candidates one landing reads; a body naming more is refused unread.
+    val maxDeliveryReferenceCandidates: int
+
+    /// Every issue a PR body names with `Refs` (fenced blocks and code spans removed), resolved
+    /// against the PR repository, in first-seen order without duplicates. Same grammar as
+    /// `scripts/board-currency-rules.py` `_REFS`; board `<repo>#<n>` shorthand is not a reference.
+    val declaredReferences: prOwner: string -> prRepo: string -> body: string -> Ref list
+
+    /// The one open Delivery a strict PR may `Refs` instead of closing its item, or the refusal.
+    /// Fails closed: a PR that closes any issue, names no candidate other than the item, names more
+    /// than `maxDeliveryReferenceCandidates`, hits any failed read, or does not name exactly one open
+    /// candidate whose parent is the item AND that the item's sub-issue list holds, is refused.
+    val deliveryReferenceLinkage:
+        target: Ref ->
+        closing: Ref option ->
+        prOwner: string ->
+        prRepo: string ->
+        body: string ->
+        read: (Ref -> Result<DeliveryReferenceFacts, string>) ->
+            Result<Ref, string>
+
     /// Whether freshly read linkage/item/obligation authority permits guarded landing. Canonical
-    /// linkage passes ordinarily; markerless delivery passes only for the exact live two-phase shape.
+    /// linkage passes ordinarily; a verified Delivery reference passes (.github#5100); markerless
+    /// delivery passes only for the exact live two-phase shape.
     val landingLinkageAuthorized: Snapshot -> bool
 
     /// One completed Actions execution observed on the repository default branch at the exact merge SHA.

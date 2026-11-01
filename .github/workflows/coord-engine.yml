@@ -67,6 +67,7 @@ on:
       - "tests/board-v2-import/**"
       - "tests/coord-engine-parity/**"
       - "tests/coord-engine-mutation/**"
+      - "tests/coord-board-writer-lock-mutation/**"
       - "tests/coord-engine-replay/**"
       - "tests/review-critic-succession-wire/**"
       - "scripts/fsgg-coord"
@@ -343,6 +344,11 @@ jobs:
       # literally named "The" — caught by parsing the file rather than by reading it.
       - name: "The #1794 mutation matrix is still runnable — every leg's anchor still matches"
         run: bash tests/coord-engine-mutation/run.sh
+
+      # The board writer-lock mutation matrix (#5136 PR 1, #5126) is still runnable: every leg's `find` still
+      # matches V2WriterLock.fs / BoardV2Application.fs. Runs no mutation; the sweep itself is on demand.
+      - name: The board writer-lock mutation matrix is still runnable
+        run: bash tests/coord-board-writer-lock-mutation/run.sh
 
       # SHIM PARITY (ADR-0040 Phase D.2). The same corpus, re-decided through `scripts/fsgg-coord` —
       # which the swap cut down to the ~40-line ADR-0034 §4.4 resolver that REPLACED the ~7,000-line bash
