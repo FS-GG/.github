@@ -90,3 +90,6 @@ secret appearing in the record.
 
 Later changes, each a separate PR reviewed against these bytes: ack writer r2 (`ack/`), operator r6 (`operator/`), seal and claim tooling (`seal/`),
 the pod operator gate layer r1 and its start r2 with the recovery driver and the credential generator (`pod-operator/`), the pod image and role entrypoint (`pod-image/`), and finalizer r5 (`finalizer/`).
+
+The pod harness r1 is in `pod-harness/`. The install route on fdev, with the files, the journal, the Root-executed steps, the receipts and
+the rollback, is [`INSTALL-FDEV.md`](INSTALL-FDEV.md).
