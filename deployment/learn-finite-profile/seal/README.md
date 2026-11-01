@@ -44,11 +44,14 @@ in the synthetic directories, and a synthetic claim copied into `claims/` is ref
 operator therefore cannot start a run from a synthetic claim until a later change gives it an explicit synthetic path.
 
 **Where real input is refused.** A synthetic base that is a symlink, is not a directory, is or lies inside or contains the real
-spool, the persistent source area or the mounted view; a tree with no valid declaration (a copy of the real spool is one); a file with
-more than one hard link (it could alias real data); and a real manifest or a real seal given to the synthetic commands. The roots
+spool, the persistent source area or the mounted view; a symlink in any component of a pinned subtree path below the base (for example
+`<base>/passive-home-canonical-v1` pointing into the real spool); a tree with no valid declaration (a copy of the real spool is one); a
+file whose `(st_dev, st_ino)` matches a file under the real spool roots (lstat only, nothing is read) or that has more than one link;
+and a real manifest or a real seal given to the synthetic commands. The sealed record carries the declaration's `generator` and
+`nonce` as the caller's claim. The roots
 are pinned in the tool; `extra_real_roots` can only add to them.
 
-**Limit, stated plainly.** This is cooperative. A copy of real data that also carries a forged declaration and no hard link is not
+**Limit, stated plainly.** This is cooperative. A copy of real data (new inodes, one link) that also carries a forged declaration is not
 detectable by this tool, which does not read the real spool. Root decides what a synthetic base contains; the record only makes the
 claim "synthetic" explicit and keeps it from satisfying a check that requires real provenance.
 

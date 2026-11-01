@@ -43,6 +43,12 @@ What this tool does and does not prove (stated plainly):
   * A void is attested by artifacts written by the operator account (fsgg-learn-qual) and read by Root: the operator RESULT,
     the finalizer record and the marker. That account can write them. Only Root's independent corroboration (recorded as a
     reference, never verified by this tool) strengthens a void. It proves "never mounted", not "never read".
+  * Synthetic mode (--mode synthetic) records "synthetic" explicitly and keeps that record from satisfying a check that needs real-spool
+    provenance. It refuses a base that overlaps the real spool, a symlink in any pinned subtree path, a file sharing (st_dev, st_ino)
+    with a real-spool file (stat only, never read) or with more than one link, and a tree that does not declare itself synthetic. It does
+    NOT prove a tree is synthetic: a copy of real data (new inodes, one link) carrying a forged declaration is not detectable here,
+    because this tool never reads the real spool. The declaration's generator and nonce are recorded in the sealed record as the
+    caller's claim, not as a measurement.
   * Decision and corroboration references are format-checked only (an issue or pull-request comment URL). Root verifies the
     comment; this tool does not.
   * The quiesce gap between M1 and M2 is self-reported by the manifest command; the real elapsed time since M1 is re-checked
@@ -854,19 +860,67 @@ def _within(path, root):
     return path == root or path.startswith(root.rstrip('/') + '/')
 
 
+def _real_roots(extra_real_roots=()):
+    """The roots real input can live under: the pinned three, then the caller's. `extra_real_roots` only ADDS."""
+    return (SPOOL_BASE, SOURCE_ROOT, VIEW_ROOT, *extra_real_roots)
+
+
 def synthetic_guard(base, extra_real_roots=()):
     """Refuse real input in synthetic mode: a base that is a symlink, is not a directory, or overlaps (is, is inside, or contains) the
-    real spool, the persistent source area or the mounted view. `extra_real_roots` ADDS to the pinned roots; it can never remove one."""
+    real spool, the persistent source area or the mounted view; and a pinned subtree path that has a symlink in ANY component below the
+    base (a symlinked `<base>/passive-home-canonical-v1` would otherwise lead into the real spool while only the leaf `spool` is a real
+    directory). The overlap test is run again on each subtree's resolved path. Returns the base's resolved path."""
     if not isinstance(base, str) or not base or '\x00' in base:
         refuse('the synthetic base is not a path')
     if os.path.islink(base) or not os.path.isdir(base):
         refuse('the synthetic base is not a real directory')
     sb = os.path.realpath(base)
-    for r in (SPOOL_BASE, SOURCE_ROOT, VIEW_ROOT, *extra_real_roots):
-        rr = os.path.realpath(r)
+    roots = [os.path.realpath(r) for r in _real_roots(extra_real_roots)]
+    for rr in roots:
         if _within(sb, rr) or _within(rr, sb):
             refuse('the synthetic base overlaps the real spool or the sealed-source area: real input is refused in synthetic mode')
+    for st in ALLOWED_SUBTREES:
+        cur = sb
+        for comp in st.split('/'):
+            cur = f'{cur}/{comp}'
+            if os.path.islink(cur):
+                refuse(f'a synthetic subtree path contains a symlink: {st}')
+        resolved = os.path.realpath(cur)
+        if resolved != cur:
+            refuse(f'a synthetic subtree path does not resolve to itself: {st}')
+        for rr in roots:
+            if _within(resolved, rr) or _within(rr, resolved):
+                refuse('a synthetic subtree overlaps the real spool or the sealed-source area: real input is refused in synthetic mode')
     return sb
+
+
+MAX_REAL_SCAN = 100000
+
+
+def real_inodes(extra_real_roots=()):
+    """(st_dev, st_ino) of every file under the real spool roots (the pinned spool and the caller's extras). lstat only, never opened or
+    read, never followed. A root that is absent contributes nothing; a scan over MAX_REAL_SCAN entries refuses."""
+    seen, count = set(), 0
+    for r in (SPOOL_BASE, *extra_real_roots):
+        for d, ds, fs in os.walk(r, followlinks=False):
+            for name in fs:
+                count += 1
+                if count > MAX_REAL_SCAN:
+                    refuse('the real spool scan is over its bound')
+                try:
+                    st = os.lstat(f'{d}/{name}')
+                except OSError:
+                    continue
+                seen.add((st.st_dev, st.st_ino))
+    return seen
+
+
+def refuse_real_inodes(sb, files, extra_real_roots=()):
+    real = real_inodes(extra_real_roots)
+    for f in files:
+        st = os.lstat(f'{sb}/{f["path"]}')
+        if (st.st_dev, st.st_ino) in real:
+            refuse(f'a synthetic file shares an inode with a real-spool file (hard link or bind mount): {f["path"]}')
 
 
 def read_declaration(base):
@@ -887,6 +941,7 @@ def take_synthetic_manifest(base, now=None, extra_real_roots=()):
     sb = synthetic_guard(base, extra_real_roots)
     _, dsha = read_declaration(sb)
     m = take_manifest(sb, list(ALLOWED_SUBTREES), now)         # the same bounds and the same refusals as the real manifest
+    refuse_real_inodes(sb, m['files'], extra_real_roots)
     for f in m['files']:
         if os.lstat(f'{sb}/{f["path"]}').st_nlink != 1:
             refuse(f'a synthetic file must not be hard-linked (it may alias real data): {f["path"]}')
@@ -920,8 +975,10 @@ def seal_synthetic(base, m1, snapshot_id, source_root, view_root, services, owne
     sb = synthetic_guard(base, (source_root, *extra_real_roots))
     if m1.get('base') != sb:
         refuse('the manifest was taken from another base directory')
-    if read_declaration(sb)[1] != m1['declarationSha256']:
+    decl, dsha = read_declaration(sb)
+    if dsha != m1['declarationSha256']:
         refuse('the synthetic declaration changed since the manifest was taken')
+    refuse_real_inodes(sb, m1['files'], (source_root, *extra_real_roots))
     now = now or datetime.now(timezone.utc)
     pids = open_pids_under([f'{sb}/{s}' for s in m1['subtrees']], proc)
     if pids:
@@ -953,8 +1010,10 @@ def seal_synthetic(base, m1, snapshot_id, source_root, view_root, services, owne
             refuse('the source changed during the copy: ' + '; '.join(diff))
         if read_declaration(sb)[1] != m1['declarationSha256']:
             refuse('the synthetic declaration changed during the copy')
+        synthetic_guard(sb, (source_root, *extra_real_roots))                     # the paths still resolve inside the base
         sealed = {'schema': SYNTHETIC_SNAPSHOT_SCHEMA, 'provenance': 'synthetic', 'realSpoolProvenance': False, 'snapshotId': snapshot_id,
                   'sourceIdentity': synthetic_identity(m1), 'declarationSha256': m1['declarationSha256'],
+                  'declaration': {'generator': decl['generator'], 'nonce': decl['nonce']},
                   'quiesce': 'not applicable: a synthetic source is not the live drain spool', 'sealedUtc': utc(now),
                   'files': [{k: f[k] for k in ('path', 'type', 'size', 'sha256', 'mtime_ns', 'mode')} for f in m1['files']]}
         data = canon(sealed)

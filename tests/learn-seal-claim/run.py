@@ -1035,6 +1035,15 @@ with tempfile.TemporaryDirectory() as tmp:
     check(i3 == ident, 'the same declared content under another path is the same synthetic identity (the path is not hashed)')
     real_ident = L.source_identity(L.take_manifest(e.base, SUBS))
     check(real_ident not in (ident, i2, i3), 'a synthetic identity never equals a real one')
+    # N2: known-answer vector for the identity (the domain tag is part of the answer), derived by hand from the documented formula
+    ka = {'declarationSha256': 'a' * 64, 'subtrees': sorted(SUBS), 'files': [{'path': SUBS[0] + '/f', 'size': 3, 'sha256': 'b' * 64, 'mtime_ns': 7, 'ctime_ns': 1, 'ino': 1, 'mode': '0o644'}]}
+    ka_bytes = ('{"declarationSha256":"' + 'a' * 64 + '","domain":"learn-synthetic-source/1","files":[{"mtime_ns":7,"path":"' + SUBS[0] + '/f","sha256":"' + 'b' * 64
+                + '","size":3}],"subtrees":["' + SUBS[0] + '","' + SUBS[1] + '"]}\n').encode()
+    check(L.SYNTHETIC_IDENTITY_DOMAIN == 'learn-synthetic-source/1', 'N2: the identity domain tag is the documented literal')
+    check(L.synthetic_identity(ka) == L.sha(ka_bytes) == 'cde78a4b7e4f7ce45c98e272cf60d01e74230e4717ba22fc45d194605eefe456', 'N2: the synthetic identity of a fixed manifest is the known answer (hand-built bytes and a pinned hex)')
+    check(L.sha(ka_bytes.replace(b'learn-synthetic-source/1', b'learn-source/1')) != L.synthetic_identity(ka), 'N2: dropping or changing the domain tag changes the identity')
+    # N4: the sealed record carries the declaration's generator and nonce
+    check(sm['declaration'] == {'generator': 'selftest', 'nonce': 'n1'}, 'N4: the sealed record records the declaration generator and nonce')
     mm = copy.deepcopy(m1)
     mm['base'] = 'x'
     check(L.synthetic_identity(mm) == ident and L.source_identity({**m1, 'base': m1['base']}) != ident, 'the real identity function on a synthetic manifest gives another value (domain separation)')
@@ -1120,7 +1129,83 @@ with tempfile.TemporaryDirectory() as tmp:
     hp = os.path.join(hb, SUBS[1], 'one.ready')
     os.remove(hp)
     os.link(os.path.join(e.base, SUBS[1], 'one.ready'), hp)
-    refused(lambda: L.take_synthetic_manifest(hb, now=clock, extra_real_roots=EX), 'hard-linked', 'a synthetic file hard-linked to real data is refused')
+    refused(lambda: L.take_synthetic_manifest(hb, now=clock, extra_real_roots=EX), 'shares an inode with a real-spool file', 'a synthetic file hard-linked to real data is refused by its (st_dev, st_ino)')
+    check(L.real_inodes(EX) >= {(os.stat(hp).st_dev, os.stat(hp).st_ino)}, 'the real inode set is built by lstat of the real files')
+    # N4: stat only, never read: the scan opens nothing (os.open and open are not reached)
+    real_open, real_os_open = open, os.open
+    try:
+        def no_open(*a, **k):
+            raise AssertionError('the real-spool scan must not open a file')
+        os.open = no_open
+        L.real_inodes(EX)
+    finally:
+        os.open = real_os_open
+    # an in-tree link between two synthetic files (no real inode) is still refused by link count
+    lb = synth_base(tmp, 'syn-link')
+    lp = os.path.join(lb, SUBS[1], 'two.ready')
+    os.link(os.path.join(lb, SUBS[1], 'one.ready'), lp)
+    refused(lambda: L.take_synthetic_manifest(lb, now=clock, extra_real_roots=EX), 'hard-linked', 'a synthetic file with more than one link is refused')
+    # the same (st_dev, st_ino) with a link count of 1 (what a bind mount of a real file looks like): the real inode set is stubbed to contain it
+    bm = synth_base(tmp, 'syn-bind')
+    bst = os.lstat(os.path.join(bm, SUBS[1], 'one.ready'))
+    real_set = L.real_inodes
+    try:
+        L.real_inodes = lambda extra=(): {(bst.st_dev, bst.st_ino)}
+        check(bst.st_nlink == 1, 'control: the bind-mount stand-in has a link count of 1, so only the inode check can refuse it')
+        refused(lambda: L.take_synthetic_manifest(bm, now=clock, extra_real_roots=EX), 'shares an inode with a real-spool file', 'a link-count-1 file sharing an inode with a real file is refused')
+    finally:
+        L.real_inodes = real_set
+    # B1 (review of 584c3246): an INTERMEDIATE symlink, <base>/<subtree parent> -> the real spool, leaves the leaf `spool` a real directory
+    # as seen by take_manifest, so only a component walk below the base sees it. Reviewer's probe, reproduced here.
+    parent = SUBS[0].split('/')[0]
+    for pin_only in (False, True):
+        ib = synth_base(tmp, 'syn-inter-%d' % pin_only)
+        shutil.rmtree(os.path.join(ib, parent))
+        os.symlink(os.path.join(e.base, parent), os.path.join(ib, parent))
+        if pin_only:                                    # no extra roots: the PINNED SPOOL_BASE alone must refuse it
+            try:
+                L.SPOOL_BASE = e.base
+                refused(lambda: L.take_synthetic_manifest(ib, now=clock), 'contains a symlink', 'B1: an intermediate symlink into the pinned real spool is refused (no extra roots)')
+            finally:
+                L.SPOOL_BASE = real_spool
+        else:
+            refused(lambda: L.take_synthetic_manifest(ib, now=clock, extra_real_roots=EX), 'contains a symlink', 'B1: an intermediate symlink into the real spool is refused')
+        refused(lambda: L.synthetic_guard(ib, EX), 'contains a symlink', 'B1: the guard itself refuses the intermediate symlink')
+    # the same swap AFTER the manifest was taken: the seal re-checks the subtree paths
+    sb6 = synth_base(tmp, 'syn-swap', nonce='n6')
+    m6 = L.take_synthetic_manifest(sb6, now=clock, extra_real_roots=EX)
+    shutil.rmtree(os.path.join(sb6, parent))
+    os.symlink(os.path.join(e.base, parent), os.path.join(sb6, parent))
+    refused(lambda: L.seal_synthetic(sb6, m6, 'syn-swap', now=clock, extra_real_roots=EX, **e.kw()), 'contains a symlink', 'B1: a subtree parent swapped for a symlink after the manifest refuses the seal')
+    check(not os.path.lexists(os.path.join(e.root, L.SYNTHETIC_INPUTS, 'syn-swap')), 'B1: nothing was created for the refused swapped seal')
+    # N4 at seal time: a file replaced by a hard link to a real file AFTER the manifest was taken is refused before anything is copied
+    sb7 = synth_base(tmp, 'syn-relink', nonce='n7')
+    m7 = L.take_synthetic_manifest(sb7, now=clock, extra_real_roots=EX)
+    f7 = os.path.join(sb7, SUBS[1], 'one.ready')
+    os.remove(f7)
+    os.link(os.path.join(e.base, SUBS[1], 'one.ready'), f7)
+    refused(lambda: L.seal_synthetic(sb7, m7, 'syn-relink', now=clock, extra_real_roots=EX, **e.kw()), 'shares an inode with a real-spool file', 'N4: a file relinked to real data after the manifest refuses the seal')
+    check(not os.path.lexists(os.path.join(e.root, L.SYNTHETIC_INPUTS, 'syn-relink')), 'N4: nothing was created for the relinked seal')
+    # a symlink to a directory that is NOT real input is refused too (the rule is structural: no symlink in the pinned paths)
+    other_dir = os.path.join(tmp, 'elsewhere')
+    shutil.copytree(os.path.join(sb, parent), other_dir)
+    ob = synth_base(tmp, 'syn-inter-other')
+    shutil.rmtree(os.path.join(ob, parent))
+    os.symlink(other_dir, os.path.join(ob, parent))
+    refused(lambda: L.take_synthetic_manifest(ob, now=clock, extra_real_roots=EX), 'contains a symlink', 'a symlinked subtree parent is refused even when it points at a synthetic-looking directory')
+    # the leaf symlink was already refused: control that the new walk did not change that refusal's reason for a plain real tree
+    check(L.take_synthetic_manifest(sb, now=clock, extra_real_roots=EX)['provenance'] == 'synthetic', 'control: a plain synthetic base with real directories is still accepted')
+    # N3: non-empty extra_real_roots ADD to the pinned roots, never replace them
+    scratch_root = os.path.join(tmp, 'unrelated-extra')
+    os.makedirs(scratch_root)
+    try:
+        L.SPOOL_BASE = e.base
+        refused(lambda: L.take_synthetic_manifest(e.base, now=clock, extra_real_roots=[scratch_root]), 'real input is refused', 'N3: a non-empty extra root does not displace the pinned SPOOL_BASE')
+        refused(lambda: L.take_synthetic_manifest(scratch_root, now=clock, extra_real_roots=[scratch_root]), 'real input is refused', 'N3: the extra root itself is also refused')
+        check(set(map(os.path.realpath, (L.SPOOL_BASE, L.SOURCE_ROOT, L.VIEW_ROOT, scratch_root))) <= set(map(os.path.realpath, L._real_roots([scratch_root]))), 'N3: the real-root set is the pinned three plus the extras')
+        check(L.take_synthetic_manifest(sb, now=clock, extra_real_roots=[scratch_root])['provenance'] == 'synthetic', 'N3 control: an unrelated extra root does not refuse a separate synthetic base')
+    finally:
+        L.SPOOL_BASE = real_spool
     # a REAL manifest handed to the synthetic seal
     m_real = L.take_manifest(e.base, SUBS)
     refused(lambda: L.seal_synthetic(sb, m_real, 'syn-x', now=clock, extra_real_roots=EX, **e.kw()), 'real manifest cannot be used in synthetic mode', 'synthetic seal refuses a real manifest')
