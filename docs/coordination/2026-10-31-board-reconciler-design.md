@@ -4,8 +4,8 @@ Design, 2026-10-31. Delivery [#5136](https://github.com/FS-GG/.github/issues/513
 [#4730](https://github.com/FS-GG/.github/issues/4730) (COORD-EFF-02). This is phase 1 of #5136: the
 design only. It makes no board write and changes no code, contract or workflow. Root (Programme/root)
 owns approval and all acceptance. [Root's decisions](https://github.com/FS-GG/.github/pull/5137#issuecomment-6548516184)
-on D1-D12 (2026-10-31) and Root's rulings on the first independent review are folded in below and listed
-in §13. Phase 2 (implementation PRs, §12) starts only after this design passes independent review.
+on D1-D12 (2026-10-31), Root's rulings on the independent reviews, and the owner-authorized decision 9 on
+Delivery closure ([#4730 comment](https://github.com/FS-GG/.github/issues/4730#issuecomment-6551301543), 2026-11-01) are folded in below and listed in §13. Phase 2 (implementation PRs, §12) starts only after this design passes independent review.
 
 ## Why
 
@@ -292,7 +292,8 @@ Evaluated in order; the first rule that matches decides. `OPR` is the set of ope
 | S3b | `OPR` empty, `DPR` not empty, Status Backlog or Ready | In progress | Apply |
 | P-LINK | `OPR` and `DPR` empty, an open PR in `LPR` | — | Propose (the PR's `linkage_of()` failure is named) |
 | S4 | Status In review, `OPR`, `DPR`, `MPR` and `LPR` empty (closed unmerged PRs are ignored), In review for longer than `reviewSettleHours`, timeline complete | In progress | Apply |
-| P-ACCEPT | Status In review or In progress, `OPR` and `DPR` empty, `MPR` not empty, `## Acceptance evidence` present and not "None yet." | — | Propose `acceptance-ready` |
+| C1 | Open Delivery, Status not Blocked, `OPR` and `DPR` empty, no open PR in `LPR`, `MPR` not empty, timeline complete, and the most recently merged PR in `MPR` does not carry `fsgg:delivery-continues/v1` | Issue closed (COMPLETED), with a comment listing the merged PRs | Apply (decision 9) |
+| P-ACCEPT | Status In review or In progress, `OPR` and `DPR` empty, `MPR` not empty, `## Acceptance evidence` present and not "None yet.", and C1 does not apply (disabled, or the last merge continues) | — | Propose `acceptance-ready` |
 | S5 | Status In progress, `OPR` and `DPR` empty, no activity within `activityHours` | — | Propose `stale-active` (to Ready, Blocked, or acceptance) |
 | P-READY | Status Backlog, `## Blocked on` is "Nothing" or "Nothing external", no open native blocker | — | Propose Backlog → Ready; for an unenrolled card the proposal says selection also needs enrollment or a `root-admit-unenrolled` marker |
 | P-UNBLOCK | Status Blocked, every native blocker and `fsgg:blocked-on/v1` blocker closed | — | Propose Blocked → Ready |
@@ -303,6 +304,15 @@ Evaluated in order; the first rule that matches decides. `OPR` is the set of ope
 
 Notes:
 
+- **C1 closes a Delivery when its linked work is merged** ([decision 9](https://github.com/FS-GG/.github/issues/4730#issuecomment-6551301543)). The owner amended "tend
+  never closes issues" for Delivery issues only. C1 uses the strict `linkage_of()` linkage (exactly one
+  Delivery), needs at least one merged PR and no open or draft one, strict or loose, and needs a complete
+  timeline. It skips a Delivery whose most recent merge carries `fsgg:delivery-continues/v1`, the marker
+  that already tells the merge gate the Delivery stays In progress. It never closes an Outcome, and never
+  closes a Blocked card: Blocked records remaining acceptance that is not a PR. It closes with reason
+  COMPLETED after a comment on the Delivery that lists the merged PRs and carries
+  `<!-- fsgg:tend-closed/v1 -->`; the built-in "Item closed → Done" workflow, or S1 as its backstop, then
+  writes Done. Until C1 is enabled, Root applies the same rule by sweep (decision 9).
 - **Blocked is never written or overwritten automatically, with one exemption: S1.** Blocked records
   Root's judgement that a named prerequisite is missing, which is also why the merge gate refuses a
   Blocked preimage. A closed card is different: closing is Root's acceptance act and supersedes that
@@ -405,6 +415,7 @@ type Apply =
     | SetField of item: ItemId * field: Field * preimage: string option * target: string * rules: RuleId list
     | AddMembership of issueNodeId: string * rule: RuleId
     | Archive of item: ItemId * rule: RuleId
+    | CloseDelivery of issueNodeId: string * mergedPrs: string list * rule: RuleId   // C1 only (decision 9)
     | PrepareEnrollment of rows: EnrollmentRow list
 type Effect = { Id: string; Apply: Apply; DependsOn: string list; Deciding: DecidingFacts }
 type Proposal = { Id: string; Rule: RuleId; Subject: Subject; Suggested: string option; Evidence: string list }
@@ -430,6 +441,7 @@ Every card lands in exactly one class for each field, and a test pins that. The 
 | E1 | Add membership for an enrollment candidate, with Status, Work level and Track filled in the same run (D12) | Every input is native, including the archived-item check; the card is never left bare (§7) | `deleteProjectV2Item`, only for an item that the reconciler's own E1 custody record proves it created, and only while its values are still the reconciler's |
 | E2 | Prepare the enrollment successor and open its carrier PR | Offline; the carrier's title, body and commit messages must pass `check-closing-keywords` before the push; the merge is Root's | Close the PR |
 | A1 | Archive Done beyond 200 (after the Python archiver retires) | #5119's guards | `unarchiveProjectV2Item` |
+| C1 | Close a Delivery whose strictly linked PRs are all merged, none open, the last merge not continuing (decision 9) | Decided from native PR state and strict linkage; never an Outcome or a Blocked card; the PR facts are re-read before the send | `reopenIssue` on an issue the reconciler's own custody proves it closed; the comment stays as the record |
 
 Each Apply effect also has a preimage condition: if the adjacent re-read differs from the snapshot, in
 the item's fields or in its deciding PR facts, the effect is refused for this run and derived again next
@@ -452,31 +464,46 @@ held writer lock; an exhausted budget or a dependency on a deferred effect (both
 not Unknown). A refusal is never a pass ([#266](https://github.com/FS-GG/.github/issues/266)) and never
 silently dropped: it is in the plan file, and a refusal that persists for 24 hours becomes a proposal.
 
-## 5. The reconciler never closes an issue
+## 5. The reconciler closes only Delivery issues, under C1
 
-Acceptance and closure stay Root's. P-ACCEPT and `children-complete` are proposals only. This is enforced
-by construction, not by care:
+Closing an Outcome, accepting an Outcome, and every other issue effect stay Root's. The one exception is
+C1: the owner-authorized decision 9 ([#4730 comment](https://github.com/FS-GG/.github/issues/4730#issuecomment-6551301543)) makes the reconciler close a Delivery
+whose strictly linked PRs are all merged and none open (§3). P-ACCEPT and `children-complete` stay
+proposals. This is enforced by construction, not by care:
 
 - **A closed change type.** The reconciler has its own discriminated union, `TendChange`, with exactly
   the cases `SetFieldValue`, `ClearFieldValue` (rollback only), `AddItem`, `RemoveCreatedItem` (E1
-  rollback only) and `ArchiveItem`. It is not a subtype of `V2Migration.Change` that a later case could
-  widen. Each case maps to one fixed GraphQL document whose only root field is
+  rollback only), `ArchiveItem` and `CloseDelivery`. It is not a subtype of `V2Migration.Change` that a
+  later case could widen. Each case maps to fixed GraphQL documents whose only root field is
   `updateProjectV2ItemFieldValue`, `clearProjectV2ItemFieldValue`, `addProjectV2ItemById`,
-  `deleteProjectV2Item` or `archiveProjectV2Item`.
+  `deleteProjectV2Item` or `archiveProjectV2Item`, or, for `CloseDelivery` alone, `addComment` followed by
+  `closeIssue` with `stateReason: COMPLETED` on the same issue.
+- **`CloseDelivery` is constructible only for a Delivery.** Its constructor takes the C1 effect, which
+  carries the card's Work level (Delivery, populated or structural), its Status (not Blocked) and its
+  issue node id; there is no way to build it for an Outcome, a Blocked card or an issue that is not on the
+  board. The writer re-reads the issue, its Work level, its Status and the deciding PRs immediately before
+  the comment and refuses on any difference. Custody records the comment and the close as one effect,
+  keyed by the issue node id; an uncertain send is read back (issue state and the `fsgg:tend-closed/v1`
+  comment), never resent.
 - **A transport-level allowlist.** The reconciler's transport parses every outgoing mutation document and
-  refuses, before dispatch, any document with a root field outside those five, as
-  `V2ObservationTransport` already admits only its one fixed document. An issue mutation (`closeIssue`,
-  `updateIssue`, `addSubIssue`, `addComment`) cannot leave the process even if a builder were wrong.
-- **Tests that can fail.** Instead of feeding names to a builder that cannot take one: (1) the tend
-  transport is handed hand-written documents for `closeIssue`, `updateIssue`, `addSubIssue` and
-  `addComment`, alone and aliased beside an allowed field, and each must be refused with zero recorded
-  sends; (2) every `TendChange` case is rendered and the set of root fields it produces must equal the
-  allowlist exactly. A mutation leg (§10) that adds `closeIssue` to the allowlist must turn (1) red.
+  refuses, before dispatch, any document with a root field outside the five project mutations, plus
+  `addComment` and `closeIssue` only when the document's subject is the issue node id of a `CloseDelivery`
+  effect in the current plan whose card is a Delivery. Any other issue mutation (`updateIssue`,
+  `reopenIssue` outside a recorded C1 rollback, `addSubIssue`, `closeIssue` on any other issue) cannot leave
+  the process even if a builder were wrong.
+- **Tests that can fail.** (1) The tend transport is handed hand-written documents for `closeIssue` on an
+  Outcome, on a Blocked Delivery and on an issue with no C1 effect, and for `updateIssue` and `addSubIssue`,
+  alone and aliased beside an allowed field; each must be refused with zero recorded sends. (2) Every
+  `TendChange` case is rendered and the set of root fields it produces must equal the allowlist exactly.
+  (3) Over the fixtures and generated boards, every closing effect is C1 on a Delivery that is not Blocked,
+  and no plan closes an Outcome. Mutation legs (§10) that admit `closeIssue` for an Outcome, or drop the
+  Blocked exclusion, must turn these tests red.
 - **Carrier PRs.** E2 runs `check-closing-keywords` on the carrier's title, body and commit messages
   before the push and refuses on any closing reference, because this repository squash-merges with the
   commit messages.
 - **Three allowlisted routes, and only three.** (1) The GraphQL transport with the five project
-  mutations above. (2) The proposals comment on #4985 (§6), through a REST route whose allowlist is exactly
+  mutations above and, for `CloseDelivery` alone, `addComment` and `closeIssue` on that Delivery.
+  (2) The proposals comment on #4985 (§6), through a REST route whose allowlist is exactly
   `POST /repos/FS-GG/.github/issues/4985/comments`. (3) E2's carrier: a push of one fresh
   `routine/board-enroll-<cohort>` branch of FS-GG/.github whose only change is the manifest commitment,
   then `POST /repos/FS-GG/.github/pulls` for that branch, after the keyword check above. No other REST or
@@ -711,7 +738,7 @@ it is accepted and delivered, E2 refuses above 450 rows and files a proposal.
   7-day plan-only comparison shows its would-be Track disagrees with at most 5% of the Tracks people have
   set on existing Delivery-Outcome pairs. The plan reports that disagreement rate on every run, so the
   comparison is a count from the reconciler's own output, not a separate study.
-- **Contract-gated rules.** S1, S3, S3b, S4, S9, S9r, O1, E1 and the declaration branches W1d and T1d
+- **Contract-gated rules.** S1, S3, S3b, S4, S9, S9r, O1, E1, C1 and the declaration branches W1d and T1d
   change what the lifecycle contract says (D2, D3, the intended-fields grammar, and automatic Status moves
   and membership). The hierarchy and default branches W1h, T1i and T1f, and gate replay `GR`, are not
   gated ([Root's ruling C](https://github.com/FS-GG/.github/pull/5139#issuecomment-6548815933)). The enable file may
@@ -815,7 +842,8 @@ e and s stay.
   cycle collapse, the input-pending expiry, within-round visibility, send order and transitive deferral,
   the W1 conflict refusal, the gate replay's exact preimage, merge order and supersession, the roll-up's
   completeness check, the archived-member refusal, the custody write before send, no resend, the lock,
-  the enable file and its contract gate, and the transport allowlist. Every leg must be killed, and its
+  the enable file and its contract gate, the transport allowlist, and C1's Delivery-only, not-Blocked,
+  strict-linkage and continues-marker conditions. Every leg must be killed, and its
   anchor check runs on each PR that touches the reconciler, as `tests/coord-engine-mutation/run.sh`
   does.
 - **Temporary paths.** Tests set a private `TMPDIR` and an injected lock directory. They never touch the
@@ -839,7 +867,7 @@ e and s stay.
 | 8e | `ConstructorIdentity` after `main` moves (#5113) | E2 refused until the prerequisite lands |
 | 8f | 114-card initialization (#5123) | At most 100 items in one run, 3 sends per item, no whole-scope re-read |
 | 9 | Merge-gate interplay | After the gate's In review with a merged PR, the plan is empty for that item; a gate `possible-send` record refuses the item |
-| 10 | Never close | No plan, for any fixture, contains an issue mutation; the transport refuses hand-written issue mutations |
+| 10 | Closes only Deliveries under C1 | The only closing effects in any plan are C1 on a Delivery that is not Blocked; no plan closes an Outcome; the transport refuses hand-written `closeIssue` on an Outcome, a Blocked card or an issue without a C1 effect |
 | 11 | Loose linkage | A PR referencing two Deliveries, or a Delivery with no parent Outcome: P-LINK, no move |
 | 12 | Merge race | The deciding PR merges between snapshot and re-read: S3 refused this run |
 | 13 | Same-run dependency | A new Outcome and its child: the child's T1 follows the parent's; the plan is idempotent |
@@ -857,6 +885,7 @@ e and s stay.
 | 25 | Crash during replay | Two `deferred` records for one Delivery and a crash after the older is rewritten to `superseded`: the next invocation sends at most once, for the newer record only; a newer `verified` record keeps an older `deferred` one from ever sending |
 | 26 | Declared Follow-up under an Active delivery parent | T1i does not write `Active delivery`; with T1d off the effect defers and then becomes `track-declared-pending`; with T1d on, T1d writes `Follow-up` |
 | 27 | Declared Active delivery on a parentless card | T1f does not write `Follow-up`; with T1d off it defers and then becomes `track-declared-pending`; with T1d on, T1d writes `Active delivery` |
+| 28 | All linked work merged (decision 9) | An In review Delivery with two strictly linked merged PRs and none open: C1 closes it with a comment listing both; the last merge carrying `fsgg:delivery-continues/v1`: no close; a Blocked Delivery, an Outcome, an open or draft PR, an open loosely linked PR, or an incomplete timeline: no close |
 
 ## 12. Phase 2 PR sequence
 
@@ -870,12 +899,14 @@ One open PR per chain, each `Refs #5136`, each reviewed independently:
    gate's lock and delivers #5126.
 2. Pure derivation to a fixpoint, plan types, fixtures (§11), properties and the mutation spec. No IO.
 3. Batched reads, `board-v2 tend` plan-only, the cost counters and a live read-only measurement at the
-   current board size.
-4. The writer: `TendChange`, the transport allowlist, the immediate re-read, custody (E1 keyed by issue
-   node id) and the reconciler's replay of the gate's deferred records (`GR`). This also delivers #5123
-   (D8).
+   current board size. The C1 derivation (decision 9) lands here, so plan-only already shows which
+   Deliveries would close.
+4. The writer: `TendChange` (including `CloseDelivery`), the transport allowlist, the immediate re-read,
+   custody (E1 and C1 keyed by issue node id) and the reconciler's replay of the gate's deferred records
+   (`GR`). This also delivers #5123 (D8).
 5. Proposals to #4985 with the ledger.
-6. The contract amendment, which gates S1, S3, S3b, S4, S9, S9r, O1, E1, W1d and T1d: the Done backstop (D2) in
+6. The contract amendment, which gates S1, S3, S3b, S4, S9, S9r, O1, E1, C1, W1d and T1d: Delivery closure by
+   C1 (decision 9) in dispatch rule 3, the Done backstop (D2) in
    dispatch rule 3 and the board-currency design, the bounded Outcome roll-up (D3), the automatic Status
    moves S3, S3b and S4, the intended-fields grammar and S9's limits, and E1's attended membership add,
    in the lifecycle contract and status lifecycle, carrying the marker `fsgg:board-tend-contract/v1`.
@@ -966,3 +997,10 @@ nonmaterial list:
 |---|---|---|
 | Declared Track overwritten | A declared Track wins: T1i and T1f never write it; while T1d is off it is a refusal-only read, deferred and expiring into `track-declared-pending`; two fixtures | §3, §10, §11 |
 | T1i is a heuristic | Inheritance disagrees with about 36% of live pairs, so T1i stays out of the unattended starting set until a 7-day plan-only comparison shows at most 5% disagreement; the starting set is `["W1h","T1f"]`, and T1f applies only to undeclared, parentless, settled cards | §3, §8 |
+
+Owner-authorized decision 9, 2026-11-01 ([#4730 comment](https://github.com/FS-GG/.github/issues/4730#issuecomment-6551301543)), recorded by Root under the owner's
+authorization to make all decisions:
+
+| Decision | Ruling | Where |
+|---|---|---|
+| 9. Delivery closure | Tend closes a Delivery automatically when all its strictly linked PRs are merged (at least one) and none are open, unless the last merge carries `fsgg:delivery-continues/v1`; never an Outcome, never a Blocked card; closed with a comment listing the merged PRs. This amends "tend never closes issues" for Delivery issues only. `closeIssue` (with `addComment`) becomes a typed `CloseDelivery` change and a transport allowlist entry for Deliveries only. C1 is gated on the contract amendment (PR 6) and on the enable file. Until it is enabled, Root applies the rule by sweep | §3, §4, §5, §8, §11, §12 |
