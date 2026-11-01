@@ -115,12 +115,15 @@ module BoardV2Application =
           WriterLock: Result<V2WriterLock.Location, string>
           ConfigHome: string
           StateHome: string
-          SyncDirectory: string -> unit }
+          SyncDirectory: string -> unit
+          /// The kit root holding the installed runtime mirrors of the lifecycle contract (`FSGG_KIT_ROOT`, else
+          /// the git toplevel). Read only when the enable file names a contract-gated rule (#5174).
+          KitRoot: unit -> string option }
 
     /// `board-v2 tend --plan-file NEW [--rules ...]`, or `--plan-file NEW --apply` (#5136 phase 2 PR 4). With
     /// --apply, writes happen only when the enable file is present, mode 0600 and lists rules, and only while
     /// the writer lock is taken (LOCK_NB; a held lock gives a plan-only run). Contract-gated rules are dropped
-    /// until the contract amendment (PR 6). Outcomes are written beside the plan as `<plan>.outcomes.json`.
+    /// unless every installed `lifecycle-contract.md` declares `fsgg:board-tend-contract/v1` (PR 6, #5174). Outcomes are written beside the plan as `<plan>.outcomes.json`.
     val runTend: deps: TendDependencies -> arguments: string list -> int
     /// Recognize board-v2 after validation; refresh composes the qualified writer, inspect only canonical reads.
     val tryRun: arguments: string list -> int option
