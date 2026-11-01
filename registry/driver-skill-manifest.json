@@ -2765,7 +2765,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "3008677b36dec29a4f6df18500cfb3aa79e00c7a9b48c2e1a97eb1665ddcbe6a",
-      "tree-sha256": "69fdb2688a4253eafdef2facc1707d1040f6773299dbae6ef1beb554a41900fd",
+      "tree-sha256": "547cbb943babfe8a779ef45a576f0768604980f617401977ffd2b1da2113025a",
       "files": [
         {
           "path": "SKILL.md",
@@ -2854,7 +2854,7 @@
         },
         {
           "path": "references/organization-v2-inspection.md",
-          "sha256": "e911c9aadc5fe3c44323ebe6643fce9592c17feb2bac528c260540b59f78421e",
+          "sha256": "9bdd341afaeeb0770c77970a744da1b61f5f364047f5958e18b1ce814324bb6e",
           "executable": false
         },
         {
