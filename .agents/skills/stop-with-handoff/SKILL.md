@@ -28,11 +28,13 @@ may need its existing safe retirement/recovery path: do only that necessary
 cleanup, and record any external job that cannot be stopped. Never claim all
 external work stopped when its state is unknown.
 
-Before stopping, push review repairs and in-progress work to the owning PR branch; a draft or WIP
-commit is enough. Do not save patches off the branch or in tmpfs: a PR sat idle about 26 hours on repairs
-saved that way. This pushes work already made and starts no new repair, so it does not breach the stop
-above. Put the pushed head in the restart pointer. If a push cannot land, record the worktree path and the
-blocker as a recovery gap.
+Before stopping, push review repairs and in-progress work to the owning PR branch, so a resume starts
+from durable state instead of patches saved off the branch or in tmpfs. A draft or WIP commit is enough.
+Push only that branch: never the default branch, never with force. A WIP head is unreviewed and merges
+nothing; the PR keeps its normal review, rebind and required checks. Work with no PR yet goes to a new
+`routine/<item-slug>` branch with a draft PR that `Refs` its Delivery. This pushes work already made and
+starts no new repair, so it does not breach the stop above. Put the pushed head in the restart pointer. If
+a push cannot land, record the worktree path and the blocker as a recovery gap.
 
 Close private observations only when their actual attempts are terminal, using
 the real completed, failed, or cancelled outcome; reconcile available usage.

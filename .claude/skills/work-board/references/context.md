@@ -31,9 +31,11 @@ exclusive shared writes and existing source custody.
 
 Before each heavy launch (SDK or re-qualification build/test, native workload, large image build), Root
 runs `scripts/fdev-lane-capacity.py`: one read-only JSON line with CPU count, 1/5/15-minute load,
-MemAvailable, free disk at `$HOME` and active heavy build processes, plus `admit` (exit 0) or `hold`
-(exit 3) with reasons. Defaults hold at 5-minute load of 0.85 x nproc or more, under 6 GiB available or
-under 20 GB free; each is a flag. On `hold`, admit heavy lanes serially: start one, re-run the probe
+MemAvailable, free disk at `$HOME` and active heavy build processes (idle `/nodeReuse:true` MSBuild nodes
+are counted apart), plus `admit` (exit 0) or `hold` (exit 3) with reasons. Defaults hold at 5-minute load
+of 0.85 x nproc or more, under 6 GiB available or under 20 GB free; each is a flag. It applies the probing
+process's own cgroup v2 `cpu.max` and `memory.max` when set and reports host and lane values. On
+`hold`, admit heavy lanes serially: start one, re-run the probe
 when it ends, and leave the others Ready with the hold reason named. An unreadable input is a hold. The
 verdict is a point-in-time sample: it adds to, and never replaces, the reservation view below.
 

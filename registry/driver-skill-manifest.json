@@ -2649,12 +2649,12 @@
     {
       "id": "stop-with-handoff",
       "scope": "driver",
-      "sha256": "de929c0d839826b5b301801d86fcf94bfd2defe531433c960416efe801478301",
-      "tree-sha256": "efb4d46725d55b4bf6e9996200a4c4534127160a228114b3b8564eaa8e66f236",
+      "sha256": "f066b393e0c48f1122487fe30e81536dc23b8a4591c576dcbbf03b0c943ef269",
+      "tree-sha256": "1726cb8802bef7f4ba5636a941ef0cc389d88fe3c32244eda94eb8b2afe5cfd1",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "de929c0d839826b5b301801d86fcf94bfd2defe531433c960416efe801478301",
+          "sha256": "f066b393e0c48f1122487fe30e81536dc23b8a4591c576dcbbf03b0c943ef269",
           "executable": false
         },
         {
@@ -2780,7 +2780,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "3008677b36dec29a4f6df18500cfb3aa79e00c7a9b48c2e1a97eb1665ddcbe6a",
-      "tree-sha256": "afc8b1e3313cc211e6087da88f41fa3e531feee357e70ec232c99412f1961574",
+      "tree-sha256": "f423c3973cbe934d429fd81d03f6667b95fcdc79f1fd4d8b6c75f878320d327c",
       "files": [
         {
           "path": "SKILL.md",
@@ -2809,7 +2809,7 @@
         },
         {
           "path": "references/context.md",
-          "sha256": "b866c8e06b3d38d2493337beb9049bde86120ad0faccec75b773b80713a3d7fb",
+          "sha256": "7763980ff82d821ca338497eff72cf1af71c4f44f733bd8e9a0c403f2ae385d0",
           "executable": false
         },
         {
