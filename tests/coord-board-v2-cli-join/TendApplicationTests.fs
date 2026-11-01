@@ -79,7 +79,8 @@ let private applyDeps (sent: ResizeArray<Request>) (mutations: ResizeArray<Reque
       WriterLock = Ok(FS.GG.Coord.GitHub.V2WriterLock.inDirectory (Path.Combine(root, "lock")) "PVT_kwDOEYAWY84Bldpa" FS.GG.Coord.GitHub.V2WriterLock.migrationLegacyName)
       ConfigHome = Path.Combine(root, "config")
       StateHome = Path.Combine(root, "state")
-      SyncDirectory = ignore }
+      SyncDirectory = ignore
+      KitRoot = fun () -> None }
 
 let private enableFile (root: string) (json: string) (mode: UnixFileMode) =
     let directory = Path.Combine(root, "config", "fsgg")
@@ -133,5 +134,75 @@ let ``tend --apply with a private enable file runs under the writer lock, and a 
         Assert.Equal(0, BoardV2Application.runTend deps [ "--plan-file"; Path.Combine(dir, "b.json"); "--apply" ])
         Assert.True(File.Exists(Path.Combine(dir, "b.json")))
         Assert.False(File.Exists(Path.Combine(dir, "b.json.outcomes.json")))
+        Assert.Empty(mutations)
+    finally Directory.Delete(dir, true)
+
+// ---- the installed contract marker (#5174) ----
+
+let private contractPath (kit: string) (runtime: string) =
+    Path.Combine(kit, runtime, "skills", "work-board", "references", "lifecycle-contract.md")
+
+let private installContract (kit: string) (runtime: string) (text: string) =
+    let path = contractPath kit runtime
+    Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
+    File.WriteAllText(path, text)
+
+let private amended = "# Lifecycle contract\n\n## Board tend automatic writes\n\n<!-- fsgg:board-tend-contract/v1 -->\nThe amendment.\n"
+let private privateFile = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+
+/// Run a gated enable file against a kit tree; true when the run was enabled (an outcomes file exists).
+let private gatedRunEnabled (dir: string) (kit: string option) (name: string) =
+    let sent, mutations = ResizeArray<Request>(), ResizeArray<Request>()
+    let deps = { applyDeps sent mutations dir with KitRoot = fun () -> kit }
+    enableFile dir """{"apply":["C1","S3"]}""" privateFile
+    let plan = Path.Combine(dir, name + ".json")
+    Assert.Equal(0, BoardV2Application.runTend deps [ "--plan-file"; plan; "--apply" ])
+    Assert.True(File.Exists plan)
+    Assert.Empty(mutations)
+    File.Exists(plan + ".outcomes.json")
+
+[<Fact>]
+let ``tend enables gated rules only when the installed contract carries the matching marker`` () =
+    let dir = directory ()
+    try
+        let kit = Path.Combine(dir, "kit")
+        // No installed contract at all, and no kit root: refused.
+        Directory.CreateDirectory kit |> ignore
+        Assert.False(gatedRunEnabled dir (Some kit) "no-contract")
+        Assert.False(gatedRunEnabled dir None "no-kit")
+        // A contract without the marker: refused.
+        installContract kit ".claude" "# Lifecycle contract\n\nno amendment\n"
+        Assert.False(gatedRunEnabled dir (Some kit) "missing")
+        // A wrong version, a marker only quoted in prose or fenced: refused.
+        installContract kit ".claude" "<!-- fsgg:board-tend-contract/v2 -->\n"
+        Assert.False(gatedRunEnabled dir (Some kit) "wrong-version")
+        installContract kit ".claude" "see `<!-- fsgg:board-tend-contract/v1 -->`\n```\n<!-- fsgg:board-tend-contract/v1 -->\n```\n"
+        Assert.False(gatedRunEnabled dir (Some kit) "quoted")
+        // The matching marker: enabled.
+        installContract kit ".claude" amended
+        Assert.True(gatedRunEnabled dir (Some kit) "present")
+        // A second runtime mirror that is stale or at another version keeps them refused; a matching one enables.
+        installContract kit ".agents" "# Lifecycle contract\n"
+        Assert.False(gatedRunEnabled dir (Some kit) "stale-mirror")
+        installContract kit ".agents" "<!-- fsgg:board-tend-contract/v3 -->\n"
+        Assert.False(gatedRunEnabled dir (Some kit) "wrong-mirror")
+        installContract kit ".agents" amended
+        Assert.True(gatedRunEnabled dir (Some kit) "both-present")
+        // A mirror that cannot be read keeps them refused (a privileged process can read anything, so it skips this leg).
+        if not Environment.IsPrivilegedProcess then
+            installContract kit ".agents" amended
+            File.SetUnixFileMode(contractPath kit ".agents", enum<UnixFileMode> 0)
+            Assert.False(gatedRunEnabled dir (Some kit) "unreadable-mirror")
+    finally Directory.Delete(dir, true)
+
+[<Fact>]
+let ``tend never reads the installed contract for ungated rules, and a gated rule with the marker leaves ungated ones unchanged`` () =
+    let dir = directory ()
+    try
+        let sent, mutations = ResizeArray<Request>(), ResizeArray<Request>()
+        let deps = { applyDeps sent mutations dir with KitRoot = fun () -> failwith "an ungated enable file must not read the contract" }
+        enableFile dir """{"apply":["W1h","T1f","GR"],"maxItemsPerRun":10}""" privateFile
+        Assert.Equal(0, BoardV2Application.runTend deps [ "--plan-file"; Path.Combine(dir, "a.json"); "--apply" ])
+        Assert.True(File.Exists(Path.Combine(dir, "a.json.outcomes.json")))
         Assert.Empty(mutations)
     finally Directory.Delete(dir, true)

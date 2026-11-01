@@ -69,6 +69,13 @@ disposition grant no dispatch, reservation release, uncertain-effect retry, Stat
 or closure authority. Do not introduce a separate reporting worker, mandatory packet, duplicate ledger,
 measurement campaign or recurring unchanged reports.
 
+**Triage review findings before merge.** Before merging, Root classifies each finding from an independent
+review as one of two things, and the verdict comment records the classification, one line per finding.
+*Fix-now*: it affects this Delivery's acceptance or the safety of the changed code; repair it on the same
+PR and re-review the moved head. *Follow-up*: it does neither; file a Delivery under OPS-MAINT through
+[canonical intake](intake.md) and name its number in the verdict. A finding left unclassified blocks the
+merge. Deferral is never a default, and a follow-up grants no dispatch.
+
 **Keep an owner for reported finding packets.** Canonical work-board owns coordination.
 When an existing owner reports an evidence-backed distinct finding or a known `fsgg:finding-packet`
 needs disposition, retain that finding and its source identity in the existing owning issue/native

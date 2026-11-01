@@ -224,6 +224,22 @@ module V2TendWrite =
     /// Rules whose enablement needs the contract amendment (`fsgg:board-tend-contract/v1`, design §12 PR 6).
     val contractGated: Set<string>
 
+    /// Whether the installed lifecycle contract carries the board-tend amendment (#5174).
+    type ContractAmendment =
+        | Amended
+        | NotAmended of reason: string
+
+    /// The marker version this engine understands (`fsgg:board-tend-contract/v1`).
+    val contractMarkerVersion: string
+
+    /// The marker versions a document declares: one per marker on a line of its own outside any code fence.
+    val markerVersions: text: string -> string list
+
+    /// Judge the installed contract documents (label and read result of each runtime mirror that exists):
+    /// Amended only when at least one exists, all read, and all declare the supported version; otherwise
+    /// NotAmended with the reason.
+    val contractAmendment: documents: (string * Result<string, string>) list -> ContractAmendment
+
     /// Rules the enable file may name: every Apply rule and GR.
     val enableable: Set<string>
 

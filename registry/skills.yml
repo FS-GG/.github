@@ -107,7 +107,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-10-31"
+updated: "2026-11-01"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -361,7 +361,7 @@ skills:
   - { id: agent-handoff, scope: driver, owner: .github, source: .github/.claude/skills/agent-handoff/SKILL.md, sha256: dd69bc096848ce58d865c785b0fa48a6a049d8d701c00b178d2109739d5b2121, materializes-when: always }
   - { id: continue-from-handoff, scope: driver, owner: .github, source: .github/.claude/skills/continue-from-handoff/SKILL.md, sha256: ee06790ca7a7238d401d61a2dc50ec214ce40a21193e694b60df2ec9bfd66939, materializes-when: always }
   - { id: routine-decisions, scope: driver, owner: .github, source: .github/.claude/skills/routine-decisions/SKILL.md, sha256: 7e7aa6e73d158b9bab2f69c873da502180951289c728669d3bae0620698592f4, materializes-when: always }
-  - { id: stop-with-handoff, scope: driver, owner: .github, source: .github/.claude/skills/stop-with-handoff/SKILL.md, sha256: 0405c82818f7640c23e675813eb5b8c876c03e1c05a94da288131b6246edae05, materializes-when: always }
+  - { id: stop-with-handoff, scope: driver, owner: .github, source: .github/.claude/skills/stop-with-handoff/SKILL.md, sha256: f066b393e0c48f1122487fe30e81536dc23b8a4591c576dcbbf03b0c943ef269, materializes-when: always }
   - { id: work-programme, scope: driver, owner: .github, source: .github/.claude/skills/work-programme/SKILL.md, sha256: c937a9d53215a27fcae1e6cca9dd52df20e3f3ff4754473bccb676149fc82b9e, materializes-when: always }
 
   # work-board — homed beside its owner+predicate siblings and reconciled verbatim from

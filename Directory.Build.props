@@ -640,8 +640,14 @@
        refresh (#5146), shares one flock writer lock (#5141) and lets a strict PR Refs a Delivery (#5138);
        packaged pnext-item and the fsgg-critic agents point to the lifecycle-contract fixture rule.
        SOURCE preparation only; published114 is unchanged and the release is a separate step. -->
+  <!-- 0.114.1 -> 0.114.2 (#5136): coherent PATCH. The CLI adds the guarded `board-v2 tend` writer behind its
+       enable file and its proposals to the findings issue (#5158, #5161), item-scoped migration-apply groups
+       (#5160), content-based ConstructorIdentity (#5147) and `enrollment rebind-reader` (#5152); packaged
+       pnext-item requires the delivery-continues/completes declaration and work-board carries the board-tend
+       contract amendment (#5136 PR 6). SOURCE preparation only; published 0.114.1 is unchanged and the
+       release is a separate step (#5136 PR 7). -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.114.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.114.2</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

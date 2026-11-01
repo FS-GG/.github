@@ -126,8 +126,8 @@ ALLOWED_FILES = frozenset(
         # not fail open, it fails LOUD (the file stops being exempt and its two deliberate mentions
         # become findings), which is the right direction for an allow-list to fail in.
         "tests/FS.GG.Coord.Cli.Kernel.Tests/OptionsTests.fs",
-        # States the rule in its own summary prose.
-        ".github/workflows/engine-flag-narrative.yml",
+        # States the rule in its own summary prose (the gate's steps live in always-gates.yml since .github#5182).
+        ".github/workflows/always-gates.yml",
         # TIER FIVE — found by this gate, on the day it was written, in the tree #917 declared clean.
         # Two dated records of the port that retired the flag. Both are `Status: COMPLETE` manifests
         # whose mentions NARRATE the removal ("`--engine=bash` is gone *because there is no bash left

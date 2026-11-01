@@ -1,4 +1,4 @@
-# Mutation legs for board-v2 tend and its shared write discipline (FS-GG/.github#5136 phase 2 PRs 2-5, #5123; design §3, §5, §6, §8, §10).
+# Mutation legs for board-v2 tend and its shared write discipline (FS-GG/.github#5136 phase 2 PRs 2-5, #5123, #5174; design §3, §5, §6, §8, §10).
 # Each leg reverts ONE guard in V2Tend.fs, V2TendReads.fs, V2TendWrite.fs, V2TendPropose.fs, V2Migration.fs or the board-v2 CLI and requires the V2Tend
 # tests (derivation, reads, writer; `leg.sh`), the tend CLI tests (`leg.sh cli`) or the migration-apply tests
 # (`leg.sh migration`) to fail.
@@ -1170,6 +1170,162 @@ mutations:
       | Some key when false ->
     breaks: >-
       placeholders are computed under a guessable short key
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: MK1/marker-version-exact
+    gate: "the installed contract amends only with the supported marker version"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      | versions when versions |> List.forall (fun v -> v = contractMarkerVersion) -> None
+    replace: |-
+      | versions when versions |> List.forall (fun v -> true) -> None
+    breaks: >-
+      a contract declaring another marker version (v2, an empty version) enables the gated rules
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: MK2/marker-absent-amends
+    gate: "a contract without the marker does not amend"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      | [] -> Some(label + " carries no fsgg:board-tend-contract marker")
+    replace: |-
+      | [] -> None
+    breaks: >-
+      a lifecycle contract with no marker enables the gated rules
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: MK3/marker-fence-counted
+    gate: "a marker inside a code fence is an example, not a declaration"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      elif not fenced then
+                      let m = markerLine.Match line
+    replace: |-
+      else
+                      let m = markerLine.Match line
+    breaks: >-
+      a fenced example of the marker enables the gated rules
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: MK4/marker-line-unanchored
+    gate: "the marker is a line of its own, not a mention"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      Regex(@"^\s*<!--\s*fsgg:board-tend-contract/(\S*?)\s*-->\s*$")
+    replace: |-
+      Regex(@"<!--\s*fsgg:board-tend-contract/(\S*?)\s*-->")
+    breaks: >-
+      prose or an inline quotation of the marker enables the gated rules
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: MK5/mirrors-first-only
+    gate: "every installed contract mirror must declare the marker"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      match verdicts |> List.choose id with
+    replace: |-
+      match verdicts |> List.truncate 1 |> List.choose id with
+    breaks: >-
+      a stale second runtime mirror is ignored once the first declares the marker
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: MK6/no-contract-amends
+    gate: "no installed contract means no amendment"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
+    find: |-
+      if documents.IsEmpty then NotAmended "no installed lifecycle-contract.md was found"
+    replace: |-
+      if false then NotAmended "no installed lifecycle-contract.md was found"
+    breaks: >-
+      a tree with no lifecycle contract enables the gated rules
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: MK7/cli-refused-enables
+    gate: "a NotAmended contract keeps gated rules dropped"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh", "cli"]
+    target: src/FS.GG.Coord.Cli/BoardV2Application.fs
+    find: |-
+      | V2TendWrite.NotAmended reason -> Ok(withoutAmendment, dropped |> List.map (fun message -> message + ": " + reason))
+    replace: |-
+      | V2TendWrite.NotAmended reason -> V2TendWrite.parseEnable json true
+    breaks: >-
+      the engine enables gated rules although the installed contract lacks the marker
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: MK8/cli-marker-ignored
+    gate: "a matching installed marker enables the gated rules"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh", "cli"]
+    target: src/FS.GG.Coord.Cli/BoardV2Application.fs
+    find: |-
+      | V2TendWrite.Amended -> V2TendWrite.parseEnable json true
+    replace: |-
+      | V2TendWrite.Amended -> Ok(withoutAmendment, dropped)
+    breaks: >-
+      the marker is read but never honoured, so the gated rules stay refused for good
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: MK9/cli-ungated-reads-contract
+    gate: "an ungated enable file never reads the installed contract"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh", "cli"]
+    target: src/FS.GG.Coord.Cli/BoardV2Application.fs
+    find: |-
+      | Ok(withoutAmendment, dropped) when dropped.IsEmpty -> Ok(withoutAmendment, dropped)
+    replace: |-
+      | Ok(withoutAmendment, dropped) when false -> Ok(withoutAmendment, dropped)
+    breaks: >-
+      an ungated run depends on the kit tree it runs in
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: MK10/cli-agents-mirror-skipped
+    gate: "both runtime mirrors of the contract are read"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh", "cli"]
+    target: src/FS.GG.Coord.Cli/BoardV2Application.fs
+    find: |-
+                ".agents/skills/work-board/references/lifecycle-contract.md" ]
+    replace: |-
+                ]
+    breaks: >-
+      a stale .agents mirror of the contract is not noticed
+    anchor:
+      pattern: 'board-tend leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-board-tend-mutation/leg.sh
+
+  - id: MK11/cli-no-kit-root-amends
+    gate: "an unavailable kit root keeps gated rules dropped"
+    command: ["bash", "tests/coord-board-tend-mutation/leg.sh", "cli"]
+    target: src/FS.GG.Coord.Cli/BoardV2Application.fs
+    find: |-
+      | None -> V2TendWrite.NotAmended "the kit root is unavailable"
+    replace: |-
+      | None -> V2TendWrite.Amended
+    breaks: >-
+      a run outside any kit tree enables the gated rules
     anchor:
       pattern: 'board-tend leg: \d+ passed, \d+ failed'
       produced_by: tests/coord-board-tend-mutation/leg.sh
