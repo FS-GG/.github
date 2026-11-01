@@ -21,11 +21,13 @@ permissions:
   contents: read
 
 # PR-keyed concurrency (#4730 CI-load, after #4994): this workflow runs on `pull_request_target` only, where
-# `github.ref` is the default branch, so the group is the PR number alone and every event is a PR event.
-# A newer event for the same pull request cancels the superseded run; the moved-base fix (#4994) resolves
-# the base live on every run, so the run that replaces it never depends on the cancelled one's payload.
+# `github.ref` is the default branch, so the key is the PR number and every event is a PR event.
+# A newer head action (opened, synchronize, reopened) cancels the superseded head's run; the moved-base fix
+# (#4994) resolves the base live on every run, so the run that replaces it never depends on the cancelled
+# one's payload. An `edited` run keys on its own `github.run_id` (#5159): it never cancels the head run
+# for the same head and is never cancelled, so no cancelled run is left to re-run on the stale body.
 concurrency:
-  group: routine-eligibility-${{ github.event.pull_request.number }}
+  group: routine-eligibility-${{ contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:

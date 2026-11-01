@@ -186,7 +186,10 @@ class Workflow(unittest.TestCase):
     def test_trigger_and_concurrency(self):
         self.assertEqual(list(self.on), ["pull_request_target"])
         self.assertEqual(self.on["pull_request_target"]["types"], ["opened", "synchronize", "reopened", "edited"])
-        self.assertEqual(self.doc["concurrency"]["group"], "board-linkage-${{ github.event.pull_request.number }}")
+        # Head-keyed (#5159): a body edit keys on its own run id, so it never cancels the head's run.
+        self.assertEqual(self.doc["concurrency"]["group"],
+                         "board-linkage-${{ contains(fromJSON('[\"opened\",\"synchronize\",\"reopened\"]'), "
+                         "github.event.action) && github.event.pull_request.number || github.run_id }}")
 
     def test_one_light_job_named_for_its_context(self):
         self.assertEqual(list(self.doc["jobs"]), ["board-linkage"])

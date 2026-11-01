@@ -2,9 +2,9 @@
 # `concurrency` that stops superseded heads and body edits from holding runners (.github#4730).
 #
 # Gate and fixture are both offline and credential-free. The gate reads the governed workflows' YAML and
-# evaluates their declared group / cancel expressions against GitHub's group semantics; the fixture
-# mutates every governed workflow nine ways (five for the PR-event-only ones) and demands each be refused for the reason that mutation
-# introduces.
+# evaluates their declared group / cancel expressions against GitHub's group semantics, including that a
+# body edit never cancels a head run for the same head (#5159); the fixture mutates every governed
+# workflow and demands each mutant be refused for the reason that mutation introduces.
 #
 # THE `paths:` FILTERS ARE PART OF THE GATE and are IDENTICAL on the pull_request and push triggers
 # (check-paths-coherence.py). They name the governed workflow files individually rather than
@@ -21,6 +21,7 @@ on:
       - ".github/workflows/architecture-map.yml"
       - ".github/workflows/atlas.yml"
       - ".github/workflows/board-paths-live-selftest.yml"
+      - ".github/workflows/board-linkage.yml"
       - ".github/workflows/board-v2-import-preflight.yml"
       - ".github/workflows/c3-audio-ordinary-enrollment-bridge-selftest.yml"
       - ".github/workflows/c3-coordination-ordinary-enrollment-bridge-selftest.yml"
@@ -28,6 +29,7 @@ on:
       - ".github/workflows/c3-governance-ordinary-enrollment-bridge-selftest.yml"
       - ".github/workflows/c3-net-ordinary-enrollment-bridge-selftest.yml"
       - ".github/workflows/c3-rendering-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/closing-keywords.yml"
       - ".github/workflows/coherence.yml"
       - ".github/workflows/coord-report-selftest.yml"
       - ".github/workflows/coordination-sync-selftest.yml"
@@ -62,6 +64,7 @@ on:
       - ".github/workflows/repos-audit-selftest.yml"
       - ".github/workflows/repos-registry-selftest.yml"
       - ".github/workflows/rest-budget-preflight-selftest.yml"
+      - ".github/workflows/reusable-job-id-coherence.yml"
       - ".github/workflows/routine-eligibility.yml"
       - ".github/workflows/routine-eligibility-selftest.yml"
       - ".github/workflows/skill-quality.yml"
@@ -88,6 +91,7 @@ on:
       - ".github/workflows/architecture-map.yml"
       - ".github/workflows/atlas.yml"
       - ".github/workflows/board-paths-live-selftest.yml"
+      - ".github/workflows/board-linkage.yml"
       - ".github/workflows/board-v2-import-preflight.yml"
       - ".github/workflows/c3-audio-ordinary-enrollment-bridge-selftest.yml"
       - ".github/workflows/c3-coordination-ordinary-enrollment-bridge-selftest.yml"
@@ -95,6 +99,7 @@ on:
       - ".github/workflows/c3-governance-ordinary-enrollment-bridge-selftest.yml"
       - ".github/workflows/c3-net-ordinary-enrollment-bridge-selftest.yml"
       - ".github/workflows/c3-rendering-ordinary-enrollment-bridge-selftest.yml"
+      - ".github/workflows/closing-keywords.yml"
       - ".github/workflows/coherence.yml"
       - ".github/workflows/coord-report-selftest.yml"
       - ".github/workflows/coordination-sync-selftest.yml"
@@ -129,6 +134,7 @@ on:
       - ".github/workflows/repos-audit-selftest.yml"
       - ".github/workflows/repos-registry-selftest.yml"
       - ".github/workflows/rest-budget-preflight-selftest.yml"
+      - ".github/workflows/reusable-job-id-coherence.yml"
       - ".github/workflows/routine-eligibility.yml"
       - ".github/workflows/routine-eligibility-selftest.yml"
       - ".github/workflows/skill-quality.yml"

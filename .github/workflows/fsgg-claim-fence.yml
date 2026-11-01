@@ -127,13 +127,15 @@ permissions:
   issues: read     # the gate reads `fsgg:claim` and `fsgg:merge-election` marker comments on the item
                    # the pull request's branch names — both valid `GITHUB_TOKEN` scopes
 
-# PR-keyed concurrency (#4730 CI-load): a newer run for the same pull request cancels the superseded
-# one, so a push or body edit no longer leaves the old head's run to finish and hold a runner. Any
-# other event keys on `github.run_id`, which is unique to the run: GitHub discards an older PENDING run
-# in a shared group even without cancel-in-progress, so a key that two events can share (the branch ref
-# for pushes, or the commit sha for dispatches and issue events at one commit) would drop a run.
+# Head-keyed concurrency (#4730 CI-load, #5159): a head action (opened, synchronize, reopened) keys on
+# the pull request, so a newer head cancels the superseded head's run. Every other event keys on
+# `github.run_id`, which is unique to the run. For a body edit or label event that means it never
+# cancels the head run for the SAME head, and is never cancelled itself: a cancelled required check on a
+# live head reads as failing, and a re-run replays the stale body (#5159). For a non-PR event it means
+# no pending run is dropped: GitHub discards an older PENDING run in a shared group even without
+# cancel-in-progress. scripts/check-pr-concurrency.py derives both from this block.
 concurrency:
-  group: fsgg-claim-fence-${{ github.event.pull_request.number || github.run_id }}
+  group: fsgg-claim-fence-${{ contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
