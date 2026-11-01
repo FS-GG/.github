@@ -3184,12 +3184,12 @@
     {
       "id": "publishing-and-deployment",
       "scope": "operator",
-      "sha256": "81b4288bdcd613a989b70f8d911a07a5474d9cc98e2cce73f199e4f04b57950a",
-      "tree-sha256": "161ad3a859c053071d4747e7f7f2fbe82aa3e6bbefd81d8dc49054bc5b05da13",
+      "sha256": "c21c9a0419e7964ba64748611ec2e63318dbaf7722dcbdc5e263af7d44a99843",
+      "tree-sha256": "cf8b1b34df90d36acf9174a906320e7fa3f9c208eae73a710679b5a4d0834ecb",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "81b4288bdcd613a989b70f8d911a07a5474d9cc98e2cce73f199e4f04b57950a",
+          "sha256": "c21c9a0419e7964ba64748611ec2e63318dbaf7722dcbdc5e263af7d44a99843",
           "executable": false
         },
         {
