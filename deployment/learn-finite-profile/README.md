@@ -89,4 +89,4 @@ secret appearing in the record.
 ## What follows
 
 Later changes, each a separate PR reviewed against these bytes: ack writer r2 (`ack/`), operator r6 (`operator/`), seal and claim tooling (`seal/`),
-the pod operator gate layer (`pod-operator/`), the pod image and role entrypoint (`pod-image/`), finalizer r5, and the pod operator's start with its recovery driver.
+the pod operator gate layer (`pod-operator/`), the pod image and role entrypoint (`pod-image/`), finalizer r5 (`finalizer/`), and the pod operator's start with its recovery driver.
