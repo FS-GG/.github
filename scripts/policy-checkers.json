@@ -126,6 +126,12 @@
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/landed-reverts/run.sh",
       "workflow": ".github/workflows/landed-reverts-selftest.yml"
+    },
+    {
+      "source": "scripts/check-pr-concurrency.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/pr-concurrency/run.sh",
+      "workflow": ".github/workflows/pr-concurrency-coherence.yml"
     }
   ]
 }
