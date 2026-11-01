@@ -47,7 +47,13 @@ module V2TendWrite =
     /// The fixed documents of one change; `mutationId` seeds each `clientMutationId` the response must echo.
     val render: mutationId: string -> change: TendChange -> Request list
 
-    /// Why the allowlist refuses a request, or Ok. `closable` says an issue's C1 close is running.
+    /// The one REST route besides GraphQL: `POST repos/FS-GG/.github/issues/4985/comments` (design §5 route 2).
+    val proposalsPath: string
+    /// The start of the proposals comment marker, `<!-- fsgg:board-tend-proposals/v1 run=`.
+    val proposalsMarker: string
+
+    /// Why the allowlist refuses a request, or Ok. `closable` says an issue's C1 close is running. The proposals
+    /// route is admitted only for a JSON body that is exactly `{"body": text}` with the marker once.
     val admits: projectId: string -> closable: (string -> bool) -> request: Request -> Result<unit, string>
 
     /// Wrap a one-shot mutation sender: a request `admits` refuses is never dispatched.
@@ -76,6 +82,10 @@ module V2TendWrite =
     /// Re-read one item, its project's field schema and the given deciding PRs in one request. Any truncated
     /// connection, a field with two values, or an unreadable PR is an error.
     val readItem: transport: IGitHubTransport -> itemId: string -> prs: string list -> Result<ItemState, string>
+
+    /// Atomically and durably replace a private file: a 0600 temporary written through and flushed, renamed over
+    /// the path, then the directory synced.
+    val atomicWrite: syncDirectory: (string -> unit) -> path: string -> json: string -> unit
 
     val custodySchema: string
 
