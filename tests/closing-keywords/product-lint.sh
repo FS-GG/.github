@@ -385,6 +385,36 @@ if [ "$RC" = 1 ] && [ -z "$leaked" ] && ! grep -q $'\r' <<<"$OUT"; then
   ok "B23 a title carrying CR plus ::error:: fails the job and stays inert in the log (no CR, no forged command)"
 else bad "B23 (rc=$RC)" "$leaked"; fi
 
+# =============================================================================================
+# C. THE CALLABLE DOOR (.github#5195): closing-keywords-receiver.yml
+# =============================================================================================
+# A repository that is not a coordination-kit receiver cannot call kit-materialize.yml (it needs the App
+# secrets, a kit pin and a receiver project), so the same job is callable on its own. There is ONE lint:
+# the receiver workflow's job must be the kit job, step for step, so every B leg above covers both.
+
+RWF="$REPO_ROOT/.github/workflows/closing-keywords-receiver.yml"
+
+python3 - "$WF" "$RWF" <<'PY' && ok "C1  the receiver workflow's closing-keywords job is identical to the kit job except its check name (one lint, two doors)" || bad "C1  the receiver workflow's job differs from the kit job: fix both or neither"
+import sys, yaml
+kit = yaml.safe_load(open(sys.argv[1]))["jobs"]["closing-keywords"]
+rec = yaml.safe_load(open(sys.argv[2]))["jobs"]["closing-keywords"]
+assert rec.pop("name") == "title-and-body", "the receiver job's check name is its own (check-job-uniqueness.py)"
+assert kit.pop("name") == "closing-keywords"
+assert kit == rec, "job bodies differ"
+PY
+
+python3 - "$RWF" <<'PY' && ok "C2  the receiver workflow is workflow_call only, holds exactly the two read scopes, has one job and reads no secret" || bad "C2  the receiver workflow's trigger, permissions, job count or secret use is wrong"
+import json, sys, yaml
+wf = yaml.safe_load(open(sys.argv[1]))
+on = wf.get(True, wf.get("on"))            # PyYAML reads the key `on` as boolean True
+assert list(on) == ["workflow_call"], on
+assert on["workflow_call"] in (None, {}), "no inputs and no secrets: a caller passes nothing"
+assert wf["permissions"] == {"contents": "read", "pull-requests": "read"}, wf["permissions"]
+assert list(wf["jobs"]) == ["closing-keywords"]
+assert "secrets." not in json.dumps(wf)
+assert "concurrency" not in json.dumps(wf["jobs"]), "a job-level concurrency block is refused (check-pr-concurrency.py)"
+PY
+
 echo
 echo "closing-keywords product-lint: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1
