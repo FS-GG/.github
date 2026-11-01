@@ -22,6 +22,7 @@ import sys
 import time
 import zipfile
 
+import release_route
 import release_source_closure
 from release_successor_admission import SingleOperatorAdmission, publisher_context_authorized
 from release_successor_execution import Refused, advance, ordered_effects, full_transition
@@ -35,7 +36,6 @@ from release_successor_provider import (GitHubAPI, MetadataRequestBudget, INSTAL
 REPOSITORY = "FS-GG/.github"
 CANDIDATE_CLOSURE = "coherent-set"
 SUCCESSOR_VERSION = CURRENT_RELEASE["version"]
-SUCCESSOR_PREDECESSOR = CURRENT_RELEASE["predecessor"]
 SUCCESSOR_REF = CURRENT_RELEASE["logicalRef"]
 ORIGINAL_SUCCESSOR_VERSION = "0.102.0"
 ORIGINAL_SUCCESSOR_PREDECESSOR = "0.101.0"
@@ -328,7 +328,9 @@ def selected_release_binding(args):
         return (ORIGINAL_SUCCESSOR_VERSION, ORIGINAL_SUCCESSOR_PREDECESSOR, ORIGINAL_SUCCESSOR_REF)
     historical = any(getattr(args, flag, False) for flag in
                      ("recovery_checkpoint", "repeat_original_nuget_kit_intent", "recover_original_runtime_intent"))
-    return ("0.101.0", "0.100.0", REF) if historical else (SUCCESSOR_VERSION, SUCCESSOR_PREDECESSOR, SUCCESSOR_REF)
+    # The current predecessor is derived, not pinned (#5156): None until bind_current_predecessor() binds
+    # the authenticated candidate's promoted channel; every later comparison reads the bound value.
+    return ("0.101.0", "0.100.0", REF) if historical else (SUCCESSOR_VERSION, CURRENT_RELEASE.get("predecessor"), SUCCESSOR_REF)
 
 
 def require(condition: bool, reason: str) -> None:
@@ -2014,6 +2016,43 @@ def run_original_runtime_recovery(manifest, journal, admission, provider, ledger
     return "checkpoint"  # Still26/intent: no final read, settlement or later effect.
 
 
+def bind_current_predecessor(api, raw: bytes, version: str) -> dict:
+    """Bind CURRENT_RELEASE's predecessor from the candidate's promoted channel, read live (#5156).
+
+    The candidate derived this channel on protected main from the newest promoted coherent-set release
+    below the version and checked it against that release's tag. The publisher does not trust that
+    derivation: it reads the same release and tag again and binds only when the release is promoted
+    (not a draft or prerelease), carries exactly these channel bytes as its uploaded `stable-channel.json`,
+    and its tag names the channel's source commit.
+    """
+    try:
+        identity = release_route.channel_identity(raw)
+    except release_route.RouteRefused as error:
+        raise Refused(f"current accepted predecessor channel is malformed: {error}") from None
+    require(release_route.parts(identity["version"]) < release_route.parts(version),
+            "current accepted predecessor is not strictly older than the version")
+    tag = release_route.TAG_PREFIX + identity["version"]
+    release = api.get(f"repos/{REPOSITORY}/releases/tags/{tag}")
+    require(isinstance(release, dict) and release.get("tag_name") == tag and release.get("draft") is False
+            and release.get("prerelease") is False and isinstance(release.get("id"), int),
+            "current accepted predecessor release is not promoted")
+    assets = api.get(f"repos/{REPOSITORY}/releases/{release['id']}/assets?per_page=100")
+    channel = [row for row in assets if isinstance(row, dict) and row.get("name") == "stable-channel.json"] \
+        if isinstance(assets, list) else []
+    require(len(channel) == 1 and channel[0].get("state") == "uploaded" and channel[0].get("size") == len(raw)
+            and channel[0].get("digest") == "sha256:" + hashlib.sha256(raw).hexdigest(),
+            "current accepted predecessor channel differs from its promoted release asset")
+    ref = api.get(f"repos/{REPOSITORY}/git/ref/tags/{tag}")
+    obj = ref.get("object", {}) if isinstance(ref, dict) else {}
+    require(obj.get("type") == "commit" and obj.get("sha") == identity["sourceSha"],
+            "current accepted predecessor tag does not name the channel's source")
+    try:
+        CURRENT_RELEASE.bind(identity)
+    except release_route.RouteRefused as error:
+        raise Refused(str(error)) from None
+    return identity
+
+
 def execute_publisher(args, report):
     version, predecessor, selected_ref = selected_release_binding(args)
     continuation = bool(getattr(args, "continue_original_0104_checkpoint", False))
@@ -2135,12 +2174,13 @@ def execute_publisher(args, report):
     manifest = json.loads(manifest_bytes)
     require(manifest["descriptor"]["version"] == version, "publisher version differs")
     if selected_ref == CURRENT_RELEASE["logicalRef"]:
-        require(manifest["descriptor"].get("previousStableVersion") == predecessor, "publisher predecessor differs")
-        previous = json.loads((candidate / "previous-stable-channel.json").read_bytes())
-        require(previous.get("version") == CURRENT_RELEASE["predecessor"]
-                and previous.get("sourceSha") == CURRENT_RELEASE["predecessorSource"]
-                and previous.get("contentId") == CURRENT_RELEASE["predecessorContentId"]
-                and manifest["descriptor"].get("previousStableContentId") == CURRENT_RELEASE["predecessorContentId"],
+        report["stage"] = "predecessor-binding"
+        identity = bind_current_predecessor(api, (candidate / "previous-stable-channel.json").read_bytes(), version)
+        predecessor = identity["version"]
+        require(manifest["descriptor"].get("previousStableVersion") == identity["version"] == CURRENT_RELEASE["predecessor"],
+                "publisher predecessor differs")
+        require(manifest["descriptor"].get("previousStableContentId") == identity["contentId"]
+                == CURRENT_RELEASE["predecessorContentId"],
                 "current accepted predecessor identity differs")
     if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery:
         require(candidate_source == RECOVERY_CANDIDATE["sourceSha"]

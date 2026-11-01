@@ -66,6 +66,18 @@ publisher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(publisher)
 _, BINDING = publisher.authority_protection()
 PREFIX = f"repos/{REPOSITORY}"
+import release_route  # noqa: E402
+
+# The current release is derived from the version bump (#5156). Its predecessor is a synthetic promoted
+# identity below it, bound once here as the publisher would bind the real one after reading its promoted
+# release and tag; no test in this file names a real version, journal or predecessor of the current route.
+CURRENT = publisher.CURRENT_RELEASE["version"]
+_major, _minor, _patch = release_route.parts(CURRENT)
+PREVIOUS = f"{_major}.{_minor}.{_patch - 1}" if _patch else f"{_major}.{_minor - 1}.0" if _minor else f"{_major - 1}.0.0"
+PREVIOUS_IDENTITY = {"version": PREVIOUS, "sourceSha": "3c" * 20, "contentId": "sha256:" + "3c" * 32}
+publisher.CURRENT_RELEASE.bind(PREVIOUS_IDENTITY)
+CURRENT_SUFFIX = publisher.CURRENT_RELEASE["logicalRef"].removeprefix("refs/heads/fsgg/v2/journal/release/")
+PREVIOUS_SUFFIX = release_route.journal_name(PREVIOUS)
 
 
 def manifest():
@@ -1626,19 +1638,95 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
             self.assertEqual(publisher.main(),1);self.assertIn('runtime upload uncertain',output.getvalue());self.assertIn('report unavailable',output.getvalue())
 
 
+class PromotedPredecessorBindingTests(unittest.TestCase):
+    """bind_current_predecessor: the publisher re-reads the candidate's promoted predecessor (#5156)."""
+    def setUp(self):
+        self.raw = canonical({**PREVIOUS_IDENTITY, 'promotedAt': '2026-10-31T15:54:06Z'})
+        self.tag = 'coherent-set/v' + PREVIOUS
+        self.release = {'id': 77, 'tag_name': self.tag, 'draft': False, 'prerelease': False}
+        self.assets = [{'id': 78, 'name': 'stable-channel.json', 'state': 'uploaded', 'size': len(self.raw),
+                        'digest': 'sha256:' + hashlib.sha256(self.raw).hexdigest()}]
+        self.ref = {'ref': 'refs/tags/' + self.tag, 'object': {'type': 'commit', 'sha': PREVIOUS_IDENTITY['sourceSha']}}
+        self.current = release_route.CurrentRelease(release_route.current(CURRENT))
+        patcher = patch.object(publisher, 'CURRENT_RELEASE', self.current)
+        patcher.start(); self.addCleanup(patcher.stop)
+
+    def api(self):
+        reads = {f'repos/FS-GG/.github/releases/tags/{self.tag}': self.release,
+                 'repos/FS-GG/.github/releases/77/assets?per_page=100': self.assets,
+                 f'repos/FS-GG/.github/git/ref/tags/{self.tag}': self.ref}
+        calls = []
+        def get(path):
+            calls.append(path)
+            if path not in reads:
+                raise NotFound(path)
+            return copy.deepcopy(reads[path])
+        return types.SimpleNamespace(get=get, calls=calls)
+
+    def test_binds_only_after_reading_the_promoted_release_asset_and_tag(self):
+        with self.assertRaisesRegex(release_route.RouteRefused, 'not bound'):
+            self.current['predecessor']
+        api = self.api()
+        identity = publisher.bind_current_predecessor(api, self.raw, CURRENT)
+        self.assertEqual(identity, PREVIOUS_IDENTITY)
+        self.assertEqual(len(api.calls), 3)
+        self.assertEqual((self.current['predecessor'], self.current['predecessorSource'], self.current['predecessorContentId']),
+                         (PREVIOUS, PREVIOUS_IDENTITY['sourceSha'], PREVIOUS_IDENTITY['contentId']))
+
+    def test_every_live_mismatch_refuses_before_binding(self):
+        mutants = [
+            ('draft', lambda: self.release.update(draft=True), 'release is not promoted'),
+            ('prerelease', lambda: self.release.update(prerelease=True), 'release is not promoted'),
+            ('other tag', lambda: self.release.update(tag_name='coherent-set/v0.1.0'), 'release is not promoted'),
+            ('asset digest', lambda: self.assets[0].update(digest='sha256:' + 'e' * 64), 'promoted release asset'),
+            ('asset size', lambda: self.assets[0].update(size=1), 'promoted release asset'),
+            ('asset state', lambda: self.assets[0].update(state='starter'), 'promoted release asset'),
+            ('asset missing', lambda: self.assets.clear(), 'promoted release asset'),
+            ('asset twice', lambda: self.assets.append(dict(self.assets[0], id=79)), 'promoted release asset'),
+            ('tag elsewhere', lambda: self.ref['object'].update(sha='e' * 40), 'tag does not name'),
+            ('annotated tag', lambda: self.ref['object'].update(type='tag'), 'tag does not name'),
+        ]
+        for name, mutate, reason in mutants:
+            with self.subTest(mutant=name):
+                self.setUp(); mutate()
+                with self.assertRaisesRegex(publisher.Refused, reason):
+                    publisher.bind_current_predecessor(self.api(), self.raw, CURRENT)
+                self.assertFalse(self.current.bound())
+        for name, raw, reason in (
+                ('not older', canonical({**PREVIOUS_IDENTITY, 'version': CURRENT, 'promotedAt': '2026-10-31T15:54:06Z'}), 'not strictly older'),
+                ('malformed', b'{}', 'channel is malformed')):
+            with self.subTest(mutant=name):
+                self.setUp()
+                with self.assertRaisesRegex(publisher.Refused, reason):
+                    publisher.bind_current_predecessor(self.api(), raw, CURRENT)
+                self.assertFalse(self.current.bound())
+
+    def test_a_second_different_predecessor_is_refused(self):
+        publisher.bind_current_predecessor(self.api(), self.raw, CURRENT)
+        other = {**PREVIOUS_IDENTITY, 'contentId': 'sha256:' + 'e' * 64}
+        raw = canonical({**other, 'promotedAt': '2026-10-31T15:54:06Z'})
+        self.assets[0].update(size=len(raw), digest='sha256:' + hashlib.sha256(raw).hexdigest())
+        with self.assertRaisesRegex(publisher.Refused, 'different predecessor'):
+            publisher.bind_current_predecessor(self.api(), raw, CURRENT)
+
+
 class SelectedReleaseBindingTests(unittest.TestCase):
-    def test_current_default_has_1141_114_and_selected_board_reader_identity(self):
+    def test_current_default_derives_the_version_bump_and_binds_the_promoted_predecessor(self):
         args = types.SimpleNamespace(recovery_checkpoint=False, repeat_original_nuget_kit_intent=False,
                                      recover_original_runtime_intent=False)
         self.assertEqual(publisher.selected_release_binding(args),
-                         ("0.114.1", "0.114.0", "refs/heads/fsgg/v2/journal/release/coord1141-board-reader-20261101-01"))
+                         (release_route.props_version(), PREVIOUS,
+                          "refs/heads/fsgg/v2/journal/release/" + release_route.journal_name(CURRENT)))
 
-    def test_current_profile_binds_promoted114_and_cannot_claim_old_journals(self):
+    def test_current_profile_binds_the_promoted_predecessor_and_cannot_claim_old_journals(self):
         self.assertEqual(set(publisher.CURRENT_RELEASE), {'version','predecessor','logicalRef','directory','predecessorSource','predecessorContentId'})
-        self.assertEqual(publisher.CURRENT_RELEASE['predecessorSource'],'3c13e67f56de25041c6a5f9de85c54d178134956')
-        self.assertEqual(publisher.CURRENT_RELEASE['predecessorContentId'],'sha256:250a010e27ebcc43007ea72bbdf01fddbabc45c2a85feabde3268d095d91d01c')
-        self.assertEqual(publisher.CURRENT_RELEASE['directory'],'state/releases/coord1141-board-reader-20261101-01')
-        for suffix in ('utel-rel-23','utel-rel-24','utel-rel-25','utel-rel-26','utel-rel-27','coord110-observer-20261020-01','coord111-resource-aware-20261021-01','coord112-skill-routing-20261021-01','coord113-claude-usage-20261023-01','coord114-enrollment-context-20261031-01'):
+        self.assertEqual(publisher.CURRENT_RELEASE['predecessorSource'],PREVIOUS_IDENTITY['sourceSha'])
+        self.assertEqual(publisher.CURRENT_RELEASE['predecessorContentId'],PREVIOUS_IDENTITY['contentId'])
+        self.assertEqual(publisher.CURRENT_RELEASE['directory'],'state/releases/'+release_route.journal_name(CURRENT))
+        # Every journal allocated before derivation, and the derived predecessor's, is a refused prior journal.
+        priors = {'utel-rel-23','utel-rel-24','utel-rel-25','utel-rel-26','utel-rel-27',PREVIOUS_SUFFIX,
+                  *(name for version, name in release_route.ALLOCATED.items() if version != CURRENT)}
+        for suffix in sorted(priors):
             authority=MemoryAuthority()
             with self.subTest(prior=suffix),self.assertRaisesRegex(JournalRefused,'different owner or profile'):
                 ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/'+suffix,
@@ -1649,7 +1737,7 @@ class SelectedReleaseBindingTests(unittest.TestCase):
         authority=MemoryAuthority()
         journal=ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/utel-rel-27',main_directory=True)
         authority.calls.clear()
-        intent={'version':'0.114.1','sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
+        intent={'version':CURRENT,'sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
                 'candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
         with self.assertRaisesRegex(JournalRefused,'different journal identity'):
             journal.initialize(intent)
@@ -1659,7 +1747,7 @@ class SelectedReleaseBindingTests(unittest.TestCase):
         authority=MemoryAuthority()
         journal=ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/coord110-observer-20261020-01',main_directory=True)
         authority.calls.clear()
-        intent={'version':'0.114.1','sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
+        intent={'version':CURRENT,'sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
                 'candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
         with self.assertRaisesRegex(JournalRefused,'different journal identity'):
             journal.initialize(intent)
@@ -1669,7 +1757,7 @@ class SelectedReleaseBindingTests(unittest.TestCase):
         authority=MemoryAuthority()
         journal=ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/coord111-resource-aware-20261021-01',main_directory=True)
         authority.calls.clear()
-        intent={'version':'0.114.1','sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
+        intent={'version':CURRENT,'sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
                 'candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
         with self.assertRaisesRegex(JournalRefused,'different journal identity'):
             journal.initialize(intent)
@@ -1679,7 +1767,7 @@ class SelectedReleaseBindingTests(unittest.TestCase):
         authority=MemoryAuthority()
         journal=ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/coord112-skill-routing-20261021-01',main_directory=True)
         authority.calls.clear()
-        intent={'version':'0.114.1','sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
+        intent={'version':CURRENT,'sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
                 'candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
         with self.assertRaisesRegex(JournalRefused,'different journal identity'):
             journal.initialize(intent)
@@ -1689,17 +1777,18 @@ class SelectedReleaseBindingTests(unittest.TestCase):
         authority=MemoryAuthority()
         journal=ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/coord113-claude-usage-20261023-01',main_directory=True)
         authority.calls.clear()
-        intent={'version':'0.114.1','sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
+        intent={'version':CURRENT,'sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
                 'candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
         with self.assertRaisesRegex(JournalRefused,'different journal identity'):
             journal.initialize(intent)
         self.assertFalse(any(method in {'post','patch'} for method,_ in authority.calls))
 
-    def test_current1141_cannot_initialize_consumed114_journal(self):
+    def test_current_cannot_initialize_the_consumed_predecessor_journal(self):
+        self.assertNotEqual(PREVIOUS_SUFFIX, CURRENT_SUFFIX)
         authority=MemoryAuthority()
-        journal=ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/coord114-enrollment-context-20261031-01',main_directory=True)
+        journal=ProtectedReleaseJournal(authority,'refs/heads/fsgg/v2/journal/release/'+PREVIOUS_SUFFIX,main_directory=True)
         authority.calls.clear()
-        intent={'version':'0.114.1','sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
+        intent={'version':CURRENT,'sourceSha':'b'*40,'contentId':'sha256:'+'b'*64,
                 'candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
         with self.assertRaisesRegex(JournalRefused,'different journal identity'):
             journal.initialize(intent)
@@ -2481,7 +2570,7 @@ class SuspensionControls(SuspensionFixture):
             self.assertLess(fence,workflow.index(name))
         self.assertNotIn('disposition_json:',workflow)
         candidate = (ROOT/'.github/workflows/release-successor-candidate.yml').read_text()
-        self.assertIn('test "$version" = 0.114.1',candidate)
+        self.assertIn('version="$(python3 scripts/release_route.py version)"',candidate)
         self.assertNotIn('-p:Version=',candidate)
         self.assertIn('name: release-successor-candidate-${{ github.sha }}-${{ github.run_id }}',candidate)
         self.assertIn('Separate evidence: never add a member to the exact seven-member publisher archive.',candidate)
@@ -2492,8 +2581,8 @@ class LiteralForwardControls(SuspensionFixture):
     def context(self):
         if not hasattr(self,'_forward_base'):self._forward_base=copy.deepcopy(self.authority)
         self.authority=copy.deepcopy(self._forward_base)
-        self.install();self.authority.logical_ref=publisher.CURRENT_RELEASE['logicalRef'];self.authority.directory_suffix='coord1141-board-reader-20261101-01';self.authority.calls.clear()
-        candidate=manifest();candidate['descriptor'].update(version='0.114.1',previousStableVersion='0.114.0')
+        self.install();self.authority.logical_ref=publisher.CURRENT_RELEASE['logicalRef'];self.authority.directory_suffix=CURRENT_SUFFIX;self.authority.calls.clear()
+        candidate=manifest();candidate['descriptor'].update(version=CURRENT,previousStableVersion=PREVIOUS)
         candidate['contentId']='sha256:'+hashlib.sha256(json.dumps(candidate['descriptor'],sort_keys=True,separators=(',',':')).encode()).hexdigest()
         counted=publisher.CountedAuthorityAPI(self.authority,ceiling=1500,quota_floor=1800);counted.admit_quota()
         shared=self.mod.ReleaseSuspension(counted);rows=report();native=MemoryPublisher()
@@ -2510,7 +2599,7 @@ class LiteralForwardControls(SuspensionFixture):
             if observation.state=='matched' and observation.observed_digest==effect.target_digest:return 'potential'
             raise publisher.Refused('inert pending witness '+observation.state)
         provider.ordinary_visibility=visibility
-        intent={'contentId':candidate['contentId'],'sourceSha':'b'*40,'version':'0.114.1','candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
+        intent={'contentId':candidate['contentId'],'sourceSha':'b'*40,'version':CURRENT,'candidateArchiveSha256':'c'*64,'operator':'EHotwagner'}
         publisher.prepare_release_journal(journal,counted,admission,provider,native,candidate,intent,'b'*40,'b'*40,False,lambda:None)
         journal.capture();ticks=[0];sleeps=[]
         def sleep(seconds):sleeps.append(seconds);ticks[0]+=seconds
@@ -2578,7 +2667,7 @@ class LiteralForwardControls(SuspensionFixture):
                             if '/actions/runs/' in path:row['status']='cancelled'
                             return row
                         native.get=get
-                    elif mode=='suspension':self.add_file('state/releases/coord1141-board-reader-20261101-01/release-state.json',canonical(journal._observed.state)+b' ')
+                    elif mode=='suspension':self.add_file('state/releases/'+CURRENT_SUFFIX+'/release-state.json',canonical(journal._observed.state)+b' ')
                     else:next(iter(self.authority.controls.values()))['enforcement']='disabled'
                 with self.assertRaises(RuntimeError):run(sleep=sleep)
                 self.assertEqual(provider.dispatched,['tag']);self.assertEqual(sleeps,[5])
@@ -3595,20 +3684,20 @@ class OrdinaryCallerControls(SuspensionFixture):
         self.add_file('state/releases/utel-rel-27/release-head.txt',self.promoted109_head)
         # Synthetic completed110 sibling uses the genuine promoted predecessor identity.
         # Fixture Git bytes/head remain inert; native completion is independently read.
-        self.promoted110_fixture=canonical({'schema':self.mod.SCHEMA,'version':'0.114.0',
-            'sourceSha':'3c13e67f56de25041c6a5f9de85c54d178134956',
-            'contentId':'sha256:250a010e27ebcc43007ea72bbdf01fddbabc45c2a85feabde3268d095d91d01c',
+        self.promoted110_fixture=canonical({'schema':self.mod.SCHEMA,'version':PREVIOUS,
+            'sourceSha':PREVIOUS_IDENTITY['sourceSha'],
+            'contentId':PREVIOUS_IDENTITY['contentId'],
             'candidateArchiveSha256':'0'*64,'operator':'EHotwagner','generation':33,
             'effects':{effect.identity:'verified' for effect in ordered_effects(manifest())}})
         self.promoted110_head=b'0000000000000000000000000000000000000000\n'
         self.add_file('state/releases/coord110-observer-20261020-01/release-state.json',self.promoted110_fixture)
         self.add_file('state/releases/coord110-observer-20261020-01/release-head.txt',self.promoted110_head)
-        self.authority.directory_suffix='coord1141-board-reader-20261101-01';self.authority.logical_ref=publisher.CURRENT_RELEASE['logicalRef']
+        self.authority.directory_suffix=CURRENT_SUFFIX;self.authority.logical_ref=publisher.CURRENT_RELEASE['logicalRef']
         for n in range(history):self.add_file('state/ordinary/cold-history.json',canonical({'generation':n}))
-        self.native=Literal104ProviderFixture(self.root,None,version="0.114.1")
+        self.native=Literal104ProviderFixture(self.root,None,version=CURRENT)
         stream=io.BytesIO()
         with zipfile.ZipFile(stream,'w') as archive:
-            for name in [*(f'{package}.0.114.1.nupkg' for package in PACKAGES),
+            for name in [*(f'{package}.{CURRENT}.nupkg' for package in PACKAGES),
                          'release-manifest.json','previous-stable-channel.json',
                          'standalone-telemetry-evidence.json','standalone-telemetry-runtime-evidence.json']:
                 archive.writestr(name,(self.root/name).read_bytes())
@@ -3637,6 +3726,16 @@ class OrdinaryCallerControls(SuspensionFixture):
                 return {'id':43,'name':f"release-successor-candidate-{self.source}-42",'expired':False,
                         'digest':'sha256:'+self.digest,'workflow_run':{'id':42,'head_sha':self.source,'head_branch':'main',
                         'repository_id':1269292704,'head_repository_id':1269292704}}
+            # The promoted predecessor the publisher reads live before binding it (#5156).
+            previous_tag='coherent-set/v'+PREVIOUS
+            if path.endswith('/releases/tags/'+previous_tag):
+                return {'id':77,'tag_name':previous_tag,'draft':False,'prerelease':False}
+            if path.endswith('/releases/77/assets?per_page=100'):
+                raw=(self.root/'previous-stable-channel.json').read_bytes()
+                return [{'id':78,'name':'stable-channel.json','state':'uploaded','size':len(raw),
+                         'digest':'sha256:'+hashlib.sha256(raw).hexdigest()}]
+            if path.endswith('/git/ref/tags/'+previous_tag):
+                return {'ref':'refs/tags/'+previous_tag,'object':{'type':'commit','sha':PREVIOUS_IDENTITY['sourceSha']}}
             value=_original_get(path)
             hidden=self.hide_effect
             if hidden=='tag' and '/git/ref/tags/' in path:raise NotFound(path)
@@ -3645,7 +3744,7 @@ class OrdinaryCallerControls(SuspensionFixture):
                 if '/releases?' in path:return []
             if hidden=='promote' and '/releases/tags/' in path:value['draft']=True
             if hidden and '/assets?per_page=100' in path:
-                name={**{f'archive-asset:{package}':f'{package}.0.114.1.nupkg' for package in PACKAGES},
+                name={**{f'archive-asset:{package}':f'{package}.{CURRENT}.nupkg' for package in PACKAGES},
                       'qualification-asset:evidence':'standalone-telemetry-evidence.json',
                       'qualification-asset:runtime':'standalone-telemetry-runtime-evidence.json',
                       'channel-asset':'stable-channel.json','manifest-asset':'release-manifest.json'}.get(hidden)
@@ -3715,7 +3814,7 @@ class OrdinaryCallerControls(SuspensionFixture):
                 return types.SimpleNamespace(returncode=0)
             if len(argv)>1 and argv[1].endswith('check-release-candidate-uniqueness.py'):
                 self.local_ports.append('uniqueness-external-port')
-                self.assertEqual(argv[2:],['--version','0.114.1','--predecessor','0.114.0'])
+                self.assertEqual(argv[2:],['--version',CURRENT,'--predecessor',PREVIOUS])
                 self.assertFalse(self.native.feeds);self.assertIsNone(self.native.release)
                 return types.SimpleNamespace(returncode=0)
             self.local_ports.append('inert-nuget-send' if argv[:3]==['dotnet','nuget','push'] else 'saga:'+argv[2])
@@ -3912,7 +4011,7 @@ class OrdinaryCallerControls(SuspensionFixture):
                             return row
                         self.native.get=get
                     elif mode=='protection':next(iter(self.authority.controls.values()))['enforcement']='disabled'
-                    else:self.external_file('state/releases/coord1141-board-reader-20261101-01/release-state.json',canonical(self.rows['lastObservedJournal'])+b' ')
+                    else:self.external_file('state/releases/'+CURRENT_SUFFIX+'/release-state.json',canonical(self.rows['lastObservedJournal'])+b' ')
                 self.on_sleep=change
                 with self.assertRaises(RuntimeError):self.invoke_caller()
                 self.assertEqual(self.dispatches,['tag'])
@@ -4006,7 +4105,7 @@ class OrdinaryCallerControls(SuspensionFixture):
                         name='release-state.json' if mode=='state' else 'release-head.txt'
                         expected=self.providers[0]._ordinary_expected_journal
                         raw=expected[1]+b' ' if mode=='state' else ('e'*40+'\n').encode()
-                        self.external_file('state/releases/coord1141-board-reader-20261101-01/'+name,raw)
+                        self.external_file('state/releases/'+CURRENT_SUFFIX+'/'+name,raw)
                 self.on_prepare=prepare
                 with self.assertRaises(RuntimeError):self.invoke_caller()
                 self.assertIsNone(self.native.tag);self.assertEqual(self.publisher_ports.count('post'),0)
