@@ -34,13 +34,25 @@ WRITE_READBACK_BACKOFF_SECONDS = (1.0, 2.0, 4.0)
 PATH = "release-state.json"
 SCHEMA = "fsgg.release-successor-journal/1"
 
-# One prospective root-selected source composition; no namespace allocation or effect authority.
-# Completed110/observer journal and frozen original cuts remain immutable.
-CURRENT_RELEASE = {"version": "0.114.1", "predecessor": "0.114.0",
-    "logicalRef": "refs/heads/fsgg/v2/journal/release/coord1141-board-reader-20261101-01",
-    "directory": "state/releases/coord1141-board-reader-20261101-01",
-    "predecessorSource": "3c13e67f56de25041c6a5f9de85c54d178134956",
-    "predecessorContentId": "sha256:250a010e27ebcc43007ea72bbdf01fddbabc45c2a85feabde3268d095d91d01c"}
+# The current release is derived from the version bump (#5156), never rebound per release: the version
+# is FsggCoherentSetVersion in Directory.Build.props and the journal namespace is unique per version
+# (release_route.journal_name). The predecessor is bound at run time from the authenticated candidate's
+# promoted stable channel, after the publisher reads that channel's release and tag live; reading it
+# before then refuses. No namespace allocation or effect authority. Completed earlier journals and
+# frozen original cuts remain immutable.
+class _RouteUnavailable(dict):
+    """The current release in a closure without the route (authority-state-import.py's pinned three-file
+    generator): every read refuses, so that closure can never act on the current release."""
+    def __missing__(self, key):
+        raise Refused("the current release route is unavailable in this source closure")
+
+
+try:
+    import release_route
+except ImportError:
+    CURRENT_RELEASE = _RouteUnavailable()
+else:
+    CURRENT_RELEASE = release_route.current_release()
 
 
 

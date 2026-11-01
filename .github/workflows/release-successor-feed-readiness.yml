@@ -2,6 +2,9 @@ name: release-successor-feed-readiness
 
 # Default: prospective coherent-set freshness; explicit Host choice: published org bytes.
 # This does not select a release, qualify source bytes, or authorize publication.
+# The coherent choice names no version (#5156): it observes the FsggCoherentSetVersion in
+# Directory.Build.props against the newest promoted coherent-set release below it
+# (scripts/release_route.py), so a version bump needs no edit here.
 on:
   workflow_dispatch:
     inputs:
@@ -9,9 +12,9 @@ on:
         description: Closed read-only observation; no candidate or publication effects
         type: choice
         required: true
-        default: coherent-01141-absence
+        default: coherent-successor-absence
         options:
-          - coherent-01141-absence
+          - coherent-successor-absence
           - host-090-org-artifact
 
 permissions:
@@ -36,7 +39,7 @@ jobs:
       - name: Verify the exact protected source and offline refusal controls
         env:
           SOURCE_SHA: ${{ github.sha }}
-          OBSERVATION: ${{ inputs.observation || 'coherent-01141-absence' }}
+          OBSERVATION: ${{ inputs.observation || 'coherent-successor-absence' }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = FS-GG/.github
@@ -47,14 +50,19 @@ jobs:
           python3 scripts/telemetry-host-published-org-read.py --check-selection
           python3 tests/release-successor-candidate/run.py
           python3 tests/telemetry-host-published-org-read/run.py
-      - name: Observe both feeds for 0.114.1 against published 0.114.0
-        if: inputs.observation == 'coherent-01141-absence' || inputs.observation == ''
+      - name: Observe both feeds for the source version against its promoted predecessor
+        if: inputs.observation == 'coherent-successor-absence' || inputs.observation == ''
         env:
+          GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          version="$(python3 scripts/release_route.py version)"
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          predecessor="$(python3 scripts/release_route.py predecessor \
+            --releases "$RUNNER_TEMP/releases.json" --version "$version")"
           python3 scripts/check-release-candidate-uniqueness.py \
-            --version 0.114.1 --predecessor 0.114.0
+            --version "$version" --predecessor "$predecessor"
       - name: Observe the published Host 0.9 org archive once
         id: host-org
         if: inputs.observation == 'host-090-org-artifact'
