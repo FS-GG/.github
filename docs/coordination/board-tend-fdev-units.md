@@ -239,6 +239,79 @@ activation/readback, separately from source integration. A local certificate est
 
 ## Related user units
 
+### Done-retention writer (#5170)
+
+The hosted `coord-board-archive` workflow stays a **counts-only read-only observer**. Its public logs and
+Projects-read App token cannot host the guarded writer. `fsgg-board-archive.{service,timer}` are a separate daily
+fdev user route, staged by `install.py archive`; this command never calls systemd, enables a timer, writes an
+activation configuration or changes the hourly tend units. The Python archiver remains the only archive writer;
+this does not enable A1 or any tend rule.
+
+```
+python3 -I deployment/fdev-board-tend/install.py archive \
+  --release-dir "$HOME/.local/libexec/fsgg-board-archive/<reviewed-source-sha>" --dry-run
+```
+
+After review, omit `--dry-run` to stage the adapter/script (0400) and two units. Release files cannot be replaced,
+even with `--force`; changed source needs a new release directory. `--force` only replaces rendered unit files.
+No installed path points into a working checkout. Root reviews the exact staged hashes before any activation.
+
+The service uses the existing fdev credentials file, with its 0600 owner check; it requests no new credentials
+or grants. The child receives only the credential file's `GH_TOKEN` and the explicitly pinned `gh` executable,
+never an inherited token/test override. `XDG_RUNTIME_DIR=%t`, the preserved `fsgg` runtime directory and the
+absence of `PrivateTmp` preserve the archiver's per-card shared and legacy writer locks. The adapter does not
+hold those locks outside the child. Type=exec, a 900-second service bound, 720-second child bound, one CPU and
+1GiB cap bound the run; no Restart directive retries failures.
+
+**Activation is separate and remains Root's effect, after the first real archive is accepted.** The service's
+`--config` file must be an owner-owned regular 0600 file with exactly these keys:
+
+| Key | Required value |
+|---|---|
+| `schema`, `enabled` | `fsgg.board-archive-config/1`, explicitly `true`; no configuration is installed by default |
+| `maxArchive` | Root's positive per-run bound, at most 500; keep is fixed 200, owner FS-GG/project 3/exact projectID are fixed in the adapter |
+| `script`, `gh`, `binding`, `commitment`, `acceptedReceipt` | each exactly `{"path":"<absolute path>","sha256":"<64 hex>"}` |
+| `readerVersion`, `readerFiles` | qualified installed reader version >=0.114.1 and a nonempty list of exact file pins for its executable/CLI/adapter closure |
+| `stateDir`, `outDir`, `workdir` | absolute private runtime paths; cwd must equal the fixed non-checkout workdir |
+
+The binding is the **current authoritative private enrollment binding**, not a discovered or historical file.
+`commitment` pins its protected public enrollment commitment. Root refreshes and qualifies the pair immediately
+before activation; changes to either identity or any reader file refuse until explicitly rebound. Updating the
+global engine symlink does not change or qualify the timer reader. A newer global version is not evidence that
+it is board-qualified. Missing reader files, stale hashes, unqualified version, stale accepted input pair or
+unreadable private credentials refuse before the child starts.
+
+The private `acceptedReceipt` is Root's accepted first-real-run evidence, not automatically fabricated by the
+installer. Its exact shape is `{"schema":"fsgg.board-archive-accepted/1","accepted":true,"evidenceUrl":
+"https://github.com/FS-GG/.github/issues/5170#issuecomment-<id>","inputs":{...}}`. `inputs` contains exactly
+`projectId`, `keep`200, `maxArchive`, `readerVersion`, `readerFiles`, `scriptSha256`, `bindingSha256` and
+`commitmentSha256`, all equal to the accepted activation inputs. The URL points to Root's native acceptance;
+the local file retains the private identity join. The adapter verifies the pinned receipt and join locally;
+it does not grant acceptance, reinterpret the comment or make an authorization decision from GitHub text.
+
+All child stdout/stderr, card identities and fsynced custody stay in exclusive 0700 run directories with 0600
+files. Journal messages contain only a generic result. No child log is published. Before starting a child, the
+adapter creates and fsyncs `stateDir/in-progress.json`. A zero exit with complete settled custody (or a completed
+empty plan) writes a private completion record before removing the latch. A nonzero exit, timeout, interruption,
+malformed custody or pending intent keeps the latch. Every later timer activation then refuses before another
+child; Root must resolve the original possible effects by readback before clearing it. Never prune unresolved
+custody, clear the latch merely because time passed, or blindly resend. The receipt and latch are local
+cooperative safeguards, not a boundary against other processes running as this user.
+
+Root's remaining sequence is: integrate reviewed ranking source; review the nonzero native plan; admit and
+accept one real guarded archive with enrollment-reader readback; qualify this scheduling adapter and exact
+activation pair; stage disabled and read back hashes/modes/units; then explicitly daemon-reload and enable
+`fsgg-board-archive.timer`. Read back its next trigger and the first scheduled run's private custody/native
+effects before accepting #5170's schedule promise. The timer is daily 04:43 UTC, Persistent=true (one catch-up,
+no backlog replay). Disable the timer and set `enabled:false` as the kill switch, preserving all custody.
+
+Preflight is the offline recording-child/archiver fixture: positive exact pins, disabled/stale inputs,
+environment/output privacy, actual shared-lock contention, successful settlement and failure/crash/timeout
+blocking the next invocation. These directly exercise the effect boundary; no new abstract scheduler model or
+browser/CLR run is needed. Run `bash tests/fdev-board-tend/run.sh` and the existing archive fixture under the
+ordinary resource budget with disk-backed temporary storage. This is safeguard qualification, with no claim
+of measured CI savings or native acceptance.
+
 `fsgg-tmp-cleanup.{service,timer}` (hourly dead-run `/tmp` cleanup, #5240) are templated here and installed by their own
 `install.py tmp-cleanup` effect; they share nothing with board tend at runtime. See
 [fdev host hygiene](fdev-host-hygiene.md).
@@ -247,6 +320,6 @@ activation/readback, separately from source integration. A local certificate est
 
 - The token is the credentials file's `GH_TOKEN`. Whether it carries every scope an eventual `--apply` needs is checked
   at the first apply admission, not in plan-only.
-- The Done-retention archiver is a hosted workflow, outside the lock; until it moves or A1 replaces it, the reconciler
-  writes nothing to archive-eligible cards (design §8).
+- The hosted Done-retention observer sends no writes. The sibling fdev writer remains inactive until Root accepts
+  and activates it; tend still writes nothing to archive-eligible cards until its own design/acceptance changes.
 - `Persistent=true` catches up one missed hourly run after fdev was down; it does not replay every missed hour.
