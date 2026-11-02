@@ -18,7 +18,8 @@ fdev-chromium-env --gpu --check            # ldd both Playwright binaries, show 
 fdev-chromium-env --gpu --print-args-json  # the launch flags for the mode
 ```
 
-`~/.local/bin/fdev-chromium-env` prepends the bundle's `usr/lib` to `LD_LIBRARY_PATH` and sets `FONTCONFIG_FILE`.
+`~/.local/bin/fdev-chromium-env` (source: `deployment/fdev-chromium/fdev-chromium-env`, installed by `install.py chromium-env`; see
+[fdev host hygiene](fdev-host-hygiene.md)) also defaults `TMPDIR` to the short disk path `~/.cache/fsgg-tmp` when unset. It prepends the bundle's `usr/lib` to `LD_LIBRARY_PATH` and sets `FONTCONFIG_FILE`.
 Neither Chromium nor Playwright reads launch flags from an environment variable, so the wrapper exports them as
 `FDEV_CHROMIUM_ARGS` (space separated) and `FDEV_CHROMIUM_ARGS_JSON` for your launcher to pass as `args`:
 

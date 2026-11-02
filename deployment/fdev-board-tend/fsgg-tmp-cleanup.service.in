@@ -1,0 +1,20 @@
+# Rendered by deployment/fdev-board-tend/install.py from fsgg-tmp-cleanup.service.in (Refs FS-GG/.github#5240).
+# Do not edit the installed copy; change the template and run `install.py tmp-cleanup --force` again.
+# Removes dead, idle harness temp directories from /tmp, $TMPDIR and ~/.cache/fsgg-tmp (scripts/fdev-tmp-cleanup.py).
+# Only known harness names; only when the owning PID is dead (or no live process references the entry) and
+# nothing under it changed for over an hour. Never follows a symlink. Never touches a live run.
+[Unit]
+Description=FS-GG fdev dead-run temp cleanup (Refs FS-GG/.github#5240)
+Documentation=https://github.com/FS-GG/.github/blob/main/docs/coordination/fdev-host-hygiene.md
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h
+UMask=0077
+NoNewPrivileges=yes
+# Housekeeping must never compete with a lane for CPU or disk.
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=600
+# Deliberately no PrivateTmp: the job exists to see the real /tmp that the lanes share.
+ExecStart=/usr/bin/python3 -I @LIBEXEC@/fdev-tmp-cleanup.py --apply

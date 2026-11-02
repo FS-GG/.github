@@ -41,10 +41,20 @@ class Proc:
     def process(self, pid, *argv):
         self.write("%d/cmdline" % pid, "\0".join(argv) + "\0")
 
+    def process_raw(self, pid, raw, exe=None):
+        """A cmdline file with these exact bytes (a rewritten process title is one space-joined string), and an exe link."""
+        path = os.path.join(self.root, str(pid), "cmdline")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as handle:
+            handle.write(raw)
+        if exe:
+            os.symlink(exe, os.path.join(self.root, str(pid), "exe"))
+
 
 def run(proc_root, *flags, nproc="12", disk="0"):
     args = [sys.executable, "-I", PROBE, "--proc-root", proc_root, "--cgroup-root", os.path.join(proc_root, "cg"),
-            "--nproc", nproc, "--disk-path", proc_root, "--min-disk-gb", disk, *flags]
+            "--nproc", nproc, "--disk-path", proc_root, "--min-disk-gb", disk,
+            "--tmp-path", proc_root, "--min-tmp-gib", "0", *flags]  # /tmp headroom is the fixture dir's, never the host's
     done = subprocess.run(args, capture_output=True, text=True, check=False)
     lines = done.stdout.splitlines()
     assert len(lines) == 1, "expected exactly one JSON line, got %r (stderr %r)" % (done.stdout, done.stderr)
@@ -102,10 +112,12 @@ class CapacityProbe(unittest.TestCase):
 
     def test_default_thresholds_are_stated(self):
         Proc(self.root)
-        done = subprocess.run([sys.executable, "-I", PROBE, "--proc-root", self.root, "--cgroup-root", self.root + "/cg", "--nproc", "12", "--disk-path", self.root],
-                              capture_output=True, text=True, check=False)
-        t = json.loads(done.stdout)["thresholds"]
+        done = subprocess.run([sys.executable, "-I", PROBE, "--proc-root", self.root, "--cgroup-root", self.root + "/cg", "--nproc", "12", "--disk-path", self.root,
+                               "--tmp-path", self.root], capture_output=True, text=True, check=False)
+        out = json.loads(done.stdout)
+        t = out["thresholds"]
         self.assertEqual((t["load5_below"], t["mem_available_gib_min"], t["disk_free_gb_min"], t["heavy_max"]), (10.2, 6.0, 20.0, None))
+        self.assertEqual((t["browser_hold_at"], t["tmp_free_gib_min"], out["tmp_path"]), (2, 3.0, self.root))
 
     def test_heavy_processes_are_counted_by_kind_and_graded_only_on_request(self):
         proc = Proc(self.root)
@@ -179,7 +191,7 @@ class CapacityProbe(unittest.TestCase):
     def test_output_is_strict_json_with_no_nan_or_infinity(self):
         Proc(self.root, load="nan inf -inf")
         done = subprocess.run([sys.executable, "-I", PROBE, "--proc-root", self.root, "--cgroup-root", self.root + "/cg", "--nproc", "12",
-                               "--disk-path", self.root, "--min-disk-gb", "0"], capture_output=True, text=True, check=False)
+                               "--disk-path", self.root, "--min-disk-gb", "0", "--tmp-path", self.root], capture_output=True, text=True, check=False)
         def refuse(token):
             raise ValueError("non-strict JSON token " + token)
         json.loads(done.stdout, parse_constant=refuse)
@@ -277,6 +289,159 @@ class CapacityProbe(unittest.TestCase):
         # a finite memory.max with no memory.current cannot be graded: hold
         Proc(self.root).cgroup(**{"lane.slice__job.scope__memory.max": "1073741824\n"})
         self.assertEqual(run(self.root)[0], 3)
+
+
+    # --- #5240: browser-run concurrency and /tmp headroom -------------------------------------------------
+
+    PW = "/home/u/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome"
+    MAIN = ["--headless", "--no-sandbox", "--user-data-dir=/tmp/playwright_chromiumdev_profile-AAAAAA", "--remote-debugging-pipe"]
+
+    def browser(self, proc, pid, exe=None, *flags):
+        proc.process(pid, exe or self.PW, *(flags or self.MAIN))
+
+    def test_browser_main_processes_count_once_and_their_children_do_not(self):
+        proc = Proc(self.root)
+        self.browser(proc, 100)
+        for pid, kind in ((101, "zygote"), (102, "gpu-process"), (103, "renderer"), (104, "utility"), (105, "renderer")):
+            proc.process(pid, self.PW, "--type=" + kind, "--headless", "--no-sandbox", "--user-data-dir=/tmp/playwright_chromiumdev_profile-AAAAAA")
+        proc.process(106, self.PW.replace("/chrome", "/chrome_crashpad_handler"), "--monitor-self", "--database=/h/Crash Reports")
+        proc.process(107, "timeout", "600", "node", "/s/probe.mjs", self.PW, "--headless", "--remote-debugging-pipe")  # launcher, not a browser
+        proc.process(108, "node", "/s/probe.mjs", self.PW, "--headless", "--remote-debugging-pipe")
+        code, out = run(self.root)
+        self.assertEqual((code, out["verdict"]), (0, "admit"))
+        self.assertEqual(out["browsers"], {"count": 1, "pids": [100]})
+
+    def test_two_browser_runs_hold_and_the_threshold_is_configurable(self):
+        proc = Proc(self.root)
+        self.browser(proc, 100)
+        self.browser(proc, 200, "/home/u/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell",
+                     "--headless", "--remote-debugging-pipe")
+        code, out = run(self.root)
+        self.assertEqual((code, out["verdict"], out["browsers"]["count"], out["browsers"]["pids"]), (3, "hold", 2, [100, 200]))
+        self.assertIn("browser runs 2 >= 2 (headless Chromium main processes)", out["reasons"])
+        self.assertEqual(run(self.root, "--browser-hold-at", "3")[0], 0)
+        self.assertEqual(run(self.root, "--browser-hold-at", "0")[0], 0)  # 0 disables
+        self.assertEqual(run(self.root, "--browser-hold-at", "3")[1]["thresholds"]["browser_hold_at"], 3)
+        self.browser(proc, 300, "/usr/bin/chromium", "--headless=new", "--remote-debugging-port=9222")
+        self.assertEqual(run(self.root, "--browser-hold-at", "3")[0], 3)
+
+    def test_a_rewritten_process_title_is_one_space_joined_field_and_still_counts(self):
+        # Captured from a real Playwright chrome-headless-shell 1243 on fdev (Chromium 153): the cmdline file is ONE
+        # string with spaces and a single trailing NUL, for the main process and for every --type= child alike.
+        def fixture(name):
+            with open(os.path.join(HERE, "fixtures", name), "rb") as handle:
+                return handle.read()
+        main, gpu, zygote = (fixture(n) for n in ("chromium-main.cmdline", "chromium-gpu-child.cmdline", "chromium-zygote-child.cmdline"))
+        self.assertEqual((main.count(b"\0"), gpu.count(b"\0")), (1, 1))  # the shape the fix is about
+        exe = "/home/u/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell"
+        proc = Proc(self.root)
+        proc.process_raw(100, main, exe)
+        proc.process_raw(101, gpu, exe)
+        proc.process_raw(102, zygote, exe)
+        code, out = run(self.root)
+        self.assertEqual((code, out["browsers"]), (0, {"count": 1, "pids": [100]}))
+        proc.process_raw(200, main.replace(b"profile-F7pDkp", b"profile-Other1"), exe)
+        code, out = run(self.root)
+        self.assertEqual((code, out["browsers"]["count"], out["verdict"]), (3, 2, "hold"))
+
+    def test_a_rewritten_title_without_a_readable_exe_is_classified_from_the_first_word(self):
+        with open(os.path.join(HERE, "fixtures", "chromium-main.cmdline"), "rb") as handle:
+            main = handle.read()
+        proc = Proc(self.root)
+        proc.process_raw(100, main)
+        self.assertEqual(run(self.root)[1]["browsers"]["count"], 1)
+
+    def test_a_launcher_keeps_its_own_argv0_even_when_it_names_chrome(self):
+        # Single-field cmdline of a shell wrapper: not a rewritten title of a browser, exe says bash.
+        proc = Proc(self.root)
+        proc.process_raw(100, b"/bin/bash -c /x/chrome --headless --remote-debugging-pipe\0", "/usr/bin/bash")
+        proc.process_raw(101, b"timeout 600 /x/chrome --headless --remote-debugging-pipe\0", "/usr/bin/timeout")
+        self.assertEqual(run(self.root)[1]["browsers"]["count"], 0)
+
+    def test_one_browser_run_admits(self):
+        proc = Proc(self.root)
+        self.browser(proc, 100)
+        proc.process(101, self.PW, "--type=renderer", "--headless")
+        proc.process(102, self.PW, "--type=gpu-process", "--headless")
+        code, out = run(self.root)
+        self.assertEqual((code, out["browsers"]["count"], out["reasons"]), (0, 1, []))
+
+    def test_only_headless_cdp_driven_chromium_mains_are_browser_runs(self):
+        proc = Proc(self.root)
+        self.browser(proc, 100, None, "--no-sandbox", "--remote-debugging-pipe")                    # headed
+        self.browser(proc, 101, None, "--headless", "--no-sandbox")                                  # no CDP
+        self.browser(proc, 102, "/usr/bin/firefox", "--headless", "--remote-debugging-port=9222")    # not Chromium
+        self.browser(proc, 103, "/usr/bin/vim", "--headless", "--remote-debugging-pipe", "chrome")   # name only in argv[1]
+        self.browser(proc, 104, "/usr/bin/google-chrome-stable", "--headless", "--remote-debugging-port=0")
+        self.browser(proc, 105, None, "--headless", "--remote-debugging-pipe", "--type=zygote")
+        code, out = run(self.root, "--browser-hold-at", "1")
+        self.assertEqual(out["browsers"], {"count": 1, "pids": [104]})
+        self.assertEqual(code, 3)
+
+    def test_browser_count_is_independent_of_the_heavy_build_count(self):
+        proc = Proc(self.root)
+        proc.process(10, "dotnet", "build")
+        self.browser(proc, 100)
+        self.browser(proc, 101)
+        code, out = run(self.root)
+        self.assertEqual((out["heavy"]["count"], out["browsers"]["count"]), (1, 2))
+        self.assertEqual(code, 3)
+
+    def test_tmp_headroom_is_reported_apart_from_disk_and_a_huge_floor_holds(self):
+        Proc(self.root)
+        code, out = run(self.root)
+        self.assertEqual(code, 0)
+        self.assertIsInstance(out["tmp_free_gib"], float)
+        self.assertEqual(out["tmp_path"], self.root)
+        self.assertIsInstance(out["disk_free_gb"], float)
+        code, out = run(self.root, "--min-tmp-gib", "1000000")
+        self.assertEqual((code, out["verdict"]), (3, "hold"))
+        self.assertEqual(len(out["reasons"]), 1, out["reasons"])
+        self.assertTrue(out["reasons"][0].startswith("free %s " % self.root) and out["reasons"][0].endswith("GiB < 1000000.00 GiB"), out["reasons"])
+        self.assertEqual(out["thresholds"]["tmp_free_gib_min"], 1000000.0)
+
+    def test_tmp_headroom_boundary_is_exactly_3_gib_by_default(self):
+        import contextlib
+        import importlib.util
+        import io
+        from unittest import mock
+        spec = importlib.util.spec_from_file_location("fdev_lane_capacity_stub", PROBE)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        Proc(self.root)
+        real = os.statvfs
+        three_gib = 3 * 1024 ** 3
+
+        def at(free_bytes):
+            def statvfs(path):
+                if path == "/stub-tmp":
+                    return mock.Mock(f_bavail=free_bytes // 4096, f_frsize=4096)
+                return real(path)
+            return statvfs
+
+        argv = ["--proc-root", self.root, "--cgroup-root", self.root + "/cg", "--nproc", "12", "--disk-path", self.root, "--min-disk-gb", "0", "--tmp-path", "/stub-tmp"]
+        for free, code in ((three_gib, 0), (three_gib - 4096, 3)):
+            out = io.StringIO()
+            with mock.patch.object(module.os, "statvfs", at(free)), contextlib.redirect_stdout(out):
+                self.assertEqual(module.main(argv), code, out.getvalue())
+            self.assertEqual(json.loads(out.getvalue())["tmp_free_gib"], round(free / 1024 ** 3, 2))
+
+    def test_unreadable_tmp_path_holds_as_unknown(self):
+        Proc(self.root)
+        code, out = run(self.root, "--tmp-path", self.root + "/does-not-exist")
+        self.assertEqual((code, out["verdict"], out["tmp_free_gib"]), (3, "hold", None))
+        self.assertTrue(any(r.startswith("unknown: free /tmp space unreadable") for r in out["reasons"]), out["reasons"])
+
+    def test_unreadable_process_table_holds_and_reports_no_browser_count(self):
+        Proc(self.root)
+        code, out = run(self.root, "--proc-root", self.root + "/nowhere")
+        self.assertEqual((code, out["browsers"]), (3, None))
+
+    def test_negative_browser_and_tmp_thresholds_are_usage_errors(self):
+        Proc(self.root)
+        for flag, value in (("--browser-hold-at", "-1"), ("--min-tmp-gib", "-1"), ("--min-tmp-gib", "nan")):
+            code = subprocess.run([sys.executable, "-I", PROBE, "--proc-root", self.root, flag, value], capture_output=True, text=True, check=False).returncode
+            self.assertEqual(code, 2, (flag, value))
 
 
 class LiveHost(unittest.TestCase):

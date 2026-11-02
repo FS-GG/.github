@@ -259,6 +259,105 @@ class UnitInstallTests(FakeHome):
         self.assertEqual(problems, [], done.stderr)
 
 
+class TmpCleanupInstallTests(FakeHome):
+    """The hourly dead-run /tmp cleanup timer and the chromium wrapper, installed by their own effects (#5240)."""
+
+    def run_install(self, *argv, expect=0):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = INSTALL.main(list(argv))
+        self.assertEqual(code, expect, err.getvalue())
+        return out.getvalue(), err.getvalue()
+
+    def test_writes_only_the_two_units_and_the_script_and_leaves_the_board_tend_units_alone(self):
+        before = self.tree()
+        self.run_install("tmp-cleanup")
+        self.assertEqual(self.tree() - before, {
+            ".config/systemd", ".config/systemd/user", ".local/libexec",
+            ".config/systemd/user/fsgg-tmp-cleanup.service", ".config/systemd/user/fsgg-tmp-cleanup.timer",
+            ".local/libexec/fdev-tmp-cleanup.py"} - before)
+        script = self.libexec / "fdev-tmp-cleanup.py"
+        self.assertEqual(script.read_bytes(), (ROOT / "scripts/fdev-tmp-cleanup.py").read_bytes())
+        self.assertEqual(stat.S_IMODE(script.stat().st_mode), 0o755)
+
+    def test_the_service_runs_the_installed_script_with_apply_and_cannot_see_a_private_tmp(self):
+        self.run_install("tmp-cleanup")
+        service = (self.unit_dir / "fsgg-tmp-cleanup.service").read_text(encoding="utf-8")
+        directives = [l for l in service.splitlines() if l.strip() and not l.lstrip().startswith("#")]
+        self.assertIn("Type=oneshot", directives)
+        self.assertIn(f"ExecStart=/usr/bin/python3 -I {self.libexec}/fdev-tmp-cleanup.py --apply", directives)
+        self.assertFalse([l for l in directives if l.startswith(("PrivateTmp", "ProtectHome", "ProtectSystem"))], directives)
+        self.assertNotIn("@", "\n".join(directives))
+        self.assertIn("Nice=15", directives)
+        self.assertIn("IOSchedulingClass=idle", directives)
+
+    def test_the_timer_is_hourly_at_minute_37_persistent_and_randomised(self):
+        self.run_install("tmp-cleanup")
+        timer = (self.unit_dir / "fsgg-tmp-cleanup.timer").read_text(encoding="utf-8")
+        for line in ("OnCalendar=*-*-* *:37:00", "Persistent=true", "RandomizedDelaySec=120", "Unit=fsgg-tmp-cleanup.service", "WantedBy=timers.target"):
+            self.assertIn(line, timer.splitlines())
+        # minute 37 collides with no other fdev timer: board tend :07, observer :23, dispatch :53, daily 00:30
+        self.assertNotIn(":07:00", timer)
+
+    def test_dry_run_writes_nothing_is_idempotent_and_refuses_a_different_file_without_force(self):
+        before = self.tree()
+        out, _ = self.run_install("tmp-cleanup", "--dry-run")
+        self.assertEqual(self.tree(), before)
+        self.assertIn("would write", out)
+        self.run_install("tmp-cleanup")
+        again, _ = self.run_install("tmp-cleanup")
+        self.assertIn("unchanged", again)
+        (self.unit_dir / "fsgg-tmp-cleanup.timer").write_text("edited", encoding="utf-8")
+        _, err = self.run_install("tmp-cleanup", expect=2)
+        self.assertIn("--force", err)
+        self.run_install("tmp-cleanup", "--force")
+        self.assertIn("OnCalendar", (self.unit_dir / "fsgg-tmp-cleanup.timer").read_text(encoding="utf-8"))
+
+    def test_enable_runs_systemctl_for_the_cleanup_timer_only(self):
+        calls = []
+        with mock.patch.object(INSTALL.subprocess, "run", side_effect=lambda cmd, **kw: calls.append(cmd)):
+            self.run_install("tmp-cleanup", "--enable")
+        self.assertEqual(calls, [["systemctl", "--user", "daemon-reload"], ["systemctl", "--user", "enable", "--now", "fsgg-tmp-cleanup.timer"]])
+        out, _ = self.run_install("tmp-cleanup")
+        self.assertIn("systemd not touched", out)
+
+    def test_refuses_to_run_as_root_and_paths_outside_home(self):
+        with mock.patch.object(INSTALL.os, "geteuid", return_value=0):
+            self.run_install("tmp-cleanup", expect=2)
+            self.run_install("chromium-env", expect=2)
+        self.run_install("tmp-cleanup", "--unit-dir", "/etc/systemd/system", expect=2)
+        self.run_install("chromium-env", "--dest", "/usr/local/bin/fdev-chromium-env", expect=2)
+
+    def test_the_rendered_script_runs_as_a_dry_run_against_an_empty_root(self):
+        self.run_install("tmp-cleanup")
+        root = self.home / "sweep"
+        root.mkdir()
+        done = subprocess.run([sys.executable, "-I", str(self.libexec / "fdev-tmp-cleanup.py"), "--root", str(root)], capture_output=True, text=True, check=False)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(json.loads(done.stdout)["mode"], "dry-run")
+
+    @unittest.skipUnless(shutil.which("systemd-analyze"), "systemd-analyze is not available")
+    def test_systemd_accepts_the_rendered_units(self):
+        self.run_install("tmp-cleanup")
+        files = [str(self.unit_dir / n) for n in ("fsgg-tmp-cleanup.service", "fsgg-tmp-cleanup.timer")]
+        done = subprocess.run(["systemd-analyze", "--user", "verify", *files], capture_output=True, text=True, timeout=60, check=False)
+        problems = [l for l in (done.stdout + done.stderr).splitlines() if "fsgg-tmp-cleanup" in l and not l.startswith("Could not")]
+        self.assertEqual(problems, [], done.stderr)
+
+    def test_chromium_env_installs_the_repo_source_executable_and_refuses_to_replace_without_force(self):
+        dest = self.home / ".local/bin/fdev-chromium-env"
+        self.run_install("chromium-env", "--dry-run")
+        self.assertFalse(dest.exists())
+        self.run_install("chromium-env")
+        self.assertEqual(dest.read_bytes(), (ROOT / "deployment/fdev-chromium/fdev-chromium-env").read_bytes())
+        self.assertEqual(stat.S_IMODE(dest.stat().st_mode), 0o755)
+        dest.write_text("#!/bin/sh\n# the old installed copy\n", encoding="utf-8")
+        _, err = self.run_install("chromium-env", expect=2)
+        self.assertIn("--force", err)
+        self.run_install("chromium-env", "--force")
+        self.assertIn("TMPDIR", dest.read_text(encoding="utf-8"))
+
+
 class KitRootTests(FakeHome):
     def repo(self, *texts):
         repo = self.home / "repo"
