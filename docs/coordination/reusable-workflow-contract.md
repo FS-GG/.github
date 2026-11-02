@@ -809,7 +809,7 @@ the two differ). A caller is one thin file that names it at `@main`, as every ot
 
 ### Per-repo inventory of the gate and its required-context state (.github#5195)
 
-Measured 2026-11-02 by reading each default branch's branch protection and rulesets
+Measured 2026-11-02; refreshed after the receiver caller merges by reading each default branch's branch protection and rulesets
 (`gh api repos/FS-GG/<repo>/branches/main/protection/required_status_checks` and `.../rules/branches/main`)
 and its workflows. The route is how the repository gets the lint: **kit** (`materialize / closing-keywords`,
 through `kit-materialize.yml`), **receiver** (a thin caller of `closing-keywords-receiver.yml`, context
@@ -824,13 +824,16 @@ can never be required.
 | FS.GG.Game, SDD, Governance, Audio, Rendering, Net | public | kit, at `@main` | no | yes, by protection (Governance also has a ruleset) |
 | FS.GG.Templates | public | kit, pinned to `f1ac83ac…` | no | yes, by protection |
 | FS.GG.Algorithms | public | standalone | **yes**, `closing-keywords` in its `main-protection` ruleset | already armed |
-| FS.GG.Coordination | public | receiver, caller FS.GG.Coordination#1118 (pinned to the receiver's merge commit: its execution-pin validator refuses `@main`) | no | yes, by its ruleset |
-| FsQuint, FSBarV2 | public | receiver, callers FsQuint#51 and FSBarV2#54 | no | only after the repository gets a protection or a ruleset: it has neither |
+| FS.GG.Coordination | public | receiver pending: caller FS.GG.Coordination#1118 remains open (pinned to the receiver's merge commit: its execution-pin validator refuses `@main`); no caller on the default branch | no | yes, by its ruleset |
+| FsQuint, FSBarV2 | public | receiver on the default branch, callers FsQuint#51 and FSBarV2#54 merged; both caller heads reported the check successfully | no | only after the repository gets a protection or a ruleset: it has neither |
 | FS.GG.RuneScape | private | standalone | no | no, advisory only |
-| FS.GG.FourD, SC2.Client, Unity.Client, Native.Qualification | private | receiver, callers FS.GG.FourD#57, SC2.Client#53, Unity.Client#35, Native.Qualification#4 (Native.Qualification pins the merge commit: it enforces full-SHA pins) | no | no, advisory only |
+| FS.GG.FourD, SC2.Client, Unity.Client, Native.Qualification | private | receiver on the default branch, callers FS.GG.FourD#57, FS.GG.SC2.Client#53, FS.GG.Unity.Client#35, FS.GG.Native.Qualification#4 merged (Native.Qualification pins the merge commit: it enforces full-SHA pins); reporting unverified | no | no, advisory only |
 
-The receiver rows are the state at measurement, when the callers were open pull requests; each row is true
-once its caller merges and the context has been seen to report. Not in the inventory because no pull request
-there references a Project 3 Delivery: FS.GG.Coordination.Authority and the two Sandbox repositories.
+The public receiver caller heads reported `closing-keywords / title-and-body` successfully, including the
+still-open Coordination caller. For the four private caller heads, the check-runs API refused access
+(`Resource not accessible by personal access token`); merged source establishes distribution, while
+actual reporting remains Unknown.
+No branch protection or ruleset was changed by this inventory. Not in the inventory because no pull request
+there references a Project 3 Delivery at the original measurement: FS.GG.Coordination.Authority and the two Sandbox repositories.
 Algorithms is the only repository where the lint is already a merge gate, and its standalone job is the reason
 the receiver exists: that copy carries its own pin to move by hand.
