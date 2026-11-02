@@ -93,6 +93,11 @@ class KnownRosterTests(unittest.TestCase):
             self.assertEqual(('campaign',f'chain{n}'),lane.marker_from_body(new['body']))
             self.assertIn('<!-- fsgg:delivery-continues/v1 -->',new['body'])
         self.assertEqual('complete',json.loads((self.root/'observed.custody.json').read_text())['phase'])
+        journal=json.loads((self.root/'observed.custody.json').read_text())
+        self.assertEqual(self.spec,journal['intent'])
+        self.assertEqual({'42','43'},set(journal['plannedBodySha256']))
+        for step in journal['steps']:
+            self.assertEqual(step['expectedMetadataSha256'],step['readbackMetadataSha256'])
 
     def test_inspect_never_writes_or_records_possible_send(self):
         code,result=self.invoke(('--inspect',));self.assertEqual(0,code,result);self.assertEqual([],self.patches)

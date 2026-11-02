@@ -706,7 +706,7 @@ def adopt_known_roster(arguments: argparse.Namespace) -> dict[str, Any]:
     expected: dict[int, dict[str, Any]] = {}
     guards: dict[int, dict[str, Any]] = {}
     desired: dict[int, str] = {}
-    custody: dict[str, Any] = {"schema": ROSTER_SCHEMA, **identity, "phase": "validated", "steps": []}
+    custody: dict[str, Any] = {"schema": ROSTER_SCHEMA, **identity, "intent": spec, "phase": "validated", "steps": []}
     def refuse(reason, **details):
         raise Refusal(reason, **identity, steps=custody["steps"], **details)
     def get(endpoint):
@@ -716,6 +716,10 @@ def adopt_known_roster(arguments: argparse.Namespace) -> dict[str, Any]:
         if problems:
             refuse("known-roster-native-unreadable")
         return guard
+    def guard_sha(guard):
+        # Bind full deciding metadata without retaining native prose or repository subresources.
+        return text_sha(json.dumps({field: metadata_fingerprint(item) for field, item in guard.items()},
+                                   sort_keys=True, separators=(",", ":")))
     def fresh_population(initial=False):
         pulls = open_pulls(arguments.gh, arguments.repo)
         numbers = [row.get("number") for row in pulls]
@@ -784,13 +788,15 @@ def adopt_known_roster(arguments: argparse.Namespace) -> dict[str, Any]:
         fresh_population()
         if arguments.inspect:
             return {"ok": True, "action": "admitted", **identity, "numbers": [row["number"] for row in spec["pulls"]]}
+        custody["plannedBodySha256"] = {str(number): text_sha(body) for number, body in desired.items()}
         save_roster_custody(path, custody, create=True)
         for row in spec["pulls"]:
             number = row["number"]
             fresh_population()
             custody["phase"] = "possible-send"
             step = {"number": number, "headSha": row["headSha"], "beforeBodySha256": row["bodySha256"],
-                    "afterBodySha256": text_sha(desired[number]), "phase": "possible-send"}
+                    "afterBodySha256": text_sha(desired[number]), "beforeMetadataSha256": guard_sha(guards[number]),
+                    "expectedMetadataSha256": guard_sha({**guards[number], "body": desired[number]}), "phase": "possible-send"}
             custody["steps"].append(step)
             save_roster_custody(path, custody)
             try:
@@ -805,6 +811,7 @@ def adopt_known_roster(arguments: argparse.Namespace) -> dict[str, Any]:
             if after != {**guards[number], "body": desired[number]}:
                 refuse("known-roster-readback-mismatch", number=number, writeAttempted=True)
             guards[number] = after
+            step["readbackMetadataSha256"] = guard_sha(after)
             step["phase"] = "confirmed"
             custody["phase"] = "partial-confirmed"
             save_roster_custody(path, custody)
