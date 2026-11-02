@@ -77,7 +77,7 @@ when, Blocked on, Acceptance evidence and native state reason/date; it does not 
 as accepted work. A merged source PR cannot establish installed acceptance, and C1 (rule 3 below) does not
 change that. `fsgg:delivery-completes/v1` means nothing in the Delivery's Done when remains after that
 merge; every merge after which any release, install or readback remains declares
-`fsgg:delivery-continues/v1`, so C1 never closes a Delivery on source alone, and Root closes it under rule 3
+`fsgg:delivery-continues/v1`, so C1 never closes a Delivery on source alone while a release, install or readback remains, and Root closes it under rule 3
 once that effect is read back. Native completed differs from
 not planned, and stale Done/closed disagreement remains a discrepancy to resolve. The accountable owner
 records accepted scope/date/evidence; the exact native issue is closed with the correct reason (a
