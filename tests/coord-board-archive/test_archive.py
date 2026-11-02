@@ -7,6 +7,7 @@ written so that deleting the guard turns the case red. The planner is pure; the 
 from __future__ import annotations
 
 import contextlib
+import datetime as dt
 import importlib.util
 import io
 import json
@@ -30,6 +31,12 @@ def row(n: int, closed: str | None = None, **kw) -> dict:
             "closedAt": closed if closed is not None else f"2026-10-{1 + n % 28:02d}T{n % 24:02d}:00:00Z"}
     base.update(kw)
     return base
+
+
+def done_history(count: int) -> list[dict]:
+    """A fixed close-time history; larger issue numbers are newer, independent of the clock."""
+    start = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
+    return [row(n, (start + dt.timedelta(days=n)).isoformat()) for n in range(1, count + 1)]
 
 
 def node(r: dict) -> dict:
@@ -199,6 +206,19 @@ class Scan(unittest.TestCase):
 
 
 class LiveBlockers(unittest.TestCase):
+    def test_protection_does_not_shift_the_newest_200_done_cutoff(self):
+        rows = done_history(203)
+        newer_protected = {f"I_{n}" for n in range(191, 204)}
+        for protected in (newer_protected, newer_protected | {"I_2"}):
+            for ordered in (rows, list(reversed(rows))):
+                with self.subTest(protected_older="I_2" in protected, reversed=ordered[0]["number"] == 203):
+                    archive, kept, excluded = A.plan(ordered, 200, protected)
+                    self.assertEqual([r["number"] for r in kept], list(range(203, 3, -1)))
+                    self.assertEqual([r["number"] for r in archive],
+                                     [n for n in (3, 2, 1) if f"I_{n}" not in protected])
+                    self.assertEqual([r["number"] for r, _ in excluded], [2] if "I_2" in protected else [])
+                    self.assertTrue(all("live card" in why for _, why in excluded))
+
     def test_a_done_card_a_live_card_is_blocked_by_stays_visible(self):
         old = "2020-01-01T00:00:00Z"
         rows = [row(1, old), row(2, old), row(3, old)]
@@ -224,6 +244,21 @@ class LiveBlockers(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("plan to archive 2", out)
         self.assertIn("KEEP FS-GG/.github#1: a live card is still blocked by it", out)
+
+    def test_threshold_dry_run_ranks_protected_rows_and_never_sends(self):
+        rows = done_history(203)
+        protected = [f"I_{n}" for n in range(191, 204)] + ["I_2"]
+        stub = Stub(self, scan=[scan_page(rows[:100], total=203, board=204, has_next=True, cursor="c1"),
+                                scan_page(rows[100:200], total=203, board=204, has_next=True, cursor="c2"),
+                                scan_page(rows[200:], total=203, board=204)],
+                    live=[live_page([protected])])
+        code, out, _ = run(["--counts-only"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("Done: 203; ranked 203, keep newest 200, plan to archive 2", out)
+        self.assertIn("KEEP <card>: a live card is still blocked by it", out)
+        self.assertIn("DRY RUN", out)
+        self.assertNotIn("FS-GG/", out)
+        self.assertEqual((len(stub.calls("scan")), stub.calls("item"), stub.calls("mutation")), (3, [], []))
 
 
 class Execute(unittest.TestCase):

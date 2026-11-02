@@ -9,7 +9,8 @@ name: Done retention dry run for the Coordination board
 #
 # THIS WORKFLOW ONLY EVER RUNS A DRY RUN. It reports the board size against the 500-item limit, the Done count and
 # the cards the policy would archive. A real run is a separate, owner-run invocation with the private enrollment
-# binding and an exact project id. The schedule gains --execute only after Root accepts the first real run.
+# binding and an exact project id. After Root accepts the first real run, the sibling fdev user timer is the
+# scheduled writer (deployment/fdev-board-tend); this hosted job remains read-only and counts-only.
 #
 # WHY THE PREVIOUS WORKFLOW AT THIS PATH WAS RETIRED (Root, 2026-10-31)
 # =====================================================================

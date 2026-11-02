@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -I
 """Install the fdev board-tend units (board-reconciler design section 8, #5136 PR 8). User-level only.
 
-Five subcommands, each writing one kind of thing and nothing else. Every one has --dry-run, which prints what it
+Six subcommands, each writing one kind of thing and nothing else. Every one has --dry-run, which prints what it
 would write and changes nothing. None needs or uses root; every destination must be under $HOME.
 
   units        Renders fsgg-board-tend.{service,timer} and fsgg-board-tend-daily.{service,timer} into the user
@@ -16,6 +16,8 @@ would write and changes nothing. None needs or uses root; every destination must
                the script with --apply. Without --enable it does not touch systemd.
   chromium-env Copies deployment/fdev-chromium/fdev-chromium-env to ~/.local/bin (the source of truth for the
                installed wrapper, which sets the short disk-backed TMPDIR default, .github#5240).
+  archive      Stages an immutable archive adapter/script and two daily user units. Never enables or starts
+               them; Root's accepted first execution and private activation configuration remain mandatory.
 
 The engine and the kit root are pinned to one release: the engine must live in .../coord-<version>/ and the kit
 root must be named kit-<version>.
@@ -286,6 +288,29 @@ def command_enable_file(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_archive(args: argparse.Namespace) -> int:
+    if os.geteuid() == 0:
+        raise Refusal("run as the fdev user, not root")
+    release = user_path(args.release_dir, "--release-dir")
+    workdir = user_path(args.workdir, "--workdir")
+    values = {"RELEASE_DIR": str(release), "WORKDIR": str(workdir),
+              "CONFIG": str(user_path(args.config, "--config")),
+              "CREDENTIALS": str(user_path(args.credentials, "--credentials"))}
+    unit_dir = user_path(args.unit_dir, "--unit-dir")
+    plan = Plan(args.dry_run)
+    # Release files are immutable: --force can replace rendered units, never a pinned release's bytes.
+    for name, source in (("fsgg-board-archive-run.py", HERE / "fsgg-board-archive-run.py"),
+                         ("coord-board-archive.py", HERE.parents[1] / "scripts/coord-board-archive.py")):
+        plan.add(release / name, source.read_bytes(), 0o400, False)
+    for name in ("fsgg-board-archive.service", "fsgg-board-archive.timer"):
+        plan.add(unit_dir / name, render((HERE / (name + ".in")).read_text(), values).encode(), 0o644, args.force)
+    plan.apply()
+    if not args.dry_run:
+        workdir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    print("archive staged disabled; systemd not touched; Root owns first-real acceptance and activation")
+    return 0
+
+
 def parser() -> argparse.ArgumentParser:
     h = home()
     root = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -324,6 +349,14 @@ def parser() -> argparse.ArgumentParser:
     chromium.add_argument("--dest", default=str(h / ".local/bin/fdev-chromium-env"))
     chromium.add_argument("--force", action="store_true", help="replace the installed wrapper when it differs")
     chromium.add_argument("--dry-run", action="store_true")
+    archive = sub.add_parser("archive")
+    archive.add_argument("--release-dir", required=True, help="a new immutable, versioned directory under HOME")
+    archive.add_argument("--workdir", default=str(h / ".local/share/fs-gg/board-archive"))
+    archive.add_argument("--config", default=str(h / ".config/fsgg/board-archive.json"))
+    archive.add_argument("--credentials", default=str(h / ".config/fdev/credentials.json"))
+    archive.add_argument("--unit-dir", default=str(h / ".config/systemd/user"))
+    archive.add_argument("--force", action="store_true")
+    archive.add_argument("--dry-run", action="store_true")
     return root
 
 
@@ -331,7 +364,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         return {"units": command_units, "kit-root": command_kit_root, "enable-file": command_enable_file,
-                "tmp-cleanup": command_tmp_cleanup, "chromium-env": command_chromium_env}[args.command](args)
+                "tmp-cleanup": command_tmp_cleanup, "chromium-env": command_chromium_env,
+                "archive": command_archive}[args.command](args)
     except Refusal as error:
         print(f"install.py: refused: {error}", file=sys.stderr)
         return 2
