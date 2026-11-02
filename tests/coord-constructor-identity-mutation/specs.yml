@@ -225,7 +225,7 @@ mutations:
   - tests/coord-constructor-identity-mutation/leg.sh
   target: src/FS.GG.Coord.GitHub/V2EnrollmentCommands.fs
   find: |2
-                         observeConstructorContent repository built main
+                         observeConstructorContentWith (if online then executingRelease host else None) repository built main
   replace: |2
                          V2Preflight.NotObserved V2Preflight.NotEvaluated
   breaks: the command never reads the closure, so every moved main stays refused and the installed-release route is unusable again
