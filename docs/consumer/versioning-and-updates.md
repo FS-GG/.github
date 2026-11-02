@@ -142,9 +142,9 @@ FS.GG.SDD#1155 onward, with a hard line around your edits:
   content-drift warning and the `upgrade` advisory names it.
 - **Never backwards.** The package version each skill came from is recorded in
   `.fsgg/scaffold-provenance.json` (`ownerSkillVersions`). An older CLI will not replace a newer
-  pack. A workspace written before versions were recorded is only refreshed by a CLI strictly newer
-  than the one that last wrote it (`upgradedBy`, else the producing CLI); an unreadable version
-  entry holds the skill rather than being ignored.
+  pack. A workspace written before versions were recorded is only refreshed by a CLI that is not
+  older than the one that last wrote it (`upgradedBy`, else the producing CLI); an unreadable
+  version entry holds the skill rather than being ignored.
 - **Safe to interrupt.** A replacement records new digests and versions only for files it actually
   wrote, and a skill is recorded all-or-nothing. If a run stops partway (a read-only directory, a
   killed process), restore the cause and run `upgrade` again: files already at the new pack's bytes
