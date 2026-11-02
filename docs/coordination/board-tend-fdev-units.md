@@ -298,6 +298,16 @@ child; Root must resolve the original possible effects by readback before cleari
 custody, clear the latch merely because time passed, or blindly resend. The receipt and latch are local
 cooperative safeguards, not a boundary against other processes running as this user.
 
+Before child launch the adapter also fsyncs the state/output directory ancestry and each new run entry in its
+parent. It preprovisions and fsyncs the child's custody directory/file and private stdout/stderr entries, so
+first-run directory creation cannot leave an otherwise durable latch or custody file unreachable after a crash.
+Any preparation fsync failure prevents launch; a failure after latch creation preserves that hold. Successful
+custody must use the archiver's exact schema and supported sequence: one run header, per-item reasoned skips or
+immediately joined intent/archived pairs with complete identical identities, then one finished record. Duplicate,
+unknown or malformed records refuse; processed items must equal min(planned, configured bound), and the final
+archived/skipped totals must equal the validated effects. An empty preprovisioned custody file is accepted only
+after the pinned child exits0 and reports a completed empty plan.
+
 Root's remaining sequence is: integrate reviewed ranking source; review the nonzero native plan; admit and
 accept one real guarded archive with enrollment-reader readback; qualify this scheduling adapter and exact
 activation pair; stage disabled and read back hashes/modes/units; then explicitly daemon-reload and enable

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import hashlib
 import importlib.util
 import io
@@ -28,14 +29,19 @@ I = load("archive_install", DEPLOY / "install.py")
 FIXTURE = load("archive_fixture", ROOT / "tests/coord-board-archive/test_archive.py")
 FAKE = '''import json,os,pathlib,sys,time
 mode = MODE
-p=pathlib.Path(sys.argv[sys.argv.index('--custody-dir')+1]);p.mkdir(mode=0o700)
+p=pathlib.Path(sys.argv[sys.argv.index('--custody-dir')+1]);p.mkdir(mode=0o700,exist_ok=True)
 (p.parent/'child.json').write_text(json.dumps({'argv':sys.argv[1:],'env':dict(os.environ)}))
 print('PRIVATE-CARD-IDENTITY',flush=True)
 if mode=='timeout': time.sleep(60)
-rows=[{'step':'run'},{'step':'intent','itemId':'PRIVATE-ID'}]
-if mode=='success': rows += [{'step':'archived','itemId':'PRIVATE-ID'},{'step':'finished'}]
-if mode=='unresolved': rows += [{'step':'finished'}]
-if mode=='failed': rows += [{'step':'uncertain','itemId':'PRIVATE-ID'}]
+base={'schema':'fsgg.board-done-retention-custody/1','at':'2026-11-02T00:00:00+00:00'}
+ref={'itemId':'PRIVATE-ID','contentId':'PRIVATE-CONTENT','repo':'fixture/repo','number':1,
+     'closedAt':'2026-01-01T00:00:00Z','enrolled':False}
+def record(step,**kw): return dict(base,step=step,**kw)
+rows=[record('run',project='PVT_kwDOEYAWY84Bldpa',board=203,done=203,keep=200,planned=1,maxArchive=3),
+      record('intent',**ref)]
+if mode=='success': rows += [record('archived',**ref),record('finished',archived=1,skipped=0)]
+if mode=='unresolved': rows += [record('finished',archived=0,skipped=0)]
+if mode=='failed': rows += [record('uncertain',reason='fixture failure',**ref)]
 (p/'custody.jsonl').write_text(''.join(json.dumps(x)+'\\n' for x in rows))
 sys.exit(3 if mode=='failed' else 0)
 '''
@@ -152,6 +158,103 @@ class ArchiveSchedule(unittest.TestCase):
                                         "(p/'custody.jsonl').write_text('[}');sys.exit(0)"))
         self.rebind()
         self.assertEqual(self.invoke(), 2)
+        self.assertTrue((self.home / "state/in-progress.json").exists())
+        self.assertEqual(self.invoke(), 2)
+
+    def test_json_valid_but_impossible_custody_never_settles(self):
+        run = self.home / "probe"; (run / "custody").mkdir(parents=True)
+        base = {"schema": "fsgg.board-done-retention-custody/1", "at": "2026-11-02T00:00:00+00:00"}
+        ref = {"itemId": "card", "contentId": "content", "repo": "fixture/repo", "number": 1,
+               "closedAt": "2026-01-01T00:00:00Z", "enrolled": False}
+        record = lambda step, **kw: dict(base, step=step, **kw)
+        good = [record("run", project=A.PROJECT, board=203, done=203, keep=200, planned=1, maxArchive=3),
+                record("intent", **ref), record("archived", **ref), record("finished", archived=1, skipped=0)]
+        bad = {}
+        bad["review probe: missing identities"] = [{"step": "run"}, {"step": "intent"},
+                                                  {"step": "archived"}, {"step": "finished"}]
+        bad["review probe: imaginary three archives"] = [dict(good[0], planned=3), dict(good[-1], archived=3)]
+        bad["review probe: unknown effect"] = [good[0], record("unknown-effect"), good[-1]]
+        for label, mutate in [
+            ("missing item", lambda x: x[1].pop("itemId")),
+            ("missing content", lambda x: x[2].pop("contentId")),
+            ("wrong schema", lambda x: x[1].update(schema="unknown")),
+            ("changed terminal identity", lambda x: x[2].update(contentId="different")),
+            ("archived count mismatch", lambda x: x[-1].update(archived=2)),
+            ("skipped count mismatch", lambda x: x[-1].update(skipped=1)),
+            ("planned count mismatch", lambda x: x[0].update(planned=3)),
+            ("wrong bound", lambda x: x[0].update(maxArchive=4)),
+            ("wrong project", lambda x: x[0].update(project="other")),
+            ("empty identity", lambda x: x[1].update(itemId="")),
+            ("invalid close time", lambda x: x[1].update(closedAt="invalid")),
+            ("invalid timestamp", lambda x: x[1].update(at="invalid")),
+            ("boolean count", lambda x: x[-1].update(archived=True)),
+        ]:
+            value = copy.deepcopy(good); mutate(value); bad[label] = value
+        bad["terminal without intent"] = [good[0], good[2], good[3]]
+        bad["repeated terminal"] = good[:3] + [good[2], good[3]]
+        bad["repeated item"] = [dict(good[0], planned=2)] + good[1:3] * 2 + [dict(good[-1], archived=2)]
+        bad["unfinished intent"] = good[:2] + [dict(good[-1], archived=0)]
+        for label, rows in bad.items():
+            with self.subTest(probe=label):
+                (run / "custody/custody.jsonl").write_text("".join(json.dumps(x) + "\n" for x in rows))
+                self.assertFalse(A.settled(run, 3))
+        (run / "custody/custody.jsonl").write_text("".join(json.dumps(x) + "\n" for x in good))
+        self.assertTrue(A.settled(run, 3))
+        skipped = [good[0], record("skipped", reason="preimage changed", **ref), record("finished", archived=0, skipped=1)]
+        (run / "custody/custody.jsonl").write_text("".join(json.dumps(x) + "\n" for x in skipped))
+        self.assertTrue(A.settled(run, 3))
+
+    def test_actual_archiver_custody_joins_bounded_archives_and_skips(self):
+        rows = FIXTURE.done_history(203)
+        first, second = rows[2], rows[1]
+        stub = FIXTURE.Stub(self, scan=[FIXTURE.scan_page(rows[:100], total=203, board=203, has_next=True),
+                                       FIXTURE.scan_page(rows[100:200], total=203, board=203, has_next=True, cursor="c2"),
+                                       FIXTURE.scan_page(rows[200:], total=203, board=203)],
+                            item=[FIXTURE.item_read(first), FIXTURE.item_read(first, archived=True),
+                                  FIXTURE.item_read(second, status="Ready")],
+                            mutation=[{"data": {"archiveProjectV2Item": {"item": {"id": first["itemId"], "isArchived": True}}}}])
+        code, stdout, _ = FIXTURE.run(["--execute", "--expect-project-id", A.PROJECT, "--max-archive", "2",
+                                      "--enrollment-binding", str(self.binding), "--reader-version", "0.114.1",
+                                      "--custody-dir", str(stub.custody), "--lock-dir", str(stub.locks)])
+        self.assertEqual(code, 0, stdout)
+        (Path(stub.dir.name) / "stdout").write_text(stdout)
+        self.assertTrue(A.settled(Path(stub.dir.name), 2))
+        self.assertFalse(A.settled(Path(stub.dir.name), 3))
+        self.assertEqual(len(stub.calls("mutation")), 1)
+        self.assertEqual(stub.records()[-1]["archived"], 1)
+        self.assertEqual(stub.records()[-1]["skipped"], 1)
+
+    def test_new_directory_entries_are_synced_before_launch(self):
+        self.c["stateDir"] = str(self.home / "fresh/state")
+        self.c["outDir"] = str(self.home / "fresh/output")
+        self.save()
+        synced = []
+        real_sync, real_popen = A.sync_dir, A.subprocess.Popen
+        def sync(path):
+            real_sync(path); synced.append((path, set(path.iterdir())))
+        def launch(*args, **kw):
+            run = next((self.home / "fresh/output").iterdir())
+            # The parent must be synced AFTER its child entry exists, not merely earlier in traversal.
+            entries = [self.home / "fresh", self.home / "fresh/state", self.home / "fresh/output", run,
+                       self.home / "fresh/state/in-progress.json", run / "custody", run / "custody/custody.jsonl",
+                       run / "stdout", run / "stderr"]
+            for entry in entries:
+                self.assertTrue(any(parent == entry.parent and entry in children for parent, children in synced), str(entry))
+            self.assertTrue((run / "custody/custody.jsonl").exists())
+            self.assertEqual((run / "custody/custody.jsonl").stat().st_size, 0)
+            return real_popen(*args, **kw)
+        with mock.patch.object(A, "sync_dir", side_effect=sync), mock.patch.object(A.subprocess, "Popen", side_effect=launch):
+            self.assertEqual(self.invoke(), 0)
+
+    def test_directory_sync_failure_prevents_launch_and_preserves_existing_latch(self):
+        real_sync = A.sync_dir
+        def fail_custody(path):
+            if path.name == "custody":
+                raise OSError("fixture fsync failure after durable latch")
+            return real_sync(path)
+        with mock.patch.object(A, "sync_dir", side_effect=fail_custody), mock.patch.object(A.subprocess, "Popen") as launch:
+            self.assertEqual(self.invoke(), 2)
+            launch.assert_not_called()
         self.assertTrue((self.home / "state/in-progress.json").exists())
         self.assertEqual(self.invoke(), 2)
 

@@ -58,7 +58,15 @@ def pin(value: object) -> tuple[Path, str]:
 
 
 def private_dir(path: Path) -> Path:
-    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # Anchor every ancestor, including entries left by an earlier failed fsync. Creating parents=True and
+    # syncing only the leaf would not make the leaf's entry in its parent durable after a first-run crash.
+    for directory in reversed((path, *path.parents)):
+        directory.mkdir(exist_ok=True, mode=0o700)
+        if not stat.S_ISDIR(directory.lstat().st_mode):
+            raise Refused("directory ancestry must not contain symlinks or non-directories")
+        sync_dir(directory)
+        if directory.parent != directory:
+            sync_dir(directory.parent)
     info = path.lstat()
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
         raise Refused("output/state directory must be owner-owned, regular and 0700")
@@ -120,22 +128,66 @@ def configuration(path: Path) -> tuple[dict, dict[str, Path]]:
     return c, paths
 
 
-def settled(run: Path) -> bool:
+def settled(run: Path, max_archive: int) -> bool:
     custody = run / "custody" / "custody.jsonl"
-    if not custody.exists():
+    if not custody.exists() or custody.stat().st_size == 0:
         return (run / "stdout").read_text().rstrip().endswith("nothing to archive.")
     rows = [json.loads(line) for line in custody.read_text().splitlines()]
-    pending = set()
+    common = {"schema", "at", "step"}
+    identity = {"itemId", "contentId", "repo", "number", "closedAt", "enrolled"}
+    def timestamp(value: object) -> bool:
+        try:
+            return isinstance(value, str) and dt.datetime.fromisoformat(value).tzinfo is not None
+        except ValueError:
+            return False
+    def integer(value: object) -> bool:
+        return type(value) is int and value >= 0
     for row in rows:
-        if not isinstance(row, dict):
+        if (not isinstance(row, dict) or not common <= row.keys()
+                or row.get("schema") != "fsgg.board-done-retention-custody/1"
+                or not timestamp(row.get("at"))):
             return False
-        if row.get("step") == "intent":
-            pending.add(row.get("itemId"))
-        elif row.get("step") == "archived":
-            pending.discard(row.get("itemId"))
-        elif row.get("step") in ("uncertain", "stopped"):
+    if len(rows) < 2:
+        return False
+    start, end = rows[0], rows[-1]
+    if (set(start) != common | {"project", "board", "done", "keep", "planned", "maxArchive"}
+            or start["step"] != "run" or start["project"] != PROJECT or start["keep"] != 200
+            or type(start["keep"]) is not int or start["maxArchive"] != max_archive
+            or not all(integer(start[k]) for k in ("board", "done", "planned", "maxArchive"))
+            or not 0 < start["planned"] <= start["done"] - 200 or not 200 < start["done"] <= start["board"] <= 500
+            or not 1 <= max_archive <= 500
+            or set(end) != common | {"archived", "skipped"} or end["step"] != "finished"
+            or not all(integer(end[k]) for k in ("archived", "skipped"))):
+        return False
+    pending = None
+    seen_items, seen_content = set(), set()
+    counts = {"archived": 0, "skipped": 0}
+    for row in rows[1:-1]:
+        step = row["step"]
+        keys = common | identity | ({"reason"} if step == "skipped" else set())
+        if (step not in ("intent", "archived", "skipped") or set(row) != keys
+                or any(not isinstance(row[k], str) or not row[k].strip() for k in ("itemId", "contentId", "repo"))
+                or not re.fullmatch(r"[^/\s]+/[^/\s]+", row["repo"])
+                or type(row["number"]) is not int or row["number"] < 1
+                or type(row["enrolled"]) is not bool or not timestamp(row["closedAt"])
+                or (step == "skipped" and (not isinstance(row["reason"], str) or not row["reason"].strip()))):
             return False
-    return bool(rows) and rows[0].get("step") == "run" and rows[-1].get("step") == "finished" and not pending
+        ref = {key: row[key] for key in identity}
+        if pending is not None:
+            if step != "archived" or ref != pending:
+                return False
+            counts["archived"] += 1
+            pending = None
+        else:
+            if step == "archived" or row["itemId"] in seen_items or row["contentId"] in seen_content:
+                return False
+            seen_items.add(row["itemId"]); seen_content.add(row["contentId"])
+            if step == "intent":
+                pending = ref
+            else:
+                counts["skipped"] += 1
+    return (pending is None and sum(counts.values()) == min(start["planned"], max_archive)
+            and all(end[k] == count for k, count in counts.items()))
 
 
 def run(config: Path, credentials: Path, timeout: float = 720) -> int:
@@ -152,7 +204,17 @@ def run(config: Path, credentials: Path, timeout: float = 720) -> int:
         out = private_dir(p["outDir"])
         stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ-")
         directory = Path(tempfile.mkdtemp(prefix=stamp, dir=out))
+        sync_dir(directory)
+        sync_dir(out)
         exclusive_json(latch, {"run": str(directory), "configSha256": hashlib.sha256(config.read_bytes()).hexdigest()})
+        # Preprovision the child's append-only file, including its directory entry, before any possible send.
+        custody = private_dir(directory / "custody")
+        fd = os.open(custody / "custody.jsonl", os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        sync_dir(custody)
         env = {key: os.environ[key] for key in ("HOME", "LANG", "LC_ALL", "XDG_RUNTIME_DIR", "DOTNET_ROOT") if key in os.environ}
         env.update(PATH="/usr/local/bin:/usr/bin:/bin", GH_TOKEN=token.strip(), COORD_ARCHIVE_GH=str(p["gh"]))
         command = ["/usr/bin/python3", "-I", str(p["script"]), "--owner", "FS-GG", "--project", "3",
@@ -161,6 +223,9 @@ def run(config: Path, credentials: Path, timeout: float = 720) -> int:
                    "--custody-dir", str(directory / "custody"), "--execute"]
         with os.fdopen(os.open(directory / "stdout", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as stdout, \
                 os.fdopen(os.open(directory / "stderr", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as stderr:
+            os.fsync(stdout.fileno())
+            os.fsync(stderr.fileno())
+            sync_dir(directory)
             process = subprocess.Popen(command, env=env, stdout=stdout, stderr=stderr, start_new_session=True, umask=0o077)
             try:
                 code = process.wait(timeout=timeout)
@@ -168,7 +233,7 @@ def run(config: Path, credentials: Path, timeout: float = 720) -> int:
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
                 code = 124
-        if code != 0 or not settled(directory):
+        if code != 0 or not settled(directory, c["maxArchive"]):
             print("board-archive: stopped; private custody retained, Root readback required", file=sys.stderr)
             return 3
         exclusive_json(directory / "completed.json", {"exitCode": code, "settled": True})
