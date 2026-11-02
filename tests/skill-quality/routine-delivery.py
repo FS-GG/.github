@@ -2134,8 +2134,8 @@ jobs:
     def fsquint_transport(self, *, apply=False, change=None, drift=None, prior=None,
                            selector="ci.yml", merged=False, uncertain=False, required=None, fresh=None, receiver="FS-GG/FsQuint"):
         repo = receiver
-        repo_id = MODULE.FOURD_REPOSITORY_ID if repo == MODULE.FOURD_REPOSITORY else MODULE.SC2_REPOSITORY_ID if repo == MODULE.SC2_REPOSITORY else MODULE.BAR_REPOSITORY_ID if repo == MODULE.BAR_REPOSITORY else 1375501179
-        workflow_id = MODULE.FOURD_VERIFY_ID if repo == MODULE.FOURD_REPOSITORY else MODULE.SC2_VERIFY_ID if repo == MODULE.SC2_REPOSITORY else MODULE.BAR_PREARM_ID if repo == MODULE.BAR_REPOSITORY else 361154226
+        repo_id = MODULE.HIGHBAR_REPOSITORY_ID if repo == MODULE.HIGHBAR_REPOSITORY else MODULE.FOURD_REPOSITORY_ID if repo == MODULE.FOURD_REPOSITORY else MODULE.SC2_REPOSITORY_ID if repo == MODULE.SC2_REPOSITORY else MODULE.BAR_REPOSITORY_ID if repo == MODULE.BAR_REPOSITORY else 1375501179
+        workflow_id = MODULE.HIGHBAR_WORKFLOW_ID if repo == MODULE.HIGHBAR_REPOSITORY else MODULE.FOURD_VERIFY_ID if repo == MODULE.FOURD_REPOSITORY else MODULE.SC2_VERIFY_ID if repo == MODULE.SC2_REPOSITORY else MODULE.BAR_PREARM_ID if repo == MODULE.BAR_REPOSITORY else 361154226
         workflow_file = "verify.yml" if repo in (MODULE.SC2_REPOSITORY, MODULE.FOURD_REPOSITORY) else "prearm-source-controls.yml" if repo == MODULE.BAR_REPOSITORY else "ci.yml"
         job_name = "verify" if repo in (MODULE.SC2_REPOSITORY, MODULE.FOURD_REPOSITORY) else "prearm-source-controls" if repo == MODULE.BAR_REPOSITORY else "qualify"
         alias = lambda value: json.loads(json.dumps(value).replace("FS-GG/FS.GG.Coordination", repo).replace("1346720714", str(repo_id)))
@@ -2145,6 +2145,10 @@ jobs:
         pr["head"]["ref"] = "routine/install-routine-producer-90ccedb7"
         after = alias(self.after)
         after["head"]["ref"] = pr["head"]["ref"]
+        base_ref = "master" if repo == MODULE.HIGHBAR_REPOSITORY else "main"
+        if repo == MODULE.HIGHBAR_REPOSITORY:
+            pr["base"]["ref"] = after["base"]["ref"] = base_ref
+            responses[f"repos/{repo}"]["default_branch"] = base_ref
         if repo == MODULE.BAR_REPOSITORY:
             old_head = fixture['head']; fixture['head'] = self.bar_head
             for value in (pr, after):
@@ -2159,7 +2163,7 @@ jobs:
             responses[f"repos/{repo}/actions/jobs/8"]['head_sha'] = self.bar_head
             responses[f"repos/{repo}/compare/{self.bar_head}...{self.bar_head}"] = dict(status='identical',merge_base_commit={'sha':self.bar_head})
         head = fixture["head"]
-        responses[f"repos/{repo}/git/ref/heads/main"] = dict(ref="refs/heads/main",object=dict(type="commit",sha=fixture['base']))
+        responses[f"repos/{repo}/git/ref/heads/{base_ref}"] = dict(ref=f"refs/heads/{base_ref}",object=dict(type="commit",sha=fixture['base']))
         metadata = responses[f"repos/{repo}"]
         metadata.update(private=repo in (MODULE.SC2_REPOSITORY, MODULE.FOURD_REPOSITORY), permissions=dict(admin=True, push=True, pull=True))
         wf = dict(id=workflow_id, path=".github/workflows/"+workflow_file, state="active",name=workflow_file[:-4])
@@ -2202,8 +2206,8 @@ jobs:
         responses[f"repos/{repo}/commits/{head}/check-runs?per_page=100"]['check_runs'][0]['name'] = job_name
         responses[f"repos/{repo}/commits/{head}/status?per_page=100"] = dict(sha=head,total_count=0,statuses=[])
         policy = {
-            f"repos/{repo}/branches/main/protection/required_status_checks": (1,404,dict(message="Branch not protected",documentation_url="https://docs.github.com/rest/branches/branch-protection#get-status-checks-protection",status="404")),
-            f"repos/{repo}/rules/branches/main?per_page=100": (0,200,[]),
+            f"repos/{repo}/branches/{base_ref}/protection/required_status_checks": (1,404,dict(message="Branch not protected",documentation_url="https://docs.github.com/rest/branches/branch-protection#get-status-checks-protection",status="404")),
+            f"repos/{repo}/rules/branches/{base_ref}?per_page=100": (0,200,[]),
             f"repos/{repo}/rulesets?includes_parents=true&per_page=100": (0,200,[]),
         }
         if repo == MODULE.FOURD_REPOSITORY:
@@ -2282,11 +2286,11 @@ jobs:
             api.attempts += 1
             self.assertEqual(args[:3],["--method","PUT",f"repos/{repo}/pulls/1/merge"])
             self.assertEqual(json.loads(kwargs['input_text']),dict(sha=head,merge_method="squash"))
-            responses[f"repos/{repo}/git/ref/heads/main"] = dict(object=dict(sha=head))
+            responses[f"repos/{repo}/git/ref/heads/{base_ref}"] = dict(object=dict(sha=head))
             if uncertain: raise MODULE.AmbiguousWrite("lost response")
             return dict(merged=True,sha=head)
         api._run = native_write
-        if merged: responses[f"repos/{repo}/git/ref/heads/main"] = dict(object=dict(sha=head))
+        if merged: responses[f"repos/{repo}/git/ref/heads/{base_ref}"] = dict(object=dict(sha=head))
         watcher=MODULE.WatchGhApi
         with mock.patch.multiple(MODULE,
                 SC2_VERIFY_SHA256=hashlib.sha256(retained['.github/workflows/verify.yml']).hexdigest() if repo == MODULE.SC2_REPOSITORY else MODULE.SC2_VERIFY_SHA256,
@@ -2296,6 +2300,196 @@ jobs:
             code,result = MODULE.summarize(api,repo=repo,pr_number=1,expected_head=head,merge_method="squash",
                 publication_required=False,apply=apply,coherent_workflow=selector,producer_source=fixture['source'],installation_prior=prior)
         return code,result,api,reads
+
+    def highbar_transport(self, *, runner=None, org_runner=None, executed=None, change=None, **kwargs):
+        # Inert native transport, real Git payload closure, fixed fixture clock.
+        # Explicit controls are independent of the adapter's expected step constants.
+        technical = {
+            "proto": ["Run bufbuild/buf-setup-action@v1", "buf lint", "buf generate (smoke — full output dropped)"],
+            "arm-coverage": ["Run arm-coverage helper", "Assert 66/66 wired", "Upload coverage CSV"],
+            "python": ["Run actions/setup-python@v5", "Codegen + pytest via Makefile"],
+            "bash-syntax": ["bash -n", "Skip-stub exit-77 invariant"],
+            "runbook-validation": ["Parse BUILD.md (structure only)"],
+            "cpp-build": ["Pre-flight (engine + assets)", "Build libSkirmishAI.so", "Run ctest", "Upload arm-coverage CSV (built variant)"],
+            "headless-acceptance": ["Pre-flight", "Parse ci-skip-reason trailers", "Run acceptance scripts"],
+            "behavioral-acceptance": ["Pre-flight", "snapshot-tick.sh (cadence + SC-005 regression)",
+                "behavioral-move.sh (US1)", "behavioral-build.sh (US2)",
+                "malformed-payload.sh (reject invalid input, stay healthy)",
+                "behavioral-attack.sh (US3, soft — accepts 77)", "aicommand-behavioral-coverage.sh (US4 macro driver)", "Upload coverage artifacts"],
+            "bench-latency": ["latency-uds.sh", "latency-tcp.sh", "Upload p99 numbers"],
+            "behavioral-reproducibility": [],
+        }
+        repo = MODULE.HIGHBAR_REPOSITORY
+        prefix = f"repos/{repo}/"
+        def prepare(responses, policy, pr):
+            head, base = pr["head"]["sha"], pr["base"]["sha"]
+            # Retain exact public workflow bytes; no hash patch can hide source drift.
+            body = (ROOT / "tests/skill-quality/fixtures/highbar-ci.yml.txt").read_bytes()
+            sha = hashlib.sha1(f"blob {len(body)}\0".encode() + body).hexdigest()
+            row = dict(path=".github/workflows/ci.yml", type="blob", mode="100644", sha=sha)
+            responses[prefix + f"git/blobs/{sha}"] = dict(sha=sha, encoding="base64", size=len(body), content=MODULE.base64.b64encode(body).decode())
+            for revision in (base, head):
+                tree = responses[prefix + f"git/commits/{revision}"]["tree"]["sha"]
+                rows = responses[prefix + f"git/trees/{tree}?recursive=1"]["tree"]
+                rows[:] = [entry for entry in rows if entry["path"] != row["path"]] + [copy.deepcopy(row)]
+            run = responses[prefix + "actions/runs/7"]
+            run.update(created_at="2026-11-01T12:00:00Z", pull_requests=[dict(number=1,
+                head=dict(sha=head, ref=pr["head"]["ref"], repo=dict(id=1393546381)),
+                base=dict(sha=base, ref="master", repo=dict(id=1393546381)))])
+            responses[prefix + f"actions/workflows/369455020/runs?head_sha={head}&per_page=100"] = dict(total_count=1, workflow_runs=[copy.deepcopy(run)])
+            responses[prefix + "check-suites/9"] = dict(id=9, head_sha=head, head_branch=pr["head"]["ref"], app=dict(id=15368), status="completed", conclusion="success")
+            for route, value in (("variables", runner), ("organization-variables", org_runner)):
+                variables = [] if value is None else [dict(name="HIGHBAR_HAVE_RUNNER", value=value, updated_at="2026-10-31T12:00:00Z")]
+                responses[prefix + f"actions/{route}?per_page=100"] = dict(total_count=len(variables), variables=variables)
+            enabled = (runner if runner is not None else org_runner or "").lower() == "true" if executed is None else executed
+            jobs, checks = [], []
+            for index, (name, controls) in enumerate(technical.items(), 8):
+                hosted = name in list(technical)[:5]
+                skipped = name == "behavioral-reproducibility" or (not hosted and not enabled)
+                steps = [] if skipped else ["Set up job", "Run actions/checkout@v4", *controls,
+                    *(["Post Run actions/setup-python@v5"] if name == "python" else []), "Post Run actions/checkout@v4", "Complete job"]
+                job = dict(id=index, name=name, run_id=7, head_sha=head, run_attempt=1, status="completed",
+                    conclusion="skipped" if skipped else "success", completed_at="2026-11-01T12:02:00Z",
+                    labels=["ubuntu-22.04"] if hosted else ["self-hosted", "Linux", "X64", "bar-engine"],
+                    check_run_url=f"https://api.github.com/repos/{repo}/check-runs/{index}",
+                    steps=[dict(number=i, name=value, status="completed", conclusion="success") for i, value in enumerate(steps, 1)])
+                jobs.append(job)
+                responses[prefix + f"actions/jobs/{index}"] = copy.deepcopy(job)
+                checks.append(dict(id=index, name=name, head_sha=head, app=dict(id=15368), check_suite=dict(id=9),
+                    status="completed", conclusion=job["conclusion"], details_url=f"https://github.com/{repo}/actions/runs/7/job/{index}"))
+            responses[prefix + "actions/runs/7/attempts/1/jobs?per_page=100"] = dict(total_count=10, jobs=jobs)
+            responses[prefix + f"commits/{head}/check-runs?per_page=100"] = dict(total_count=10, check_runs=checks)
+            if change: change(responses, policy, pr)
+        return self.fsquint_transport(receiver=repo, change=prepare, **kwargs)
+
+    def test_highbar_pure_install_full_transport_ready_and_exact_head_merge(self):
+        for apply in (False, True):
+            code, result, api, reads = self.highbar_transport(apply=apply)
+            self.assertEqual((code, api.attempts), (0, int(apply)), result.reason)
+            self.assertEqual(result.codeDelivery, "delivered" if apply else "not-delivered")
+            if not apply: self.assertIn("required-policy-observed-empty", result.reason or "")
+            self.assertTrue(any("organization-variables" in command[-1] for command in reads))
+
+    def test_highbar_dynamic_runner_and_inherited_override(self):
+        for kwargs in (dict(runner="true"), dict(org_runner="TRUE"), dict(runner="false", org_runner="true")):
+            code, result, api, _ = self.highbar_transport(**kwargs)
+            self.assertEqual((code, api.attempts), (0, 0), result.reason)
+        for kwargs in (dict(runner="true", executed=False), dict(org_runner="true", executed=False),
+                       dict(runner="false", executed=True)):
+            code, result, api, _ = self.highbar_transport(apply=True, **kwargs)
+            self.assertEqual((code, api.attempts), (2, 0), result.reason)
+
+    def test_highbar_native_policy_and_required_checks_remain_independent(self):
+        prefix = f"repos/{MODULE.HIGHBAR_REPOSITORY}/"
+        for route, value in (("branches/master/protection/required_status_checks", (1, 403, {})),
+                ("rules/branches/master?per_page=100", (0, 200, [dict(type="required_status_checks")])),
+                ("rulesets?includes_parents=true&per_page=100", (0, 200, [dict(id=1)])),
+                ("rulesets?includes_parents=true&per_page=100", (0, 200, [dict(id=i) for i in range(100)]))):
+            code, result, api, _ = self.highbar_transport(apply=True, change=lambda r,p,pr: p.update({prefix+route:value}))
+            self.assertEqual((code, api.attempts), (2, 0), result.reason)
+        required = dict(name="proto", bucket="pass", state="SUCCESS", completedAt="2026-11-01T12:02:00Z",
+            event="pull_request", workflow="ci", startedAt="2026-11-01T12:00:00Z",
+            link="https://github.com/FS-GG/HighBarV3/actions/runs/7/job/8")
+        def policy(r,p,pr):
+            p[prefix+"branches/master/protection/required_status_checks"] = (0,200,dict(contexts=["proto"],checks=[dict(context="proto",app_id=15368)]))
+            p[prefix+"rules/branches/master?per_page=100"] = (0,200,[dict(type="required_status_checks")])
+        code, result, _, _ = self.highbar_transport(required=(0,json.dumps([required]).encode()), change=policy)
+        self.assertEqual(code,0,result.reason)
+        required["bucket"] = "fail"
+        self.assertEqual(self.highbar_transport(apply=True,required=(0,json.dumps([required]).encode()))[0],2)
+        for required in ((1,b"",b"permission denied"),(0,b"[]"),(1,b"",b"")):
+            code, _, api, _ = self.highbar_transport(apply=True,required=required)
+            self.assertEqual((code,api.attempts),(2,0))
+
+    def test_highbar_causal_native_identity_and_execution_refusals(self):
+        prefix = f"repos/{MODULE.HIGHBAR_REPOSITORY}/"
+        head = self.fixture["head"]
+        jobs = prefix + "actions/runs/7/attempts/1/jobs?per_page=100"
+        population = prefix + f"actions/workflows/369455020/runs?head_sha={head}&per_page=100"
+        checks = prefix + f"commits/{head}/check-runs?per_page=100"
+        changes = [
+            lambda r,p,pr:r[prefix.rstrip('/')].update(id=1),
+            lambda r,p,pr:r[prefix.rstrip('/')]["permissions"].update(admin=False),
+            lambda r,p,pr:r[prefix+"git/ref/heads/master"]["object"].update(sha="f"*40),
+            lambda r,p,pr:r[prefix+"actions/workflows/ci.yml"].update(id=1),
+            lambda r,p,pr:r[population].update(total_count=0,workflow_runs=[]),
+            lambda r,p,pr:r[population]["workflow_runs"][0].update(event="push"),
+            lambda r,p,pr:r[population]["workflow_runs"][0].update(run_attempt=2),
+            lambda r,p,pr:r[population]["workflow_runs"][0]["pull_requests"][0]["base"].update(sha="f"*40),
+            lambda r,p,pr:r[prefix+"actions/runs/7"].update(head_branch="foreign"),
+            lambda r,p,pr:r[prefix+"check-suites/9"].update(head_sha="f"*40),
+            lambda r,p,pr:r[prefix+"actions/organization-variables?per_page=100"].update(total_count=1),
+            lambda r,p,pr:r[jobs].update(total_count=9),
+            lambda r,p,pr:r[jobs]["jobs"].pop(),
+            lambda r,p,pr:r[jobs]["jobs"][1].update(id=8),
+            lambda r,p,pr:r[jobs]["jobs"][0].update(conclusion="skipped"),
+            lambda r,p,pr:r[checks]["check_runs"][0]["app"].update(id=1),
+            lambda r,p,pr:r[checks]["check_runs"][0].update(head_sha="f"*40),
+            lambda r,p,pr:r[checks]["check_runs"][0].update(details_url="https://example.invalid"),
+            lambda r,p,pr:r[checks]["check_runs"].pop(),
+            lambda r,p,pr:r[prefix+"actions/jobs/8"].update(run_attempt=2),
+            lambda r,p,pr:r[prefix+f"commits/{head}/status?per_page=100"].update(total_count=1),
+        ]
+        # Change both representations to prove execution checks, not just readback equality.
+        def step_change(r,p,pr):
+            for job in (r[jobs]["jobs"][0],r[prefix+"actions/jobs/8"]):
+                job["steps"][3]["conclusion"]="skipped"
+        changes.append(step_change)
+        for index, change in enumerate(changes):
+            with self.subTest(index=index):
+                code, result, api, _ = self.highbar_transport(apply=True, change=change)
+                self.assertEqual((code, api.attempts), (2, 0), result.reason)
+
+    def test_highbar_source_closure_rejects_changed_workflow_mode_and_unrelated_leaf(self):
+        prefix = f"repos/{MODULE.HIGHBAR_REPOSITORY}/"
+        def mutate(kind):
+            def change(r,p,pr):
+                revisions = (pr["base"]["sha"],pr["head"]["sha"]) if kind != "unrelated" else (pr["head"]["sha"],)
+                for revision in revisions:
+                    tree = r[prefix+f"git/commits/{revision}"]["tree"]["sha"]
+                    rows = r[prefix+f"git/trees/{tree}?recursive=1"]["tree"]
+                    row = next(row for row in rows if row["path"] == ("README.md" if kind == "unrelated" else ".github/workflows/ci.yml"))
+                    if kind == "mode": row["mode"] = "100755"
+                    else:
+                        body = b"changed source\n"
+                        sha = hashlib.sha1(f"blob {len(body)}\0".encode()+body).hexdigest()
+                        row["sha"] = sha
+                        r[prefix+f"git/blobs/{sha}"] = dict(sha=sha,encoding="base64",size=len(body),content=MODULE.base64.b64encode(body).decode())
+            return change
+        for kind in ("workflow", "mode", "unrelated"):
+            code,result,api,_ = self.highbar_transport(apply=True,change=mutate(kind))
+            self.assertEqual((code,api.attempts),(2,0),result.reason)
+
+    def test_highbar_every_hosted_technical_job_must_execute_its_controls(self):
+        prefix = f"repos/{MODULE.HIGHBAR_REPOSITORY}/"
+        for index in range(5):
+            def change(r,p,pr):
+                for job in (r[prefix+"actions/runs/7/attempts/1/jobs?per_page=100"]["jobs"][index],r[prefix+f"actions/jobs/{8+index}"]):
+                    job["steps"][2]["conclusion"] = "skipped"
+            code,result,api,_ = self.highbar_transport(apply=True,change=change)
+            self.assertEqual((code,api.attempts),(2,0),result.reason)
+            self.assertIn("technical steps",result.reason)
+
+    def test_highbar_variable_populations_fail_closed_and_policy_is_rechecked(self):
+        prefix = f"repos/{MODULE.HIGHBAR_REPOSITORY}/"
+        for payload in ({}, dict(total_count=100,variables=[]), dict(total_count=2,variables=[
+                dict(name="HIGHBAR_HAVE_RUNNER",value="false"),dict(name="highbar_have_runner",value="true")])):
+            code,result,api,_ = self.highbar_transport(apply=True,change=lambda r,p,pr:
+                r.update({prefix+"actions/organization-variables?per_page=100":payload}))
+            self.assertEqual((code,api.attempts),(2,0),result.reason)
+        code,result,api,_ = self.highbar_transport(apply=True,drift=lambda r,p,pr:p.update({
+            prefix+"rules/branches/master?per_page=100":(0,200,[dict(type="required_status_checks")])}))
+        self.assertEqual((code,api.attempts),(2,0),result.reason)
+
+    def test_highbar_runner_change_after_run_and_ambiguous_effect_are_retained(self):
+        prefix = f"repos/{MODULE.HIGHBAR_REPOSITORY}/"
+        code, result, api, _ = self.highbar_transport(apply=True, runner="true", change=lambda r,p,pr:
+            r[prefix+"actions/variables?per_page=100"]["variables"][0].update(updated_at="2026-11-02T12:00:00Z"))
+        self.assertEqual((code,api.attempts),(2,0),result.reason)
+        code, result, api, _ = self.highbar_transport(apply=True, uncertain=True)
+        self.assertEqual(api.attempts,1)
+        # A lost response is read back through existing custody, never resent.
+        self.assertEqual(result.codeDelivery,"delivered",result.reason)
 
     def fourd_transport(self, **kwargs):
         self.fourd_retained = {

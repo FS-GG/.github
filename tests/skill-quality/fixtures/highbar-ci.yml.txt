@@ -1,0 +1,323 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# HighBarV3 — CI pipeline (T051-T056).
+#
+# Two-tier runner topology (research.md §R2 / spec Clarification):
+#   GitHub-hosted ubuntu-22.04 — proto, arm-coverage, python, lint,
+#                                 runbook-validation, bash-syntax
+#   self-hosted bar-engine    — cpp-build (needs the BAR/Recoil engine
+#                                 source tree symlinked in), headless-
+#                                 acceptance (live spring-headless),
+#                                 bench-latency
+#
+# Self-hosted-only jobs use `runs-on: [self-hosted, Linux, X64, bar-engine]`
+# and gate on `vars.HIGHBAR_HAVE_RUNNER == 'true'` so they no-op on
+# repos without a registered runner.
+
+name: ci
+
+on:
+  push:
+    branches: ["master", "002-live-headless-e2e"]
+  pull_request:
+    branches: ["master"]
+
+jobs:
+
+  # -----------------------------------------------------------------
+  # Hosted-runner jobs (always run)
+  # -----------------------------------------------------------------
+
+  proto:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-setup-action@v1
+      - name: buf lint
+        run: buf lint proto
+      - name: buf generate (smoke — full output dropped)
+        run: cd proto && buf generate
+
+  arm-coverage:
+    # T056 — assert dispatcher_wired=true for all 66 arms before any
+    # other job depends on the AI being usable.
+    runs-on: ubuntu-22.04
+    needs: proto
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run arm-coverage helper
+        run: |
+          mkdir -p build/reports
+          tests/headless/_gen-arm-coverage.sh \
+              --repo-root . \
+              --output build/reports/aicommand-arm-coverage.csv
+      - name: Assert 66/66 wired
+        run: |
+          total=$(grep -cv '^arm_name' build/reports/aicommand-arm-coverage.csv)
+          wired=$(grep -c ',true,' build/reports/aicommand-arm-coverage.csv)
+          echo "arms: $wired / $total wired"
+          [ "$total" -eq 66 ] || { echo "expected 66 arms, got $total"; exit 1; }
+          [ "$wired" -eq 66 ] || { echo "expected 66 wired, got $wired"; exit 1; }
+      - name: Upload coverage CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: aicommand-arm-coverage
+          path: build/reports/aicommand-arm-coverage.csv
+
+  python:
+    runs-on: ubuntu-22.04
+    needs: proto
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Codegen + pytest via Makefile
+        working-directory: clients/python
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install grpcio grpcio-tools pytest
+          make codegen
+          make test
+
+  bash-syntax:
+    # Cheap regression catch: every shell script must `bash -n` cleanly,
+    # and the skip-stub scripts must exit 77 when SPRING_HEADLESS is
+    # unset (FR-007 invariant).
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n
+        run: |
+          fail=0
+          for f in tests/headless/*.sh tests/bench/*.sh; do
+              [ -f "$f" ] || continue
+              if ! bash -n "$f"; then
+                  echo "syntax error in $f" >&2
+                  fail=1
+              fi
+          done
+          exit "$fail"
+      - name: Skip-stub exit-77 invariant
+        run: |
+          set +e
+          unset SPRING_HEADLESS
+          for f in tests/headless/phase2-smoke.sh \
+                   tests/headless/quickstart-e2e.sh \
+                   tests/headless/sc-disconnect-lifecycle.sh \
+                   tests/headless/sc-symbol-visibility.sh \
+                   tests/headless/sc006-soak.sh \
+                   tests/headless/malformed-payload.sh \
+                   tests/headless/us3-external-only.sh \
+                   tests/headless/us3-external-only-ai.sh \
+                   tests/headless/us4-tcp.sh \
+                   tests/headless/us4-transport-parity.sh \
+                   tests/headless/us5-cross-client-parity.sh \
+                   tests/headless/us6-reconnect.sh \
+                   tests/headless/us6-resume-in-ring.sh \
+                   tests/headless/us6-resume-out-of-range.sh \
+                   tests/headless/gateway-fault.sh; do
+              "$f" >/dev/null 2>&1
+              rc=$?
+              if [ "$rc" -ne 77 ]; then
+                  echo "FAIL: $f returned $rc; expected 77 (skip without SPRING_HEADLESS)" >&2
+                  exit 1
+              fi
+          done
+          echo "14 skip-stub scripts all exit 77 cleanly"
+
+  runbook-validation:
+    # T020 / T055 — parses BUILD.md, extracts steps + expect comments,
+    # asserts step count and expect-substring grammar. Full step
+    # execution requires the BAR engine + spring binary which only the
+    # self-hosted runner has; the structural check is hosted-runnable.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse BUILD.md (structure only)
+        run: |
+          # The validator's parser runs inline below — full step
+          # execution is reserved for the self-hosted job.
+          set -euo pipefail
+          [ -f BUILD.md ] || { echo "BUILD.md missing"; exit 1; }
+          tmp=$(mktemp -d)
+          awk -v d="$tmp" '
+            BEGIN { step=0; in_block=0; expect=""; }
+            /^## [0-9]+\. / { step=$2; sub(/\./, "", step); next }
+            /^<!-- expect: .* -->[ \t]*$/ {
+                expect=$0; sub(/^<!-- expect: /, "", expect)
+                sub(/ -->[ \t]*$/, "", expect); next
+            }
+            /^```bash[ \t]*$/ { if (step==0) next; in_block=1; out=sprintf("%s/step_%02d.sh",d,step); ef=sprintf("%s/step_%02d.expect",d,step); print expect > ef; close(ef); next }
+            /^```[ \t]*$/ { if (in_block) { in_block=0; close(out); expect="" } next }
+            in_block { print > out }
+          ' BUILD.md
+          steps=$(ls "$tmp"/step_*.sh 2>/dev/null | wc -l)
+          [ "$steps" -ge 1 ] || { echo "no numbered steps in BUILD.md"; exit 1; }
+          [ "$steps" -le 10 ] || { echo "BUILD.md has > 10 numbered steps ($steps)"; exit 1; }
+          for ef in "$tmp"/step_*.expect; do
+              [ -s "$ef" ] || { echo "empty expect for $(basename "$ef" .expect)"; exit 1; }
+          done
+          echo "BUILD.md: $steps steps with non-empty expect substrings — OK"
+
+  # -----------------------------------------------------------------
+  # Self-hosted runner jobs (require bar-engine label)
+  # -----------------------------------------------------------------
+
+  cpp-build:
+    # T052 — actual libSkirmishAI.so build inside the BAR/Recoil engine
+    # source tree. Self-hosted because the build needs ~recoil-engine
+    # symlinked in + the rts/lib submodules + the vcpkg cache, all of
+    # which are runner-provisioned.
+    needs: arm-coverage
+    if: ${{ vars.HIGHBAR_HAVE_RUNNER == 'true' }}
+    runs-on: [self-hosted, Linux, X64, bar-engine]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pre-flight (engine + assets)
+        run: .github/runner-setup/preflight.sh
+      - name: Build libSkirmishAI.so
+        run: bash .github/runner-setup/build-plugin.sh
+      - name: Run ctest
+        run: ctest --test-dir "$HOME/recoil-engine/build" --output-on-failure
+      - name: Upload arm-coverage CSV (built variant)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aicommand-arm-coverage-built
+          path: $HOME/recoil-engine/build/reports/aicommand-arm-coverage.csv
+          if-no-files-found: ignore
+
+  headless-acceptance:
+    # T053 — runs the green acceptance scripts against a live match.
+    # ci-skip-reason: trailer parsing per contracts/ci-skip-reason.md.
+    needs: cpp-build
+    if: ${{ vars.HIGHBAR_HAVE_RUNNER == 'true' }}
+    runs-on: [self-hosted, Linux, X64, bar-engine]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pre-flight
+        run: .github/runner-setup/preflight.sh
+      - name: Parse ci-skip-reason trailers
+        id: skip
+        uses: ./.github/actions/parse-skip-reason
+      - name: Run acceptance scripts
+        env:
+          ALLOWED_SKIPS: ${{ steps.skip.outputs.allowed_skips_newline }}
+        run: |
+          set +e
+          declare -a allowed
+          while IFS= read -r line; do [ -n "$line" ] && allowed+=("$line"); done <<< "$ALLOWED_SKIPS"
+          fail=0
+          for script in tests/headless/us*.sh tests/headless/sc-*.sh; do
+              base=$(basename "$script")
+              echo "=== $base ==="
+              "$script"
+              rc=$?
+              if [ "$rc" -eq 0 ]; then
+                  echo "$base: PASS"
+              elif [ "$rc" -eq 77 ]; then
+                  # Skip — must be in allowed list.
+                  ok=0
+                  for a in "${allowed[@]}"; do
+                      [ "$a" = "$base" ] && ok=1 && break
+                  done
+                  if [ "$ok" -eq 1 ]; then
+                      echo "$base: SKIP (allowed by ci-skip-reason)"
+                  else
+                      echo "$base: SKIP NOT ALLOWED — fail"
+                      fail=1
+                  fi
+              else
+                  echo "$base: FAIL rc=$rc"
+                  fail=1
+              fi
+          done
+          exit "$fail"
+
+  behavioral-acceptance:
+    # 003-snapshot-arm-coverage T033 — per-PR behavioral-verification
+    # scripts. Four hard jobs (snapshot-tick + move + build + macro
+    # coverage) fail the PR on regression; behavioral-attack is soft
+    # (accepts 77 per spec §Edge Case: no enemy LOS on minimal.startscript).
+    # Non-regression gate (FR-011): us1-observer.sh, us2-ai-coexist.sh,
+    # and the latency benches continue to run under the default snapshot
+    # tick. If any of those regress after 003 lands, this gate blocks
+    # the PR until the regression is fixed.
+    needs: cpp-build
+    if: ${{ vars.HIGHBAR_HAVE_RUNNER == 'true' }}
+    runs-on: [self-hosted, Linux, X64, bar-engine]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pre-flight
+        run: .github/runner-setup/preflight.sh
+      - name: snapshot-tick.sh (cadence + SC-005 regression)
+        run: tests/headless/snapshot-tick.sh
+      - name: behavioral-move.sh (US1)
+        run: tests/headless/behavioral-move.sh
+      - name: behavioral-build.sh (US2)
+        run: tests/headless/behavioral-build.sh
+      - name: malformed-payload.sh (reject invalid input, stay healthy)
+        run: tests/headless/malformed-payload.sh
+      - name: behavioral-attack.sh (US3, soft — accepts 77)
+        run: |
+          set +e
+          tests/headless/behavioral-attack.sh
+          rc=$?
+          if [ "$rc" -eq 0 ] || [ "$rc" -eq 77 ]; then exit 0; fi
+          exit "$rc"
+      - name: aicommand-behavioral-coverage.sh (US4 macro driver)
+        env:
+          HIGHBAR_BEHAVIORAL_THRESHOLD: "0.50"
+        run: tests/headless/aicommand-behavioral-coverage.sh
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aicommand-behavioral-coverage
+          path: |
+            build/reports/aicommand-behavioral-coverage.csv
+            build/reports/aicommand-behavioral-coverage.digest
+          if-no-files-found: warn
+
+  behavioral-reproducibility:
+    # 003 T033 — post-merge-only because 5× runs exceed PR-budget wall-clock.
+    # Triggered on pushes to master.
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master'
+         && vars.HIGHBAR_HAVE_RUNNER == 'true' }}
+    needs: behavioral-acceptance
+    runs-on: [self-hosted, Linux, X64, bar-engine]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pre-flight
+        run: .github/runner-setup/preflight.sh
+      - name: behavioral-reproducibility.sh (5× runs, digest + p50 fps spread)
+        run: tests/headless/behavioral-reproducibility.sh
+      - name: Upload per-run artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: behavioral-reproducibility-runs
+          path: build/reports/run-*
+          if-no-files-found: warn
+
+  bench-latency:
+    # T054 — Constitution V gate. p99 ≤ 500µs UDS, ≤ 1.5ms TCP.
+    needs: headless-acceptance
+    if: ${{ vars.HIGHBAR_HAVE_RUNNER == 'true' }}
+    runs-on: [self-hosted, Linux, X64, bar-engine]
+    steps:
+      - uses: actions/checkout@v4
+      - name: latency-uds.sh
+        run: bash tests/bench/latency-uds.sh
+      - name: latency-tcp.sh
+        run: bash tests/bench/latency-tcp.sh
+      - name: Upload p99 numbers
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: latency-p99
+          path: |
+            build/reports/latency-uds-p99.txt
+            build/reports/latency-tcp-p99.txt
+          if-no-files-found: ignore
