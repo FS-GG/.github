@@ -169,6 +169,13 @@
       "status": "root-run-gated-writer",
       "gs2089": "unresolved",
       "reason": "Project 3 Done-retention archiver (#5119). Its only provider write, archiveProjectV2Item, runs only under --execute, which a Root operator runs on fdev with --expect-project-id, --max-archive, the private enrollment binding and the shared board-writer flock; the hosted workflow runs a counts-only dry run with a read-only App token and never --execute. Fence owner Root approved this route on 2026-11-01."
+    },
+    {
+      "path": "scripts/learn-dispatch.py",
+      "sha256": "0e359e4d707bf2beb889fb8c7e1bf9da36ec63463736b9a3824a7c3822398093",
+      "status": "not-exercised",
+      "gs2089": "unresolved",
+      "reason": "LEARN-02 dispatch classification recorder (#5249). Explicit --record mode can post a native issue comment and submit its telemetry observation; offline preparation and fixtures exercise no provider effect. Shared per-Delivery custody, a writer lock, possible-send fencing and exact native readback govern the comment path. No live execution, legacy-client refusal or GS2-08.9 protection is claimed. Source delivery does not authorize operation; Root must separately admit the real comment and telemetry effects."
     }
   ]
 }

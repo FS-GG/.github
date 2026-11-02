@@ -1,0 +1,32 @@
+name: learn-02-selftest
+on:
+  pull_request:
+    paths:
+      - 'scripts/learn-dispatch.py'
+      - 'scripts/learn-calibration.py'
+      - 'scripts/learn-calibration-join.sql'
+      - 'tests/learn-dispatch/**'
+      - '.github/workflows/learn-02-selftest.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/learn-dispatch.py'
+      - 'scripts/learn-calibration.py'
+      - 'scripts/learn-calibration-join.sql'
+      - 'tests/learn-dispatch/**'
+      - '.github/workflows/learn-02-selftest.yml'
+permissions:
+  contents: read
+concurrency:
+  group: learn-02-selftest-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  offline-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      # Fixed synthetic snapshots and mocked native/receiver IO; no live credentials or store effects.
+      - run: python3 -m unittest discover -s tests/learn-dispatch -p 'test_*.py'
