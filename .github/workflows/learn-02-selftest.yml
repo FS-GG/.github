@@ -29,4 +29,4 @@ jobs:
         with:
           persist-credentials: false
       # Fixed synthetic snapshots and mocked native/receiver IO; no live credentials or store effects.
-      - run: python3 -m unittest discover -s tests/learn-dispatch -v
+      - run: python3 -m unittest discover -s tests/learn-dispatch -p 'test_*.py'

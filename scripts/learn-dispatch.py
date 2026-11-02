@@ -249,7 +249,7 @@ if __name__=='__main__':
  parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--input',type=Path);parser.add_argument('--output',type=Path,required=True)
  parser.add_argument('--record',action='store_true',help='explicit live comment and telemetry effects; needs separate authority')
  parser.add_argument('--state-root',type=Path,help='one shared private custody root per host; retain across retries')
- parser.add_argument('--engine',default='fsgg-coord-engine');parser.add_argument('--config');parser.add_argument('--producer');parser.add_argument('--binding-digest')
+ parser.add_argument('--telemetry-cli',dest='engine',default='fsgg-coord-engine');parser.add_argument('--config');parser.add_argument('--producer');parser.add_argument('--binding-digest')
  args=parser.parse_args()
  try:
   if args.record:
