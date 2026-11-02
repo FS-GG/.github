@@ -86,6 +86,28 @@ def main() -> None:
         historical, successor_for(write_command), write_command),
         "a provider write command with a matching hash")
 
+    # The closing-keywords job's checkout is pinned to the v7 commit, and a `uses:` line may carry a trailing
+    # comment (.github#5195). The pinned form is the only one admitted: the commit is named, so a different
+    # commit, a dropped pin and a comment on an unreviewed action are all refused with a matching hash.
+    pinned = b"actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7\n"
+    assert source.count(pinned) == 1, "selftest pinned-checkout anchor moved"
+    uncommented = source.replace(pinned, pinned.split(b" #")[0] + b"\n", 1)
+    try:
+        validator.validate_kit_read_only_successor(historical, successor_for(uncommented), uncommented)
+    except SystemExit as error:
+        raise SystemExit(f"producer-fence-validator-selftest: refused the pinned checkout without its trailing comment: {error}")
+    other_commit = source.replace(pinned, b"actions/checkout@" + b"0" * 40 + b" # v7\n", 1)
+    must_fail(lambda: validator.validate_kit_read_only_successor(
+        historical, successor_for(other_commit), other_commit), "a checkout pinned to a commit that was not reviewed")
+    dropped_pin = source.replace(pinned, b"actions/checkout@v7\n", 1)
+    must_fail(lambda: validator.validate_kit_read_only_successor(
+        historical, successor_for(dropped_pin), dropped_pin), "the pin dropped back to the v7 tag")
+    commented_action = source.replace(b"        uses: actions/setup-dotnet@v6\n",
+                                      b"        uses: actions/cache@v4 # v4\n", 1)
+    must_fail(lambda: validator.validate_kit_read_only_successor(
+        historical, successor_for(commented_action), commented_action),
+        "an unreviewed action hidden behind a trailing comment")
+
     # Every spelling of a `gh api` write is refused with a matching hash, and a read-only GET is not.
     inject_anchor = b"          dotnet restore \"$RECEIVER_PROJECT\" -v minimal\n"
     assert source.count(inject_anchor) == 1, "selftest injection anchor moved"
