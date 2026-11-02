@@ -71,5 +71,3 @@ class CalibrationTests(unittest.TestCase):
   r=self.mod.aggregate({'deliveries':rows})
   self.assertAlmostEqual(-1,r['logTokenPearson']);self.assertAlmostEqual(1,r['reviewPearson']);self.assertEqual(3,r['uniqueDeliveries']);self.assertEqual(6,r['reviewExamples']);self.assertEqual(12,r['reviewRoundSum'])
 if __name__=='__main__':unittest.main()
-
-
