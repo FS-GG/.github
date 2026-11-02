@@ -48,7 +48,7 @@ class DispatchTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    out=Path(d)/'intent';self.packet(out)
    with patch.object(m.subprocess,'check_output',return_value=json.dumps({'body':'changed'})) as call,patch.object(m.subprocess,'run') as run:
-    with self.assertRaisesRegex(ValueError,'changed'):m.record(out,None)
+    with self.assertRaisesRegex(ValueError,'changed'):m.record(out,SimpleNamespace(producer='fixture'))
     run.assert_not_called();self.assertEqual(1,call.call_count)
  def test_partial_telemetry_failure_preserves_intent(self):
   with tempfile.TemporaryDirectory() as d:
@@ -58,6 +58,15 @@ class DispatchTests(unittest.TestCase):
    with patch.object(m.subprocess,'check_output',side_effect=replies),patch.object(m.subprocess,'run') as run:
     with self.assertRaises(subprocess.CalledProcessError):m.record(out,args)
     self.assertEqual(1,run.call_count);self.assertEqual(original,(out/'observation.json').read_bytes())
+ def test_floor_preserves_delta_review(self):
+  with self.assertRaisesRegex(ValueError,'floor'):
+   m.classify(self.snapshot('upgrade',chosenProfile=dict(tier='best',criticTier='best',effort='high',reviewDepth='single-source-review'),overrideReason='less review'))
+ def test_producer_mismatch_has_no_io(self):
+  with tempfile.TemporaryDirectory() as d:
+   out=Path(d)/'intent';self.packet(out)
+   with patch.object(m.subprocess,'check_output') as call:
+    with self.assertRaisesRegex(ValueError,'producer mismatch'):m.record(out,SimpleNamespace(producer='other'))
+    call.assert_not_called()
 class CalibrationTests(unittest.TestCase):
  @classmethod
  def setUpClass(cls):

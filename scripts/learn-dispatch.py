@@ -54,7 +54,7 @@ def classify(snapshot):
   raise ValueError('invalid chosenProfile')
  if chosen!=route and not snapshot.get('overrideReason'):
   raise ValueError('overrideReason required')
- if safety and (chosen['tier']!='best' or chosen['criticTier']!='best' or chosen['effort']!='high'):
+ if safety and (chosen['tier']!='best' or chosen['criticTier']!='best' or chosen['effort']!='high' or chosen['reviewDepth']!='source-and-delta'):
   raise ValueError('safety floor cannot be lowered')
  propensity=snapshot.get('propensity',1.0)
  if isinstance(propensity,bool) or not isinstance(propensity,(int,float)) or not 0<propensity<=1:
@@ -87,7 +87,9 @@ def prepare(snapshot,out):
 
 def record(out,args):
  # Consume exact retained intent. A partial failure is retried with these same bytes.
- snapshot=json.loads((out/'snapshot.json').read_text()); digest=hashlib.sha256(canonical(snapshot)).hexdigest()
+ snapshot=json.loads((out/'snapshot.json').read_text())
+ if args.producer!=snapshot['producer']: raise ValueError('producer mismatch')
+ digest=hashlib.sha256(canonical(snapshot)).hexdigest()
  batch=json.loads((out/'observation.json').read_text())
  if batch['events'][0]['snapshotDigest']!=digest or batch['events'][0]['itemId']!=snapshot['itemId']:
   raise ValueError('snapshot/observation mismatch')
