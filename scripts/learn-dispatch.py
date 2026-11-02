@@ -3,6 +3,8 @@
 Input is a frozen public issue snapshot; outputs belong in private scratch until reviewed.
 """
 import argparse
+import fcntl
+import os
 import hashlib
 import json
 import re
@@ -67,52 +69,186 @@ def classify(snapshot):
   overrideReason=snapshot.get('overrideReason'),propensity=propensity,runtime=snapshot.get('runtime'),
   model=snapshot.get('model'),reviewActor='existing owner or authorized reviewer; no automatic critic dispatch')
 
-def prepare(snapshot,out):
- for key in ('runtime','model'):
-  if not snapshot.get(key): raise ValueError(key+' is required for an actual dispatch')
- stamp=datetime.fromisoformat(snapshot['capturedAt'].replace('Z','+00:00'))
- if stamp.utcoffset() is None or stamp.utcoffset().total_seconds()!=0: raise ValueError('capturedAt must be UTC')
- record=classify(snapshot); digest=hashlib.sha256(canonical(record)).hexdigest()
- identity='learn-02-'+digest
- event=dict(kind='learn-task-snapshot',identity=identity,itemId=record['itemId'],revision=1,snapshotId=identity,
-  rubricVersion=RUBRIC,snapshotDigest=digest,capturedAt=record['capturedAt'])
- batch=dict(schema='fsgg.telemetry.ingest/1',ingestId=identity,sourceIdentity=record['producer'],generation=identity,
-  cursor='1',eventCount=1,events=[event])
- out.mkdir(parents=True,exist_ok=True)
- # Exclusive writes retain original intent; an interrupted prepare must be inspected, never overwritten.
- for name,data in [('snapshot.json',canonical(record)),('observation.json',canonical(batch)),
-  ('comment.md',('<!-- fsgg:learn-dispatch/v1 snapshot='+digest+' -->\n```json\n'+canonical(record).decode()+'```\n').encode())]:
-  with (out/name).open('xb') as f: f.write(data)
- print(json.dumps(dict(snapshotDigest=digest,files=3,effects=0)))
+def batch_for(snapshot):
+    digest = hashlib.sha256(canonical(snapshot)).hexdigest()
+    identity = 'learn-02-' + digest
+    event = dict(kind='learn-task-snapshot', identity=identity, itemId=snapshot['itemId'], revision=1,
+                 snapshotId=identity, rubricVersion=RUBRIC, snapshotDigest=digest, capturedAt=snapshot['capturedAt'])
+    return dict(schema='fsgg.telemetry.ingest/1', ingestId=identity, sourceIdentity=snapshot['producer'],
+                generation=identity, cursor='1', eventCount=1, events=[event])
 
-def record(out,args):
- # Consume exact retained intent. A partial failure is retried with these same bytes.
- snapshot=json.loads((out/'snapshot.json').read_text())
- if args.producer!=snapshot['producer']: raise ValueError('producer mismatch')
- digest=hashlib.sha256(canonical(snapshot)).hexdigest()
- batch=json.loads((out/'observation.json').read_text())
- if batch['events'][0]['snapshotDigest']!=digest or batch['events'][0]['itemId']!=snapshot['itemId']:
-  raise ValueError('snapshot/observation mismatch')
- expected='<!-- fsgg:learn-dispatch/v1 snapshot='+digest+' -->\n```json\n'+canonical(snapshot).decode()+'```\n'
- if (out/'comment.md').read_text()!=expected: raise ValueError('comment mismatch')
- repo,number=snapshot['itemId'].split('#')
- current=json.loads(subprocess.check_output(['gh','issue','view',number,'--repo',repo,'--json','body'],text=True))
- if hashlib.sha256(current['body'].encode()).hexdigest()!=snapshot['inputDigest']:
-  raise ValueError('issue body changed; prepare a new pre-dispatch snapshot')
- comments=json.loads(subprocess.check_output(['gh','api','--paginate','--slurp','repos/'+repo+'/issues/'+number+'/comments'],text=True))
- matches=[c for page in comments for c in page if c['body']==expected]
- if len(matches)>1: raise ValueError('duplicate exact dispatch comments require owner reconciliation')
- if not matches:
-  subprocess.run(['gh','issue','comment',number,'--repo',repo,'--body-file',str(out/'comment.md')],check=True)
- receipt=subprocess.check_output([args.engine,'telemetry','workspace','submit','--config',args.config,
-  '--repository',repo,'--producer',args.producer,'--binding-digest',args.binding_digest,'--input',str(out/'observation.json')],text=True)
- # Preserve receipts beside private intent. Submission errors retain the comment and intent for retry.
- with (out/'receipt.json').open('a') as f: f.write(receipt+'\n')
- print('recorded comment and telemetry submission; verify receipt acceptance before dispatch')
+
+def comment_for(snapshot):
+    digest = hashlib.sha256(canonical(snapshot)).hexdigest()
+    return '<!-- fsgg:learn-dispatch/v1 snapshot=' + digest + ' -->\n```json\n' + canonical(snapshot).decode() + '```\n'
+
+
+def prepare(snapshot, out):
+    for key in ('runtime', 'model'):
+        if not snapshot.get(key):
+            raise ValueError(key + ' is required for an actual dispatch')
+    stamp = datetime.fromisoformat(snapshot['capturedAt'].replace('Z', '+00:00'))
+    if stamp.utcoffset() is None or stamp.utcoffset().total_seconds() != 0:
+        raise ValueError('capturedAt must be UTC')
+    snapshot = classify(snapshot)
+    out.mkdir(parents=True, exist_ok=True)
+    for name, data in [('snapshot.json', canonical(snapshot)), ('observation.json', canonical(batch_for(snapshot))),
+                       ('comment.md', comment_for(snapshot).encode())]:
+        with (out / name).open('xb') as f:
+            f.write(data)
+    print(json.dumps(dict(snapshotDigest=batch_for(snapshot)['events'][0]['snapshotDigest'], files=3, effects=0)))
+
+
+def durable_directory(path):
+    if path.is_dir():
+        return
+    durable_directory(path.parent)
+    path.mkdir(mode=0o700)
+    parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
+
+
+def durable_json(path, value):
+    temporary = path.with_suffix('.pending')
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, 'wb') as stream:
+        stream.write(canonical(value))
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def read_issue(repo, number):
+    return json.loads(subprocess.check_output(['gh', 'issue', 'view', number, '--repo', repo, '--json', 'body'], text=True))
+
+
+def read_comments(repo, number):
+    pages = json.loads(subprocess.check_output(['gh', 'api', '--paginate', '--slurp',
+                        'repos/' + repo + '/issues/' + number + '/comments'], text=True))
+    if not isinstance(pages, list) or not pages or any(not isinstance(page, list) for page in pages):
+        raise ValueError('unreadable comment census')
+    comments = [comment for page in pages for comment in page]
+    if any(not isinstance(comment, dict) or type(comment.get('id')) is not int or not isinstance(comment.get('body'), str) for comment in comments):
+        raise ValueError('unreadable comment census')
+    return comments
+
+
+def read_comment(repo, identity):
+    return json.loads(subprocess.check_output(['gh', 'api', 'repos/' + repo + '/issues/comments/' + str(identity)], text=True))
+
+
+def post_comment(repo, number, request):
+    return json.loads(subprocess.check_output(['gh', 'api', '--method', 'POST',
+                      'repos/' + repo + '/issues/' + number + '/comments', '--input', str(request)], text=True))
+
+
+def submit_telemetry(repo, args, packet):
+    return subprocess.check_output([args.engine, 'telemetry', 'workspace', 'submit', '--config', args.config,
+        '--repository', repo, '--producer', args.producer, '--binding-digest', args.binding_digest,
+        '--input', str(packet)], text=True)
+
+
+def record(out, args):
+    # Validate every retained byte before any remote operation, then use only custody copies.
+    raw = (out / 'snapshot.json').read_bytes()
+    snapshot = json.loads(raw)
+    if raw != canonical(snapshot):
+        raise ValueError('noncanonical snapshot')
+    if args.producer != snapshot['producer']:
+        raise ValueError('producer mismatch')
+    batch = batch_for(snapshot)
+    if (out / 'observation.json').read_bytes() != canonical(batch):
+        raise ValueError('snapshot/observation mismatch: exact full batch required')
+    expected = comment_for(snapshot)
+    if (out / 'comment.md').read_bytes() != expected.encode():
+        raise ValueError('comment mismatch')
+    digest = batch['events'][0]['snapshotDigest']
+    repo, number = snapshot['itemId'].split('#')
+    default_root = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'fsgg/learn-dispatch'
+    state_root = Path(getattr(args, 'state_root', None) or default_root)
+    # All cooperating invocations for this native Delivery share a lock, even with different intent directories.
+    custody = state_root / hashlib.sha256(snapshot['itemId'].encode()).hexdigest()
+    durable_directory(custody)
+    lock = os.open(custody / 'writer.lock', os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise ValueError('Delivery recording lock is held') from error
+        scope = dict(snapshotDigest=digest, producer=args.producer, config=str(Path(args.config).resolve()),
+                     bindingDigest=args.binding_digest, engine=args.engine)
+        state_path = custody / (digest + '.json')
+        for other in custody.glob('*.json'):
+            prior = json.loads(other.read_bytes())
+            if other != state_path and prior['phase'] != 'telemetry-submitted':
+                raise ValueError('another Delivery intent has unresolved effects; reconcile its custody')
+        state = json.loads(state_path.read_bytes()) if state_path.exists() else dict(schema='fsgg.learn-dispatch-custody/1', scope=scope, phase='prepared')
+        if state.get('schema') != 'fsgg.learn-dispatch-custody/1' or state.get('phase') not in ('prepared', 'comment-possible', 'comment-observed', 'telemetry-possible', 'telemetry-submitted'):
+            raise ValueError('unreadable recording custody; reconciliation required')
+        if state['phase'] == 'telemetry-submitted' and not isinstance(state.get('receipt'), str):
+            raise ValueError('missing retained receipt; reconciliation required')
+        if state['scope'] != scope:
+            raise ValueError('recording scope changed; retain original custody')
+        if state['phase'] == 'telemetry-possible':
+            raise ValueError('telemetry possible-send is unresolved; receiver reconciliation required, no automatic resend')
+        # Exact immutable local payload copies avoid trusting mutable caller files at send time.
+        packet = custody / (digest + '.observation')
+        request = custody / (digest + '.comment')
+        for path, payload in [(packet, batch), (request, dict(body=expected))]:
+            if path.exists() and path.read_bytes() != canonical(payload):
+                raise ValueError('custody payload mismatch')
+            if not path.exists():
+                durable_json(path, payload)
+        current = read_issue(repo, number)
+        if hashlib.sha256(current['body'].encode()).hexdigest() != snapshot['inputDigest']:
+            raise ValueError('issue body changed; reconcile old effects before preparing a new snapshot')
+        matches = [comment for comment in read_comments(repo, number) if comment['body'] == expected]
+        if len(matches) > 1:
+            raise ValueError('duplicate exact dispatch comments require owner reconciliation')
+        if matches:
+            comment = matches[0]
+        elif state['phase'] != 'prepared':
+            raise ValueError('comment possible-send/readback is unresolved; no automatic repost')
+        else:
+            state['phase'] = 'comment-possible'
+            durable_json(state_path, state)  # durable before a subprocess can send anything
+            comment = post_comment(repo, number, request)
+        if type(comment.get('id')) is not int or comment['id'] <= 0:
+            raise ValueError('unreadable native comment identity; retain possible-send custody')
+        if state.get('commentId') is not None and state['commentId'] != comment['id']:
+            raise ValueError('native comment identity changed; reconciliation required')
+        state['commentId'] = comment['id']
+        if state['phase'] == 'comment-possible':
+            durable_json(state_path, state)
+        observed = read_comment(repo, comment['id'])
+        if observed['id'] != comment['id'] or observed['body'] != expected:
+            raise ValueError('native comment readback mismatch; retain possible-send custody')
+        if state['phase'] == 'telemetry-submitted':
+            print('retained telemetry submission; native comment readback verified; inspect receipt acceptance before dispatch')
+            return
+        state.update(phase='comment-observed', commentId=observed['id'], commentUrl=observed.get('html_url'))
+        durable_json(state_path, state)
+        state['phase'] = 'telemetry-possible'
+        durable_json(state_path, state)
+        receipt = submit_telemetry(repo, args, packet)
+        state.update(phase='telemetry-submitted', receipt=receipt)
+        durable_json(state_path, state)
+        print('native comment readback verified and telemetry submission retained; inspect receipt acceptance before dispatch')
+    finally:
+        os.close(lock)
 
 if __name__=='__main__':
  parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--input',type=Path);parser.add_argument('--output',type=Path,required=True)
  parser.add_argument('--record',action='store_true',help='explicit live comment and telemetry effects; needs separate authority')
+ parser.add_argument('--state-root',type=Path,help='one shared private custody root per host; retain across retries')
  parser.add_argument('--engine',default='fsgg-coord-engine');parser.add_argument('--config');parser.add_argument('--producer');parser.add_argument('--binding-digest')
  args=parser.parse_args()
  try:

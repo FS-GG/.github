@@ -4,6 +4,7 @@ on:
     paths:
       - 'scripts/learn-dispatch.py'
       - 'scripts/learn-calibration.py'
+      - 'scripts/learn-calibration-join.sql'
       - 'tests/learn-dispatch/**'
       - '.github/workflows/learn-02-selftest.yml'
   push:
@@ -11,6 +12,7 @@ on:
     paths:
       - 'scripts/learn-dispatch.py'
       - 'scripts/learn-calibration.py'
+      - 'scripts/learn-calibration-join.sql'
       - 'tests/learn-dispatch/**'
       - '.github/workflows/learn-02-selftest.yml'
 permissions:

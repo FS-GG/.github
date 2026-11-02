@@ -88,11 +88,22 @@ python3 scripts/learn-dispatch.py --record --output /private/dispatch-intent \
   --config /private/telemetry.json --producer PRODUCER --binding-digest DIGEST
 ```
 
-Preparation performs0 external effects. Recording checks the issue body still matches, follows every native
-comment page, avoids an identical marker comment, and submits the retained `observation.json` using
-`telemetry workspace submit`. Comment and telemetry submission are separate effects: a failure retains
-intent and any comment already posted; retry the same directory, inspect the receipt, and verify receiver
-acceptance before dispatch. A changed issue body requires a new snapshot. The script never dispatches a
+Preparation performs0 external effects. Before any native read, recording reconstructs the complete closed
+telemetry batch from the canonical snapshot and requires byte equality, including envelope identities,
+revision, kind, count and the complete event list. It then uses fsynced custody copies for sends. All
+cooperating invocations for the Delivery share a nonblocking advisory lock under
+`$XDG_STATE_HOME/fsgg/learn-dispatch` (default `~/.local/state/fsgg/learn-dispatch`), independent of the caller's
+intent directory. An alternate `--state-root` must be the same shared private directory for every recorder
+on that host; copying or removing custody is not a recovery route. Cross-host recording is not supported.
+
+Recording checks the issue body, follows all native comment pages, and verifies the exact comment ID and
+body by native readback. It fsyncs `comment-possible` before POST and `telemetry-possible` before workspace
+submission. A failed/uncertain POST is never automatically repeated: a later unique exact comment readback
+can resolve it; absent, duplicate, changed or unreadable comments retain the hold. An uncertain telemetry
+submission likewise refuses automatic resend and requires receiver reconciliation by the operating owner.
+A retained successful submission is read back without a new submit, and its receipt still needs acceptance
+verification before dispatch. Comment and telemetry are separate effects; partial effects and their original
+scope remain in shared custody. A changed issue body requires reconciling old effects before a new snapshot. The script never dispatches a
 worker or reviewer. Review depth selects substantive scrutiny by an existing authorized reviewer; it cannot
 require a critic actor or change the routine process route.
 
@@ -139,10 +150,19 @@ from REQUEST_CHANGES (reviews were often Root comments or private transcripts). 
 Algorithms' two PRs are dependent observations of one Delivery. Blocking findings have no consistently
 recorded complete count in this sample and remain Unknown, rather than0.
 
-The private read-only query uses the join exercised by `ClaudeSubagentDispatchTests.fs` in #5178:
-`expected_dispatches → invocation_lineage → provider-usage-observation/1`, matching
-`json_extract(canonical,'$.threadId') = invocation_id`. Group by Delivery after the dispatch join and
-sum provider `total`. Do not substitute `runtime_turn_usage`, which does not contain this Claude response
+The original retained aggregate SQL joined `invocation_lineage` directly to
+`provider-usage-observation/1` on `json_extract(canonical,'$.threadId') = invocation_id`, filtering FS-GG
+identities. It did not have the expected-dispatch join or a uniqueness control; describing it as #5178's
+verbatim join was incorrect. The source schema allows multiple lineage identities for one invocation.
+
+The corrected, retained [`learn-calibration-join.sql`](../../scripts/learn-calibration-join.sql) requires the
+#5178 Claude expected-dispatch relation, deduplicates `(item_id, invocation_id)` before summing provider
+usage, and emits an `ambiguousInvocations` control. Any invocation assigned to multiple Deliveries yields
+null rows and refuses aggregate interpretation. A read-only recheck prints `lineageRows: 74`,
+`distinctAssignments: 74`, `ambiguousInvocations: 0`, `attributedIdentities: 34`; its per-Delivery response,
+invocation and token aggregates equal the earlier retained34 rows, so the reported calibration statistics
+are unchanged. Synthetic fixtures prove duplicate lineage cannot multiply a response and conflicting
+Delivery assignment returns null rows. Missing token totals remain null. Do not substitute `runtime_turn_usage`, which does not contain this Claude response
 population. The same query observes the known-positive Game745 attribution established by
 [#5171's installed proof](https://github.com/FS-GG/.github/issues/5171#issuecomment-6561159541).
 The receiver contained34 attributed native identities at retrieval. Native Project3 membership was checked
