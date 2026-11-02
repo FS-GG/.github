@@ -268,4 +268,9 @@ class LegacyUpdateTests(unittest.TestCase):
         self.plan['authorization'].update(commentId=100,nodeId='IC_100');self.auth()
         self.assertEqual('legacy-update-custody-exists-no-resend',self.invoke()[1]['reason']);self.assertEqual([42],self.patches)
 
+    def test_directory_durability_failure_prevents_any_provider_effect(self):
+        with patch('os.fsync',side_effect=OSError('directory flush failed')):
+            code,result=self.invoke();self.assertEqual(2,code,result)
+        self.assertFalse(self.patches);self.assertFalse(list(self.root.glob('legacy-update-*/*.json')))
+
 if __name__=='__main__':unittest.main()

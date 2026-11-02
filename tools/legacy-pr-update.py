@@ -252,6 +252,14 @@ def execute(lane, args):
         info = root.lstat()
         if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
             raise lane.ToolError("unsafe continuation custody directory")
+        # Persist newly created directory entries as well as journal contents. A crash
+        # must not lose the stable custody directory after a provider effect.
+        for directory in (root, *root.parents):
+            descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
         files = sorted(root.iterdir())
         history = []
         for index, path in enumerate(files, 1):
