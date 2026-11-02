@@ -678,10 +678,14 @@ let ``deadline page cancellation covers delayed headers and delayed response bod
     server.Prefixes.Add origin
     server.Start()
     let observed = new System.Threading.ManualResetEventSlim(false)
+    use listenerReady = new System.Threading.ManualResetEventSlim(false)
+    // GetContext and the deliberate server delay block. Keep this fixture worker off the
+    // shared pool so it cannot starve the HTTP continuations and cancellation timer being tested.
     let task =
-        System.Threading.Tasks.Task.Run(
-            fun () ->
+        System.Threading.Tasks.Task.Factory.StartNew(
+            System.Action(fun () ->
                 try
+                    listenerReady.Set()
                     let context = server.GetContext()
                     observed.Set()
                     if slowHeaders then System.Threading.Thread.Sleep 600
@@ -698,8 +702,12 @@ let ``deadline page cancellation covers delayed headers and delayed response bod
                 with
                 | :? System.Net.HttpListenerException -> ()
                 | :? System.IO.IOException -> ()
-                | :? ObjectDisposedException -> ())
+                | :? ObjectDisposedException -> ()),
+            System.Threading.CancellationToken.None,
+            System.Threading.Tasks.TaskCreationOptions.LongRunning,
+            System.Threading.Tasks.TaskScheduler.Default)
     try
+        Assert.True(listenerReady.Wait 1000, "fixture listener did not start")
         use http = new HttpTransport(origin, "")
         let timer = System.Diagnostics.Stopwatch.StartNew()
         let result = (http :> IDeadlineSinglePageGitHubTransport).SendSingleWithin(request "resource" Rest, TimeSpan.FromMilliseconds 150.0)
@@ -708,5 +716,5 @@ let ``deadline page cancellation covers delayed headers and delayed response bod
         Assert.True(timer.Elapsed < TimeSpan.FromSeconds 2.0)
     finally
         server.Stop()
-        task.Wait 2000 |> ignore
+        Assert.True(task.Wait 2000, "fixture listener did not retire")
         observed.Dispose()
