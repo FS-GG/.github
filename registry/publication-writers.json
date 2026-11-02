@@ -16,6 +16,12 @@
       }
     },
     {
+      "repo": "FS-GG/FS.GG.Algorithms",
+      "workflows": [
+        ".github/workflows/release.yml"
+      ]
+    },
+    {
       "repo": "FS-GG/FS.GG.Audio",
       "workflows": [
         ".github/workflows/release-skills.yml",
