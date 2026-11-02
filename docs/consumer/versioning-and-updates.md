@@ -129,6 +129,56 @@ pin silently omits them, so the CLI is treated as a first-class member of the
   a side effect, and it only rewrites state you own (your `.fsgg/providers.yml`), not
   the governed pin (that stays a PR in its owning repo).
 
+### Skills that ship with the CLI stay current too
+
+Some skills reach a workspace from packages compiled into the CLI: the driver skills (for
+example `atlas`, `work-board`) and the owner product skills (Rendering, Audio, Game). Their text
+changes upstream, so `fsgg-sdd upgrade` refreshes them from the CLI release that carries
+FS.GG.SDD#1155 onward, with a hard line around your edits:
+
+- **Replaced as one unit, only if untouched.** A skill is replaced only when none of its files
+  differs from the digests recorded at scaffold time, across the `.claude` and `.agents` copies
+  together. One edited file, or a recorded file with no digest, holds the whole skill; it keeps its
+  content-drift warning and the `upgrade` advisory names it.
+- **Never backwards.** The package version each skill came from is recorded in
+  `.fsgg/scaffold-provenance.json` (`ownerSkillVersions`). An older CLI will not replace a newer
+  pack. A workspace written before versions were recorded is only refreshed by a CLI that is not
+  older than the one that last wrote it (`upgradedBy`, else the producing CLI); an unreadable
+  version entry holds the skill rather than being ignored.
+- **Safe to interrupt.** A replacement records new digests and versions only for files it actually
+  wrote, and a skill is recorded all-or-nothing. If a run stops partway (a read-only directory, a
+  killed process), restore the cause and run `upgrade` again: files already at the new pack's bytes
+  count as untouched, and the run completes.
+- **Files the upstream dropped** are removed with the skill when still unedited, and their records
+  are dropped. A skill the upstream no longer ships at all is left alone.
+- **Never through a link out of the workspace.** `upgrade` refuses to write or delete a skill file
+  that is, or sits under, a symbolic link resolving outside the workspace, and names it.
+- **Exact bytes.** `atlas.py` hashes the exact bytes of pack and skill files, so the workspace's
+  `.gitattributes` marks the skills SDD delivers (`.claude/skills/<name>/**`,
+  `.agents/skills/<name>/**` for each) and `docs/atlas/**` as `-text`. Rules for your own skills are
+  never touched or shadowed. New workspaces get the rules; `upgrade` appends any that are missing,
+  keeping your lines, your line endings and a leading byte-order mark.
+
+**Name collisions.** SDD installs a fixed set of driver skill names into every workspace. The
+`FS.GG.Drivers` 0.114.3 pack added six: `agent-handoff`, `atlas`, `continue-from-handoff`,
+`routine-decisions`, `stop-with-handoff` and `work-programme`. If you already have your own skill
+with one of these names, `upgrade` does not overwrite it, does not write the pack's files around it,
+and does not fail the other skills: it names the skill in its closing advisory ("a skill with this
+name already exists here and is not the one SDD delivers") and leaves it. Rename or remove your skill,
+then run `upgrade` again.
+
+**`doctor` is not silent about it.** A workspace can read coherent while a delivered skill is stale
+and `upgrade` will not replace it (edited locally, would downgrade, version unprovable, a name
+collision, an unreadable file). `fsgg-sdd doctor` adds an informational advisory,
+`doctor.ownerSkillsNotRefreshable`, naming each skill and the reason. It does not change the verdict
+or the exit code.
+
+Which CLI carries which skills is itself kept current: the CLI's skills-package pins
+(`FS.GG.Drivers` and the `FS.GG.*.Skills` packages) may trail their published feeds by at most five
+stable versions, enforced when an SDD release is prepared. Update the CLI (`dotnet tool update`)
+before `upgrade`, because the skill text an upgrade lays down is the text compiled into the CLI that
+runs it.
+
 So "stay current" is one explicit command (`fsgg-sdd upgrade`), and CI won't let a
 behind-CLI scaffold pass unnoticed. Pin the tool in `dotnet-tools.json` as above; the
 fail-closed check *protects* that pin rather than fighting it.
