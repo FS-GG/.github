@@ -58,9 +58,9 @@ For an admitted routine item, the board is an asynchronous view rather than merg
    the repository's routine eligibility and protected-boundary checks. When the change spans independent
    concerns (for example source plus release route plus docs/registry, or two unrelated fixes), the owner
    splits it into separately reviewable PRs, sequenced under the one-open-PR-per-chain and two-managed-PR lane
-   limits (later ones opened as earlier ones merge), before requesting review; #4941's four-PR sequence is the model. Before requesting review, run the same gate commands CI will run for the touched paths,
+   limits (later ones opened as earlier ones merge), before requesting review; #4941's four-PR sequence is the model. Before requesting review, run the [owner self-check](#owner-self-check-before-review) and the same gate commands CI will run for the touched paths,
    locally or on the PR, and state the results; where the change adds or edits fixtures or release controls, name each one's clock, source or sandbox in the PR body per the [lifecycle-contract fixture rule](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#qualify-the-actual-path-and-deliver-exact-source); do not request review on a head with known-red required
-   gates, except failures inherited from main, which must be named. Until then keep the PR draft: board tend
+   gates, except failures inherited from main, which must be named. Keep the PR draft until its required gates pass: board tend
    shows a strictly linked non-draft PR's Delivery as In review. Put exactly one
    `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
    the PR body, and exactly one of `<!-- fsgg:delivery-continues/v1 -->` (on every merge after which any PR work,
@@ -71,7 +71,7 @@ For an admitted routine item, the board is an asynchronous view rather than merg
    otherwise link it without closing it and retain its remaining assertions. Waits, scratch files and body files follow the
    [hosted-wait rule](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#qualify-the-actual-path-and-deliver-exact-source). A moved head must be reviewed and rebound. A routine refusal blocks the affected delivery until repaired; it does not select heavyweight
    process or authorize weakening or bypassing the gate.
-4. Repair on the same PR. Recurring same-class failures require investigating relevant callers,
+4. Repair on the same PR, re-running every reviewer probe on the new head (see the self-check). Recurring same-class failures require investigating relevant callers,
    shared assumptions, failure and cleanup paths before another coherent repair. Governing/code changes
    require one independent source review of the exact candidate, relevant tests and final required CI;
    inert prose uses owner review and proportionate validation. A reviewer supplies an actual verdict and recounts every headline count, reporting an untraceable one as an Unknown,
@@ -93,6 +93,18 @@ For an admitted routine item, the board is an asynchronous view rather than merg
 
 The routine route ends here. Do not execute the lifecycle, identity, claim, critique, receipt, feedback,
 or done-stamp instructions in the linked strict protocol for that item.
+
+## Owner self-check before review
+
+Independent reviewers keep finding defects the author's own tests missed. Before requesting review of a
+governing or code change, probe your own work the way a reviewer would. This is the owner's checklist,
+not a gate, critic or report; inert prose needs none of it.
+
+- **Range:** fuzz or property-test across the full range the API accepts, not only typical values.
+- **Partial failure:** for each multi-step write or effect, ask what happens on failure or kill between steps, and test it.
+- **Planted bugs:** disable each safety check or guard in turn and confirm a test fails.
+- **Reviewer probes:** when repairing after review, re-run all of the reviewer's probes on the new head and add their classes to your tests.
+- **Cross-cutting defects** (sizing, concurrency, lifecycle): write the invariant first, then the code, not point fixes.
 
 ## Conditional instructions
 

@@ -10,7 +10,9 @@ Use [work-board](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-
 runtime and useful; this skill does not require spawning workers.
 
 Keep one accountable owner and isolated worktree/branch per coherent Delivery, with explicit actual
-touch-set and one integrator for shared surfaces. Continue existing owners/PRs/attempts; do not create
+touch-set and one integrator for shared surfaces. When parallel Deliveries share a type, contract or file,
+each dispatch brief names the one Delivery that owns that shared surface; the others consume it and do not
+define a rival. Continue existing owners/PRs/attempts; do not create
 a second assignment or demand reservation for the same work. Before launch reconcile active demand,
 known/Unknown reservations, CPU/memory, hosted capacity and shared outputs. Free slots do not admit work.
 
