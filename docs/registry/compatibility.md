@@ -165,6 +165,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 
 | Contract | Owner | version | package-version |
 |---|---|---|---|
+| `algorithms` | FS.GG.Algorithms | `0.1.0` | `0.1.0` |
 | `fsquint-replay` | FsQuint | `0.1.0` | `0.1.0` |
 | `scaffold-provider` | FS.GG.SDD | `1.1.0` | — |
 | `fsgg-contracts` | FS.GG.SDD | `7.6.0` | `7.6.0` |
