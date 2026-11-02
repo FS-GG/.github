@@ -1,7 +1,7 @@
 # Org-shared .NET build configuration
 
-The canonical MSBuild / CPM / tool-manifest baseline for every FS-GG .NET repo. The source of
-truth is [`dist/dotnet/`](../../dist/dotnet/) in this repo; consumer repos **materialize** the files
+The canonical MSBuild / CPM baseline for FS-GG .NET build-config receivers. The source of
+truth is [`dist/dotnet/`](../../dist/dotnet/) in this repo; consumer repos **materialize** the two `.props` files
 from the versioned **FS.GG.Kit** package ([ADR-0062](../adr/0062-versioned-kit-package-replaces-byte-copy-sync.md),
 #1262) rather than hand-copying or the retired byte-copy sync. Decision record: [ADR-0006](../adr/0006-org-shared-dotnet-build-config-and-unified-restore-locked-mode-gate.md).
 Contracts: `shared-build-config` + `lockfile-restore-enforcement`
@@ -13,8 +13,11 @@ Contracts: `shared-build-config` + `lockfile-restore-enforcement`
 |---|---|
 | `Directory.Build.props` | Deterministic builds; Central Package Management (CPM) + transitive pinning; the `lockfile-restore-enforcement` gate; `NU1603`/`NU1608`→error; the opt-in `api-breaking-change-gate`. |
 | `Directory.Packages.props` | CPM enablement + the org-wide `FSharp.Core` pin + the centrally pinned `PublicApiAnalyzers` for the gate. Read the [canonical declarations](../../dist/dotnet/Directory.Packages.props) for current versions. |
-| `.config/dotnet-tools.json` | Pinned local tool manifest (`fake-cli` `6.1.4`, matching the `Fake.Core.*` library pin). |
 | ~~`.config/fsgg-build-config.sha`~~ | **RETIRED** (ADR-0062, #1262). The ADR-0036 provenance pin was the baseline the *byte-copy* drift check judged against; under package delivery the pin is unmanaged, so it was deleted from every receiver and the check now measures against the pinned `FS.GG.Kit` instead — see below. |
+
+The [local tool manifest](../../dist/dotnet/.config/dotnet-tools.json) remains this repository's
+canonical tool baseline. It is excluded from the Kit package; each receiver owns and updates its
+own manifest ([ADR-0068](../adr/0068-the-engine-tool-manifest-leaves-kit-ownership.md)).
 
 ## The unified `RestoreLockedMode` gate
 
