@@ -4,9 +4,9 @@
     "net10.0": {
       "FSharp.Core": {
         "type": "Direct",
-        "requested": "[10.1.401, )",
-        "resolved": "10.1.401",
-        "contentHash": "/lvOK51KD8IangBYkfDVna3/HrE/r4VUnX3dI01KDspctoYXmind3POeoYkqWKeXHwiKlf6Hc9TxwSnoSCWcjw=="
+        "requested": "[10.1.403, )",
+        "resolved": "10.1.403",
+        "contentHash": "SpKxPt90eSC3pfSKGLnSyucXXKVWokv1KVMTy2uQG36seOgJg14qUxjlcaWjZNWgxJtG5MeH9WpI6PQg4OR4tA=="
       },
       "Microsoft.Data.Sqlite": {
         "type": "Direct",
@@ -215,34 +215,34 @@
       "fs.gg.coord.core": {
         "type": "Project",
         "dependencies": {
-          "FSharp.Core": "[10.1.401, )"
+          "FSharp.Core": "[10.1.403, )"
         }
       },
       "fs.gg.coord.github": {
         "type": "Project",
         "dependencies": {
           "FS.GG.Coord.Core": "[1.0.0, )",
-          "FSharp.Core": "[10.1.401, )"
+          "FSharp.Core": "[10.1.403, )"
         }
       },
       "fs.gg.telemetry.client": {
         "type": "Project",
         "dependencies": {
           "FS.GG.Telemetry.Contracts": "[1.0.0, )",
-          "FSharp.Core": "[10.1.401, )"
+          "FSharp.Core": "[10.1.403, )"
         }
       },
       "fs.gg.telemetry.contracts": {
         "type": "Project",
         "dependencies": {
           "FS.GG.Coord.Core": "[1.0.0, )",
-          "FSharp.Core": "[10.1.401, )"
+          "FSharp.Core": "[10.1.403, )"
         }
       },
       "fs.gg.telemetry.dashboard": {
         "type": "Project",
         "dependencies": {
-          "FSharp.Core": "[10.1.401, )"
+          "FSharp.Core": "[10.1.403, )"
         }
       },
       "fs.gg.telemetry.host": {
@@ -255,14 +255,14 @@
           "FS.GG.Telemetry.Contracts": "[1.0.0, )",
           "FS.GG.Telemetry.Dashboard": "[1.0.0, )",
           "FS.GG.Telemetry.Store": "[1.0.0, )",
-          "FSharp.Core": "[10.1.401, )"
+          "FSharp.Core": "[10.1.403, )"
         }
       },
       "fs.gg.telemetry.store": {
         "type": "Project",
         "dependencies": {
           "FS.GG.Coord.Core": "[1.0.0, )",
-          "FSharp.Core": "[10.1.401, )",
+          "FSharp.Core": "[10.1.403, )",
           "Microsoft.Data.Sqlite": "[10.0.12, )",
           "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.5, )"
         }

@@ -13,6 +13,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -162,10 +163,20 @@ MUTANTS = [
 ]
 
 
-def run(source: Path) -> bool:
+def run(source: Path, *, failfast: bool = False) -> bool:
     env = dict(os.environ, ROUTINE_DELIVERY_UNDER_TEST=str(source), PYTHONDONTWRITEBYTECODE="1")
-    done = subprocess.run([sys.executable, str(HERE / "routine-delivery.py"), "BoardGateTests", "BoardWriterLockReplayTests", "BoardTendTriggerTests"],
+    command = [sys.executable, str(HERE / "routine-delivery.py")]
+    # A mutant needs one witness of rejection. The unmutated baseline still runs
+    # every test; a survivor also runs them all. Continuing after a known kill
+    # multiplied this suite into a five-minute gate bottleneck (#5228).
+    if failfast:
+        command.append("--failfast")
+    command.extend(["BoardGateTests", "BoardWriterLockReplayTests", "BoardTendTriggerTests"])
+    done = subprocess.run(command,
                           env=env, capture_output=True, text=True, timeout=300, check=False)
+    if not failfast and done.returncode != 0:
+        sys.stderr.write(done.stdout)
+        sys.stderr.write(done.stderr)
     return done.returncode == 0
 
 
@@ -193,8 +204,10 @@ def main() -> int:
                 print(f"routine-delivery board mutate: mutant anchor not unique: {name}", file=sys.stderr)
                 return 1
             target.write_text(text.replace(original, replacement), encoding="utf-8")
-            killed = not run(target)
-            print(f"{'killed  ' if killed else 'SURVIVED'} {name}")
+            started = time.monotonic()
+            killed = not run(target, failfast=True)
+            elapsed = time.monotonic() - started
+            print(f"{'killed  ' if killed else 'SURVIVED'} {name} ({elapsed:.3f}s)", flush=True)
             if not killed:
                 survivors.append(name)
     print(f"routine-delivery board mutate: {len(MUTANTS) - len(survivors)}/{len(MUTANTS)} mutants killed")
