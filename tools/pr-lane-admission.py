@@ -141,7 +141,8 @@ def machine_markers(body: str) -> dict[str, str]:
 
 
 def update_body(fresh: str, proposed: str, branch: str, head: str,
-                previous_head: str, campaign: str, chain: str, *, adopt_legacy: bool = False) -> str:
+                previous_head: str, campaign: str, chain: str, *, adopt_legacy: bool = False,
+                declare_continues: bool = False) -> str:
     """Preserve native metadata, optionally adding a genuinely absent admission identity."""
     adopting = adopt_legacy and "fsgg-pr-lane-admission" not in fresh
     if adopting and not branch.startswith("routine/"):
@@ -151,6 +152,17 @@ def update_body(fresh: str, proposed: str, branch: str, head: str,
         raise ToolError("existing PR admission identity is missing, malformed or conflicts")
     original = machine_markers(fresh)
     desired = dict(original)
+    if declare_continues:
+        declaration = "<!-- fsgg:delivery-continues/v1 -->"
+        keys = ("fsgg:delivery-continues/v1", "fsgg:delivery-completes/v1")
+        if fresh.count("fsgg:delivery-") != sum(key in original for key in keys):
+            raise ToolError("unrecognized delivery declaration")
+        if any(key in original for key in keys):
+            if original.get(keys[0]) != declaration or keys[1] in original:
+                raise ToolError("existing delivery declaration conflicts")
+        elif "fsgg:delivery-" in fresh:
+            raise ToolError("unrecognized delivery declaration")
+        desired[keys[0]] = declaration
     if adopting:
         desired["fsgg-pr-lane-admission:v1"] = marker(campaign, chain)
     if branch.startswith("routine/"):
@@ -165,6 +177,8 @@ def update_body(fresh: str, proposed: str, branch: str, head: str,
     for key, value in submitted.items():
         allowed = {original[key], desired[key]} if key in original else set()
         if adopting and key == "fsgg-pr-lane-admission:v1":
+            allowed.add(desired[key])
+        if declare_continues and key == "fsgg:delivery-continues/v1":
             allowed.add(desired[key])
         if key == "fsgg:routine-development/v1" and key in desired:
             allowed.add(re.sub(r"(?<!\S)head=[0-9a-f]+(?=\s)", "head=" + previous_head, desired[key]))
@@ -300,7 +314,8 @@ def update_pull(arguments: argparse.Namespace, proposed: str, identity: dict[str
         try:
             body = update_body(before["body"], proposed, arguments.head, arguments.head_sha,
                                arguments.previous_head_sha, arguments.campaign_id, arguments.dependency_chain_id,
-                               adopt_legacy=arguments.adopt_legacy_pr)
+                               adopt_legacy=arguments.adopt_legacy_pr,
+                               declare_continues=arguments.declare_delivery_continues)
         except ToolError:
             refuse("update-metadata-conflict", "metadata-preparation", "policy-or-marker-conflict",
                    [metadata_difference("body", before["body"], proposed)])
@@ -599,27 +614,246 @@ def repository_lock(repo: str) -> Iterator[None]:
         os.close(descriptor)
 
 
+# A known-roster recovery is a separate bounded metadata operation, not a relaxed lane check.
+ROSTER_SCHEMA = "fsgg.known-legacy-pr-roster/1"
+
+
+def text_sha(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def read_known_roster(path: pathlib.Path, repo: str) -> dict[str, Any]:
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ToolError("duplicate roster JSON key")
+            value[key] = item
+        return value
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 65536:
+            raise ToolError("roster must be a regular file of at most 64KiB")
+        value = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique)
+    except (OSError, ValueError, UnicodeError) as error:
+        raise ToolError("unreadable known legacy roster") from error
+    if (not isinstance(value, dict) or set(value) != {"schema", "repo", "base", "baseSha", "pulls"}
+            or value["schema"] != ROSTER_SCHEMA or value["repo"] != repo
+            or value["base"] != "main" or not isinstance(value["baseSha"], str)
+            or not re.fullmatch(r"[0-9a-f]{40}", value["baseSha"])
+            or not isinstance(value["pulls"], list) or len(value["pulls"]) != 2):
+        raise ToolError("known roster requires exactly two explicit PRs on one exact main base")
+    fields = {"number", "id", "nodeId", "branch", "headSha", "baseSha", "campaign", "chain", "bodySha256", "titleSha256", "declareContinues"}
+    for row in value["pulls"]:
+        if (not isinstance(row, dict) or set(row) != fields
+                or any(type(row[key]) is not int or row[key] <= 0 for key in ("number", "id"))
+                or not isinstance(row["nodeId"], str) or not row["nodeId"]
+                or any(not isinstance(row[key], str) or not ID_RE.fullmatch(row[key]) for key in ("campaign", "chain"))
+                or not isinstance(row["branch"], str) or not routine_validator().ROUTINE_BRANCH_RE.fullmatch(row["branch"])
+                or any(not isinstance(row[key], str) or not re.fullmatch(r"[0-9a-f]{40}", row[key]) for key in ("headSha", "baseSha"))
+                or any(not isinstance(row[key], str) or not re.fullmatch(r"[0-9a-f]{64}", row[key]) for key in ("bodySha256", "titleSha256"))
+                or type(row["declareContinues"]) is not bool):
+            raise ToolError("invalid explicit known-roster PR assignment")
+    for key in ("number", "id", "nodeId", "branch", "chain"):
+        if len({row[key] for row in value["pulls"]}) != 2:
+            raise ToolError("known roster has duplicate native or chain identities")
+    if [row["number"] for row in value["pulls"]] != sorted(row["number"] for row in value["pulls"]):
+        raise ToolError("known roster PRs must be in increasing number order")
+    return value
+
+
+def roster_custody_root() -> pathlib.Path:
+    root = pathlib.Path(os.environ.get("XDG_STATE_HOME", pathlib.Path.home() / ".local/state")) / "fs-gg/pr-lane-known-roster"
+    if not root.is_absolute():
+        raise ToolError("known-roster custody requires an absolute state directory")
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = root.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
+        raise ToolError("unsafe known-roster custody directory")
+    return root
+
+
+def save_roster_custody(path: pathlib.Path, value: dict[str, Any], *, create: bool = False) -> None:
+    """Fsync intent/possible-send before any provider effect; keep raw PR text out of custody."""
+    raw = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    if create:
+        descriptor = os.open(path, flags, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+    else:
+        descriptor, temp = tempfile.mkstemp(prefix=".known-roster-", dir=path.parent)
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+            os.replace(temp, path)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(temp)
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def adopt_known_roster(arguments: argparse.Namespace) -> dict[str, Any]:
+    spec = read_known_roster(arguments.adopt_known_roster, arguments.repo)
+    raw_spec = json.dumps(spec, sort_keys=True, separators=(",", ":"))
+    intent_sha = text_sha(raw_spec)
+    # Stable across caller files, spec edits and process restarts. A changed plan cannot reset an uncertain send.
+    key = text_sha(arguments.repo.lower() + ":" + ",".join(str(row["id"]) for row in spec["pulls"]))
+    identity = {"repo": arguments.repo, "intentSha256": intent_sha}
+    expected: dict[int, dict[str, Any]] = {}
+    guards: dict[int, dict[str, Any]] = {}
+    desired: dict[int, str] = {}
+    custody: dict[str, Any] = {"schema": ROSTER_SCHEMA, **identity, "intent": spec, "phase": "validated", "steps": []}
+    def refuse(reason, **details):
+        raise Refusal(reason, **identity, steps=custody["steps"], **details)
+    def get(endpoint):
+        return run_gh(arguments.gh, ["--method", "GET", endpoint])
+    def projection(native):
+        guard, problems = metadata_projection(native)
+        if problems:
+            refuse("known-roster-native-unreadable")
+        return guard
+    def guard_sha(guard):
+        # Bind full deciding metadata without retaining native prose or repository subresources.
+        return text_sha(json.dumps({field: metadata_fingerprint(item) for field, item in guard.items()},
+                                   sort_keys=True, separators=(",", ":")))
+    def fresh_population(initial=False):
+        pulls = open_pulls(arguments.gh, arguments.repo)
+        numbers = [row.get("number") for row in pulls]
+        if (len(pulls) != 2 or any(type(number) is not int for number in numbers)
+                or set(numbers) != {row["number"] for row in spec["pulls"]} or len(set(numbers)) != 2):
+            refuse("known-roster-population-mismatch")
+        base = current_head_sha(arguments.gh, arguments.repo, spec["base"])
+        if base != spec["baseSha"]:
+            refuse("known-roster-base-moved")
+        for row in spec["pulls"]:
+            number = row["number"]
+            native = get(f"/repos/{arguments.repo}/pulls/{number}")
+            guard = projection(native)
+            roster_entry = next(pull for pull in pulls if pull["number"] == number)
+            # GitHub's list response omits merged/maintainer_can_modify. Compare its
+            # identity/preimage fields, then retain the full detail response as the guard.
+            population_fields = ("number", "id", "node_id", "state", "title", "body", "head.ref", "head.sha",
+                                 "head.repo.full_name", "base.ref", "base.sha", "base.repo.full_name")
+            if any(metadata_field(roster_entry, field) != guard[field] for field in population_fields):
+                refuse("known-roster-population-disagrees", number=number)
+            if current_head_sha(arguments.gh, arguments.repo, row["branch"]) != row["headSha"]:
+                refuse("known-roster-head-moved", number=number)
+            if initial:
+                wanted = {"number": number, "id": row["id"], "node_id": row["nodeId"], "state": "open", "merged": False,
+                          "head.ref": row["branch"], "head.sha": row["headSha"], "base.ref": spec["base"],
+                          "base.sha": row["baseSha"], "head.repo.full_name": arguments.repo, "base.repo.full_name": arguments.repo,
+                          "html_url": f"https://github.com/{arguments.repo}/pull/{number}"}
+                if (any(guard[field] != value for field, value in wanted.items())
+                        or text_sha(native["title"]) != row["titleSha256"] or text_sha(native["body"]) != row["bodySha256"]
+                        or "fsgg-pr-lane-admission" in native["body"]):
+                    refuse("known-roster-preimage-mismatch", number=number)
+                validate_routine_body(native["body"], row["branch"], row["headSha"])
+                desired[number] = update_body(native["body"], native["body"], row["branch"], row["headSha"], row["headSha"],
+                                              row["campaign"], row["chain"], adopt_legacy=True,
+                                              declare_continues=row["declareContinues"])
+                expected[number], guards[number] = native, guard
+            elif guard != guards[number]:
+                refuse("known-roster-preimage-drift", number=number)
+        # Reuse the normal policy over the fully assigned hypothetical population. No capacity exception.
+        assigned = [{**expected[row["number"]], "body": desired[row["number"]]} for row in spec["pulls"]]
+        for row in spec["pulls"]:
+            enforce_lane([pull for pull in assigned if pull["number"] != row["number"]], row["campaign"], row["chain"])
+    with repository_lock(arguments.repo):
+        root = roster_custody_root()
+        path = root / (key + ".json")
+        if path.exists() or path.is_symlink():
+            # Re-entry never sends, even after a failed acknowledgement or a partial cohort.
+            info = path.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
+                raise ToolError("unsafe known-roster custody file")
+            try:
+                prior = json.loads(path.read_text())
+                if not isinstance(prior, dict) or prior.get("schema") != ROSTER_SCHEMA:
+                    raise ValueError("custody schema")
+            except (ValueError, OSError) as error:
+                raise ToolError("unreadable prior custody; no resend") from error
+            observations = []
+            for row in spec["pulls"]:
+                native = get(f"/repos/{arguments.repo}/pulls/{row['number']}")
+                observations.append({"number": row["number"], "headSha": metadata_field(native, "head.sha"),
+                                     "bodySha256": text_sha(native["body"]) if isinstance(native.get("body"), str) else None})
+            raise Refusal("known-roster-custody-exists-no-resend", **identity,
+                          priorIntentSha256=prior.get("intentSha256"), phase=prior.get("phase"), steps=prior.get("steps"),
+                          readback=observations, writeAttempted=False)
+        fresh_population(initial=True)
+        fresh_population()
+        if arguments.inspect:
+            return {"ok": True, "action": "admitted", **identity, "numbers": [row["number"] for row in spec["pulls"]]}
+        custody["plannedBodySha256"] = {str(number): text_sha(body) for number, body in desired.items()}
+        save_roster_custody(path, custody, create=True)
+        for row in spec["pulls"]:
+            number = row["number"]
+            fresh_population()
+            custody["phase"] = "possible-send"
+            step = {"number": number, "headSha": row["headSha"], "beforeBodySha256": row["bodySha256"],
+                    "afterBodySha256": text_sha(desired[number]), "beforeMetadataSha256": guard_sha(guards[number]),
+                    "expectedMetadataSha256": guard_sha({**guards[number], "body": desired[number]}), "phase": "possible-send"}
+            custody["steps"].append(step)
+            save_roster_custody(path, custody)
+            try:
+                run_gh(arguments.gh, ["--method", "PATCH", f"/repos/{arguments.repo}/pulls/{number}", "--input", "-"],
+                       stdin=json.dumps({"body": desired[number]}, ensure_ascii=False))
+            except ToolError:
+                refuse("known-roster-send-uncertain", number=number, writeAttempted=True)
+            try:
+                after = projection(get(f"/repos/{arguments.repo}/pulls/{number}"))
+            except (ToolError, Refusal):
+                refuse("known-roster-readback-unresolved", number=number, writeAttempted=True)
+            if after != {**guards[number], "body": desired[number]}:
+                refuse("known-roster-readback-mismatch", number=number, writeAttempted=True)
+            guards[number] = after
+            step["readbackMetadataSha256"] = guard_sha(after)
+            step["phase"] = "confirmed"
+            custody["phase"] = "partial-confirmed"
+            save_roster_custody(path, custody)
+        fresh_population()
+        custody["phase"] = "complete"
+        save_roster_custody(path, custody)
+        return {"ok": True, "action": "adopted-known-roster", **identity, "steps": custody["steps"]}
+
+
 def parser() -> argparse.ArgumentParser:
     result = JsonArgumentParser(description=__doc__)
     result.add_argument("--repo", required=True, help="GitHub owner/repository")
-    result.add_argument("--campaign-id", required=True)
-    result.add_argument("--dependency-chain-id", required=True)
-    result.add_argument("--head", required=True, help="Head branch in the target repository")
-    result.add_argument("--head-sha", required=True, help="Exact expected head commit")
-    result.add_argument("--base", required=True)
-    result.add_argument("--title", required=True)
-    result.add_argument("--body-file", required=True, type=pathlib.Path)
+    result.add_argument("--campaign-id")
+    result.add_argument("--dependency-chain-id")
+    result.add_argument("--head", help="Head branch in the target repository")
+    result.add_argument("--head-sha", help="Exact expected head commit")
+    result.add_argument("--base")
+    result.add_argument("--title")
+    result.add_argument("--body-file", type=pathlib.Path)
     result.add_argument("--update-pr", type=int, help="Update an existing managed PR, preserving native machine metadata")
     result.add_argument("--previous-head-sha", help="Explicit previous routine marker head for an update")
     result.add_argument("--adopt-legacy-pr", action="store_true",
                         help="Explicitly assign the supplied campaign/chain to an existing routine PR with absent admission metadata")
     result.add_argument("--sc2-producer-predecessor-source", help="Protected canonical producer pin for the selected SC2 first-install predecessor")
+    result.add_argument("--adopt-known-roster", type=pathlib.Path, help="Explicit exact two-legacy-PR roster; separate guarded metadata operation")
+    result.add_argument("--declare-delivery-continues", action="store_true", help="Explicitly initialize a missing continues declaration during an existing PR update")
     result.add_argument("--inspect", action="store_true", help="Check admission without creating a PR")
     result.add_argument("--gh", default="gh", help=argparse.SUPPRESS)
     return result
 
 
 def validate(arguments: argparse.Namespace) -> None:
+    if not REPO_RE.fullmatch(arguments.repo):
+        raise ToolError("repo must have owner/repository form")
+    if arguments.adopt_known_roster:
+        if any(getattr(arguments, key) is not None for key in ("campaign_id", "dependency_chain_id", "head", "head_sha", "base", "title", "body_file", "update_pr", "previous_head_sha", "sc2_producer_predecessor_source")) or arguments.adopt_legacy_pr or arguments.declare_delivery_continues:
+            raise ToolError("known-roster mode cannot mix ordinary PR arguments")
+        return
+    if any(getattr(arguments, key) is None for key in ("campaign_id", "dependency_chain_id", "head", "head_sha", "base", "title", "body_file")):
+        raise ToolError("ordinary mode requires campaign, chain, branch, head, base, title and body")
+    if arguments.declare_delivery_continues and arguments.update_pr is None:
+        raise ToolError("initial delivery declaration requires an existing PR update")
     if arguments.adopt_legacy_pr and arguments.update_pr is None:
         raise ToolError("legacy PR adoption requires --update-pr")
     if arguments.sc2_producer_predecessor_source and (arguments.update_pr is not None
@@ -650,6 +884,11 @@ def validate(arguments: argparse.Namespace) -> None:
 
 def execute(arguments: argparse.Namespace) -> dict[str, Any]:
     validate(arguments)
+    if arguments.adopt_known_roster:
+        try:
+            return adopt_known_roster(arguments)
+        except OSError as error:
+            raise ToolError("known-roster I/O failed; retain custody and do not resend") from error
     try:
         original_body = arguments.body_file.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:
