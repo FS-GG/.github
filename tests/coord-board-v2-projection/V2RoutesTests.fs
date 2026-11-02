@@ -194,7 +194,7 @@ module V2RoutesTests =
           InstalledReaderSha256 = Known(String.replicate 64 "a"); KnownInstalledReaders = Set.ofList [ String.replicate 64 "a" ]; KnownLiftedCapReaders = Set.empty; KnownCap500Readers = Set.empty
           LockedFSharpCoreHash = Known "h"; CachedFSharpCoreHash = Known "h"; MemoryHeadroomBytes = Known(Some 4294967296L); HostMemAvailableBytes = Known 8589934592L
           MinimumHeadroomBytes = 1073741824L; PayloadLimitBytes = payloadLimitBytes; BindingLimitBytes = bindingLimitBytes
-          ProjectItems = Known [ for i in 0 .. 4 -> { ItemId = $"PVTI_{i}"; Content = IssueContent($"FS-GG/.github#{70001 + i}", $"I_synthetic_{sentinel}_{i}"); HasStatus = true; HasTrack = true; HasWorkLevel = true; RoadmapRaw = None; UpdatedAt = DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero) } ]
+          ProjectItems = Known [ for i in 0 .. 4 -> { ItemId = $"PVTI_{i}"; Content = IssueContent($"FS-GG/.github#{70001 + i}", $"I_synthetic_{sentinel}_{i}"); HasStatus = true; HasTrack = true; HasWorkLevel = true; Archived = false; RoadmapRaw = None; UpdatedAt = DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero) } ]
           InvisibleRepositories = Set.empty; Now = DateTimeOffset(2026, 10, 30, 12, 0, 0, TimeSpan.Zero); ChurnWindow = TimeSpan.FromMinutes 10.0 }
 
     [<Fact>]
@@ -244,7 +244,7 @@ module V2RoutesTests =
         let inputs = bindInputs successorPrivate successorPublic privateJson publicJson
         let built = String.replicate 40 "2"
         let changedClosure =
-            { Built = built; Main = String.replicate 40 "1"; BuiltIsAncestor = true; ClosureEntries = 40; ChangedOutsideClosure = 3; ChangedInsideClosure = 1 }
+            { Built = built; Main = String.replicate 40 "1"; BuiltIsAncestor = true; ClosureEntries = 40; ChangedOutsideClosure = 3; ChangedInsideClosure = 1; SelfRegistration = None }
         let differing = { inputs with ConstructorRevision = Known built; ConstructorContent = Known changedClosure }
         let verdict (changed: EnrollmentInputs) freshness = verdictOf (run ProgrammeEnrollmentSuccessor PlanSuccessor { changed with ProtectedMainFreshness = freshness }) ConstructorIdentity
         Assert.Equal(Unsupported(ConstructorDiffersFromMain, ConstructorBuild), verdict differing LiveMain)
@@ -269,7 +269,7 @@ module V2RoutesTests =
         let privateJson, publicJson, successorPrivate, successorPublic = healthyBind ()
         let main = String.replicate 40 "1"
         let built = String.replicate 40 "2"
-        let unchanged = { Built = built; Main = main; BuiltIsAncestor = true; ClosureEntries = 40; ChangedOutsideClosure = 7; ChangedInsideClosure = 0 }
+        let unchanged = { Built = built; Main = main; BuiltIsAncestor = true; ClosureEntries = 40; ChangedOutsideClosure = 7; ChangedInsideClosure = 0; SelfRegistration = None }
         let inputs = { bindInputs successorPrivate successorPublic privateJson publicJson with ConstructorRevision = Known built; ConstructorContent = Known unchanged }
         let verdict (changed: EnrollmentInputs) = verdictOf (run ProgrammeEnrollmentSuccessor PlanSuccessor changed) ConstructorIdentity
         // The installed-release case of cohort 90: main moved past the constructor, nothing in its closure changed.
@@ -281,7 +281,7 @@ module V2RoutesTests =
         | other -> failwithf "%A" other
         Assert.Equal(0, exitCode (run ProgrammeEnrollmentSuccessor BindRuntime inputs).Overall)
         // Causal: one changed closure path refuses, naming the count only.
-        let changed = run ProgrammeEnrollmentSuccessor PlanSuccessor { inputs with ConstructorContent = Known { unchanged with ChangedInsideClosure = 1 } }
+        let changed = run ProgrammeEnrollmentSuccessor PlanSuccessor { inputs with ConstructorContent = Known { unchanged with ChangedInsideClosure = 1; SelfRegistration = None } }
         Assert.Equal(Unsupported(ConstructorDiffersFromMain, ConstructorBuild), verdictOf changed ConstructorIdentity)
         Assert.Equal<string list>([ "1" ], (findingOf changed ConstructorIdentity).Subjects)
         Assert.Equal(10, exitCode changed.Overall)

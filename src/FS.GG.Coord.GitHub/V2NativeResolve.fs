@@ -25,6 +25,7 @@ module V2NativeResolve =
           HasStatus: bool
           HasTrack: bool
           HasWorkLevel: bool
+          Archived: bool
           RoadmapRaw: string option
           UpdatedAt: DateTimeOffset }
 
@@ -65,6 +66,8 @@ module V2NativeResolve =
             let segments = pathPart.Substring(1).Split('/') |> Array.toList
             let noQuery = query.IsNone
             match segments with
+            | [ "repos"; "FS-GG"; ".github"; "git"; "ref"; "tags"; "coherent-set"; version ] ->
+                Regex.IsMatch(version, @"\Av(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\z") && noQuery && not paginated
             // Project metadata, fields and items.
             | [ "orgs"; owner; "projectsV2"; number ] -> isName owner && numberPattern.IsMatch number && noQuery && not paginated
             | [ "orgs"; owner; "projectsV2"; number; "fields" ] -> isName owner && numberPattern.IsMatch number && query = Some "per_page=100" && paginated
@@ -182,6 +185,7 @@ module V2NativeResolve =
           HasStatus = fieldPresent element "Status"
           HasTrack = fieldPresent element "Track"
           HasWorkLevel = fieldPresent element "Work level"
+          Archived = false
           RoadmapRaw = roadmapRaw element
           UpdatedAt = DateTimeOffset.Parse(str "updated_at" element, Globalization.CultureInfo.InvariantCulture) }
 
@@ -363,3 +367,61 @@ module V2NativeResolve =
                 Ok(String.Join("\n\n", messages))
             | _ -> fail ()
         with _ -> Error V2Enrollment.NativeReadFailed
+
+    let reconcileArchived (read: V2Projection.IssueRef -> string -> Errors.IoResult<string * string * int * bool>)
+                          (binding: V2Projection.Binding) (items: ProjectItem list) =
+        try
+            let present = items |> List.choose (fun x -> match x.Content with IssueContent(_, node) -> Some node | _ -> None) |> Set.ofList
+            let missing = binding.SelectedIssues |> Map.toList |> List.filter (fun (node, _) -> not (present.Contains node))
+            let archived = missing |> List.map (fun (node, reference) ->
+                let m = Regex.Match(reference, @"\A([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)#([1-9][0-9]*)\z")
+                if not m.Success then fail ()
+                let issue: V2Projection.IssueRef = { Owner = m.Groups.[1].Value; Repository = m.Groups.[2].Value; Number = int m.Groups.[3].Value }
+                match read issue node with
+                | Ok(itemId, contentId, pages, true) when contentId = node && not (String.IsNullOrWhiteSpace itemId) && pages > 0 && pages <= 10 ->
+                    { ItemId = itemId; Content = IssueContent(reference, node); HasStatus = false; HasTrack = false; HasWorkLevel = false
+                      Archived = true; RoadmapRaw = None; UpdatedAt = DateTimeOffset.MinValue }
+                | _ -> fail ())
+            let all = items @ archived
+            let nodes = all |> List.choose (fun item -> match item.Content with IssueContent(_, node) -> Some node | _ -> None)
+            if (all |> List.map _.ItemId |> Set.ofList).Count <> all.Length || (Set.ofList nodes).Count <> nodes.Length then fail ()
+            Ok all
+        with _ -> Error V2Enrollment.NativeReadFailed
+
+    let readReleaseSource (get: Get) (version: string) =
+        try
+            let reference = "tags/coherent-set/v" + version
+            match get' get ("/repos/FS-GG/.github/git/ref/" + reference) false with
+            | Body body ->
+                use document = parse body
+                let root = document.RootElement
+                let target = root.GetProperty "object"
+                let sha = str "sha" target
+                if str "ref" root <> "refs/" + reference || str "type" target <> "commit"
+                   || not (Regex.IsMatch(sha, @"\A[0-9a-f]{40}\z")) then fail ()
+                Ok sha
+            | _ -> fail ()
+        with _ -> Error V2Enrollment.NativeReadFailed
+
+    let membershipArguments (request: Transport.Request) =
+        match request.Method, request.Path, request.Body with
+        | "POST", "graphql", Transport.Query(document, variables) when document = V2Projection.exactMembershipQuery && request.Query.IsEmpty && request.IfNoneMatch.IsNone ->
+            let names = variables |> List.map fst
+            let expected = Set.ofList [ "owner"; "repo"; "number" ]
+            let actual = Set.ofList names
+            let validVariable (name, value) =
+                match name, value with
+                | ("owner" | "repo"), Transport.VString text -> isName text
+                | "number", Transport.VNumber number -> Double.IsFinite number && number >= 1.0 && number <= float Int32.MaxValue && floor number = number
+                | "after", Transport.VString cursor -> not (String.IsNullOrWhiteSpace cursor) && cursor.Length <= 4096 && not (cursor |> Seq.exists Char.IsControl)
+                | _ -> false
+            if actual.Count <> names.Length || (actual <> expected && actual <> Set.add "after" expected)
+               || not (variables |> List.forall validVariable) then None
+            else
+                Some([ "api"; "graphql"; "--method"; "POST"; "-f"; "query=" + document ] @
+                     (variables |> List.collect (fun (name, value) ->
+                        match value with
+                        | Transport.VString text -> [ "-f"; name + "=" + text ]
+                        | Transport.VNumber number -> [ "-F"; name + "=" + number.ToString(Globalization.CultureInfo.InvariantCulture) ]
+                        | _ -> [])))
+        | _ -> None

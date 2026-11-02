@@ -145,6 +145,7 @@ module V2EnrollmentCommands =
         info.Environment.["GIT_TERMINAL_PROMPT"] <- "0"
         try
             use proc = Diagnostics.Process.Start info
+            use deadline = new Threading.Timer((fun _ -> try proc.Kill(true) with _ -> ()), null, 120000, Threading.Timeout.Infinite)
             let errors = proc.StandardError.ReadToEndAsync()
             use buffer = new MemoryStream()
             let chunk = Array.zeroCreate<byte> 512
@@ -168,7 +169,7 @@ module V2EnrollmentCommands =
     // ancestry by `git merge-base`, the closure derived from the tree at `built`, and the change listing between the
     // two. Any failed or over-bound read, an underivable closure or an unparseable listing is an unobserved input,
     // which `ConstructorIdentity` reports as Unknown: nothing here can produce support by failing.
-    let observeConstructorContent (repository: string) (built: string) (main: string) : V2Preflight.Observed<V2Preflight.ConstructorContent> =
+    let private observeConstructorContentWith (release: (string * string) option) (repository: string) (built: string) (main: string) : V2Preflight.Observed<V2Preflight.ConstructorContent> =
         let sha = Regex(@"\A[0-9a-f]{40}\z")
         if not (sha.IsMatch built && sha.IsMatch main) then V2Preflight.NotObserved V2Preflight.Unreadable
         else
@@ -177,7 +178,7 @@ module V2EnrollmentCommands =
                 if not (sha.IsMatch mergeBase) then V2Preflight.NotObserved V2Preflight.ReadFailed
                 elif mergeBase <> built then
                     V2Preflight.Known
-                        { Built = built; Main = main; BuiltIsAncestor = false; ClosureEntries = 0; ChangedOutsideClosure = 0; ChangedInsideClosure = 0 }
+                        { Built = built; Main = main; BuiltIsAncestor = false; ClosureEntries = 0; ChangedOutsideClosure = 0; ChangedInsideClosure = 0; SelfRegistration = None }
                 else
                     let listing = gitRun repository [ "ls-tree"; "-r"; "-z"; "--full-tree"; "--name-only"; built ] 16777216
                     if not (listing.EndsWith("\000", StringComparison.Ordinal)) then V2Preflight.NotObserved V2Preflight.Incomplete
@@ -196,12 +197,21 @@ module V2EnrollmentCommands =
                             | Error _ -> V2Preflight.NotObserved V2Preflight.Incomplete
                             | Ok changes ->
                                 let inside = V2ConstructorClosure.changesInside closure changes
+                                let registration =
+                                    match release, inside with
+                                    | Some(source, version), [ change ] when source = built && change.Status = 'M' && change.Path = "dist/dotnet/.config/dotnet-tools.json" ->
+                                        let before = gitRun repository [ "cat-file"; "blob"; built + ":" + change.Path ] 1048576
+                                        let after = gitRun repository [ "cat-file"; "blob"; main + ":" + change.Path ] 1048576
+                                        V2ConstructorClosure.selfRegistration built version before after
+                                    | _ -> None
                                 V2Preflight.Known
                                     { Built = built; Main = main; BuiltIsAncestor = true
                                       ClosureEntries = closure.Paths.Count + closure.Prefixes.Count
                                       ChangedOutsideClosure = changes.Length - inside.Length
-                                      ChangedInsideClosure = inside.Length }
+                                      ChangedInsideClosure = inside.Length; SelfRegistration = registration }
             with _ -> V2Preflight.NotObserved V2Preflight.ReadFailed
+
+    let observeConstructorContent repository built main = observeConstructorContentWith None repository built main
 
     // The protected public blob is read from the supplied checkout at the exact merge commit.
     // A fixed argument vector, no shell, bounded output, stderr discarded. A failed read is
@@ -391,43 +401,61 @@ module V2EnrollmentCommands =
 
     let private ghOutputCap = 33554432
 
+    let private ghRead (arguments: string list) =
+        try
+            let info = Diagnostics.ProcessStartInfo(ghExecutable ())
+            for argument in arguments do info.ArgumentList.Add argument
+            info.RedirectStandardOutput <- true
+            info.RedirectStandardError <- true
+            info.UseShellExecute <- false
+            info.Environment.["GH_PROMPT_DISABLED"] <- "1"
+            info.Environment.["GH_NO_UPDATE_NOTIFIER"] <- "1"
+            use proc = Diagnostics.Process.Start info
+            use deadline = new Threading.Timer((fun _ -> try proc.Kill(true) with _ -> ()), null, 120000, Threading.Timeout.Infinite)
+            let errors = proc.StandardError.ReadToEndAsync()
+            // Stream the body up to the cap; a response that reaches it is killed, never buffered whole.
+            use buffer = new MemoryStream()
+            let chunk = Array.zeroCreate<byte> 65536
+            let mutable overflow = false
+            let mutable count = proc.StandardOutput.BaseStream.Read(chunk, 0, chunk.Length)
+            while count > 0 && not overflow do
+                if buffer.Length + int64 count > int64 ghOutputCap then overflow <- true
+                else
+                    buffer.Write(chunk, 0, count)
+                    count <- proc.StandardOutput.BaseStream.Read(chunk, 0, chunk.Length)
+            if overflow then
+                (try proc.Kill() with _ -> ())
+                V2NativeResolve.Failed
+            elif not (proc.WaitForExit 120000) then
+                (try proc.Kill() with _ -> ())
+                V2NativeResolve.Failed
+            else
+                errors.Wait()
+                if proc.ExitCode = 0 then V2NativeResolve.Body(strictUtf8.GetString(buffer.ToArray()))
+                elif errors.Result.Contains "HTTP 404" then V2NativeResolve.NotFound
+                else V2NativeResolve.Failed
+        with _ -> V2NativeResolve.Failed
+
     let ghGet : V2NativeResolve.Get =
         fun path paginated ->
             match V2NativeResolve.getArguments path paginated with
             | None -> V2NativeResolve.Failed
-            | Some arguments ->
-                try
-                    let info = Diagnostics.ProcessStartInfo(ghExecutable ())
-                    for argument in arguments do info.ArgumentList.Add argument
-                    info.RedirectStandardOutput <- true
-                    info.RedirectStandardError <- true
-                    info.UseShellExecute <- false
-                    info.Environment.["GH_PROMPT_DISABLED"] <- "1"
-                    info.Environment.["GH_NO_UPDATE_NOTIFIER"] <- "1"
-                    use proc = Diagnostics.Process.Start info
-                    let errors = proc.StandardError.ReadToEndAsync()
-                    // Stream the body up to the cap; a response that reaches it is killed, never buffered whole.
-                    use buffer = new MemoryStream()
-                    let chunk = Array.zeroCreate<byte> 65536
-                    let mutable overflow = false
-                    let mutable count = proc.StandardOutput.BaseStream.Read(chunk, 0, chunk.Length)
-                    while count > 0 && not overflow do
-                        if buffer.Length + int64 count > int64 ghOutputCap then overflow <- true
-                        else
-                            buffer.Write(chunk, 0, count)
-                            count <- proc.StandardOutput.BaseStream.Read(chunk, 0, chunk.Length)
-                    if overflow then
-                        (try proc.Kill() with _ -> ())
-                        V2NativeResolve.Failed
-                    elif not (proc.WaitForExit 120000) then
-                        (try proc.Kill() with _ -> ())
-                        V2NativeResolve.Failed
-                    else
-                        errors.Wait()
-                        if proc.ExitCode = 0 then V2NativeResolve.Body(strictUtf8.GetString(buffer.ToArray()))
-                        elif errors.Result.Contains "HTTP 404" then V2NativeResolve.NotFound
-                        else V2NativeResolve.Failed
-                with _ -> V2NativeResolve.Failed
+            | Some arguments -> ghRead arguments
+
+    // The only additional read is the maintained exact-membership document, with typed variables.
+    // Neither a caller-supplied document nor a mutation body has an argument vector here.
+    let private membershipTransport =
+        let refused () = Error(Errors.Malformed("enrollment membership", "read-only exact membership query required"))
+        { new Transport.IGitHubTransport with
+            member _.Send request =
+                match V2NativeResolve.membershipArguments request with
+                | Some arguments ->
+                    match ghRead arguments with
+                    | V2NativeResolve.Body body -> Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
+                    | _ -> Error(Errors.Transport "bounded exact membership read unavailable")
+                | None -> refused ()
+            member _.SendMutation _ = refused ()
+            member _.RetryMutation _ = refused () }
 
     let programmeBinding (request: V2Enrollment.Request) =
         match V2Projection.decodeBinding (readText programmeInputLimit request.PredecessorPrivatePath) with
@@ -513,7 +541,22 @@ module V2EnrollmentCommands =
     let private requiredFor (values: Collections.Generic.Dictionary<string, string>) (names: string list) =
         if names |> List.exists (fun name -> not (values.ContainsKey name)) then refuse V2Enrollment.MalformedInput
 
-    let private preflightEnrollment (route: V2Preflight.Route) (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) (online: bool) : int =
+    let private executingRelease (host: Reflection.Assembly option) =
+        try
+            match host with
+            | Some assembly when assembly.GetName().Name = "fsgg-coord-engine" ->
+                let source, _ = assemblyIdentity assembly
+                let version = assembly.GetName().Version
+                if isNull version || version.Revision <> 0 then None
+                else
+                    let versionText = $"{version.Major}.{version.Minor}.{version.Build}"
+                    match V2NativeResolve.readReleaseSource ghGet versionText with
+                    | Ok published -> V2ConstructorClosure.authenticateRelease (assembly.GetName().Name) (fst (constructorIdentity ())) source published versionText
+                    | _ -> None
+            | _ -> None
+        with _ -> None
+
+    let private preflightEnrollment (host: Reflection.Assembly option) (route: V2Preflight.Route) (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) (online: bool) : int =
         requiredFor values [ "--request" ]
         if online = values.ContainsKey "--native-facts" then refuse V2Enrollment.MalformedInput
         let request = decodeRequestFile values.["--request"]
@@ -536,7 +579,12 @@ module V2EnrollmentCommands =
                     match V2Projection.decodeBinding json with
                     | Ok binding when V2Projection.isProgrammeBinding binding ->
                         match V2NativeResolve.resolve ghGet binding request with
-                        | Ok resolved -> V2Preflight.Known(resolved.Facts, V2Preflight.Live), V2Preflight.Known resolved.Items, Set.ofList resolved.HiddenRepositories
+                        | Ok resolved ->
+                            let complete =
+                                match V2NativeResolve.reconcileArchived (V2Projection.exactMembership membershipTransport binding) binding resolved.Items with
+                                | Ok inventory -> V2Preflight.Known inventory
+                                | Error _ -> V2Preflight.NotObserved V2Preflight.ReadFailed
+                            V2Preflight.Known(resolved.Facts, V2Preflight.Live), complete, Set.ofList resolved.HiddenRepositories
                         | Error _ -> V2Preflight.NotObserved V2Preflight.ReadFailed, V2Preflight.NotObserved V2Preflight.ReadFailed, Set.empty
                     | _ -> V2Preflight.NotObserved V2Preflight.Unreadable, V2Preflight.NotObserved V2Preflight.Unreadable, Set.empty
                 | V2Preflight.NotObserved kind -> V2Preflight.NotObserved kind, V2Preflight.NotObserved kind, Set.empty
@@ -601,7 +649,7 @@ module V2EnrollmentCommands =
               ConstructorContent =
                 (match revision, mainRevision, freshness with
                  | V2Preflight.Known built, V2Preflight.Known main, (V2Preflight.LiveMain | V2Preflight.AssertedMain) when built <> main ->
-                     observeConstructorContent repository built main
+                     observeConstructorContentWith (if online then executingRelease host else None) repository built main
                  | _ -> V2Preflight.NotObserved V2Preflight.NotEvaluated)
               PredecessorPrivate = privateJson
               PredecessorPublic = publicJson
@@ -840,7 +888,7 @@ module V2EnrollmentCommands =
         printfn "%s" (V2Preflight.toJson report)
         V2Preflight.exitCode report.Overall
 
-    let preflight (args: string array) : int =
+    let private preflightWith host (args: string array) : int =
         let values, flags =
             namedOptional args
                 [ "--route"; "--stage"; "--repository" ]
@@ -854,7 +902,7 @@ module V2EnrollmentCommands =
         let stage =
             V2Preflight.stages |> List.tryFind (fun stage -> V2Preflight.stageCode stage = values.["--stage"]) |> Option.defaultWith (fun () -> refuse V2Enrollment.MalformedInput)
         match route with
-        | V2Preflight.ProgrammeEnrollmentSuccessor -> preflightEnrollment route stage values online
+        | V2Preflight.ProgrammeEnrollmentSuccessor -> preflightEnrollment host route stage values online
         | V2Preflight.RoutineDelivery when stage = V2Preflight.OpenPullRequest || stage = V2Preflight.MergePullRequest -> preflightRoutine stage values online
         | V2Preflight.PublicationWriterRegistration when stage = V2Preflight.RegisterWriter || stage = V2Preflight.RunWriter -> preflightPublication stage values online
         | _ ->
@@ -862,6 +910,8 @@ module V2EnrollmentCommands =
             let report = V2Preflight.unregisteredReport route stage
             printfn "%s" (V2Preflight.toJson report)
             V2Preflight.exitCode report.Overall
+
+    let preflight args = preflightWith None args
 
     // ---- reader identity rebind after a coherent upgrade (#5120) ----
 
@@ -1009,7 +1059,7 @@ module V2EnrollmentCommands =
             | "bind-runtime" -> bindRuntime args; 0
             | "rebind-reader" -> rebindReader host args; 0
             | "resolve-issues" -> resolveIssues args; 0
-            | "preflight" -> preflight args
+            | "preflight" -> preflightWith host args
             | _ -> renderCarrier args; 0
         with
         | Refused refusal ->

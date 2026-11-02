@@ -443,11 +443,14 @@ module V2Projection =
     // The one-shot writer's explicit refusal for an archived card (#5119); documented in the .fsi.
     let archivedCardWriteRefusal = "the board card is archived (Done retention); no Observation write"
 
-    let private exactMembership (transport: IGitHubTransport) (binding: Binding) (issue: IssueRef) expectedNativeId =
+    let exactMembershipQuery =
+        "query($owner: String!, $repo: String!, $number: Int!, $after: String) { repository(owner: $owner, name: $repo) { nameWithOwner issue(number: $number) { id number projectItems(first: 50, after: $after) { totalCount pageInfo { hasNextPage endCursor } nodes { id isArchived project { id } content { ... on Issue { id number repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }"
+
+    let exactMembership (transport: IGitHubTransport) (binding: Binding) (issue: IssueRef) expectedNativeId =
         let subject = $"{issue.Owner}/{issue.Repository}#{issue.Number} exact membership"
-        let document =
-            "query($owner: String!, $repo: String!, $number: Int!, $after: String) { repository(owner: $owner, name: $repo) { nameWithOwner issue(number: $number) { id number projectItems(first: 50, after: $after) { totalCount pageInfo { hasNextPage endCursor } nodes { id isArchived project { id } content { ... on Issue { id number repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }"
+        let document = exactMembershipQuery
         let mutable pages = 0
+        let mutable expectedTotal: int option = None
         let fetch after =
             let variables =
                 [ "owner", VString issue.Owner; "repo", VString issue.Repository; "number", VNumber(double issue.Number) ]
@@ -469,9 +472,12 @@ module V2Projection =
                                 Error(Malformed(subject, "membership content identity differs"))
                             else Ok(itemId, projectId, (nativeId, node.GetProperty("isArchived").GetBoolean()))
                         let connection = native.GetProperty "projectItems"
-                        if connection.GetProperty("totalCount").GetInt32() < 0 || connection.GetProperty("nodes").GetArrayLength() > 50 then
+                        let total = connection.GetProperty("totalCount").GetInt32()
+                        if total < 0 || total > 500 || connection.GetProperty("nodes").GetArrayLength() > 50
+                           || (expectedTotal |> Option.exists ((<>) total)) then
                             Error(Malformed(subject, "membership count/window is invalid"))
                         else
+                            expectedTotal <- Some total
                             let page = GraphQl.page subject "native issue project memberships" (fun (id, _, _) -> id) decode connection
                             match page with
                             | Ok _ -> pages <- pages + 1; page
@@ -481,6 +487,7 @@ module V2Projection =
                 | :? InvalidOperationException -> Error(Malformed(subject, "unreadable native membership identity")))
         match GraphQl.drain subject "native issue project memberships" { MaxPages = 10; MaxItems = 500 } fetch with
         | Error error -> Error error
+        | Ok memberships when expectedTotal <> Some memberships.Length -> Error(Malformed(subject, "membership total differs from complete pages"))
         | Ok memberships ->
             match memberships |> List.filter (fun (_, projectId, _) -> projectId = binding.ProjectId) with
             | [ (itemId, _, (nativeId, archived)) ] -> Ok(itemId, nativeId, pages, archived)

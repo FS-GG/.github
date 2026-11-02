@@ -1968,3 +1968,33 @@ let ``successor planning changes at the final barrier remain Unknown`` () =
     Assert.Equal("Unknown", report.Items.Head.SourceCurrentness)
     Assert.Equal("Unknown", report.Items.Head.Evidence.Health)
     Assert.Empty reads.Mutations
+
+[<Fact>]
+let ``exact archived membership drains real page grammar and refuses incomplete or contradictory identities`` () =
+    let page (item: string) (project: string) (archived: bool) (next: bool) (cursor: string option) (total: int) =
+        let body = (match membership with Ok value -> value.Body | _ -> failwith "fixture")
+        let root = System.Text.Json.Nodes.JsonNode.Parse body
+        let connection = root.["data"].["repository"].["issue"].["projectItems"]
+        connection.["totalCount"] <- System.Text.Json.Nodes.JsonValue.Create total
+        connection.["pageInfo"].["hasNextPage"] <- System.Text.Json.Nodes.JsonValue.Create next
+        connection.["pageInfo"].["endCursor"] <- (match cursor with Some c -> System.Text.Json.Nodes.JsonValue.Create c :> System.Text.Json.Nodes.JsonNode | None -> null)
+        let node = connection.["nodes"].[0]
+        node.["id"] <- System.Text.Json.Nodes.JsonValue.Create item
+        node.["project"].["id"] <- System.Text.Json.Nodes.JsonValue.Create project
+        node.["isArchived"] <- System.Text.Json.Nodes.JsonValue.Create archived
+        ok (root.ToJsonString())
+    let first = page "foreign-item" "foreign-project" false true (Some "cursor1") 2
+    let last = page "archived-item" binding.ProjectId true false None 2
+    let transport = scripted [ first; last ]
+    Assert.Equal(Ok("archived-item", "I_native", 2, true), exactMembership transport binding issue "I_native")
+    Assert.Equal(2, transport.GraphQlCalls)
+    Assert.Empty(transport.Mutations)
+    for responses in
+        [ [ first; page "archived-item" binding.ProjectId true false None 3 ]
+          [ page "archived-item" binding.ProjectId true false None 2 ]
+          [ page "one" binding.ProjectId true true (Some "cursor1") 2; last ]
+          [ first; (last |> Result.map (fun response -> { response with Body = response.Body.Replace("I_native", "wrong-native") })) ]
+          [ first; Error(Transport "missing page") ] ] do
+        let failed = scripted responses
+        Assert.True(Result.isError (exactMembership failed binding issue "I_native"))
+        Assert.Empty(failed.Mutations)

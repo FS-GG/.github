@@ -427,7 +427,8 @@ module V2Preflight =
           BuiltIsAncestor: bool
           ClosureEntries: int
           ChangedOutsideClosure: int
-          ChangedInsideClosure: int }
+          ChangedInsideClosure: int
+          SelfRegistration: V2ConstructorClosure.SelfRegistration option }
 
     type EnrollmentInputs =
         { Request: V2Enrollment.Request
@@ -587,7 +588,8 @@ module V2Preflight =
                 if built = main then supported ConstructorIdentity ("constructor source revision equals the intended protected main (" + source + ")")
                 else
                     // A later main is admitted only by content (#5113): it must descend from the constructor's source
-                    // revision and leave every path of the constructor closure unchanged. Evidence for any other pair of
+                    // revision and leave its constructor closure unchanged, apart from the typed authenticated
+                    // executing-release registration case (#5263). Evidence for any other pair of
                     // revisions, or none at all, decides nothing. (if/elif, not guarded match arms: a guarded match
                     // compiles a MatchFailureException that embeds this file's absolute path, which breaks the
                     // path-independent package payload.)
@@ -596,9 +598,11 @@ module V2Preflight =
                     | Known content ->
                         if content.Built <> built || content.Main <> main then unknown ConstructorIdentity ConstructorClosure NotEvaluated []
                         elif not content.BuiltIsAncestor then unsupported ConstructorIdentity ConstructorNotAncestorOfMain []
+                        elif content.ClosureEntries <= 0 then unknown ConstructorIdentity ConstructorClosure Incomplete []
+                        elif content.ChangedInsideClosure = 1 && (content.SelfRegistration |> Option.exists (fun proof -> proof.Source = built)) then
+                            supported ConstructorIdentity "constructor closure differs only by authenticated executing-release self-registration"
                         elif content.ChangedInsideClosure <> 0 then
                             unsupported ConstructorIdentity ConstructorDiffersFromMain [ string content.ChangedInsideClosure ]
-                        elif content.ClosureEntries <= 0 then unknown ConstructorIdentity ConstructorClosure Incomplete []
                         else
                             supported ConstructorIdentity
                                 ("constructor closure of " + string content.ClosureEntries + " entries is unchanged from the constructor source revision to its descendant, the intended protected main ("
@@ -888,7 +892,13 @@ module V2Preflight =
             // Project, and an absence of bare memberships in it proves nothing.
             let present = items |> List.choose (fun item -> match item.Content with IssueContent(_, node) -> Some node | _ -> None) |> Set.ofList
             let missing = predecessor.SelectedIssues |> Map.toList |> List.filter (fun (node, _) -> not (present.Contains node)) |> List.map snd
-            if not missing.IsEmpty then unknown ProjectAutoAdd ProjectItems Incomplete (capped missing)
+            let issueNodes = items |> List.choose (fun item -> match item.Content with IssueContent(_, node) -> Some node | _ -> None)
+            let invalidArchived = items |> List.exists (fun item ->
+                item.Archived && (match item.Content with IssueContent(reference, node) -> Map.tryFind node predecessor.SelectedIssues <> Some reference | _ -> true))
+            if invalidArchived || Set.count present <> issueNodes.Length
+               || (items |> List.map _.ItemId |> Set.ofList |> Set.count) <> items.Length then
+                unknown ProjectAutoAdd ProjectItems Incomplete []
+            elif not missing.IsEmpty then unknown ProjectAutoAdd ProjectItems Incomplete (capped missing)
             else
                 let enrolled (item: ProjectItem) =
                     match item.Content with

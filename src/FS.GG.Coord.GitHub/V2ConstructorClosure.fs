@@ -151,3 +151,44 @@ module V2ConstructorClosure =
 
     let changesInside (closure: Closure) (changes: Change list) =
         changes |> List.filter (fun change -> covers closure change.Path || (change.Status = 'A' && shadows closure change.Path))
+
+    type SelfRegistration = { Source: string; Version: string; PreviousVersion: string }
+
+    let authenticateRelease (hostName: string) (constructorSource: string) (hostSource: string) (publishedSource: string) (version: string) =
+        let sha = System.Text.RegularExpressions.Regex(@"\A[0-9a-f]{40}\z")
+        let stable = System.Text.RegularExpressions.Regex(@"\A(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\z")
+        if hostName = "fsgg-coord-engine" && sha.IsMatch constructorSource && constructorSource = hostSource
+           && hostSource = publishedSource && stable.IsMatch version then Some(constructorSource, version)
+        else None
+
+    let selfRegistration (built: string) (version: string) (oldText: string) (newText: string) =
+        try
+            let stable = System.Text.RegularExpressions.Regex(@"\A(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\z")
+            let parse text =
+                let node = System.Text.Json.Nodes.JsonNode.Parse(text: string)
+                let rec unique (element: System.Text.Json.JsonElement) =
+                    match element.ValueKind with
+                    | System.Text.Json.JsonValueKind.Object ->
+                        let names = System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal)
+                        for p in element.EnumerateObject() do
+                            if not (names.Add p.Name) then invalidOp "duplicate property"
+                            unique p.Value
+                    | System.Text.Json.JsonValueKind.Array -> for x in element.EnumerateArray() do unique x
+                    | _ -> ()
+                use document = System.Text.Json.JsonDocument.Parse(text: string)
+                unique document.RootElement
+                if node.AsObject().Count <> 3 || node.["version"].GetValue<int>() <> 1 || not (node.["isRoot"].GetValue<bool>()) then invalidOp "manifest"
+                let tool = node.["tools"].["fs.gg.coord.cli"]
+                if tool.["commands"].ToJsonString() <> "[\"fsgg-coord-engine\"]" then invalidOp "command"
+                node, tool
+            let oldNode, oldTool = parse oldText
+            let newNode, newTool = parse newText
+            let previous = oldTool.["version"].GetValue<string>()
+            if not (stable.IsMatch version && stable.IsMatch previous) || System.Version(previous) >= System.Version(version)
+               || newTool.["version"].GetValue<string>() <> version then None
+            else
+                oldTool.["version"] <- System.Text.Json.Nodes.JsonValue.Create version
+                if System.Text.Json.Nodes.JsonNode.DeepEquals(oldNode, newNode) then
+                    Some { Source = built; Version = version; PreviousVersion = previous }
+                else None
+        with _ -> None

@@ -471,9 +471,9 @@ facts do not support as `NodeIdMismatch`, a changed prefix as `PrefixNotPreserve
 
 `resolve-issues --request --native-facts-output` is the online half of `plan-successor`. It is read-only by construction:
 the only effect is a `GET` through the GitHub CLI with a fixed argument vector (`--method GET`, never a field, input or
-GraphQL endpoint), and the path must be exactly one of ten allowlisted endpoints: the Project, its fields and its items; a
+GraphQL endpoint), and the path must match the closed endpoint allowlist: the Project, its fields and its items; a
 repository, one issue, one pull request and its commits, the open pull requests and the `main` ref of a repository; and a
-document on `main`.
+document on `main`. The #5263 self-registration observer adds only the exact stable coherent-set tag ref.
 A path segment is a name (`[A-Za-z0-9_.-]`, no `%`); only a whole `.` or `..` segment is a traversal, so a name like `a..b.md`
 is reachable. It reads the Project, its fields and every item, each request issue and each protected plan document on
 `main`, and writes the `fsgg.board-v2-native-facts/1` document the planner consumes. A clean
@@ -628,3 +628,36 @@ Replayed over cohort 90's `runtime-binding207.json` with Root's two values, the 
 for byte (sha256 `eba7a946…f9a5`). The next cohort's `route-preflight` accepts the rebound runtime binding beside the
 predecessor private pair, which still names the old reader, but only when `--known-readers` lists the rebound artifact
 (`RuntimeBindingIntegrity`). The stage grants no native write and changes no other field.
+
+## Release self-registration and archived enrollment (#5263)
+
+The original #4941 acceptance remains historical. This successor addresses two observed failures after that
+acceptance: a published constructor's own registry update changes its tool manifest inside the constructor
+closure, and the active Project inventory omits explicitly archived predecessor members.
+
+The closure and ancestry checks still apply. `ConstructorIdentity` has one typed equivalence: the only changed
+closure path is `dist/dotnet/.config/dotnet-tools.json`, its only semantic change is the `fs.gg.coord.cli.version`
+value, and the target is the executing engine's stable version. The host must be the actual coordination engine,
+its embedded source must equal the constructor's, and the native `coherent-set/v<version>` commit ref must join
+to that source. No caller flag supplies or overrides that identity. Missing proof never grants equivalence;
+other tool pins, commands, manifest properties, closure paths, additions/deletions and unrelated source changes
+retain the existing refusal. Offline/asserted-input preflight does not acquire this live release proof. The
+standalone constructor has no engine-host identity and retains the strict unchanged-closure route.
+
+For online enrollment preflight, the existing REST active inventory remains complete and visible. Missing
+predecessor nodes are additionally read with the maintained `V2Projection.exactMembership` query and its bounded
+pagination: issue/repository/number, content, item and exact Project identities must join, every page must complete,
+and the native row must explicitly be archived. Totals must agree across pages and with the drained count.
+This is a fixed read-only GraphQL document, not a caller-selected query or new mutation capability. Partial,
+missing, contradictory, duplicate, foreign or unarchived results remain Unknown. Archived rows carry no invented
+scheduling values and must match the predecessor's enrollment exactly; they are never appended as new issues or
+removed from the private pair. The new reads grant neither archive nor membership-write authority.
+
+Source controls and review do not qualify a live successor. After normal source integration, coherent publication
+and actual installed qualification, repeat the supported preflight on the authentic predecessor and current main.
+Only then continue `resolve-issues`, `plan`, `prepare`, protected carrier integration and `bind-runtime`, preserving
+all original refusals and effects. Reader rebinding uses the supported `rebind-reader` command. Before switching
+an archive schedule to a successor, Root must join the exact binding, protected commitment, qualified reader and
+matching acceptance receipt; the old receipt cannot authenticate new input hashes. Existing archive custody and
+unresolved-effect latches remain immutable and retain their own gates. Native-plan and membership gaps remain
+separate owning prerequisites; no general-purpose plan substitution or source waiver is introduced.
