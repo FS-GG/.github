@@ -137,11 +137,10 @@ once more than 250 rows are enrolled: the 0.114.0 reader refuses a population ab
 associations retired by 0.113.0 must not be rolled back to 0.112.0: the older reader would re-read
 closed sources.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.114.3 — Patch release of the coherent set: Kit, Drivers and CLI advance together; existing verbs keep their contracts.
-`telemetry passive capture` attributes Claude Code subagent transcripts to a deterministic dispatch, invocation and Delivery from the brief's first-line `fsgg-dispatch:` marker, reusing expected-dispatch, invocation-lineage and runtime-admission; a missing marker, metadata or launch result is an explicit gap (#5171).
-Packaged `pnext-item` and the work-board driver: every dispatch brief starts with the exact `fsgg-dispatch: item=OWNER/REPO#N role=...` line, the only source of telemetry item attribution (#5171).
-Carried forward from 0.114.2: the guarded `board-v2 tend --apply` writer and its findings-issue proposals, item-scoped `board-v2 migration-apply`, content-based ConstructorIdentity, `enrollment rebind-reader` and the routine-PR delivery-continues/completes declaration.
-VALIDATOR: qualify 0.114.3 inspections with `scripts/board_v2_native_results.py` from main at or after #5132.
+    <PackageReleaseNotes>0.114.4 — Patch release of the coherent set: Kit, Drivers and CLI advance together; existing verbs keep their contracts. No engine change.
+Packaged `pnext-item` gains an owner self-check before review (range, partial failure, planted bugs, all reviewer probes re-run on the new head, invariant first for cross-cutting defects) with no new gate, critic or report, keeps the PR draft until its required gates pass, and `intra-repo-parallel-work` has dispatch briefs name the one owner of a surface shared by parallel Deliveries (#5239, #5185).
+Carried forward from 0.114.3: the first-line `fsgg-dispatch:` marker and telemetry attribution of Claude Code subagent dispatches, the guarded `board-v2 tend --apply` writer, item-scoped `board-v2 migration-apply`, content-based ConstructorIdentity, `enrollment rebind-reader` and the routine-PR delivery-continues/completes declaration.
+VALIDATOR: qualify 0.114.4 inspections with `scripts/board_v2_native_results.py` from main at or after #5132.
 Source, installed adoption and native acceptance remain distinct. See STANDING ADVISORIES for the rollback limits.
 
 $(FsggStandingAdvisories)
