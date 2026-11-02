@@ -14,6 +14,21 @@ Verdict (every condition must hold to admit):
   - cgroup v2 memory headroom (memory.max - memory.current) >= min-mem-gib GiB, when a limit is set
   - free disk at --disk-path (default $HOME) >= min-disk-gb GB (default 20, decimal GB)
   - active heavy processes <= max-heavy, only when --max-heavy is given (default: reported, not graded)
+  - fewer than browser-hold-at active headless Chromium browsers (default 2; 0 disables)       (#5240)
+  - free space at --tmp-path (default /tmp, a tmpfs on fdev) >= min-tmp-gib GiB (default 3)    (#5240)
+
+BROWSER RUNS (#5240). Many concurrent browser smokes loaded the host and filled /tmp. A run is one headless
+Chromium MAIN process: argv[0] is a Chromium family binary (`chrome`, `chromium`, `chromium-browser`,
+`google-chrome*`, `chrome-headless-shell`, `headless_shell`), it carries `--headless` or `--headless=...`, it
+carries `--remote-debugging-pipe` or `--remote-debugging-port`, and it has NO `--type=` flag. The renderer, GPU,
+zygote, utility and crashpad children of one browser therefore count once (they carry `--type=`, or are
+`chrome_crashpad_handler`), and a launcher such as `node ... chrome ...` or `timeout 600 node ...` is not a
+browser (only argv[0] is classified). The JSON reports `browsers.count` and the main pids. A browser launched
+without --headless or without remote debugging is not counted.
+
+/tmp SPACE (#5240). `/tmp` on fdev is a 16 GB tmpfs shared by every lane; at 100% the SDD tests fail with
+spurious errors. Free space at --tmp-path is reported as `tmp_free_gib` separately from `disk_free_gb`
+(which is $HOME). An unreadable --tmp-path is an `unknown:` hold.
 
 LANE LIMITS. fdev runs lanes in cgroups, so host-wide numbers can overstate what a lane may use. The probe
 reads its own cgroup from <proc-root>/self/cgroup (`0::/path`) and walks from that cgroup up to the root
@@ -141,8 +156,28 @@ def read_cgroup_limits(args):
     return cpus, headroom
 
 
-def count_heavy(proc_root, own_pid):
-    kinds = {}
+BROWSER_EXES = {"chrome", "chromium", "chromium-browser", "chrome-headless-shell", "headless_shell"}
+
+
+def is_browser_main(argv):
+    """True for a headless, CDP-driven Chromium main process; its renderer/GPU/zygote children are not."""
+    if not argv:
+        return False
+    exe = os.path.basename(argv[0])
+    if exe not in BROWSER_EXES and not exe.startswith("google-chrome"):
+        return False
+    rest = argv[1:]
+    if any(a == "--type" or a.startswith("--type=") for a in rest):
+        return False
+    headless = any(a == "--headless" or a.startswith("--headless=") for a in rest)
+    debugging = any(a == "--remote-debugging-pipe" or a.startswith("--remote-debugging-pipe=")
+                    or a == "--remote-debugging-port" or a.startswith("--remote-debugging-port=") for a in rest)
+    return headless and debugging
+
+
+def scan_processes(proc_root, own_pid):
+    """(heavy kinds, browser main pids) from one pass over <proc-root>/<pid>/cmdline."""
+    kinds, browsers = {}, []
     for entry in os.listdir(proc_root):
         if not entry.isdigit() or int(entry) == own_pid:
             continue
@@ -150,10 +185,13 @@ def count_heavy(proc_root, own_pid):
             raw = read_text(os.path.join(proc_root, entry, "cmdline"))
         except OSError:
             continue  # the process exited between listdir and read
-        kind = heavy_kind([a for a in raw.split("\0") if a])
+        argv = [a for a in raw.split("\0") if a]
+        kind = heavy_kind(argv)
         if kind:
             kinds[kind] = kinds.get(kind, 0) + 1
-    return kinds
+        if is_browser_main(argv):
+            browsers.append(int(entry))
+    return kinds, sorted(browsers)
 
 
 def probe(args):
@@ -202,12 +240,24 @@ def probe(args):
         out["disk_free_gb"] = None
         reasons.append("unknown: free disk unreadable (%s)" % type(exc).__name__)
 
+    tmp_bytes = None
+    out["tmp_path"] = args.tmp_path
     try:
-        kinds = count_heavy(args.proc_root, os.getpid())
+        stat = os.statvfs(args.tmp_path)
+        tmp_bytes = stat.f_bavail * stat.f_frsize
+        out["tmp_free_gib"] = round(tmp_bytes / GIB, 2)
+    except OSError as exc:
+        out["tmp_free_gib"] = None
+        reasons.append("unknown: free /tmp space unreadable (%s)" % type(exc).__name__)
+
+    try:
+        kinds, browser_pids = scan_processes(args.proc_root, os.getpid())
         idle = kinds.pop("msbuild-node-idle", 0)
         out["heavy"] = {"count": sum(kinds.values()), "kinds": kinds, "idle_msbuild_nodes": idle}
+        out["browsers"] = {"count": len(browser_pids), "pids": browser_pids}
     except OSError as exc:
         out["heavy"] = None
+        out["browsers"] = None
         reasons.append("unknown: process table unreadable (%s)" % type(exc).__name__)
 
     limit = args.max_load_per_core * out["nproc"] if out["nproc"] else None
@@ -216,6 +266,8 @@ def probe(args):
         "mem_available_gib_min": args.min_mem_gib,
         "disk_free_gb_min": args.min_disk_gb,
         "heavy_max": args.max_heavy,
+        "browser_hold_at": args.browser_hold_at,
+        "tmp_free_gib_min": args.min_tmp_gib,
     }
     if out["load5"] is not None:
         if limit is None:
@@ -231,6 +283,10 @@ def probe(args):
         reasons.append("free disk %.2f GB < %.2f GB at %s" % (out["disk_free_gb"], args.min_disk_gb, args.disk_path))
     if args.max_heavy is not None and out["heavy"] is not None and out["heavy"]["count"] > args.max_heavy:
         reasons.append("heavy processes %d > %d" % (out["heavy"]["count"], args.max_heavy))
+    if args.browser_hold_at and out["browsers"] is not None and out["browsers"]["count"] >= args.browser_hold_at:
+        reasons.append("browser runs %d >= %d (headless Chromium main processes)" % (out["browsers"]["count"], args.browser_hold_at))
+    if tmp_bytes is not None and tmp_bytes < args.min_tmp_gib * GIB:
+        reasons.append("free %s %.2f GiB < %.2f GiB" % (args.tmp_path, out["tmp_free_gib"], args.min_tmp_gib))
 
     out["verdict"] = "hold" if reasons else "admit"
     out["reasons"] = reasons
@@ -266,6 +322,9 @@ def main(argv=None):
     parser.add_argument("--min-mem-gib", type=finite_number(0.0, True), default=6.0, help="hold when MemAvailable is below this many GiB (default 6)")
     parser.add_argument("--min-disk-gb", type=finite_number(0.0, True), default=20.0, help="hold when free disk is below this many decimal GB (default 20)")
     parser.add_argument("--max-heavy", type=cpu_override_zero, default=None, help="optional: hold when more heavy build processes than this (default: report only)")
+    parser.add_argument("--browser-hold-at", type=cpu_override_zero, default=2, help="hold when at least this many headless Chromium main processes are active; 0 disables (default 2)")
+    parser.add_argument("--min-tmp-gib", type=finite_number(0.0, True), default=3.0, help="hold when free space at --tmp-path is below this many GiB (default 3)")
+    parser.add_argument("--tmp-path", default="/tmp", help="path whose filesystem free space is checked as /tmp headroom (default /tmp)")
     parser.add_argument("--disk-path", default=os.path.expanduser("~"), help="path whose filesystem free space is checked (default $HOME)")
     parser.add_argument("--proc-root", default="/proc", help="procfs root; tests point it at a fixture tree")
     parser.add_argument("--cgroup-root", default="/sys/fs/cgroup", help="cgroup v2 mount; tests point it at a fixture tree")

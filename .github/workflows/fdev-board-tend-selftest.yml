@@ -9,12 +9,16 @@ on:
   pull_request:
     paths:
       - "deployment/fdev-board-tend/**"
+      - "deployment/fdev-chromium/**"
+      - "scripts/fdev-tmp-cleanup.py"
       - "tests/fdev-board-tend/**"
       - ".github/workflows/fdev-board-tend-selftest.yml"
   push:
     branches: [main]
     paths:
       - "deployment/fdev-board-tend/**"
+      - "deployment/fdev-chromium/**"
+      - "scripts/fdev-tmp-cleanup.py"
       - "tests/fdev-board-tend/**"
       - ".github/workflows/fdev-board-tend-selftest.yml"
   workflow_dispatch:

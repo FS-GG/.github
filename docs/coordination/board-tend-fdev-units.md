@@ -188,6 +188,12 @@ Outcome and no Blocked card may appear. Day 0 shows 0 would-close, because the d
 merges, so the week may legitimately end with few or no items. If fewer than 3 distinct would-close items have been
 compared by day 7, Root either extends the observation or waives the count; this note does not assume which.
 
+## Related user units
+
+`fsgg-tmp-cleanup.{service,timer}` (hourly dead-run `/tmp` cleanup, #5240) are templated here and installed by their own
+`install.py tmp-cleanup` effect; they share nothing with board tend at runtime. See
+[fdev host hygiene](fdev-host-hygiene.md).
+
 ## Known limits
 
 - The token is the credentials file's `GH_TOKEN`. Whether it carries every scope an eventual `--apply` needs is checked

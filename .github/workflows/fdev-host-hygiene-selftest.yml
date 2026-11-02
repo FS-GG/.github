@@ -1,0 +1,45 @@
+name: fdev-host-hygiene-selftest
+
+# fdev host hygiene (.github#5240): scripts/fdev-tmp-cleanup.py removes dead harness temp directories from the shared
+# /tmp tmpfs (dry-run unless --apply), and deployment/fdev-chromium/fdev-chromium-env defaults TMPDIR to a short
+# disk-backed path. The capacity probe's browser and /tmp holds are covered by fdev-lane-capacity-selftest. These
+# fixtures build a fake temp root and a fake procfs, offline and credential-free, and never touch the runner's /tmp
+# procfs, systemd or a real browser.
+on:
+  pull_request:
+    paths:
+      - "scripts/fdev-tmp-cleanup.py"
+      - "deployment/fdev-chromium/**"
+      - "tests/fdev-tmp-cleanup/**"
+      - "tests/fdev-chromium-env/**"
+      - ".github/workflows/fdev-host-hygiene-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/fdev-tmp-cleanup.py"
+      - "deployment/fdev-chromium/**"
+      - "tests/fdev-tmp-cleanup/**"
+      - "tests/fdev-chromium-env/**"
+      - ".github/workflows/fdev-host-hygiene-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR-keyed concurrency (#4730 CI-load): a newer run for the same pull request cancels the superseded
+# one. Any other event keys on `github.run_id`, so two events at one ref or sha never drop a run.
+concurrency:
+  group: fdev-host-hygiene-selftest-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the cleanup fixtures
+        run: bash tests/fdev-tmp-cleanup/run.sh
+      - name: Run the chromium wrapper TMPDIR fixtures
+        run: bash tests/fdev-chromium-env/run.sh

@@ -1,0 +1,12 @@
+# Rendered by deployment/fdev-board-tend/install.py from fsgg-tmp-cleanup.timer.in (Refs FS-GG/.github#5240).
+[Unit]
+Description=Hourly FS-GG fdev dead-run temp cleanup (minute 37, away from board tend's :07, the drift observer's :23 and the :53 dispatch)
+
+[Timer]
+OnCalendar=*-*-* *:37:00
+Persistent=true
+RandomizedDelaySec=120
+Unit=fsgg-tmp-cleanup.service
+
+[Install]
+WantedBy=timers.target

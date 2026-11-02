@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -I
 """Install the fdev board-tend units (board-reconciler design section 8, #5136 PR 8). User-level only.
 
-Three subcommands, each writing one kind of thing and nothing else. Every one has --dry-run, which prints what it
+Five subcommands, each writing one kind of thing and nothing else. Every one has --dry-run, which prints what it
 would write and changes nothing. None needs or uses root; every destination must be under $HOME.
 
   units        Renders fsgg-board-tend.{service,timer} and fsgg-board-tend-daily.{service,timer} into the user
@@ -11,6 +11,11 @@ would write and changes nothing. None needs or uses root; every destination must
   kit-root     Writes the two lifecycle-contract.md mirrors of one released ref into the pinned kit root, after
                checking each against the expected sha256 and for exactly one fsgg:board-tend-contract/v1 marker.
   enable-file  Writes the EMPTY enable file ({"apply": []}) with mode 0600 and never replaces an existing one.
+  tmp-cleanup  Renders fsgg-tmp-cleanup.{service,timer} (hourly dead-run /tmp cleanup, .github#5240) into the user
+               systemd directory and copies scripts/fdev-tmp-cleanup.py to the libexec directory. The unit runs
+               the script with --apply. Without --enable it does not touch systemd.
+  chromium-env Copies deployment/fdev-chromium/fdev-chromium-env to ~/.local/bin (the source of truth for the
+               installed wrapper, which sets the short disk-backed TMPDIR default, .github#5240).
 
 The engine and the kit root are pinned to one release: the engine must live in .../coord-<version>/ and the kit
 root must be named kit-<version>.
@@ -32,6 +37,11 @@ HERE = pathlib.Path(__file__).resolve().parent
 UNIT_TEMPLATES = ("fsgg-board-tend.service", "fsgg-board-tend.timer", "fsgg-board-tend-daily.service", "fsgg-board-tend-daily.timer")
 TIMERS = ("fsgg-board-tend.timer", "fsgg-board-tend-daily.timer")
 WRAPPER = "fsgg-board-tend-run.py"
+CLEANUP_UNITS = ("fsgg-tmp-cleanup.service", "fsgg-tmp-cleanup.timer")
+CLEANUP_TIMER = "fsgg-tmp-cleanup.timer"
+CLEANUP_SCRIPT_SOURCE = HERE.parent.parent / "scripts" / "fdev-tmp-cleanup.py"
+CLEANUP_SCRIPT = "fdev-tmp-cleanup.py"
+CHROMIUM_ENV_SOURCE = HERE.parent / "fdev-chromium" / "fdev-chromium-env"
 ENABLE_TEMPLATE = "board-tend.json"
 MIRRORS = (".claude/skills/work-board/references/lifecycle-contract.md", ".agents/skills/work-board/references/lifecycle-contract.md")
 MARKER_LINE = re.compile(r"^\s*<!--\s*fsgg:board-tend-contract/(\S*?)\s*-->\s*$")
@@ -181,6 +191,38 @@ def command_units(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_tmp_cleanup(args: argparse.Namespace) -> int:
+    if os.geteuid() == 0:
+        raise Refusal("run as the fdev user, not root")
+    unit_dir = user_path(args.unit_dir, "--unit-dir")
+    libexec = user_path(args.libexec_dir, "--libexec-dir")
+    plan = Plan(args.dry_run)
+    for name in CLEANUP_UNITS:
+        text = render((HERE / f"{name}.in").read_text(encoding="utf-8"), {"LIBEXEC": str(libexec)})
+        plan.add(unit_dir / name, text.encode("utf-8"), 0o644, args.force)
+    plan.add(libexec / CLEANUP_SCRIPT, CLEANUP_SCRIPT_SOURCE.read_bytes(), 0o755, args.force)
+    plan.apply()
+    commands = [["systemctl", "--user", "daemon-reload"], ["systemctl", "--user", "enable", "--now", CLEANUP_TIMER]]
+    if not args.enable:
+        print("systemd not touched; to enable: " + " && ".join(" ".join(c) for c in commands))
+        return 0
+    for command in commands:
+        print(("would run  " if args.dry_run else "run        ") + " ".join(command))
+        if not args.dry_run:
+            subprocess.run(command, check=True, timeout=60)
+    return 0
+
+
+def command_chromium_env(args: argparse.Namespace) -> int:
+    if os.geteuid() == 0:
+        raise Refusal("run as the fdev user, not root")
+    dest = user_path(args.dest, "--dest")
+    plan = Plan(args.dry_run)
+    plan.add(dest, CHROMIUM_ENV_SOURCE.read_bytes(), 0o755, args.force)
+    plan.apply()
+    return 0
+
+
 def markers(text: str) -> list[str]:
     fenced, found = False, []
     for line in text.replace("\r\n", "\n").split("\n"):
@@ -259,13 +301,24 @@ def parser() -> argparse.ArgumentParser:
     enable = sub.add_parser("enable-file")
     enable.add_argument("--dest", default=str(pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or h / ".config") / "fsgg/board-tend.json"))
     enable.add_argument("--dry-run", action="store_true")
+    cleanup = sub.add_parser("tmp-cleanup")
+    cleanup.add_argument("--unit-dir", default=str(pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or h / ".config") / "systemd/user"))
+    cleanup.add_argument("--libexec-dir", default=str(h / ".local/libexec"))
+    cleanup.add_argument("--enable", action="store_true", help="daemon-reload and enable --now the cleanup timer")
+    cleanup.add_argument("--force", action="store_true", help="replace installed files that differ")
+    cleanup.add_argument("--dry-run", action="store_true")
+    chromium = sub.add_parser("chromium-env")
+    chromium.add_argument("--dest", default=str(h / ".local/bin/fdev-chromium-env"))
+    chromium.add_argument("--force", action="store_true", help="replace the installed wrapper when it differs")
+    chromium.add_argument("--dry-run", action="store_true")
     return root
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
-        return {"units": command_units, "kit-root": command_kit_root, "enable-file": command_enable_file}[args.command](args)
+        return {"units": command_units, "kit-root": command_kit_root, "enable-file": command_enable_file,
+                "tmp-cleanup": command_tmp_cleanup, "chromium-env": command_chromium_env}[args.command](args)
     except Refusal as error:
         print(f"install.py: refused: {error}", file=sys.stderr)
         return 2

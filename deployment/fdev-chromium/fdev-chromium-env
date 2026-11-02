@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# fdev-chromium-env: run a command with the fdev Chromium runtime bundle (nss, nspr, at-spi, X libs, fonts)
+# on LD_LIBRARY_PATH / FONTCONFIG_FILE, so Playwright's Chromium (headless shell) launches on fdev.
+# Bundle: ~/.local/share/fdev-chromium/<version>/ (see manifest.json). FS-GG/.github#5193.
+# Source of truth: deployment/fdev-chromium/fdev-chromium-env in FS-GG/.github; ~/.local/bin holds an installed copy.
+#
+#   fdev-chromium-env [--gpu|--no-gpu] [--bundle DIR] -- <cmd...>
+#   fdev-chromium-env [--gpu|--no-gpu] --print-env | --print-args | --print-args-json | --check
+#   fdev-chromium-env --print-tmpdir      # the short disk-backed TMPDIR, for non-browser runs: export TMPDIR="$(fdev-chromium-env --print-tmpdir)"
+#
+# Chromium launch flags cannot be passed by env var (neither Chromium nor Playwright reads one), so this
+# exports them for your launcher to pass as `args`:
+#   FDEV_CHROMIUM_ARGS       space-separated
+#   FDEV_CHROMIUM_ARGS_JSON  JSON array   e.g. chromium.launch({ args: JSON.parse(process.env.FDEV_CHROMIUM_ARGS_JSON) })
+#
+# TMPDIR (FS-GG/.github#5240). /tmp on fdev is a 16 GB tmpfs shared by every lane; browser profiles and test
+# trees filled it and failed unrelated tests. When TMPDIR is unset or empty, the command runs with a short
+# DISK-backed one, $HOME/.cache/fsgg-tmp (mode 0700, created if absent). A TMPDIR you already set is never changed
+# (set TMPDIR=/tmp to opt out). FDEV_TMPDIR overrides the default path. The path must stay short: a Unix socket
+# path is at most 107 bytes and harness trees nest under TMPDIR (fsgg-sdd-tests-<pid>-<32 hex>/...), so a path
+# longer than FDEV_TMPDIR_MAX (default 32) is refused with a warning and TMPDIR is left unset.
+set -euo pipefail
+
+# Short disk-backed TMPDIR unless the caller set one. Only the run, --print-env and --print-tmpdir actions resolve it.
+resolve_tmpdir() {
+  [ -z "${TMPDIR:-}" ] || return 0
+  local dir="${FDEV_TMPDIR:-$HOME/.cache/fsgg-tmp}" max="${FDEV_TMPDIR_MAX:-32}"
+  if [ "${#dir}" -gt "$max" ]; then
+    echo "fdev-chromium-env: warning: TMPDIR default '$dir' is ${#dir} bytes, over the $max-byte budget for Unix socket paths; leaving TMPDIR unset" >&2
+    return 0
+  fi
+  if [ -L "$dir" ]; then
+    echo "fdev-chromium-env: warning: '$dir' is a symlink; leaving TMPDIR unset" >&2
+    return 0
+  fi
+  mkdir -p -m 0700 "$dir" 2>/dev/null || true
+  if [ -d "$dir" ] && [ -O "$dir" ] && [ -w "$dir" ]; then
+    export TMPDIR="$dir"
+  else
+    echo "fdev-chromium-env: warning: '$dir' is not a writable directory of yours; leaving TMPDIR unset" >&2
+  fi
+}
+
+mode=no-gpu
+bundle="${FDEV_CHROMIUM_BUNDLE:-$HOME/.local/share/fdev-chromium/current}"
+action=run
+
+usage() { sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//' >&2; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --gpu) mode=gpu ;;
+    --no-gpu) mode=no-gpu ;;
+    --bundle) bundle="${2:?--bundle needs a directory}"; shift ;;
+    --print-env|--print-args|--print-args-json|--check|--print-tmpdir) action="${1#--}" ;;
+    -h|--help) usage; exit 0 ;;
+    --) shift; break ;;
+    *) echo "fdev-chromium-env: unknown option '$1'" >&2; usage; exit 64 ;;
+  esac
+  shift
+done
+
+if [ "$action" = print-tmpdir ]; then resolve_tmpdir; echo "${TMPDIR:-}"; [ -n "${TMPDIR:-}" ]; exit; fi
+
+bundle="$(readlink -f "$bundle")"
+lib="$bundle/root/usr/lib"
+conf="$bundle/fonts.conf"
+[ -f "$bundle/manifest.json" ] && [ -f "$lib/libnss3.so" ] && [ -f "$conf" ] || {
+  echo "fdev-chromium-env: no usable bundle at $bundle (expected manifest.json, root/usr/lib/libnss3.so, fonts.conf)" >&2; exit 66; }
+
+# GPU: ANGLE over Vulkan (RADV) is the proven hardware path on fdev (FS.GG.Game#746 probe F/H: WebGL renderer
+# "ANGLE (AMD, Vulkan ... RADV ...)"). Default Chromium flags silently fall back to SwiftShader (software),
+# so --no-gpu pins software explicitly. Playwright adds --no-sandbox itself; raw chrome needs it on fdev.
+if [ "$mode" = gpu ]; then
+  args=(--use-angle=vulkan --enable-features=Vulkan --ignore-gpu-blocklist)
+else
+  args=(--disable-gpu --enable-unsafe-swiftshader --use-angle=swiftshader)
+fi
+
+json="["; sep=""; for a in "${args[@]}"; do json+="$sep\"$a\""; sep=","; done; json+="]"
+
+export LD_LIBRARY_PATH="$lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export FONTCONFIG_FILE="$conf"
+export FDEV_CHROMIUM_BUNDLE="$bundle"
+export FDEV_CHROMIUM_MODE="$mode"
+export FDEV_CHROMIUM_ARGS="${args[*]}"
+export FDEV_CHROMIUM_ARGS_JSON="$json"
+
+case "$action" in
+  print-env) resolve_tmpdir
+    printf 'LD_LIBRARY_PATH=%s\nFONTCONFIG_FILE=%s\nFDEV_CHROMIUM_MODE=%s\nFDEV_CHROMIUM_ARGS=%s\nTMPDIR=%s\n' "$LD_LIBRARY_PATH" "$FONTCONFIG_FILE" "$mode" "$FDEV_CHROMIUM_ARGS" "${TMPDIR:-}"; exit 0 ;;
+  print-args) echo "$FDEV_CHROMIUM_ARGS"; exit 0 ;;
+  print-args-json) echo "$json"; exit 0 ;;
+  check)
+    rc=0
+    for b in "$HOME"/.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell \
+             "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux64/chrome; do
+      [ -x "$b" ] || continue
+      missing="$(ldd "$b" 2>&1 | grep 'not found' || true)"
+      if [ -n "$missing" ]; then echo "MISSING for $b:"; echo "$missing"; rc=1; else echo "ok  $b"; fi
+    done
+    fc-match sans-serif | sed 's/^/font sans-serif -> /'
+    [ "$mode" = gpu ] && [ ! -e /dev/dri/renderD128 ] && echo "warning: --gpu but /dev/dri/renderD128 is absent" >&2
+    exit $rc ;;
+esac
+
+[ $# -gt 0 ] || { echo "fdev-chromium-env: no command after --" >&2; usage; exit 64; }
+resolve_tmpdir
+if [ "$mode" = gpu ] && ! ls /dev/dri/renderD* >/dev/null 2>&1; then
+  echo "fdev-chromium-env: warning: --gpu but no /dev/dri/renderD*; Chromium will fall back to software" >&2
+fi
+exec "$@"
