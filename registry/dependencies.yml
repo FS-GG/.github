@@ -682,6 +682,10 @@ contracts:
       tracking: "https://github.com/FS-GG/FS.GG.SDD/issues/1 (cross-repo follow-up for the scaffold-path execution)"
   - id: shared-build-config
     version: "1.1.0"
+    # #5253 ordinary active source: canonical FSharp.Core 10.1.403, with the existing
+    # SDK library-packs exclusion. Kit 0.114.4 is a prepared source cut, not a published
+    # receiver supplier. Payload bytes are derived at Kit pack/materialization; the
+    # build-config contract and frozen/historical qualification identities are unchanged.
     owner: github   # the FS-GG/.github org repo is the source of truth
     # #592 / ADR-0036 (1.0.0 -> 1.1.0): THE DRIFT CHECK NOW COMPARES AGAINST A PIN, NOT AGAINST main.
     # Every receiver's gate.yml checks .github out at `ref: main` and runs sync-build-config.sh --check,

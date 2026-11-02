@@ -655,6 +655,9 @@
        briefs name the one owner of a surface shared by parallel Deliveries. No engine change. SOURCE preparation
        only; published 0.114.3 is unchanged and the release is a separate step. -->
   <PropertyGroup>
+    <!-- Unpublished 0.114.4 source cut also carries the ordinary active Core 10.1.403
+         baseline (#5253) and reviewed LEARN Atlas records (#5249). Existing published
+         identities and frozen runtime/profile inputs remain separately qualified. -->
     <FsggCoherentSetVersion>0.114.4</FsggCoherentSetVersion>
   </PropertyGroup>
 

@@ -1,5 +1,22 @@
 # Registry changelog
 
+## 2026-11-02 — prepare shared FSharp.Core 10.1.403 source (FS-GG/.github#5253)
+
+The producer root and canonical `dist/dotnet/Directory.Packages.props` select listed
+stable FSharp.Core 10.1.403. The CPM-disabled projection test aligns atomically, and
+54 active dependency locks are regenerated from the public feed. The existing SDK
+library-packs exclusion remains in force. This narrowly supersedes SDK-PATCH-01 Q3
+for ordinary active dependencies under #5251; frozen profiles, SDK guards and
+historical evidence remain unchanged.
+
+`shared-build-config` remains contract 1.1.0: the surface and materialization rules
+are unchanged. The changed payload joins the existing **unpublished 0.114.4 source
+cut** with the owner self-check and LEARN records. CLI release notes identify the
+Core rebuild and unchanged command/exit-code contracts. Published registry package
+fields and consumer tool pins stay at their accepted versions until canonical
+publication and both-feed readback; no receiver adoption is claimed here.
+
+
 ## 2026-11-02 — register FS.GG.Algorithms and its published 0.1.0 (FS-GG/.github#5224, FS-GG/.github#5222)
 
 Add the `algorithms` repo row and the `algorithms` contract at `version` and `package-version` **0.1.0**,
