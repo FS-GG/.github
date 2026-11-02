@@ -73,6 +73,83 @@ let private request document variables subject : Request =
 // ---------------------------------------------------------------------------------------------------
 
 [<Fact>]
+let provider_contract_rejects_ID_option_variables_without_effect () =
+    let board = Board()
+    board.AddItem("PVTI_a", item "FS-GG/x#10" "I_a" [ "Status", "In progress" ])
+    let change = V2TendWrite.SetFieldValue(projectId, "PVTI_a", [ fieldId "Status", V2TendWrite.OptionValue(optionId "Status" "In review") ])
+    let rendered = V2TendWrite.render "contract" change |> List.head
+    let legacy =
+        match rendered.Body with
+        | Query(document, variables) ->
+            { rendered with Body = Query(document.Replace("$v0: String!", "$v0: ID!"),
+                                          variables |> List.map (function "v0", VString value -> "v0", VId value | pair -> pair)) }
+        | _ -> failwith "GraphQL expected"
+    match legacy.Body with
+    | Query(d, v) -> Assert.False(validSingleSelectVariables d v)
+    | _ -> failwith "GraphQL expected"
+    match board.Mutate legacy with
+    | Ok response -> Assert.Equal(200, response.Status); Assert.Contains("errors", response.Body)
+    | Error error -> failwithf "%A" error
+    Assert.Equal(Some "In progress", board.Items.["PVTI_a"].Values.TryFind "Status")
+    match rendered.Body with
+    | Query(d, v) -> Assert.True(validSingleSelectVariables d v, "rendered option variable must match the independent provider input contract")
+    | _ -> failwith "GraphQL expected"
+    match board.Mutate rendered with
+    | Ok response -> Assert.DoesNotContain("errors", response.Body)
+    | Error error -> failwithf "%A" error
+    Assert.Equal(Some "In review", board.Items.["PVTI_a"].Values.TryFind "Status")
+
+[<Fact>]
+let field_error_response_is_retained_privately_and_does_not_clear_uncertainty () =
+    let root = temporary ()
+    try
+        let board = Board()
+        board.AddItem("PVTI_a", item "FS-GG/x#10" "I_a" [ "Status", "Ready" ])
+        let h = harness "response-errors" root board
+        let body = "{\"errors\":[{\"message\":\"validation rejected\"}]}" + String(' ', 70000)
+        let reply = { Status = 200; ETag = None; NextLink = None; Headers = Map.ofList [ "X-GitHub-Request-Id", "fixture-request"; "Set-Cookie", "never retain" ]; Body = body }
+        let bad = { h with Context = { h.Context with Send = fun _ -> Ok reply } }
+        let outcomes = run bad (plan [ effect "T1f:a" "PVTI_a" "FS-GG/x#10" V2Tend.TrackField None "Follow-up" [ "T1f" ] [] ] []) (snapshotOf board [])
+        Assert.Equal("uncertain", outcomes.Head.Result)
+        Assert.Equal("send-unconfirmed", outcomes.Head.Detail)
+        let files = Directory.GetFiles(Path.Combine(root, "tend", "response-errors", "responses"), "*.json")
+        Assert.Single files |> ignore
+        let evidence = JsonNode.Parse(File.ReadAllText files.[0])
+        Assert.Equal(200, evidence["status"].GetValue<int>())
+        Assert.True(evidence["bodyTruncated"].GetValue<bool>())
+        let prefix = Convert.FromBase64String(string evidence["bodyPrefixBase64"])
+        Assert.Equal(65536, prefix.Length)
+        Assert.Contains("validation rejected", Text.Encoding.UTF8.GetString prefix)
+        Assert.Equal("fixture-request", string (evidence["headers"]["X-GitHub-Request-Id"]))
+        Assert.Null(evidence["headers"]["Set-Cookie"])
+        Assert.Equal(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode files.[0])
+        let before = File.ReadAllBytes(h.Context.Custody.Path "PVTI_a")
+        let held, _ = V2TendWrite.sweepOwn h.Context
+        Assert.Contains("PVTI_a", held)
+        Assert.Equal<byte>(before, File.ReadAllBytes(h.Context.Custody.Path "PVTI_a"))
+        Assert.Empty(board.Mutations)
+        Assert.Equal(0, snd (h.Context.Custody.Records()))
+    finally Directory.Delete(root, true)
+
+[<Fact>]
+let field_response_retention_failure_stays_uncertain_after_one_send () =
+    let root = temporary ()
+    try
+        let board = Board()
+        board.AddItem("PVTI_a", item "FS-GG/x#10" "I_a" [ "Status", "Ready" ])
+        let h = harness "blocked-response" root board
+        let runDirectory = Path.Combine(root, "tend", "blocked-response")
+        Directory.CreateDirectory runDirectory |> ignore
+        File.WriteAllText(Path.Combine(runDirectory, "responses"), "fixture blocks private response directory")
+        let outcomes = run h (plan [ effect "T1f:a" "PVTI_a" "FS-GG/x#10" V2Tend.TrackField None "Follow-up" [ "T1f" ] [] ] []) (snapshotOf board [])
+        Assert.Equal("uncertain", outcomes.Head.Result)
+        Assert.Equal("response-custody-unavailable", outcomes.Head.Detail)
+        Assert.Single board.Mutations |> ignore
+        let record = JsonNode.Parse(File.ReadAllText(h.Context.Custody.Path "PVTI_a"))
+        Assert.Equal("possible-send", string record["state"])
+    finally Directory.Delete(root, true)
+
+[<Fact>]
 let ``the allowlist refuses hand-written issue and foreign mutations before dispatch`` () =
     let board = Board()
     let mutable sent = 0

@@ -1,8 +1,8 @@
-# `board-v2 tend` on fdev: units, enable file and the 7-day observation
+# `board-v2 tend` on fdev: pinned units, guarded activation and ongoing observation
 
 Refs #5136. This is the operating note for [board-reconciler design](2026-10-31-board-reconciler-design.md) §8 and
 §12 PR 8. The design decides what the reconciler does; this note says how it is run on fdev, what is pinned, what
-an install changes and how the 7 plan-only days are recorded and judged. The source is
+an install changes and how current qualification and continuing observations are judged. The source is
 `deployment/fdev-board-tend/`; `tests/fdev-board-tend/` renders and exercises all of it offline.
 
 ## What runs
@@ -10,7 +10,7 @@ an install changes and how the 7 plan-only days are recorded and judged. The sou
 | Unit | When | What |
 |---|---|---|
 | `fsgg-board-tend.timer` | hourly at minute 07, `Persistent=true`, up to 120 s random delay | starts `fsgg-board-tend.service` |
-| `fsgg-board-tend.service` | the timer, and the post-merge trigger below | `fsgg-board-tend-run.py run --mode plan-only`, which runs `fsgg-coord-engine board-v2 tend` |
+| `fsgg-board-tend.service` | the timer, and the post-merge trigger below | `fsgg-board-tend-run.py run --mode <installed mode>`, which runs `fsgg-coord-engine board-v2 tend` |
 | `fsgg-board-tend-daily.timer` | 00:30 UTC | starts the daily record service |
 | `fsgg-board-tend-daily.service` | the daily timer | `fsgg-board-tend-run.py summarize --date yesterday`: reads the private run index, writes the daily record. Local and read-only; it posts nothing |
 
@@ -19,8 +19,8 @@ Minute 07 is away from the drift observer's :23 cron, its :53 fdev dispatch and 
 ### What is pinned
 
 - **`Environment=FSGG_KIT_ROOT=<kit root>`.** `board-v2 tend` reads the contract marker `fsgg:board-tend-contract/v1`
-  from `lifecycle-contract.md` under `FSGG_KIT_ROOT`, else the process's git toplevel. A timer started inside
-  another checkout could therefore enable gated rules from a stale or edited contract (#5188 F1). The kit root is
+  from `lifecycle-contract.md` under `FSGG_KIT_ROOT`, else the process's git toplevel. The hardened wrapper requires `--workdir` and `--expect-kit-sha256`, checks both mirror hashes at every run,
+  and rejects a kit root or workdir inside a checkout (#5206). The kit root is
   `~/.local/share/fs-gg/board-tend/kit-<version>/`: exactly the two contract mirrors of the released tag, written
   read-only and verified against the released contract's sha256 (`install.py kit-root`). It is never a checkout.
 - **`WorkingDirectory=~/.local/share/fs-gg/board-tend`.** A fixed directory that is not a git checkout. The wrapper
@@ -29,7 +29,8 @@ Minute 07 is away from the drift observer's :23 cron, its :53 fdev dispatch and 
 - **The engine path is the versioned one** (`~/.local/share/fs-gg/tools/coord-<version>/fsgg-coord-engine`), not the
   moving `~/.local/bin/fsgg-coord-engine` link, and the kit root must carry the same `<version>`. An engine update
   (`update-fsgg-coord-cli`) therefore changes nothing under the timer until Root re-runs the installer for the new
-  release.
+  release. The wrapper probes the real executable with `--version` before any board command; its three release
+  components must match `coord-<version>` and `kit-<version>` (an assembly revision of zero is accepted).
 - **`RuntimeMaxSec=900`** and `Type=exec` (the cap does not apply to a oneshot service). A killed run leaves the
   post-merge marker in place.
 - **The writer lock** is the engine's own `flock(2)` `LOCK_EX|LOCK_NB` on
@@ -40,9 +41,15 @@ Minute 07 is away from the drift observer's :23 cron, its :53 fdev dispatch and 
 - **The child environment is scrubbed.** The wrapper passes the engine `HOME`, `PATH`, `LANG`, the `XDG_*` directories,
   `DOTNET_ROOT`, the pinned `FSGG_KIT_ROOT` and `GH_TOKEN` read from the 0600 credentials file (the file the
   board-drift dispatcher already uses). Nothing else is inherited, in particular not `GITHUB_TOKEN` and not `TMPDIR`.
-- **Plan-only is the unit's mode.** `--apply` is never on the command line. Moving to apply is a separate Root
+- **Config/state homes are explicit.** The installer captures its `XDG_CONFIG_HOME` and `XDG_STATE_HOME`
+  (or HOME defaults), with optional absolute `--config-home`/`--state-home` overrides. Both units render the same
+  paths into their environment and wrapper arguments; the wrapper refuses disagreement. The engine enable file
+  must be `fsgg/board-tend.json` under that config home. The merge gate uses the same XDG state home for its marker:
+  Root must launch the gate with the installed home pins, including when custom paths are used. A wrong-mode
+  state directory refuses loudly in the journal; the wrapper does not silently repair or bypass it.
+- **Plan-only is the installer default.** Only explicit `--mode apply` adds the engine's `--apply`. Moving to apply is a separate Root
   effect: re-run `install.py units --mode apply --force`, which refuses unless the enable file already exists with
-  mode 0600 and names at least one rule. Deleting the enable file, or `"apply": []`, is still the kill switch.
+  mode 0600 and names at least one qualified rule. Deleting the enable file, or `"apply": []`, is still the kill switch.
 
 ### Private output
 
@@ -70,12 +77,13 @@ reported on stderr only; a failure never changes the merge result or its schema.
 The wrapper never lets a post-merge run be swallowed:
 
 1. A timer run inside the 5-minute minimum interval is skipped, **unless the marker exists**, which always runs.
-2. The marker is cleared only by a run that **started after it was written and exited 0**. The wrapper compares the
-   marker's identity (inode, mtime, size) before and after the run; a marker rewritten during the run, or one that
-   appeared during a timer run, is not cleared, and the wrapper runs once more (up to 3 passes, then leaves the
-   marker for the next run).
-3. A failed run keeps the marker. If the unit is already active, `systemctl start` is a no-op, and the active run's
-   own end-of-run check covers the new marker.
+2. Under the wrapper run lock, the pending marker is atomically renamed to `pending-post-merge.claimed` and
+   its directory fsynced before work. Only that claimed name is deleted after a successful run; a concurrent
+   trigger writes a fresh pending name that is never unlinked by the completed run. A crash or failed run keeps
+   the claim, which bypasses the minimum interval on recovery.
+3. A new pending marker observed at the end causes another pass (up to three); one arriving during final claim
+   deletion remains pending for the next activation. If the unit is active, `systemctl start` is a no-op, but it
+   cannot erase the durable pending marker. Failed runs keep both existing claim and any concurrent pending marker.
 4. A second wrapper started by hand while one runs holds nothing, exits 0 and keeps the marker.
 
 ## The enable file
@@ -101,7 +109,7 @@ Nameable rule ids: `W1h`, `W1d`, `T1d`, `T1i`, `T1f`, `RM1`, `S1`, `S3`, `S3b`, 
 gate replay `GR`. Of these, S1, S3, S3b, S4, S9, S9r, O1, C1, W1d and T1d are contract-gated: the engine drops them
 unless every installed `lifecycle-contract.md` under the pinned kit root declares `fsgg:board-tend-contract/v1`.
 The 0.114.2 contract (sha256 `819a6cb22859455265ed2223f9ea6dbb85dfe82a98277a420c2a58539355a901`) does, so the gate is
-satisfied; each rule is still enabled by Root alone, one at a time, after the observation below. The ungated rules
+satisfied; each rule is still enabled by Root alone, one at a time, after the current qualification below. The ungated rules
 are W1h, T1i, T1f and `GR`; the recommended first unattended set is `{"apply": ["W1h","T1f"], "propose": true,
 "maxItemsPerRun": 100}`. RM1 stays out until the engine is given its enrollment input (it is inert today).
 
@@ -121,7 +129,8 @@ python3 -I deployment/fdev-board-tend/install.py enable-file
 # 3. The four user units and the wrapper; --enable also runs daemon-reload and enables both timers.
 python3 -I deployment/fdev-board-tend/install.py units \
   --kit-root ~/.local/share/fs-gg/board-tend/kit-0.114.2 \
-  --engine-path ~/.local/share/fs-gg/tools/coord-0.114.2/fsgg-coord-engine --enable
+  --engine-path ~/.local/share/fs-gg/tools/coord-0.114.2/fsgg-coord-engine \
+  --expect-kit-sha256 819a6cb22859455265ed2223f9ea6dbb85dfe82a98277a420c2a58539355a901 --enable
 ```
 
 `units` writes exactly `~/.config/systemd/user/fsgg-board-tend{,-daily}.{service,timer}` and
@@ -134,59 +143,99 @@ root and engine stay for rollback, as `update-fsgg-coord-cli` already retains ol
 Rollback is `systemctl --user disable --now fsgg-board-tend.timer fsgg-board-tend-daily.timer`, then deleting the
 five files; nothing else was written.
 
-## The 7-day plan-only observation
+## Current qualification and continuing observation
 
-Day 0 is the first timer run. Seven full UTC days are recorded before any rule is enabled; the earliest enable is
-the end of day 7. The enable file stays empty throughout and the unit stays plan-only, so no day can write to the
-board.
+On 2026-11-02 the user explicitly requested permanent automatic board reconciliation. That instruction replaces
+this note's previous elapsed seven-day plan-only/advisory waits with **current qualification before activation**.
+It does not waive native guards, unresolved effects, rule-specific prerequisites, exact-source review or installed
+readback. #5206 supplies the wrapper/installer hardening required before applying gated rules. Root owns the live
+configuration and activation; a source candidate or installer default is not evidence that automation is enabled.
 
-**Recorded every day, automatically, in the private directory:**
+Before activation Root checks the exact installed wrapper/engine/kit identities, the offline refusal and marker
+race/recovery controls, a complete current native plan and the chosen rule subset against its native preconditions.
+The published engine and a separately reviewed/tested local wrapper candidate retain distinct identities until
+normal source PR/CI integration completes. A failed population read stays failed/Unknown and grants no write.
+Elapsed days or a successful read alone do not qualify an unsafe rule.
 
-- every run's `plan.json` (the full would-apply and would-close lists, the T1i comparison, deferrals, proposals and
-  refusals) and engine summary line, under `runs/`;
-- `daily/<date>.json` at 00:30 UTC: runs, post-merge runs, exit codes, skipped runs, plans unreadable, apply-mode
-  runs and plans that applied or closed anything (both must be 0), the distinct would-apply effects by rule with how
-  many were present in every run of the day, the would-close items with the same stability count, the T1i
-  disagreement rate (last, minimum, maximum), distinct proposals and refusals;
-- `daily/<date>.md`: the same as a comment body that names only `FS-GG/.github` references (any other repository may
-  be private; its count is given and the references stay in the private JSON).
+The current authorization permits Root to enable the qualified subset together and keep its timers permanently
+active. It does not require enabling every nameable rule. Keep any rule with an unsatisfied input, unsafe adjacent
+read or unresolved effect disabled; do not broaden the set as a side effect of changing the wrapper. Root's native
+acceptance records the chosen set and its qualification. The enable file still controls allowed rules and the bound;
+missing/invalid/empty activation keeps the engine plan-only. Disabling the timers and clearing apply rules is the
+kill switch, preserving original custody and pending markers.
 
-**Posted daily by the owner of this Delivery**, as a fresh comment on #5136 headed by the
-`fsgg:board-tend-observation/v1` marker line the `.md` already carries. A comment is created, never edited by
-recency; a correction is a new comment. Proposals to #4985 are the engine's own, only once `propose` is enabled.
-
-**Health criteria for the week** (any failure restarts the count for the affected day, and a pattern goes to Root):
-
-1. Every day has at least 20 successful scheduled runs plus every post-merge run; no exit code 3; no unreadable plan;
-   apply-mode runs 0 and plans that applied or closed anything 0.
-2. Each run costs at most 20 requests and 60 seconds (day-0 reference: 12 requests, about 22 seconds, 279 cards).
-3. The post-merge marker never survives two consecutive successful runs.
-
-**Criteria for enabling each rule** (Root decides; each is a separate edit of the enable file, one rule at a time,
-with the next rule's observation starting after the previous one has run a clean day):
-
-| Rule | Enable when |
+| Rule | Technical qualification before enable |
 |---|---|
-| W1h, T1f | The 7 days' would-apply fills show an empty `preimage` in every entry (absent-only), and Root has checked the distinct entries against the native hierarchy. Start with `"propose": true` only after the HMAC key file is in place. |
-| T1i | The T1i disagreement rate is at most 5% on each of the 7 days. Day 0 reads 73 of 222 (32.9%), so it stays plan-only until that changes. |
-| GR | The merge gate has run in enforce mode and its custody directory holds no uncertain or malformed record. It cannot be observed in plan-only, so it joins after the first rules. |
-| S3, S3b | Every distinct would-apply was checked as a strictly linked, non-Blocked, non-Done card; no entry would undo a merge-gate write; no flapping (an effect present in one run and absent in the next without a native change). |
-| S4 | No would-apply names a card with any linked PR (open, draft, merged, loose); every entry is In review past `reviewSettleHours`. |
-| O1 | Every distinct roll-up matches Root's manual roll-up (day 0 shows 4); none starts from Blocked, In review or Done. |
-| S9, S9r | Every Backlog fill is an open card with an empty Status; every S9r Ready is a Root-authored intended-fields line. |
-| W1d, T1d | Every declaration-branch fill equals the card's own declared line. |
-| S1 | Every would-apply is a closed card, Status not Done, past the settle window, which the built-in workflow did not write. |
-| RM1 | Not in this window: needs the enrollment input first. |
-| C1 | **Its own gates, all three.** (a) A 7-day would-close observation (below). (b) The merge gate's delivery-marker check (#5161) is required, not advisory (`--delivery-marker required`), which is Root's switch after its 7 advisory days, no earlier than 2026-11-08. (c) The contract marker is read as Amended by the pinned kit root (it is, for 0.114.2). |
+| W1h, T1f | Current fills have empty preimages and match the native hierarchy; proposal posting separately needs the HMAC key and its admission. |
+| S1 | Closed native content, non-Done current Status and the settle window/adjacent re-read all qualify. |
+| S3, S3b | Strict linked-PR evidence and current non-Blocked/non-Done preimages qualify; preserve merge-gate writes. |
+| S9, S9r | Open card with empty Status for the Backlog fill; S9r additionally needs Root-authored intended-fields evidence. |
+| T1i | Current Roadmap parity and disagreement evidence qualify; it remains held while this is unknown or outside the accepted threshold. |
+| S4 | No linked PR of any state and settled In review qualify. |
+| O1 | Adjacent child and parent state must qualify the roll-up; absent required child re-reads are a hold. |
+| W1d, T1d | Current native declarations qualify every proposed fill. |
+| RM1 | Requires its authoritative enrollment input; no removal without it. |
+| GR | Enforced gate and complete resolved gate custody qualify replay. |
+| C1 | Required delivery-marker enforcement, amended installed contract and current would-close review must all qualify; no remaining release/install/readback promise may close. |
 
-**C1's would-close review.** During the 7 days Root's manual sweep applies the same conditions, and the daily
-would-close list is compared with it: every would-close item is one the sweep would also close (a Delivery,
-populated Work level, In review, all strictly linked PRs merged, none open, last merge at least 48 hours old,
-declaring `fsgg:delivery-completes/v1`, no remaining release, install or readback step in its `## Done when`); any
-item the sweep would not close is a defect to repair before C1; any swept item the reconciler lacks is explained. No
-Outcome and no Blocked card may appear. Day 0 shows 0 would-close, because the declaration did not exist for earlier
-merges, so the week may legitimately end with few or no items. If fewer than 3 distinct would-close items have been
-compared by day 7, Root either extends the observation or waives the count; this note does not assume which.
+C1's current review retains the actual closure guards: populated Delivery/Work level, In review, strictly linked
+PRs all merged with none open, last merge beyond the existing 48-hour settle, `fsgg:delivery-completes/v1`, and
+no remaining Done-when obligations. No Outcome or Blocked card may close. A missing comparison or unmet native
+gate remains a hold; the user authorization replaces elapsed waiting rather than making those assertions true.
+
+Every run and the 00:30UTC daily record remain private: complete plan, engine summary, exit code, apply-mode
+and applied/closed counts, distinct/stable effects, refused inputs and T1i comparison. The daily summarizer counts
+malformed plans as unreadable and excludes them from aggregates instead of crashing or treating them as empty.
+Both daily units are verified with the main units by the offline fixture. The generated comment body names only
+FS-GG/.github references; other references stay in private JSON. The observer itself posts nothing.
+
+Root monitors scheduled/post-merge outcomes, request/runtime costs and pending markers continuously. No
+unresolved send, incomplete plan or unreadable custody can become success through a retry. Failed reads and
+safeguard refusals are retained and investigated; hold the affected rule or activation when its safety is Unknown.
+This source change performs no installation, timer activation or board write.
+
+## The 2026-11-02 option-scalar incident (#5206)
+
+The first apply with the published0.114.3 engine returned three `send-unconfirmed` field outcomes. The original
+provider bodies were not retained and remain Unknown. An offline reconstruction using the authenticated installed
+assemblies reproduced all three complete requests; their `singleSelectOptionId` variables were declared `ID!`,
+while the live read-only GitHub input schema reports `String`. Independent native readback found the original
+Status preimages unchanged. The repaired renderer uses `String!`/`VString`. Selected field sends now retain
+private response status, request/body hashes, a bounded64KiB body prefix and bounded allowlisted headers before
+echo classification. Retention failure leaves the send uncertain. This does not change GR, C1 or O1.
+
+Keep **the installed service in plan-only mode** until the corrected engine is qualified; stopping only its timer
+cannot prevent a post-merge trigger from starting it. Preserve the original possible-send records. An unchanged
+Status alone does not prove no effect, and no operator may delete or rewrite custody merely to unblock a retry.
+
+The incident-specific `V2TendFieldRecovery.admit` API and checked `tools/tend-field-validation-settle.py` controller
+provide a separate local no-effect settlement. This is restricted by source-pinned hashes to the three original
+records, incident run, authenticated old runtime and independently reconstructed canonical requests. No private
+card identities, paths, body contents or credentials are embedded in the source allowlist. Production admission
+takes the actual Project3 writer lock, refreshes native schema and item/project/content/ref/field/preimage evidence,
+reconstructs the entire known-invalid request and requires byte equality with the authenticated installed-renderer
+proof. Arbitrary request JSON, a supplied readback or a Root string cannot admit another original.
+
+The controller previews by default: exact qualified runtime/SDK hashes and private input modes are checked, with
+no child process, provider read or certificate. Root supplies the reviewed qualified engine runtime directory,
+original runtime directory, original custody and reconstructed-request artifacts, exact hashes, existing private
+credentials, a fresh private output directory and the native #5206 admission-comment URL. Only explicit `--admit`
+launches the typed read-only admission. Run it under the admitted one-CPU/2GiB bound. Its child is capped120seconds;
+stdout/stderr/config stay0700/0600 private, and no mutation transport is ever invoked.
+
+Success appends0600 evidence and a final certificate with O_EXCL and file/directory fsync beneath the private
+custody root's `no-effect-settlements/<original-sha256>/`. The bundle joins exact original/request/runtime/schema/
+fresh-readback hashes and Root's admission reference. A conflict, partial write, stale artifact or missing proof
+keeps the original fenced. The original file is never replaced, renamed or marked target-verified. A valid
+certificate is terminal for that original: subsequent `sweepOwn` neither re-reads nor rewrites it, including after
+a later valid write changes the preimage. Missing/tampered evidence instead fences without rewriting the incident
+original, even if its former target is now observed.
+
+After settlement a corrected, separately admitted engine run derives a fresh plan and uses new run/request/custody
+identities, adjacent reads, one send, retained response and native readback. It never resubmits the invalid original.
+The normal coherent successor release and qualified published-engine adoption remain prerequisites; the checked
+controller does not install an unpublished hotfix or replace published0.114.3 bytes. Root owns settlement and
+activation/readback, separately from source integration. A local certificate establishes no native Status change.
 
 ## Related user units
 

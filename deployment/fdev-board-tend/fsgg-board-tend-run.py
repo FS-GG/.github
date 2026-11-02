@@ -13,8 +13,8 @@ Two subcommands, stdlib only:
   * keep every output in a private directory (0700, one directory per run);
   * honour the post-merge marker: a `pending-post-merge` file in the reconciler's state directory means a merge
     happened since the last run, so the run goes ahead regardless of the 5-minute timer minimum, and the marker
-    is cleared only by a run that started after it was written (a run that finds the marker newer than its own
-    start runs once more, up to --max-passes).
+    is claimed by rename before work and only that claim is deleted after success. New pending markers
+    cause another pass, up to --max-passes; failed or interrupted claims survive recovery.
 
 The Project 3 writer lock is the engine's own flock(2) on $XDG_RUNTIME_DIR/fsgg/board-writer-<project>.lock,
 taken with LOCK_NB and only under --apply; this wrapper never takes it. It only checks the path is satisfiable.
@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import fcntl
+import hashlib
 import json
 import os
 import pathlib
@@ -39,6 +40,7 @@ from typing import Any
 RUN_SCHEMA = "fsgg.board-tend-run/1"
 DAILY_SCHEMA = "fsgg.board-tend-daily/1"
 MARKER = "pending-post-merge"
+CLAIMED_MARKER = MARKER + ".claimed"
 PROJECT_ID = "PVT_kwDOEYAWY84Bldpa"
 WRITER_LOCK_NAME = f"board-writer-{PROJECT_ID}.lock"
 CONTRACT_MIRRORS = (
@@ -80,6 +82,8 @@ def private_directory(path: pathlib.Path) -> pathlib.Path:
         raise Refusal(f"{path} is not a directory owned by this user")
     if stat.S_IMODE(info.st_mode) & 0o077:
         raise Refusal(f"{path} must be private to its owner (mode 0700); it is {stat.S_IMODE(info.st_mode):o}")
+    for directory in (path, *path.parents):
+        sync_directory(directory)
     return path
 
 
@@ -91,6 +95,7 @@ def atomic_write(path: pathlib.Path, text: str) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp, path)
+        sync_directory(path.parent)
     except BaseException:
         try:
             os.unlink(tmp)
@@ -116,17 +121,39 @@ def read_token(credentials: pathlib.Path) -> str:
     return token.strip()
 
 
-def check_pin(env: dict[str, str], workdir: pathlib.Path | None, cwd: pathlib.Path) -> pathlib.Path:
-    """The environment pin: FSGG_KIT_ROOT absolute, existing and carrying a contract mirror; cwd the fixed path."""
+def sync_directory(path: pathlib.Path) -> None:
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def check_homes(args: argparse.Namespace, env: dict[str, str]) -> None:
+    for field, key in (("config_home", "XDG_CONFIG_HOME"), ("state_home", "XDG_STATE_HOME")):
+        expected = getattr(args, field)
+        if not os.path.isabs(expected) or env.get(key) != expected:
+            raise Refusal(f"{key} must match its explicit installed home pin")
+
+
+def check_pin(env: dict[str, str], workdir: pathlib.Path, cwd: pathlib.Path, expected: str) -> pathlib.Path:
+    """Validate both installed contract bytes and the fixed non-checkout working directory at every run."""
     root = env.get("FSGG_KIT_ROOT", "")
     if not root or not os.path.isabs(root):
         raise Refusal("FSGG_KIT_ROOT must be set to the absolute installed kit root")
     kit = pathlib.Path(root)
     if not kit.is_dir():
         raise Refusal("FSGG_KIT_ROOT is not a directory")
-    if not any((kit / mirror).is_file() for mirror in CONTRACT_MIRRORS):
-        raise Refusal("FSGG_KIT_ROOT carries no lifecycle-contract.md mirror; it is not an installed kit root")
-    if workdir is not None and cwd.resolve() != workdir.resolve():
+    if not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise Refusal("the release contract sha256 is required")
+    for directory in (kit.resolve(), workdir.resolve()):
+        if any((parent / ".git").exists() for parent in (directory, *directory.parents)):
+            raise Refusal("the kit root and workdir must not be in git checkouts")
+    for mirror in CONTRACT_MIRRORS:
+        path = kit / mirror
+        if path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            raise Refusal("both installed contract mirrors must match the pinned release sha256")
+    if not workdir.is_absolute() or cwd.resolve() != workdir.resolve():
         raise Refusal("the working directory differs from the pinned WorkingDirectory")
     runtime = env.get("XDG_RUNTIME_DIR", "")
     if not runtime or not os.path.isabs(runtime):
@@ -140,6 +167,19 @@ def marker_identity(state: pathlib.Path) -> tuple[int, int, int] | None:
     except FileNotFoundError:
         return None
     return (info.st_ino, info.st_mtime_ns, info.st_size)
+
+
+def claim_marker(state: pathlib.Path) -> bool:
+    """Only the run-lock owner claims. A crash/failed run retains its existing claim for recovery."""
+    claimed = state / CLAIMED_MARKER
+    if claimed.exists():
+        return True
+    try:
+        os.rename(state / MARKER, claimed)
+    except FileNotFoundError:
+        return False
+    sync_directory(state)
+    return True
 
 
 def child_environment(env: dict[str, str], token: str, kit: pathlib.Path) -> dict[str, str]:
@@ -204,15 +244,23 @@ def command_run(args: argparse.Namespace, env: dict[str, str] | None = None, cwd
     state = pathlib.Path(args.state_dir) if args.state_dir else state_home / "fsgg" / "board-tend"
     out = pathlib.Path(args.out_dir) if args.out_dir else state_home / "fsgg" / "board-tend-out"
     try:
-        kit = check_pin(env, pathlib.Path(args.workdir) if args.workdir else None, cwd)
+        check_homes(args, env)
+        kit = check_pin(env, pathlib.Path(args.workdir), cwd, args.expect_kit_sha256)
         token = read_token(pathlib.Path(args.credentials))
         private_directory(out)
         runs = private_directory(out / "runs")
         private_directory(state)
-    except Refusal as error:
+    except (Refusal, OSError) as error:
         print(f"fsgg-board-tend-run: refused: {error}", file=sys.stderr)
         return 2
     child = child_environment(env, token, kit)
+    version = engine_version(args.engine, child)
+    release = re.fullmatch(r"coord-(\d+\.\d+\.\d+)", pathlib.Path(args.engine).parent.name)
+    if (not pathlib.Path(args.engine).is_absolute() or release is None or pathlib.Path(args.engine).name != "fsgg-coord-engine"
+            or kit.name != "kit-" + release[1]
+            or version not in (release[1], release[1] + ".0")):
+        print("fsgg-board-tend-run: refused: real engine version does not match the pinned engine/kit release", file=sys.stderr)
+        return 2
     lock = os.open(out / "run.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -224,8 +272,8 @@ def command_run(args: argparse.Namespace, env: dict[str, str] | None = None, cwd
         last = out / "last-run.json"
         passes, code = 0, 0
         while True:
-            seen = marker_identity(state)
-            if passes == 0 and seen is None:
+            seen = claim_marker(state)
+            if passes == 0 and not seen:
                 try:
                     started_epoch = json.loads(last.read_text(encoding="utf-8")).get("startedEpoch", 0)
                 except (OSError, ValueError, AttributeError):
@@ -238,27 +286,22 @@ def command_run(args: argparse.Namespace, env: dict[str, str] | None = None, cwd
                     return 0
             started = now_utc()
             run_dir = new_run_directory(runs, started, passes)
-            trigger = "post-merge" if seen is not None else "timer"
+            trigger = "post-merge" if seen else "timer"
             code, summary = run_once(args.engine, run_dir, args.mode, child, args.engine_timeout)
             after = marker_identity(state)
-            if after is None:
-                disposition = "none"
-            elif seen is not None and after == seen and code == 0:
-                try:
-                    os.unlink(state / MARKER)
-                    disposition = "cleared"
-                except FileNotFoundError:
-                    disposition = "cleared"
-            elif after != seen:
-                disposition = "newer"
+            if code != 0:
+                disposition = "kept-failed" if seen or after is not None else "none"
             else:
-                disposition = "kept-failed"
+                if seen:
+                    os.unlink(state / CLAIMED_MARKER)  # never unlink the concurrently replaceable pending name
+                    sync_directory(state)
+                disposition = "newer" if after is not None else "cleared" if seen else "none"
             record: dict[str, Any] = {
                 "schema": RUN_SCHEMA, "event": "run", "mode": args.mode, "trigger": trigger,
                 "startedAt": iso(started), "startedEpoch": started.timestamp(), "finishedAt": iso(now_utc()),
                 "exit": code, "runDir": str(run_dir), "plan": str(run_dir / "plan.json"),
                 "summary": summary, "marker": disposition, "pass": passes,
-                "kitRoot": str(kit), "engine": args.engine, "engineVersion": engine_version(args.engine, child),
+                "kitRoot": str(kit), "engine": args.engine, "engineVersion": version,
                 "writerLock": str(pathlib.Path(env["XDG_RUNTIME_DIR"]) / "fsgg" / WRITER_LOCK_NAME),
             }
             atomic_write(run_dir / "meta.json", json.dumps(record, indent=2, sort_keys=True) + "\n")
@@ -271,7 +314,7 @@ def command_run(args: argparse.Namespace, env: dict[str, str] | None = None, cwd
             if summary:
                 print(summary)
             passes += 1
-            if disposition != "newer" or passes >= args.max_passes:
+            if code != 0 or disposition != "newer" or passes >= args.max_passes:
                 break
         prune(runs, args.keep)
         return code
@@ -283,6 +326,36 @@ def command_run(args: argparse.Namespace, env: dict[str, str] | None = None, cwd
 
 def rate(pairs: int, disagreements: int) -> float | None:
     return round(disagreements / pairs, 4) if pairs else None
+
+
+def valid_daily_plan(plan: object) -> bool:
+    """Validate the shapes the daily reducer reads; malformed plans are Unknown, never empty observations."""
+    if not isinstance(plan, dict) or plan.get("schema") != "fsgg.board-tend-plan/1":
+        return False
+    for name in ("apply", "close", "deferred", "wouldApply", "wouldClose", "propose", "refuse"):
+        rows = plan.get(name, [])
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            return False
+        if name in ("wouldApply", "wouldClose", "propose", "refuse"):
+            ids = [row.get("id") for row in rows]
+            if any(not isinstance(value, str) or not value for value in ids) or len(set(ids)) != len(ids):
+                return False
+        for row in rows:
+            if name in ("wouldApply", "wouldClose", "refuse") and not isinstance(row.get("ref"), str):
+                return False
+            if name == "wouldApply" and (not isinstance(row.get("rules"), list)
+                                          or any(not isinstance(rule, str) for rule in row["rules"])):
+                return False
+            if name == "refuse" and any(not isinstance(row.get(key), str) for key in ("rule", "reason")):
+                return False
+    comparison = plan.get("t1iComparison")
+    if comparison is not None:
+        if not isinstance(comparison, dict):
+            return False
+        pairs, disagreements = comparison.get("pairs"), comparison.get("disagreements")
+        if type(pairs) is not int or type(disagreements) is not int or not 0 <= disagreements <= pairs:
+            return False
+    return True
 
 
 def summarize(out: pathlib.Path, date: str) -> dict[str, Any]:
@@ -302,7 +375,7 @@ def summarize(out: pathlib.Path, date: str) -> dict[str, Any]:
     for entry in runs:
         try:
             plan = json.loads((pathlib.Path(entry["runDir"]) / "plan.json").read_text(encoding="utf-8"))
-            if plan.get("schema") != "fsgg.board-tend-plan/1":
+            if not valid_daily_plan(plan):
                 raise ValueError
             plans.append((entry, plan))
         except (OSError, ValueError, KeyError, AttributeError):
@@ -398,6 +471,7 @@ def render_comment(daily: dict[str, Any]) -> str:
 
 def command_summarize(args: argparse.Namespace, env: dict[str, str] | None = None) -> int:
     env = dict(os.environ) if env is None else env
+    check_homes(args, env)
     state_home = pathlib.Path(env.get("XDG_STATE_HOME") or os.path.join(env.get("HOME", "~"), ".local", "state"))
     out = pathlib.Path(args.out_dir) if args.out_dir else state_home / "fsgg" / "board-tend-out"
     today = now_utc().date()
@@ -425,7 +499,8 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--mode", choices=("plan-only", "apply"), default="plan-only")
     run.add_argument("--engine-path", dest="engine", required=True, help="absolute path of fsgg-coord-engine")
     run.add_argument("--credentials", required=True, help="0600 JSON file with GH_TOKEN")
-    run.add_argument("--workdir", help="the fixed WorkingDirectory the process must have been started in")
+    run.add_argument("--workdir", required=True, help="the fixed WorkingDirectory the process must have been started in")
+    run.add_argument("--expect-kit-sha256", required=True, help="sha256 of both accepted release contract mirrors")
     run.add_argument("--out-dir", help="private output directory (default $XDG_STATE_HOME/fsgg/board-tend-out)")
     run.add_argument("--state-dir", help="reconciler state directory holding the marker (default $XDG_STATE_HOME/fsgg/board-tend)")
     run.add_argument("--min-interval", type=int, default=DEFAULT_MIN_INTERVAL, help="seconds; applies to timer runs only")
@@ -435,6 +510,9 @@ def parser() -> argparse.ArgumentParser:
     daily = sub.add_parser("summarize")
     daily.add_argument("--date", default="yesterday", help="YYYY-MM-DD (UTC), today or yesterday")
     daily.add_argument("--out-dir")
+    for command in (run, daily):
+        command.add_argument("--config-home", required=True)
+        command.add_argument("--state-home", required=True)
     return root
 
 
