@@ -172,7 +172,7 @@ def record(out, args):
         raise ValueError('comment mismatch')
     digest = batch['events'][0]['snapshotDigest']
     repo, number = snapshot['itemId'].split('#')
-    default_root = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'fsgg/learn-dispatch'
+    default_root = Path(os.environ.get('XDG_STATE_HOME') or Path.home() / '.local/state') / 'fsgg/learn-dispatch'
     state_root = Path(getattr(args, 'state_root', None) or default_root)
     # All cooperating invocations for this native Delivery share a lock, even with different intent directories.
     custody = state_root / hashlib.sha256(snapshot['itemId'].encode()).hexdigest()
