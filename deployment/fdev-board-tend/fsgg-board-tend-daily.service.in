@@ -6,8 +6,9 @@ Description=FS-GG board-v2 tend daily observation record (Refs FS-GG/.github#513
 [Service]
 Type=oneshot
 WorkingDirectory=@WORKDIR@
-Environment=XDG_STATE_HOME=%h/.local/state
+Environment=XDG_CONFIG_HOME=@CONFIG_HOME@
+Environment=XDG_STATE_HOME=@STATE_HOME@
 UMask=0077
 NoNewPrivileges=yes
 TimeoutStartSec=120
-ExecStart=/usr/bin/python3 -I @LIBEXEC@/fsgg-board-tend-run.py summarize --date yesterday
+ExecStart=/usr/bin/python3 -I @LIBEXEC@/fsgg-board-tend-run.py summarize --date yesterday --config-home @CONFIG_HOME@ --state-home @STATE_HOME@

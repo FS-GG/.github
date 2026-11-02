@@ -16,8 +16,8 @@ Environment=FSGG_KIT_ROOT=@KIT_ROOT@
 # The shared Project 3 writer lock is flock(2) on %t/fsgg/board-writer-PVT_kwDOEYAWY84Bldpa.lock (LOCK_NB, taken by
 # the engine only under --apply). Pin where %t points and keep the directory across runs.
 Environment=XDG_RUNTIME_DIR=%t
-Environment=XDG_CONFIG_HOME=%h/.config
-Environment=XDG_STATE_HOME=%h/.local/state
+Environment=XDG_CONFIG_HOME=@CONFIG_HOME@
+Environment=XDG_STATE_HOME=@STATE_HOME@
 Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
 Environment=DOTNET_NOLOGO=1
 RuntimeDirectory=fsgg
@@ -28,4 +28,4 @@ UMask=0077
 NoNewPrivileges=yes
 # Deliberately no PrivateTmp: during the transition the writers also take the legacy lock at the literal /tmp path.
 RuntimeMaxSec=@RUNTIME_MAX@
-ExecStart=/usr/bin/python3 -I @LIBEXEC@/fsgg-board-tend-run.py run --mode @MODE@ --engine-path @ENGINE@ --credentials @CREDENTIALS@ --workdir @WORKDIR@
+ExecStart=/usr/bin/python3 -I @LIBEXEC@/fsgg-board-tend-run.py run --mode @MODE@ --engine-path @ENGINE@ --credentials @CREDENTIALS@ --workdir @WORKDIR@ --expect-kit-sha256 @KIT_SHA256@ --config-home @CONFIG_HOME@ --state-home @STATE_HOME@
