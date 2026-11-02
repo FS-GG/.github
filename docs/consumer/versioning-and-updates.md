@@ -142,18 +142,42 @@ FS.GG.SDD#1155 onward, with a hard line around your edits:
   content-drift warning and the `upgrade` advisory names it.
 - **Never backwards.** The package version each skill came from is recorded in
   `.fsgg/scaffold-provenance.json` (`ownerSkillVersions`). An older CLI will not replace a newer
-  pack; a workspace written before versions were recorded is only refreshed by a strictly newer CLI
-  than the one that wrote it.
+  pack. A workspace written before versions were recorded is only refreshed by a CLI strictly newer
+  than the one that last wrote it (`upgradedBy`, else the producing CLI); an unreadable version
+  entry holds the skill rather than being ignored.
+- **Safe to interrupt.** A replacement records new digests and versions only for files it actually
+  wrote, and a skill is recorded all-or-nothing. If a run stops partway (a read-only directory, a
+  killed process), restore the cause and run `upgrade` again: files already at the new pack's bytes
+  count as untouched, and the run completes.
 - **Files the upstream dropped** are removed with the skill when still unedited, and their records
-  are dropped; new digests are recorded after every replacement.
+  are dropped. A skill the upstream no longer ships at all is left alone.
+- **Never through a link out of the workspace.** `upgrade` refuses to write or delete a skill file
+  that is, or sits under, a symbolic link resolving outside the workspace, and names it.
 - **Exact bytes.** `atlas.py` hashes the exact bytes of pack and skill files, so the workspace's
-  `.gitattributes` marks `.claude/skills/**`, `.agents/skills/**` and `docs/atlas/**` as `-text`.
-  New workspaces get the rules; `upgrade` appends any that are missing without editing your lines.
+  `.gitattributes` marks the skills SDD delivers (`.claude/skills/<name>/**`,
+  `.agents/skills/<name>/**` for each) and `docs/atlas/**` as `-text`. Rules for your own skills are
+  never touched or shadowed. New workspaces get the rules; `upgrade` appends any that are missing,
+  keeping your lines, your line endings and a leading byte-order mark.
+
+**Name collisions.** SDD installs a fixed set of driver skill names into every workspace. The
+`FS.GG.Drivers` 0.114.3 pack added six: `agent-handoff`, `atlas`, `continue-from-handoff`,
+`routine-decisions`, `stop-with-handoff` and `work-programme`. If you already have your own skill
+with one of these names, `upgrade` does not overwrite it, does not write the pack's files around it,
+and does not fail the other skills: it names the skill in its closing advisory ("a skill with this
+name already exists here and is not the one SDD delivers") and leaves it. Rename or remove your skill,
+then run `upgrade` again.
+
+**`doctor` is not silent about it.** A workspace can read coherent while a delivered skill is stale
+and `upgrade` will not replace it (edited locally, would downgrade, version unprovable, a name
+collision, an unreadable file). `fsgg-sdd doctor` adds an informational advisory,
+`doctor.ownerSkillsNotRefreshable`, naming each skill and the reason. It does not change the verdict
+or the exit code.
 
 Which CLI carries which skills is itself kept current: the CLI's skills-package pins
 (`FS.GG.Drivers` and the `FS.GG.*.Skills` packages) may trail their published feeds by at most five
-stable versions, checked when an SDD release is prepared. Update the CLI (`dotnet tool update`) before
-`upgrade`, because the skill text an upgrade lays down is the text compiled into the CLI that runs it.
+stable versions, enforced when an SDD release is prepared. Update the CLI (`dotnet tool update`)
+before `upgrade`, because the skill text an upgrade lays down is the text compiled into the CLI that
+runs it.
 
 So "stay current" is one explicit command (`fsgg-sdd upgrade`), and CI won't let a
 behind-CLI scaffold pass unnoticed. Pin the tool in `dotnet-tools.json` as above; the
