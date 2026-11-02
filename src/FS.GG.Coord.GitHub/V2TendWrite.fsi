@@ -93,6 +93,7 @@ module V2TendWrite =
     /// item id for field sends, the issue node id for a close). Written atomically, private, synced.
     type Custody =
         new: root: string * run: string * syncDirectory: (string -> unit) -> Custody
+        member internal RecordFieldResponse: key: string * request: Request * response: IoResult<Response> -> unit
         member Root: string
         member Run: string
         member Path: key: string -> string
