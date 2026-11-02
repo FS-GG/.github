@@ -43,6 +43,32 @@ PRODUCER_PATHS = (
     "scripts/lib/gate.py",
 )
 
+HIGHBAR_REPOSITORY = "FS-GG/HighBarV3"
+HIGHBAR_REPOSITORY_ID = 1393546381
+HIGHBAR_WORKFLOW_ID = 369455020
+HIGHBAR_WORKFLOW_SHA256 = "9aa1b8e493a5dad1cfb9405810b3ff698e6d3c69910adf377d3594d2cb13f3c9"
+# Exact technical steps in the unchanged receiver workflow. Native setup/cleanup
+# are checked separately; no successful aggregate can hide a skipped control.
+HIGHBAR_HOSTED_STEPS = {
+    "proto": ("Run bufbuild/buf-setup-action@v1", "buf lint", "buf generate (smoke — full output dropped)"),
+    "arm-coverage": ("Run arm-coverage helper", "Assert 66/66 wired", "Upload coverage CSV"),
+    "python": ("Run actions/setup-python@v5", "Codegen + pytest via Makefile"),
+    "bash-syntax": ("bash -n", "Skip-stub exit-77 invariant"),
+    "runbook-validation": ("Parse BUILD.md (structure only)",),
+}
+HIGHBAR_RUNNER_STEPS = {
+    "cpp-build": ("Pre-flight (engine + assets)", "Build libSkirmishAI.so", "Run ctest", "Upload arm-coverage CSV (built variant)"),
+    "headless-acceptance": ("Pre-flight", "Parse ci-skip-reason trailers", "Run acceptance scripts"),
+    "behavioral-acceptance": ("Pre-flight", "snapshot-tick.sh (cadence + SC-005 regression)",
+        "behavioral-move.sh (US1)", "behavioral-build.sh (US2)",
+        "malformed-payload.sh (reject invalid input, stay healthy)",
+        "behavioral-attack.sh (US3, soft — accepts 77)", "aicommand-behavioral-coverage.sh (US4 macro driver)",
+        "Upload coverage artifacts"),
+    "bench-latency": ("latency-uds.sh", "latency-tcp.sh", "Upload p99 numbers"),
+    # This pinned workflow deliberately excludes reproducibility from pull requests.
+    "behavioral-reproducibility": (),
+}
+
 BAR_REPOSITORY = "FS-GG/FSBarV2"
 BAR_REPOSITORY_ID = 1393512699
 BAR_PREARM = ".github/workflows/prearm-source-controls.yml"
@@ -690,7 +716,7 @@ class GhApi:
         api = WatchGhApi(time.monotonic() + 31)
         command = ["gh", "pr", "checks", str(number), "--repo", repo,
                    "--required", "--json", WATCH_FIELDS]
-        if repo in ("FS-GG/FsQuint", BAR_REPOSITORY, SC2_REPOSITORY, FOURD_REPOSITORY):
+        if repo in ("FS-GG/FsQuint", BAR_REPOSITORY, SC2_REPOSITORY, FOURD_REPOSITORY, HIGHBAR_REPOSITORY):
             stderr = bytearray()
             code, raw = bounded_watch_query(command, time.monotonic() + 31, stderr_output=stderr)
             absent = (code == 1 and raw == b"" and bytes(stderr) ==
@@ -705,6 +731,12 @@ class GhApi:
         else:
             code, checks = api._watch_read(command, (0,))
             absent = False
+        if repo == HIGHBAR_REPOSITORY:
+            self.installation_highbar_verify(repo, number, head, roster, metadata=metadata, base=base,
+                candidate=candidate, coherent_workflow=coherent_workflow, branch=branch, require_empty=absent)
+            if absent:
+                self._installation_policy_fact = "required-policy-observed-empty"
+                return
         if repo == FOURD_REPOSITORY:
             self.installation_fourd_verify(repo, head, roster, metadata=metadata, base=base,
                                            candidate=candidate, coherent_workflow=coherent_workflow, branch=branch)
@@ -825,6 +857,159 @@ class GhApi:
                 or rules_status != 200 or rules != [] or sets_status != 200 or sets != []):
             raise RuntimeError("installation required policy is not authentically empty")
         self.installation_full_verify(repo, head, roster, metadata=metadata, base=base, candidate=candidate, branch=branch)
+
+    def installation_highbar_verify(self, repo: str, number: int, head: str, roster: list[dict], *,
+                                    metadata: dict, base: str, candidate: dict,
+                                    coherent_workflow: str | None, branch: str, require_empty: bool) -> None:
+        """One authenticated HighBar first install; normal required checks remain additional."""
+        if (repo != HIGHBAR_REPOSITORY or type(metadata.get("id")) is not int
+                or metadata["id"] != HIGHBAR_REPOSITORY_ID or metadata.get("private") is not False
+                or metadata.get("default_branch") != "master" or coherent_workflow != "ci.yml"
+                or not isinstance(metadata.get("permissions"), dict)
+                or any(metadata["permissions"].get(key) is not True for key in ("admin", "push", "pull"))):
+            raise RuntimeError("HighBar receiver/capability/coherent selector differs")
+        default = self.installation_read(f"repos/{repo}/git/ref/heads/master")
+        if (default.get("ref") != "refs/heads/master" or (default.get("object") or {}).get("type") != "commit"
+                or (default.get("object") or {}).get("sha") != base):
+            raise RuntimeError("HighBar current default/base identity differs")
+        classic_status, classic = self.installation_policy_read(f"repos/{repo}/branches/master/protection/required_status_checks")
+        rules_status, rules = self.installation_policy_read(f"repos/{repo}/rules/branches/master?per_page=100")
+        sets_status, sets = self.installation_policy_read(f"repos/{repo}/rulesets?includes_parents=true&per_page=100")
+        no_classic = (classic_status == 404 and classic == {
+            "message": "Branch not protected", "status": "404",
+            "documentation_url": "https://docs.github.com/rest/branches/branch-protection#get-status-checks-protection"})
+        if (rules_status != 200 or not isinstance(rules, list) or len(rules) >= 100
+                or any(not isinstance(row, dict) for row in rules)
+                or sets_status != 200 or not isinstance(sets, list) or len(sets) >= 100
+                or any(not isinstance(row, dict) for row in sets)
+                or (not no_classic and (classic_status != 200 or not isinstance(classic, dict)
+                    or not isinstance(classic.get("contexts"), list) or not isinstance(classic.get("checks"), list)))):
+            raise RuntimeError("HighBar native policy is denied, incomplete or unknown")
+        if require_empty and (not no_classic or rules != [] or sets != []):
+            raise RuntimeError("HighBar required policy is not authentically empty")
+
+        path = ".github/workflows/ci.yml"
+        workflow = self.installation_read(f"repos/{repo}/actions/workflows/ci.yml")
+        if (type(workflow.get("id")) is not int or workflow["id"] != HIGHBAR_WORKFLOW_ID
+                or workflow.get("path") != path or workflow.get("state") != "active"):
+            raise RuntimeError("HighBar native workflow identity differs")
+        baseline = self.installation_tree(repo, base).get(path)
+        if (baseline is None or baseline.get("type") != "blob" or baseline.get("mode") != "100644"
+                or candidate.get(path) != baseline
+                or hashlib.sha256(self.installation_blob(repo, baseline)).hexdigest() != HIGHBAR_WORKFLOW_SHA256):
+            raise RuntimeError("HighBar unchanged reviewed CI source differs")
+        population = self.installation_read(f"repos/{repo}/actions/workflows/{HIGHBAR_WORKFLOW_ID}/runs?head_sha={head}&per_page=100")
+        if (type(population.get("total_count")) is not int or population["total_count"] != 1
+                or not isinstance(population.get("workflow_runs"), list) or len(population["workflow_runs"]) != 1):
+            raise RuntimeError("HighBar exact-head run population incomplete/ambiguous")
+        run = population["workflow_runs"][0]
+        if (not isinstance(run, dict) or type(run.get("id")) is not int or run["id"] <= 0
+                or type(run.get("workflow_id")) is not int or run["workflow_id"] != HIGHBAR_WORKFLOW_ID
+                or run.get("path") != path or run.get("head_sha") != head or run.get("head_branch") != branch
+                or run.get("event") != "pull_request" or type(run.get("run_attempt")) is not int or run["run_attempt"] != 1
+                or run.get("status") != "completed" or run.get("conclusion") != "success"
+                or type((run.get("repository") or {}).get("id")) is not int
+                or (run.get("repository") or {}).get("id") != HIGHBAR_REPOSITORY_ID
+                or (run.get("repository") or {}).get("full_name") != repo
+                or type(run.get("check_suite_id")) is not int or run["check_suite_id"] <= 0):
+            raise RuntimeError("HighBar run identity/event/attempt/success differs")
+        prs = run.get("pull_requests")
+        if (not isinstance(prs, list) or len(prs) != 1 or not isinstance(prs[0], dict)
+                or type(prs[0].get("number")) is not int or prs[0]["number"] != number
+                or any((prs[0].get(key) or {}).get("sha") != sha
+                       or (prs[0].get(key) or {}).get("ref") != ref
+                       or type(((prs[0].get(key) or {}).get("repo") or {}).get("id")) is not int
+                       or ((prs[0].get(key) or {}).get("repo") or {}).get("id") != HIGHBAR_REPOSITORY_ID
+                       for key, sha, ref in (("head", head, branch), ("base", base, "master")))):
+            raise RuntimeError("HighBar tested PR source/base association differs")
+        detail = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}")
+        if any(detail.get(key) != run.get(key) for key in ("id", "workflow_id", "path", "head_sha", "head_branch",
+                "event", "run_attempt", "status", "conclusion", "check_suite_id", "repository", "pull_requests", "created_at")):
+            raise RuntimeError("HighBar run readback differs")
+        suite = self.installation_read(f"repos/{repo}/check-suites/{run['check_suite_id']}")
+        if (type(suite.get("id")) is not int or suite["id"] != run["check_suite_id"]
+                or suite.get("head_sha") != head or suite.get("head_branch") != branch
+                or type((suite.get("app") or {}).get("id")) is not int
+                or (suite.get("app") or {}).get("id") != 15368
+                or suite.get("status") != "completed" or suite.get("conclusion") != "success"):
+            raise RuntimeError("HighBar native suite provenance differs")
+
+        # Repo variables override accessible organization variables. Read both complete
+        # authenticated populations; denied org visibility cannot prove runner absence.
+        values = []
+        for route in ("variables", "organization-variables"):
+            value = self.installation_read(f"repos/{repo}/actions/{route}?per_page=100")
+            rows = value.get("variables")
+            if (type(value.get("total_count")) is not int or not 0 <= value["total_count"] < 100
+                    or not isinstance(rows, list) or len(rows) != value["total_count"]
+                    or any(not isinstance(row, dict) or not isinstance(row.get("name"), str)
+                           or not isinstance(row.get("value"), str) for row in rows)
+                    or len({row["name"].upper() for row in rows}) != len(rows)):
+                raise RuntimeError("HighBar runner variable population is incomplete/ambiguous")
+            selected = [row for row in rows if row["name"].upper() == "HIGHBAR_HAVE_RUNNER"]
+            if selected:
+                try:
+                    created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+                    updated = datetime.fromisoformat(selected[0]["updated_at"].replace("Z", "+00:00"))
+                    if created.tzinfo is None or updated.tzinfo is None or updated > created:
+                        raise ValueError("variable changed after run")
+                except (KeyError, TypeError, ValueError) as error:
+                    raise RuntimeError("HighBar runner variable/run timing differs") from error
+            values.append(selected[0]["value"] if selected else None)
+        runner_enabled = (next((value for value in values if value is not None), "").lower() == "true")
+        jobs = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}/attempts/1/jobs?per_page=100")
+        names = set(HIGHBAR_HOSTED_STEPS) | set(HIGHBAR_RUNNER_STEPS)
+        rows = jobs.get("jobs")
+        if (type(jobs.get("total_count")) is not int or jobs["total_count"] != len(names)
+                or not isinstance(rows, list) or len(rows) != len(names)
+                or any(not isinstance(row, dict) for row in rows)
+                or {row.get("name") for row in rows} != names
+                or not isinstance(roster, list) or len(roster) != len(names)
+                or any(not isinstance(row, dict) for row in roster)
+                or {row.get("name") for row in roster} != names
+                or len({row.get("id") for row in rows}) != len(names)
+                or len({row.get("id") for row in roster}) != len(names)):
+            raise RuntimeError("HighBar complete ten-job/check cohort differs")
+        statuses = self.installation_read(f"repos/{repo}/commits/{head}/status?per_page=100")
+        if (statuses.get("sha") != head or type(statuses.get("total_count")) is not int
+                or statuses["total_count"] != 0 or statuses.get("statuses") != []):
+            raise RuntimeError("HighBar status provenance unknown")
+        for cohort in rows:
+            name = cohort["name"]
+            check = next(row for row in roster if row["name"] == name)
+            skipped = name == "behavioral-reproducibility" or (name in HIGHBAR_RUNNER_STEPS and not runner_enabled)
+            conclusion = "skipped" if skipped else "success"
+            job = self.installation_read(f"repos/{repo}/actions/jobs/{cohort.get('id')}")
+            if (job != cohort or type(job.get("id")) is not int or job["id"] <= 0
+                    or type(job.get("run_id")) is not int or job.get("run_id") != run["id"] or type(job.get("run_attempt")) is not int or job["run_attempt"] != 1
+                    or job.get("head_sha") != head or job.get("status") != "completed"
+                    or job.get("conclusion") != conclusion or not job.get("completed_at")
+                    or job.get("labels") != (["ubuntu-22.04"] if name in HIGHBAR_HOSTED_STEPS else ["self-hosted", "Linux", "X64", "bar-engine"])
+                    or job.get("check_run_url") != f"https://api.github.com/repos/{repo}/check-runs/{job['id']}"
+                    or type(check.get("id")) is not int or check["id"] != job["id"]
+                    or check.get("head_sha") != head or type((check.get("app") or {}).get("id")) is not int
+                    or (check.get("app") or {}).get("id") != 15368
+                    or type((check.get("check_suite") or {}).get("id")) is not int
+                    or (check.get("check_suite") or {}).get("id") != run["check_suite_id"]
+                    or check.get("details_url") != f"https://github.com/{repo}/actions/runs/{run['id']}/job/{job['id']}"
+                    or check.get("status") != "completed" or check.get("conclusion") != conclusion):
+                raise RuntimeError("HighBar check/app/job/run/attempt/conditional provenance differs")
+            steps = job.get("steps")
+            if skipped:
+                if steps != []:
+                    raise RuntimeError("HighBar conditional skip contains execution")
+                continue
+            technical = (HIGHBAR_HOSTED_STEPS if name in HIGHBAR_HOSTED_STEPS else HIGHBAR_RUNNER_STEPS)[name]
+            expected = ("Set up job", "Run actions/checkout@v4", *technical,
+                        *(("Post Run actions/setup-python@v5",) if name == "python" else ()),
+                        "Post Run actions/checkout@v4", "Complete job")
+            if (not isinstance(steps, list) or len(steps) != len(expected)
+                    or any(not isinstance(step, dict) or step.get("status") != "completed"
+                           or step.get("conclusion") != "success" or type(step.get("number")) is not int
+                           or step["number"] <= 0 for step in steps)
+                    or tuple(step.get("name") for step in steps) != expected
+                    or [step["number"] for step in steps] != sorted({step["number"] for step in steps})):
+                raise RuntimeError("HighBar technical steps absent/skipped/failed/duplicated")
 
     def installation_fourd_policy(self, repo: str) -> None:
         """Authenticate the accepted process policy; a plan refusal is never empty policy."""

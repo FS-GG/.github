@@ -650,8 +650,15 @@
        deterministic dispatch, invocation and Delivery from the brief's first-line `fsgg-dispatch:` marker, reusing the
        existing dispatch, lineage and admission facts; packaged pnext-item and the work-board driver state the marker.
        SOURCE preparation only; published 0.114.2 is unchanged and the release is a separate step. -->
+  <!-- 0.114.3 -> 0.114.4 (#5239, #5185): coherent PATCH. Packaged pnext-item gains the owner self-check before
+       review and keeps the PR draft until its required gates pass; packaged intra-repo-parallel-work has dispatch
+       briefs name the one owner of a surface shared by parallel Deliveries. No engine change. SOURCE preparation
+       only; published 0.114.3 is unchanged and the release is a separate step. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.114.3</FsggCoherentSetVersion>
+    <!-- Unpublished 0.114.4 source cut also carries the ordinary active Core 10.1.403
+         baseline (#5253) and reviewed LEARN Atlas records (#5249). Existing published
+         identities and frozen runtime/profile inputs remain separately qualified. -->
+    <FsggCoherentSetVersion>0.114.4</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

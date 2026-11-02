@@ -300,7 +300,8 @@
     "scripts/release-saga-promote-release.sh",
     "src/FS.GG.Telemetry.Client/DirectResponses.fs",
     "src/FS.GG.Telemetry.Client/RemoteClient.fs",
-    "tools/routine-delivery.py"
+    "tools/routine-delivery.py",
+    "scripts/learn-dispatch.py"
   ],
   "externalWriterDisposition": "route-specific-gs2-08.9-evidence",
   "legacyClients": [

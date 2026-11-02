@@ -107,7 +107,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-11-01"
+updated: "2026-11-02"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -409,7 +409,7 @@ skills:
   # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 6383a6e5f79b4f0b37b91cfdb3af005bf249c2d8537844363c58b5d5ce549de5, materializes-when: "false" }
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 367da7d4c3ce0969912552b5f153203d7ee68659ea346b48c502f88969217da1, materializes-when: "false" }
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
@@ -427,4 +427,4 @@ skills:
   # Reconciled, not hand-authored: scope/sha256/materializes-when verbatim from the manifest
   # entry, `source` from its `supplied-by`. Re-home and annotate these into the block they
   # belong to, then set `updated:` and prepend a registry/skills.CHANGELOG.md entry.
-  - { id: work-board-coord,       scope: operator,owner: .github,         source: .github/.claude/skills/work-board-coord/SKILL.md, sha256: 6e3a5d260d19d53c8c231549f372dd38db4b0645382b2e6488297c38c05c8001, materializes-when: "false" }
+  - { id: work-board-coord,       scope: operator,owner: .github,         source: .github/.claude/skills/work-board-coord/SKILL.md, sha256: 25bfacaace8e0970fa690884fcf6d6d28123d27f303c6d6c530761aef29a8688, materializes-when: "false" }

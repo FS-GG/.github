@@ -38,7 +38,9 @@ Deliveries, as the
 An execution invocation authorizes useful subagent delegation within the selected scope and the
 runtime's permissions. Actively seek parallel work at entry, after delivery or a changed blocker,
 and whenever a lane starts a build, review, CI or supplier wait. Prefer keeping independent,
-meaningful Deliveries moving together when their actual capacity and prerequisites permit it.
+meaningful Deliveries moving together when their actual capacity and prerequisites permit it. When parallel
+Deliveries share a type, contract or file, each brief names the single owner of that surface
+(see [intra-repo parallel work](../intra-repo-parallel-work/SKILL.md)).
 
 - Compare the complete eligible work against active owners, exact PR heads, touch-sets, shared
   outputs and remaining worker, CPU/memory, integrator and hosted-CI capacity. Preserve relevant

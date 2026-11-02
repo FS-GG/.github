@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -I
 """Install the fdev board-tend units (board-reconciler design section 8, #5136 PR 8). User-level only.
 
-Five subcommands, each writing one kind of thing and nothing else. Every one has --dry-run, which prints what it
+Six subcommands, each writing one kind of thing and nothing else. Every one has --dry-run, which prints what it
 would write and changes nothing. None needs or uses root; every destination must be under $HOME.
 
   units        Renders fsgg-board-tend.{service,timer} and fsgg-board-tend-daily.{service,timer} into the user
@@ -16,6 +16,8 @@ would write and changes nothing. None needs or uses root; every destination must
                the script with --apply. Without --enable it does not touch systemd.
   chromium-env Copies deployment/fdev-chromium/fdev-chromium-env to ~/.local/bin (the source of truth for the
                installed wrapper, which sets the short disk-backed TMPDIR default, .github#5240).
+  archive      Stages an immutable archive adapter/script and two daily user units. Never enables or starts
+               them; Root's accepted first execution and private activation configuration remain mandatory.
 
 The engine and the kit root are pinned to one release: the engine must live in .../coord-<version>/ and the kit
 root must be named kit-<version>.
@@ -152,6 +154,11 @@ def command_units(args: argparse.Namespace) -> int:
     credentials = user_path(args.credentials, "--credentials")
     unit_dir = user_path(args.unit_dir, "--unit-dir")
     libexec = user_path(args.libexec_dir, "--libexec-dir")
+    config_home = user_path(args.config_home, "--config-home")
+    state_home = user_path(args.state_home, "--state-home")
+    enable_file = user_path(args.enable_file, "--enable-file") if args.enable_file else config_home / "fsgg/board-tend.json"
+    if enable_file != config_home / "fsgg/board-tend.json":
+        raise Refusal("--enable-file must be the engine's file under --config-home")
     engine_release, kit_release = version_of(engine.parent.name, "coord-"), version_of(kit.name, "kit-")
     if engine.name != "fsgg-coord-engine" or engine_release is None:
         raise Refusal("--engine-path must be .../coord-<version>/fsgg-coord-engine, the versioned path, not the moving link")
@@ -159,16 +166,21 @@ def command_units(args: argparse.Namespace) -> int:
         raise Refusal(f"--kit-root must be named kit-{engine_release} to match the engine release")
     if not engine.is_file() or not os.access(engine, os.X_OK):
         raise Refusal("--engine-path is not an executable file")
-    if not any((kit / mirror).is_file() for mirror in MIRRORS):
-        raise Refusal("--kit-root carries no lifecycle-contract.md mirror; run the kit-root subcommand first")
+    if not re.fullmatch(r"[0-9a-f]{64}", args.expect_kit_sha256):
+        raise Refusal("--expect-kit-sha256 must be 64 lowercase hex digits")
+    for mirror in MIRRORS:
+        path = kit / mirror
+        if path.is_symlink() or not path.is_file() or digest(path.read_bytes()) != args.expect_kit_sha256:
+            raise Refusal("both --kit-root mirrors must match --expect-kit-sha256")
     if workdir == kit:
         raise Refusal("--workdir must not be the kit root")
-    if (workdir / ".git").exists() or (kit / ".git").exists():
+    if any((parent / ".git").exists() for directory in (workdir, kit) for parent in (directory, *directory.parents)):
         raise Refusal("--workdir and --kit-root must not be git checkouts")
-    if args.mode == "apply" and not enable_file_names_a_rule(user_path(args.enable_file, "--enable-file")):
+    if args.mode == "apply" and not enable_file_names_a_rule(enable_file):
         raise Refusal("--mode apply needs a 0600 enable file that names at least one rule; the installer never writes rules")
     values = {"MODE": args.mode, "WORKDIR": str(workdir), "KIT_ROOT": str(kit), "ENGINE": str(engine), "CREDENTIALS": str(credentials),
-              "LIBEXEC": str(libexec), "RUNTIME_MAX": str(RUNTIME_MAX_SECONDS)}
+              "LIBEXEC": str(libexec), "RUNTIME_MAX": str(RUNTIME_MAX_SECONDS),
+              "KIT_SHA256": args.expect_kit_sha256, "CONFIG_HOME": str(config_home), "STATE_HOME": str(state_home)}
     plan = Plan(args.dry_run)
     for name in UNIT_TEMPLATES:
         text = render((HERE / f"{name}.in").read_text(encoding="utf-8"), values)
@@ -276,6 +288,29 @@ def command_enable_file(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_archive(args: argparse.Namespace) -> int:
+    if os.geteuid() == 0:
+        raise Refusal("run as the fdev user, not root")
+    release = user_path(args.release_dir, "--release-dir")
+    workdir = user_path(args.workdir, "--workdir")
+    values = {"RELEASE_DIR": str(release), "WORKDIR": str(workdir),
+              "CONFIG": str(user_path(args.config, "--config")),
+              "CREDENTIALS": str(user_path(args.credentials, "--credentials"))}
+    unit_dir = user_path(args.unit_dir, "--unit-dir")
+    plan = Plan(args.dry_run)
+    # Release files are immutable: --force can replace rendered units, never a pinned release's bytes.
+    for name, source in (("fsgg-board-archive-run.py", HERE / "fsgg-board-archive-run.py"),
+                         ("coord-board-archive.py", HERE.parents[1] / "scripts/coord-board-archive.py")):
+        plan.add(release / name, source.read_bytes(), 0o400, False)
+    for name in ("fsgg-board-archive.service", "fsgg-board-archive.timer"):
+        plan.add(unit_dir / name, render((HERE / (name + ".in")).read_text(), values).encode(), 0o644, args.force)
+    plan.apply()
+    if not args.dry_run:
+        workdir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    print("archive staged disabled; systemd not touched; Root owns first-real acceptance and activation")
+    return 0
+
+
 def parser() -> argparse.ArgumentParser:
     h = home()
     root = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -283,12 +318,15 @@ def parser() -> argparse.ArgumentParser:
     units = sub.add_parser("units")
     units.add_argument("--kit-root", required=True)
     units.add_argument("--engine-path", dest="engine", required=True)
+    units.add_argument("--expect-kit-sha256", required=True)
+    units.add_argument("--config-home", default=str(pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or h / ".config")))
+    units.add_argument("--state-home", default=str(pathlib.Path(os.environ.get("XDG_STATE_HOME") or h / ".local/state")))
     units.add_argument("--mode", choices=("plan-only", "apply"), default="plan-only")
     units.add_argument("--workdir", default=str(h / ".local/share/fs-gg/board-tend"))
     units.add_argument("--credentials", default=str(h / ".config/fdev/credentials.json"))
     units.add_argument("--unit-dir", default=str(pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or h / ".config") / "systemd/user"))
     units.add_argument("--libexec-dir", default=str(h / ".local/libexec"))
-    units.add_argument("--enable-file", default=str(pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or h / ".config") / "fsgg/board-tend.json"))
+    units.add_argument("--enable-file", help="must name fsgg/board-tend.json under --config-home")
     units.add_argument("--enable", action="store_true", help="daemon-reload and enable --now both timers")
     units.add_argument("--force", action="store_true", help="replace installed files that differ")
     units.add_argument("--dry-run", action="store_true")
@@ -311,6 +349,14 @@ def parser() -> argparse.ArgumentParser:
     chromium.add_argument("--dest", default=str(h / ".local/bin/fdev-chromium-env"))
     chromium.add_argument("--force", action="store_true", help="replace the installed wrapper when it differs")
     chromium.add_argument("--dry-run", action="store_true")
+    archive = sub.add_parser("archive")
+    archive.add_argument("--release-dir", required=True, help="a new immutable, versioned directory under HOME")
+    archive.add_argument("--workdir", default=str(h / ".local/share/fs-gg/board-archive"))
+    archive.add_argument("--config", default=str(h / ".config/fsgg/board-archive.json"))
+    archive.add_argument("--credentials", default=str(h / ".config/fdev/credentials.json"))
+    archive.add_argument("--unit-dir", default=str(h / ".config/systemd/user"))
+    archive.add_argument("--force", action="store_true")
+    archive.add_argument("--dry-run", action="store_true")
     return root
 
 
@@ -318,7 +364,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         return {"units": command_units, "kit-root": command_kit_root, "enable-file": command_enable_file,
-                "tmp-cleanup": command_tmp_cleanup, "chromium-env": command_chromium_env}[args.command](args)
+                "tmp-cleanup": command_tmp_cleanup, "chromium-env": command_chromium_env,
+                "archive": command_archive}[args.command](args)
     except Refusal as error:
         print(f"install.py: refused: {error}", file=sys.stderr)
         return 2

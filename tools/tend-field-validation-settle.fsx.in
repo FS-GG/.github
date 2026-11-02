@@ -1,0 +1,39 @@
+// Loaded only by the checked controller after exact runtime-file verification. No mutation sender is used.
+open System
+open System.IO
+open System.Runtime.InteropServices
+open System.Text.Json.Nodes
+open FS.GG.Coord.GitHub
+
+module Native =
+    [<DllImport("libc", EntryPoint="open", SetLastError=true)>]
+    extern int openDirectory(string path, int flags)
+    [<DllImport("libc", SetLastError=true)>]
+    extern int fsync(int descriptor)
+    [<DllImport("libc", SetLastError=true)>]
+    extern int close(int descriptor)
+
+let syncDirectory path =
+    let fd = Native.openDirectory(path, 65536)
+    if fd < 0 then raise (IOException "directory open refused")
+    try
+        if Native.fsync fd <> 0 then raise (IOException "directory fsync refused")
+    finally Native.close fd |> ignore
+
+let execute () =
+    let config = JsonNode.Parse(File.ReadAllText(Array.last fsi.CommandLineArgs))
+    let text (name: string) = config[name].GetValue<string>()
+    let credentials = JsonNode.Parse(File.ReadAllText(text "credentials"))
+    let token = credentials["GH_TOKEN"].GetValue<string>()
+    let input : V2TendNoEffect.Input =
+        { CustodyRoot = text "custodyRoot"; OriginalPath = text "originalPath"
+          RequestPath = text "requestPath"; OriginalRuntimeDirectory = text "originalRuntimeDirectory"
+          RootAdmissionReference = text "rootAdmissionReference" }
+    use transport = new Transport.HttpTransport("https://api.github.com", token)
+    match V2TendFieldRecovery.admit (transport :> Transport.IGitHubTransport) syncDirectory input with
+    | Ok _ -> printfn "tend field recovery: certificate appended; no provider send"
+    | Error reason -> eprintfn "%s" reason; exit 3
+
+if Array.contains "--typecheck-only" fsi.CommandLineArgs then
+    printfn "tend field recovery controller: offline typecheck only"
+else execute ()

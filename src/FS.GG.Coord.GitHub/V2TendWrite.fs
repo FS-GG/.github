@@ -58,7 +58,7 @@ module V2TendWrite =
             |> List.iteri (fun index (fieldId, value) ->
                 let kind, argument =
                     match value with
-                    | OptionValue option -> "ID!", ("v" + string index, VId option)
+                    | OptionValue option -> "String!", ("v" + string index, VString option)
                     | TextValue text -> "String!", ("v" + string index, VString text)
                 declared.Append(sprintf ", $f%d: ID!, $v%d: %s, $c%d: String!" index index kind index) |> ignore
                 let valueShape = match value with OptionValue _ -> sprintf "{singleSelectOptionId: $v%d}" index | TextValue _ -> sprintf "{text: $v%d}" index
@@ -351,6 +351,35 @@ module V2TendWrite =
             record["run"] <- run
             record["key"] <- key
             atomicWrite syncDirectory (this.Path key) (record.ToJsonString())
+        member internal _.RecordFieldResponse(key: string, request: Request, response: IoResult<Response>) =
+            let record = JsonObject()
+            record["schema"] <- "fsgg.board-tend-field-response/1"
+            record["run"] <- run
+            record["key"] <- key
+            record["requestSha256"] <- SHA256.HashData(canonicalMutationBytes request) |> Convert.ToHexString |> fun s -> s.ToLowerInvariant()
+            match response with
+            | Ok received ->
+                record["status"] <- received.Status
+                let bytes = Encoding.UTF8.GetBytes received.Body
+                record["bodyByteCount"] <- bytes.Length
+                record["bodyTruncated"] <- bytes.Length > 65536
+                record["bodyPrefixBase64"] <- Convert.ToBase64String(bytes, 0, min 65536 bytes.Length)
+                record["bodySha256"] <- SHA256.HashData(bytes) |> Convert.ToHexString |> fun s -> s.ToLowerInvariant()
+                let headers = JsonObject()
+                for name in [ "X-GitHub-Request-Id"; "Retry-After"; "X-RateLimit-Remaining"; "X-RateLimit-Resource" ] do
+                    match received.Headers |> Map.tryPick (fun key value -> if key.Equals(name, StringComparison.OrdinalIgnoreCase) then Some value else None) with
+                    | Some value -> headers[name] <- value.Substring(0, min 256 value.Length)
+                    | None -> ()
+                record["headers"] <- headers
+            | Error error ->
+                let detail = Errors.explain error
+                record["transportError"] <- detail.Substring(0, min 4096 detail.Length)
+            let directory = Path.Combine(root, run, "responses")
+            privateDirectory directory
+            syncDirectory (Path.GetDirectoryName directory)
+            let path = Path.Combine(directory, keyName key + ".json")
+            if File.Exists path then invalidOp "field response custody already exists; never replace"
+            atomicWrite syncDirectory path (record.ToJsonString())
         // Every readable record in every run, with its path; malformed files are counted, never trusted.
         member _.Records() : (string * JsonObject) list * int =
             if not (Directory.Exists root) then [], 0
@@ -603,7 +632,11 @@ module V2TendWrite =
                                 context.Pacer.Before()
                                 let sent = context.Send request
                                 context.Pacer.After()
+                                let retained =
+                                    try context.Custody.RecordFieldResponse(card.ItemId, request, sent); true
+                                    with _ -> false
                                 match sent with
+                                | _ when not retained -> outcome "uncertain" "response-custody-unavailable"
                                 | Error error -> outcome "uncertain" ("send: " + Errors.explain error)
                                 | Ok response when not (echoed response card.ItemId (mutationIds request)) -> outcome "uncertain" "send-unconfirmed"
                                 | Ok _ ->
@@ -825,7 +858,7 @@ module V2TendWrite =
 
     // Read back every `possible-send` record of the reconciler's own custody; a proven target rewrites it to
     // `verified`. Never sends. Returns the keys still uncertain.
-    let sweepOwn (context: Context) : Set<string> * Outcome list =
+    let internal sweepOwnUsing isIncident isSettled (context: Context) : Set<string> * Outcome list =
         let records, malformed = context.Custody.Records()
         let outcomes =
             [ for path, record in records do
@@ -836,8 +869,11 @@ module V2TendWrite =
                     // reported by item, so an uncertain close also blocks the item's field writes and its next close.
                     let held = record["itemId"] |> Option.ofObj |> Option.map string |> Option.defaultValue key
                     let reference = record["ref"] |> Option.ofObj |> Option.map string |> Option.defaultValue ""
+                    let incident = isIncident path
+                    let acceptedNoEffect = incident && isSettled context.Custody.Root path
                     let proven =
                         match kind with
+                        | _ when incident -> false // incident originals are immutable, even if evidence later disappears
                         | "fields" ->
                             match readItem context.Reads (string record["itemId"]) [] with
                             | Ok item ->
@@ -852,7 +888,9 @@ module V2TendWrite =
                                        && (obj data "comment" |> Option.bind (fun c -> str c "body") |> Option.exists (fun b -> b.Contains tendClosedMarker))))
                                 |> Result.defaultValue false
                         | _ -> false
-                    if proven then
+                    if acceptedNoEffect then
+                        yield held, { Subject = key; Ref = reference; Kind = "sweep"; Result = "root-settled-no-effect"; Detail = kind }
+                    elif proven then
                         record["state"] <- "verified"
                         record["verifiedAt"] <- context.Clock.GetUtcNow().ToString("o")
                         (try context.Custody.Rewrite(path, record) with _ -> ())
@@ -861,6 +899,8 @@ module V2TendWrite =
         let uncertain = outcomes |> List.filter (fun (_, o) -> o.Result = "uncertain") |> List.map fst |> Set.ofList
         let malformedOutcome = if malformed > 0 then [ { Subject = "custody"; Ref = ""; Kind = "sweep"; Result = "malformed"; Detail = string malformed } ] else []
         uncertain, (outcomes |> List.map snd) @ malformedOutcome
+
+    let sweepOwn context = sweepOwnUsing V2TendNoEffect.isIncident V2TendNoEffect.settled context
 
     // ---- GR: replay of the merge gate's deferred records (design §6) ----
 

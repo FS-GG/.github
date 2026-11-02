@@ -101,12 +101,16 @@
     <Compile Include="V2Tend.fs" />
     <Compile Include="V2TendReads.fsi" />
     <Compile Include="V2TendReads.fs" />
+    <Compile Include="V2TendNoEffect.fsi" />
+    <Compile Include="V2TendNoEffect.fs" />
     <Compile Include="V2TendWrite.fsi" />
     <Compile Include="V2TendWrite.fs" />
     <Compile Include="V2TendPropose.fsi" />
     <Compile Include="V2TendPropose.fs" />
     <Compile Include="V2WriterLock.fsi" />
     <Compile Include="V2WriterLock.fs" />
+    <Compile Include="V2TendFieldRecovery.fsi" />
+    <Compile Include="V2TendFieldRecovery.fs" />
     <Compile Include="V2Custody.fsi" />
     <Compile Include="V2Custody.fs" />
     <Compile Include="V2NativeResolve.fsi" />

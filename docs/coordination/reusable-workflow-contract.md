@@ -809,8 +809,8 @@ the two differ). A caller is one thin file that names it at `@main`, as every ot
 
 ### Per-repo inventory of the gate and its required-context state (.github#5195)
 
-Measured 2026-11-02; refreshed after the receiver caller merges by reading each default branch's branch protection and rulesets
-(`gh api repos/FS-GG/<repo>/branches/main/protection/required_status_checks` and `.../rules/branches/main`)
+Measured 2026-11-02 UTC; refreshed after the receiver caller merges by reading each default branch's branch protection and rulesets
+(`gh api repos/FS-GG/<repo>/branches/<default>/protection/required_status_checks` and `.../rules/branches/<default>`; HighBarV3 and RecoilEngine use `master`)
 and its workflows. The route is how the repository gets the lint: **kit** (`materialize / closing-keywords`,
 through `kit-materialize.yml`), **receiver** (a thin caller of `closing-keywords-receiver.yml`, context
 `closing-keywords / title-and-body`) or **standalone** (a copy of the job that fetches the rule at a pinned hub
@@ -827,12 +827,21 @@ can never be required.
 | FS.GG.Coordination | public | receiver pending: caller FS.GG.Coordination#1118 remains open (pinned to the receiver's merge commit: its execution-pin validator refuses `@main`); no caller on the default branch | no | yes, by its ruleset |
 | FsQuint, FSBarV2 | public | receiver on the default branch, callers FsQuint#51 and FSBarV2#54 merged; both caller heads reported the check successfully | no | only after the repository gets a protection or a ruleset: it has neither |
 | FS.GG.RuneScape | private | standalone | no | no, advisory only |
-| FS.GG.FourD, SC2.Client, Unity.Client, Native.Qualification | private | receiver on the default branch, callers FS.GG.FourD#57, FS.GG.SC2.Client#53, FS.GG.Unity.Client#35, FS.GG.Native.Qualification#4 merged (Native.Qualification pins the merge commit: it enforces full-SHA pins); reporting unverified | no | no, advisory only |
+| FS.GG.FourD, SC2.Client, Unity.Client, Native.Qualification | private | receiver on the default branch; the four caller PRs are merged and successful native Actions jobs now observed (Native.Qualification pins the merge commit: it enforces full-SHA pins) | no | no, advisory only |
+| HighBarV3, RecoilEngine | public | absent on the default branch; minimal read-only receiver callers prepared locally under #5195, not yet pushed or installed at measurement | no | only after a protection or ruleset is added; neither currently has one |
 
 The public receiver caller heads reported `closing-keywords / title-and-body` successfully, including the
-still-open Coordination caller. For the four private caller heads, the check-runs API refused access
-(`Resource not accessible by personal access token`); merged source establishes distribution, while
-actual reporting remains Unknown.
+still-open Coordination caller. The earlier four-private-repository reporting Unknown is resolved by
+fresh authenticated Actions run/job metadata: each has a completed successful `title-and-body` job,
+matching run/head/attempt and its native `check_run_url`. This is execution/reporting evidence, not a
+claim that the previously denied check-runs-list endpoint became readable. Private raw evidence is
+retained by the delivery owner, not copied into this document.
+
+HighBarV3 and RecoilEngine now reference Project3 Deliveries, so the original repository set is no
+longer complete: HighBarV3#18 and RecoilEngine#3 are concrete new examples. Both default branches lack
+the lint. Their prepared callers reuse the maintained read-only hub workflow; they are neither installed
+nor required at measurement. This is an explicit #5195 remainder, not evidence of fleet completion.
+The table is a dated observation; refresh native source/reporting before declaring the rollout complete.
 No branch protection or ruleset was changed by this inventory. Not in the inventory because no pull request
 there references a Project 3 Delivery at the original measurement: FS.GG.Coordination.Authority and the two Sandbox repositories.
 Algorithms is the only repository where the lint is already a merge gate, and its standalone job is the reason

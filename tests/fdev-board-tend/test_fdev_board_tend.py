@@ -8,6 +8,7 @@ rules (never swallowed, cleared only by a run that started after it was written)
 from __future__ import annotations
 
 import contextlib
+import ast
 import importlib.util
 import io
 import json
@@ -109,7 +110,7 @@ class FakeHome(unittest.TestCase):
 
 class UnitInstallTests(FakeHome):
     def install(self, *extra, expect=0):
-        argv = ["units", "--kit-root", str(self.kit), "--engine-path", str(self.engine), *extra]
+        argv = ["units", "--kit-root", str(self.kit), "--engine-path", str(self.engine), "--expect-kit-sha256", INSTALL.digest(CONTRACT.encode()), *extra]
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = INSTALL.main(argv)
@@ -208,7 +209,7 @@ class UnitInstallTests(FakeHome):
         moving = self.home / ".local/bin/fsgg-coord-engine"
         moving.parent.mkdir(parents=True)
         moving.symlink_to(self.engine)
-        base = {"--kit-root": str(self.kit), "--engine-path": str(self.engine)}
+        base = {"--kit-root": str(self.kit), "--engine-path": str(self.engine), "--expect-kit-sha256": INSTALL.digest(CONTRACT.encode())}
         cases = {
             "the moving link, not a versioned engine": {"--engine-path": str(moving)},
             "a kit root of another release": {"--kit-root": str(self.kit.parent / "kit-0.114.1")},
@@ -230,10 +231,10 @@ class UnitInstallTests(FakeHome):
         for mirror in INSTALL.MIRRORS:
             (empty / mirror).unlink()
         with contextlib.redirect_stderr(io.StringIO()) as err:
-            self.assertEqual(INSTALL.main(["units", "--kit-root", str(empty), "--engine-path", str(self.engine)]), 2)
+            self.assertEqual(INSTALL.main(["units", "--kit-root", str(empty), "--engine-path", str(self.engine), "--expect-kit-sha256", INSTALL.digest(CONTRACT.encode())]), 2)
         (self.workdir / ".git").mkdir(parents=True)
         with contextlib.redirect_stderr(io.StringIO()) as err:
-            self.assertEqual(INSTALL.main(["units", "--kit-root", str(self.kit), "--engine-path", str(self.engine)]), 2)
+            self.assertEqual(INSTALL.main(["units", "--kit-root", str(self.kit), "--engine-path", str(self.engine), "--expect-kit-sha256", INSTALL.digest(CONTRACT.encode())]), 2)
         self.assertIn("git checkouts", err.getvalue())
 
     def test_apply_mode_needs_an_enable_file_that_names_a_rule_and_renders_apply(self):
@@ -241,22 +242,38 @@ class UnitInstallTests(FakeHome):
         self.enable.write_text('{"apply": ["W1h"]}', encoding="utf-8")
         self.enable.chmod(0o644)
         with contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(INSTALL.main(["units", "--kit-root", str(self.kit), "--engine-path", str(self.engine), "--mode", "apply"]), 2)
+            self.assertEqual(INSTALL.main(["units", "--kit-root", str(self.kit), "--engine-path", str(self.engine), "--expect-kit-sha256", INSTALL.digest(CONTRACT.encode()), "--mode", "apply"]), 2)
         self.enable.chmod(0o600)
         self.install("--mode", "apply")
         self.assertIn(" run --mode apply ", self.directives("fsgg-board-tend.service"))
 
     def test_refuses_to_run_as_root(self):
         with mock.patch.object(INSTALL.os, "geteuid", return_value=0), contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(INSTALL.main(["units", "--kit-root", str(self.kit), "--engine-path", str(self.engine)]), 2)
+            self.assertEqual(INSTALL.main(["units", "--kit-root", str(self.kit), "--engine-path", str(self.engine), "--expect-kit-sha256", INSTALL.digest(CONTRACT.encode())]), 2)
 
     @unittest.skipUnless(shutil.which("systemd-analyze"), "systemd-analyze is not available")
     def test_systemd_accepts_the_rendered_units(self):
         self.install()
-        files = [str(self.unit_dir / n) for n in ("fsgg-board-tend.service", "fsgg-board-tend.timer")]
+        files = [str(self.unit_dir / n) for n in INSTALL.UNIT_TEMPLATES]
         done = subprocess.run(["systemd-analyze", "--user", "verify", *files], capture_output=True, text=True, timeout=60, check=False)
         problems = [l for l in (done.stdout + done.stderr).splitlines() if "fsgg-board-tend" in l and not l.startswith("Could not")]
         self.assertEqual(problems, [], done.stderr)
+
+    def test_custom_xdg_homes_are_identical_in_installer_units_wrapper_and_gate(self):
+        config, state = self.home / "config-custom", self.home / "state-custom"
+        self.install("--config-home", str(config), "--state-home", str(state))
+        for name in ("fsgg-board-tend.service", "fsgg-board-tend-daily.service"):
+            text = self.directives(name)
+            self.assertIn(f"Environment=XDG_CONFIG_HOME={config}\n", text)
+            self.assertIn(f"Environment=XDG_STATE_HOME={state}\n", text)
+            self.assertIn(f"--config-home {config} --state-home {state}", text)
+        # Execute the actual gate's path resolver against the same explicitly pinned environment.
+        tree = ast.parse((ROOT / "tools/routine-delivery.py").read_text())
+        function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "default_board_tend_state_root")
+        ns = {"os": os, "pathlib": pathlib}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), "<actual-gate-resolver>", "exec"), ns)
+        with mock.patch.dict(os.environ, {"XDG_STATE_HOME": str(state), "XDG_CONFIG_HOME": str(config)}):
+            self.assertEqual(ns["default_board_tend_state_root"](), state / "fsgg/board-tend")
 
 
 class TmpCleanupInstallTests(FakeHome):
@@ -464,8 +481,9 @@ class WrapperTests(FakeHome):
         (self.tools / "config.json").write_text(json.dumps(self.config), encoding="utf-8")
 
     def args(self, *extra):
-        return RUN.parser().parse_args(["run", "--engine-path", str(self.engine), "--credentials", str(self.credentials),
-                                        "--workdir", str(self.workdir), "--min-interval", "0", *extra])
+        return RUN.parser().parse_args(["run", "--engine-path", str(self.engine), "--expect-kit-sha256", INSTALL.digest(CONTRACT.encode()), "--credentials", str(self.credentials),
+                                        "--workdir", str(self.workdir), "--config-home", self.env["XDG_CONFIG_HOME"],
+                                        "--state-home", self.env["XDG_STATE_HOME"], "--min-interval", "0", *extra])
 
     def go(self, *extra, env=None, cwd=None):
         out = io.StringIO()
@@ -612,7 +630,8 @@ class WrapperTests(FakeHome):
         self.config["exit"] = 3
         self.write_config()
         self.assertEqual(self.go()[0], 3)
-        self.assertTrue((self.state / RUN.MARKER).exists())
+        self.assertTrue((self.state / RUN.CLAIMED_MARKER).exists())
+        self.assertFalse((self.state / RUN.MARKER).exists())
         self.assertEqual(self.index()[-1]["marker"], "kept-failed")
 
     def test_a_second_wrapper_while_one_holds_the_run_lock_does_nothing_and_keeps_the_marker(self):
@@ -655,7 +674,7 @@ class WrapperTests(FakeHome):
         code = io.StringIO()
         today = RUN.now_utc().date().isoformat()
         with contextlib.redirect_stdout(code):
-            self.assertEqual(RUN.command_summarize(RUN.parser().parse_args(["summarize", "--date", today, "--out-dir", str(self.out)]), env=self.env), 0)
+            self.assertEqual(RUN.command_summarize(RUN.parser().parse_args(["summarize", "--date", today, "--out-dir", str(self.out), "--config-home", self.env["XDG_CONFIG_HOME"], "--state-home", self.env["XDG_STATE_HOME"]]), env=self.env), 0)
         daily = json.loads((self.out / "daily" / f"{today}.json").read_text())
         self.assertEqual((daily["runs"], daily["plansRead"], daily["applyModeRuns"], daily["plansWithApply"]), (2, 2, 0, 0))
         self.assertEqual(daily["wouldApplyByRule"]["O1"]["stableAllDay"], 1)
@@ -676,6 +695,89 @@ class WrapperTests(FakeHome):
         daily = RUN.summarize(self.out, "2026-01-01")
         self.assertEqual((daily["runs"], daily["plansRead"]), (0, 0))
         self.assertIn("Runs: 0", RUN.render_comment(daily))
+
+    def test_runtime_rejects_changed_missing_or_checkout_kit_mirrors(self):
+        mirror = self.kit / INSTALL.MIRRORS[1]
+        original = mirror.read_text()
+        mirror.write_text(original + "changed")
+        self.assertEqual(self.go()[0], 2)
+        mirror.unlink()
+        self.assertEqual(self.go()[0], 2)
+        mirror.write_text(original)
+        (self.kit / ".git").write_text("gitdir: elsewhere")
+        self.assertEqual(self.go()[0], 2)
+        self.assertEqual(self.calls(), [])
+
+    def test_runtime_rejects_wrong_real_engine_version_before_board_call(self):
+        self.engine.write_text(FAKE_ENGINE.replace('print("0.114.2.0")', 'print("0.114.1.0")'))
+        self.assertEqual(self.go()[0], 2)
+        self.assertEqual(self.calls(), [])
+
+    def test_marker_is_claimed_before_work_and_concurrent_pending_is_never_unlinked(self):
+        self.write_marker()
+        run_once = RUN.run_once
+        def work(*args):
+            self.assertFalse((self.state / RUN.MARKER).exists(), "pending must have been renamed before work")
+            self.assertTrue((self.state / (RUN.MARKER + ".claimed")).exists())
+            return run_once(*args)
+        with mock.patch.object(RUN, "run_once", side_effect=work):
+            self.assertEqual(self.go()[0], 0)
+
+    def test_trigger_arriving_at_claim_deletion_survives_and_runs_next_time(self):
+        self.write_marker()
+        unlink = RUN.os.unlink
+        def concurrent(path, *args, **kwargs):
+            if pathlib.Path(path).name == RUN.CLAIMED_MARKER:
+                self.write_marker()
+            return unlink(path, *args, **kwargs)
+        with mock.patch.object(RUN.os, "unlink", side_effect=concurrent):
+            self.assertEqual(self.go()[0], 0)
+        self.assertTrue((self.state / RUN.MARKER).exists())
+        self.assertFalse((self.state / RUN.CLAIMED_MARKER).exists())
+        self.assertEqual(len(self.calls()), 1)
+        self.assertEqual(self.go()[0], 0)
+        self.assertEqual(len(self.calls()), 2)
+        self.assertFalse((self.state / RUN.MARKER).exists())
+
+    def test_abandoned_claim_survives_failed_run_and_is_recovered(self):
+        self.state.mkdir(parents=True, mode=0o700)
+        (self.state / RUN.CLAIMED_MARKER).write_text("interrupted prior wrapper")
+        self.config["exit"] = 3; self.write_config()
+        self.assertEqual(self.go()[0], 3)
+        self.assertTrue((self.state / RUN.CLAIMED_MARKER).exists())
+        self.config["exit"] = 0; self.write_config()
+        self.assertEqual(self.go("--min-interval", "300")[0], 0)
+        self.assertEqual(len(self.calls()), 2)
+        self.assertFalse((self.state / RUN.CLAIMED_MARKER).exists())
+
+    def test_missing_workdir_and_changed_xdg_homes_refuse_before_board_work(self):
+        args = ["run", "--engine-path", str(self.engine), "--credentials", str(self.credentials),
+                "--expect-kit-sha256", INSTALL.digest(CONTRACT.encode()),
+                "--config-home", self.env["XDG_CONFIG_HOME"], "--state-home", self.env["XDG_STATE_HOME"]]
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+            RUN.parser().parse_args(args)
+        self.assertEqual(error.exception.code, 2)
+        for key in ("XDG_CONFIG_HOME", "XDG_STATE_HOME"):
+            with self.subTest(key=key):
+                self.assertEqual(self.go(env=dict(self.env, **{key: str(self.home / "other")}))[0], 2)
+        self.assertEqual(self.calls(), [])
+
+    def test_wrong_mode_state_directory_is_loud_and_never_runs_engine(self):
+        self.state.mkdir(parents=True, mode=0o755)
+        self.state.chmod(0o755)
+        self.assertEqual(self.go()[0], 2)
+        self.assertIn("private", self.err)
+        self.assertEqual(self.calls(), [])
+
+    def test_daily_summary_counts_json_valid_malformed_plans_as_unreadable(self):
+        self.go()
+        latest = pathlib.Path(json.loads((self.out / "last-run.json").read_text())["plan"])
+        for broken in [{"wouldApply": [None]}, {"wouldClose": [{}]}, {"propose": 42},
+                       {"refuse": ["bad"]}, {"t1iComparison": {"pairs": "bad", "disagreements": 1}}]:
+            with self.subTest(broken=broken):
+                latest.write_text(json.dumps(dict(plan_with(), **broken)))
+                daily = RUN.summarize(self.out, RUN.now_utc().date().isoformat())
+                self.assertEqual((daily["plansRead"], daily["plansUnreadable"]), (0, 1))
 
 
 if __name__ == "__main__":

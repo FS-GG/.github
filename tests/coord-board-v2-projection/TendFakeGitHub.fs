@@ -3,6 +3,7 @@ module FS.GG.Coord.GitHub.Tests.TendFakeGitHub
 
 open System
 open System.Text.Json.Nodes
+open System.Text.RegularExpressions
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 
@@ -49,6 +50,14 @@ let fieldDefinitions =
 
 let fieldId (name: string) = "F_" + name.Replace(" ", "_")
 let optionId (field: string) (value: string) = "O_" + field.Replace(" ", "_") + "_" + value.Replace(" ", "_")
+
+/// GitHub ProjectV2FieldValue.singleSelectOptionId is String (not the Node scalar ID).
+/// Provider contract, independent of the renderer: https://docs.github.com/en/graphql/reference/projects#projectv2fieldvalue
+let validSingleSelectVariables (document: string) (variables: (string * Var) list) =
+    [ for m in Regex.Matches(document, @"singleSelectOptionId\s*:\s*\$(\w+)") -> m.Groups.[1].Value ]
+    |> List.forall (fun name ->
+        Regex.IsMatch(document, @"\$" + Regex.Escape name + @"\s*:\s*String!?(?=\s*[,\)])")
+        && (variables |> List.exists (function n, VString _ when n = name -> true | _ -> false)))
 
 type Call = { Kind: string; Subject: string; Document: string }
 
@@ -222,9 +231,16 @@ type Board(clock: FakeClock) =
       | _ ->
         let document, variables = match request.Body with Query(d, v) -> d, v | _ -> failwith "query expected"
         calls.Add { Kind = "mutation"; Subject = request.Subject; Document = document }
-        this.BeforeMutation request
-        if this.FailMutation then Error(Errors.Malformed(request.Subject, "network failure after send"))
+        if not (validSingleSelectVariables document variables) then
+            Ok { Status = 200; ETag = None; NextLink = None; Headers = Map.empty
+                 Body = "{\"errors\":[{\"message\":\"Variable type mismatch: singleSelectOptionId requires String\"}]}" }
         else
+            this.BeforeMutation request
+            if this.FailMutation then Error(Errors.Malformed(request.Subject, "network failure after send"))
+            else
+              this.MutateValidated(request, document, variables)
+
+    member private this.MutateValidated(request: Request, document: string, variables: (string * Var) list) =
             let data = JsonObject()
             if document.Contains "updateProjectV2ItemFieldValue" then
                 let item = items.[this.Text(variables, "item")]

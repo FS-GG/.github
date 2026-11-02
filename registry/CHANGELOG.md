@@ -1,5 +1,58 @@
 # Registry changelog
 
+## 2026-11-02 — reconcile coherent 0.114.4 after canonical promotion (FS-GG/.github#5253)
+
+The canonical [coherent-set/v0.114.4 release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.114.4)
+is promoted from immutable source `c914942cd0094179e07f12f0a2971f7daf059ff4`.
+Original candidate `41491677490` / artifact `13166040055` / archive SHA256
+`60ec3509a31829b1640533ff667841c28f5986c4ab3d1ec73a63c1d97ff217e7`
+binds content ID
+`sha256:a20c568e191ec82ee430f3c9145b4466fa32ee17cd3b582176754cb441fb8e1e`.
+[Ordinary forward 41504251592, attempt 1](https://github.com/FS-GG/.github/actions/runs/41504251592)
+completed all 16 effects at journal generation 33; release `431788123` became
+public at `2026-11-02T19:02:22Z`. Both feeds have verified receipts for CLI,
+Kit and Drivers. All three public normalized payloads match the original
+candidate; the three release package assets and two qualification assets are
+byte-identical to it. The final manifest descriptor and content ID are unchanged.
+
+Final manifest SHA256:
+`09d4d5046c04bb443297850ee5adf24c24f4719a572ace2cc104fe7d76968266`.
+Stable-channel SHA256:
+`b3e2827fcb4e7075afe539e7b9114b9acb50a1d89aae875bee13dcbbbb435378`.
+Final Authority physical head `45687a12a8c0aac3026ef04cf7cf4635ad259d32`,
+logical head `229d657b782765145ad7a44118244b8bbba40bb0`, state SHA256
+`c230e176432a60b303af035742d8cebe3c5f832373329504c6bd2f8725d80d28`.
+The original draft-observation failure `41495265202`, visibility checkpoint
+`41497634725` and guarded CAS refusal `41501443662` remain retained. The same
+candidate and journal advanced through separately admitted ordinary forwards;
+pre-existing intents settled by readback without resending them.
+
+Align the `coord-engine` registry `version`, `package-version` and `package-tag`
+and the source-distributed `FS.GG.Coord.Cli` tool pin with the actual promoted
+coherent set. Regenerate the maintained projections and payload manifests. This
+is post-publication source bookkeeping; it changes no published archive or tag
+and does not rebuild 0.114.4. Existing shared Core/dependency upgrades and the
+reconciler repair remain unchanged. Installed adoption and receiver acceptance
+remain separate; release completion also requires this PR merged and `feed`
+green on the resulting main.
+
+## 2026-11-02 — prepare shared FSharp.Core 10.1.403 source (FS-GG/.github#5253)
+
+The producer root and canonical `dist/dotnet/Directory.Packages.props` select listed
+stable FSharp.Core 10.1.403. The CPM-disabled projection test aligns atomically, and
+54 active dependency locks are regenerated from the public feed. The existing SDK
+library-packs exclusion remains in force. This narrowly supersedes SDK-PATCH-01 Q3
+for ordinary active dependencies under #5251; frozen profiles, SDK guards and
+historical evidence remain unchanged.
+
+`shared-build-config` remains contract 1.1.0: the surface and materialization rules
+are unchanged. The changed payload joins the existing **unpublished 0.114.4 source
+cut** with the owner self-check and LEARN records. CLI release notes identify the
+Core rebuild and unchanged command/exit-code contracts. Published registry package
+fields and consumer tool pins stay at their accepted versions until canonical
+publication and both-feed readback; no receiver adoption is claimed here.
+
+
 ## 2026-11-02 — register FS.GG.Algorithms and its published 0.1.0 (FS-GG/.github#5224, FS-GG/.github#5222)
 
 Add the `algorithms` repo row and the `algorithms` contract at `version` and `package-version` **0.1.0**,

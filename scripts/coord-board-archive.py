@@ -32,8 +32,9 @@ THE GUARDS, ALL FAIL-CLOSED
    read completely or the run refuses. This is the "never a live row's blocker" guard the reconciler design keeps.
 2. Newest 200 kept. Candidates are ranked by `closedAt` descending, with ties broken by repository, number and
    item id, so the selection never depends on connection order. The first `--keep` stay; only the rest are
-   planned. The reconciler (tend) must use exactly this ranking (closedAt, then repository, number and item
-   id); a shared test pins the two together when tend lands (#5136).
+   considered for archiving. Protected cards count in this ranking; older protected cards also stay visible,
+   without shifting the newest-200 cutoff. The reconciler (tend) must use exactly this ranking (closedAt, then
+   repository, number and item id); a shared test pins the two together when tend lands (#5136).
 3. Complete read or nothing. The scan reads `items(query: "status:Done")` in pages of 100, at most 5 pages, the
    500-item board limit. A partial page set, a count mismatch, a GraphQL error or an over-limit board refuses
    without archiving anything.
@@ -85,6 +86,7 @@ MAX_PAGES = 5
 BOARD_LIMIT = PAGE * MAX_PAGES
 TERMINAL = ("CLOSED", "MERGED")
 CUSTODY_SCHEMA = "fsgg.board-done-retention-custody/1"
+LIVE_BLOCKER_REASON = "a live card is still blocked by it: stays visible"
 
 SCAN = """
 query($owner:String!,$number:Int!,$cursor:String){
@@ -282,10 +284,11 @@ def live_blockers(owner: str, number: int) -> tuple[set[str], int]:
 
 
 def plan(rows: list[dict], keep: int = KEEP, protected: set[str] | None = None) -> tuple[list[dict], list[dict], list[tuple[dict, str]]]:
-    """Split Done rows into (archive, kept, not-rankable-with-reason). Pure, so every guard is testable.
+    """Split Done rows into (archive, newest-kept, excluded-with-reason). Pure, so every guard is testable.
 
     Ranked: Done, issue or PR, terminal state, parseable `closedAt`, not already archived. Newest first by
     `closedAt`, ties broken by (repo, number, itemId) so connection order never decides. The first `keep` stay.
+    Only then exclude live blockers from the older candidates; protection never shifts the retention cutoff.
     """
     if keep < 0:
         raise ValueError("keep must not be negative")
@@ -307,13 +310,17 @@ def plan(rows: list[dict], keep: int = KEEP, protected: set[str] | None = None) 
             unranked.append((row, "closedAt is unreadable: never archived"))
         elif not isinstance(row.get("number"), int) or not row.get("repo"):
             unranked.append((row, "unreadable repository or number: never archived"))
-        elif protected and row["contentId"] in protected:
-            unranked.append((row, "a live card is still blocked by it: stays visible"))
         else:
             ranked.append((closed, str(row["repo"]), int(row["number"]), str(row["itemId"]), row))
     ranked.sort(key=lambda entry: (-entry[0].timestamp(), entry[1], entry[2], entry[3]))
     kept = [entry[4] for entry in ranked[:keep]]
-    archive = [entry[4] for entry in ranked[keep:]]
+    archive = []
+    for entry in ranked[keep:]:
+        row = entry[4]
+        if protected and row["contentId"] in protected:
+            unranked.append((row, LIVE_BLOCKER_REASON))
+        else:
+            archive.append(row)
     return archive, kept, unranked
 
 
@@ -535,8 +542,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     archive, kept, unranked = plan(rows, args.keep, protected)
+    ranked_count = len(archive) + len(kept) + sum(why == LIVE_BLOCKER_REASON for _, why in unranked)
     print(f"board: {project.get('totalCount')} item(s) (limit {BOARD_LIMIT}); Done: {len(rows)}; "
-          f"ranked {len(archive) + len(kept)}, keep newest {len(kept)}, plan to archive {len(archive)}")
+          f"ranked {ranked_count}, keep newest {len(kept)}, plan to archive {len(archive)}")
     for row, why in unranked:
         print(f"  KEEP {'<card>' if args.counts_only else ref_of(row)}: {why}")
     if enrolled is None:

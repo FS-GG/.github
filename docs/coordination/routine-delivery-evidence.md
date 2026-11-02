@@ -136,6 +136,60 @@ the flag grants no identity replacement or fresh PR creation.
 This is source support for an explicitly selected adoption. It does not establish
 native adoption, exact-head review/check qualification or Delivery acceptance.
 
+## Recover exactly two known legacy reservations
+
+`pr-lane-admission.py --repo OWNER/REPO --adopt-known-roster roster.json --inspect`
+checks an explicitly assigned pair of existing routine PRs. Remove `--inspect` only
+for the admitted metadata operation. This separate route handles the case where each
+single-PR adoption refuses the other unknown reservation; ordinary adoption, creation
+and the selected SC2 exception retain their existing policy.
+
+The UTF-8 JSON input has exactly `schema` (`fsgg.known-legacy-pr-roster/1`), `repo`,
+`base` (`main`), `baseSha` (exact40hex), and `pulls` (exactly two entries, increasing
+native PR number). Each entry has exactly:
+
+| Field | Bound value |
+| --- | --- |
+| `number`, `id`, `nodeId` | Positive native PR number and ID, exact native node ID |
+| `branch`, `headSha` | Existing routine branch and exact40hex pushed head |
+| `baseSha` | Exact observed PR base pointer, which may precede current main |
+| `campaign`, `chain` | Explicit admission identities; both chains must be distinct |
+| `bodySha256`, `titleSha256` | SHA256 of the exact native UTF-8 strings |
+| `declareContinues` | Boolean; explicitly initialize the continues declaration when true |
+
+Unknown keys, duplicate JSON keys, duplicate native identities/chains, missing or extra
+native PRs, different base/head/preimages, existing or damaged lane markers, and invalid
+routine operations refuse. Both native PR detail responses must agree with the complete
+paginated population. The normal capacity and chain policy is checked over the proposed
+assigned pair. The generated bodies preserve all existing prose, routine fields and
+unrelated machine markers. Only the lane identity and explicitly requested continues
+marker are added; titles and source heads are never changed.
+
+The top-level `baseSha` binds current main independently of each PR's observed base
+pointer. A legacy PR may expose an older native base pointer; adoption preserves and
+guards that pointer rather than rewriting source or claiming it is up to date.
+
+The shared repository lock covers the sequence. Each step refreshes the full roster,
+base and branch refs and compares the complete deciding metadata preimage, including
+any first confirmed update. Durable private custody is fsynced before each possible
+PATCH, and independent exact metadata readback precedes the next step. GitHub provides
+no compare-and-swap for PR text; adjacent readback guards do not claim server atomicity.
+Stop on the first failure or uncertainty, retaining every confirmed/possible step.
+
+Custody lives beneath `$XDG_STATE_HOME/fs-gg/pr-lane-known-roster` (default
+`~/.local/state/fs-gg/pr-lane-known-roster`), keyed by repository and the native pair IDs.
+Re-entry is read-only and refuses to resend, including after a changed input file,
+partial confirmation or lost acknowledgement. It reports current head/body digests for
+independent reconciliation. Never delete or relocate custody to replay an uncertain
+operation; a remaining effect needs an explicit recovered disposition. Source support
+and offline controls do not establish actual native adoption.
+
+For one existing PR update, `--declare-delivery-continues` is the explicit initial
+metadata operation. It may add the exact continues marker when no declaration exists,
+or preserve an already identical one; conflicting, unknown or duplicate declarations
+refuse. Without that flag, caller injection of a new machine marker still refuses.
+Every unrelated machine marker, routine operation and existing lane identity is retained.
+
 ## SC2 private-receiver first installation
 
 The [canonical first-install source predicate](../../tools/routine-delivery.py) can inspect a candidate

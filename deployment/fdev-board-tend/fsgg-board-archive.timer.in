@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily FS-GG Project3 guarded Done retention
+
+[Timer]
+OnCalendar=*-*-* 04:43:00 UTC
+Persistent=true
+Unit=fsgg-board-archive.service
+
+[Install]
+WantedBy=timers.target
