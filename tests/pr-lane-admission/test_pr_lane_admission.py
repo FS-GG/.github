@@ -115,6 +115,25 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
         state["open_pages"] = [[copy.deepcopy(state["pull"])]]
         return state
 
+    def test_initial_delivery_continues_requires_explicit_operation_and_preserves_other_metadata(self):
+        declaration = "<!-- fsgg:delivery-continues/v1 -->"
+        state = self.update_state()
+        proposed = "Reviewed prose\n" + declaration
+        completed, _, calls = self.update(state, proposed)
+        self.assertEqual(3, completed.returncode)
+        self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+        completed, result, calls = self.update(state, proposed, extra=("--declare-delivery-continues",))
+        self.assertEqual(0, completed.returncode, result)
+        payload = json.loads(next(call["stdin"] for call in calls if call["arguments"][2] == "PATCH"))
+        self.assertEqual(1, payload["body"].count(declaration))
+        self.assertIn("campaign=campaign-7 chain=chain-3", payload["body"])
+        self.assertIn("operation=source-change extra=value", payload["body"])
+        for existing in ("<!-- fsgg:delivery-completes/v1 -->", "<!-- fsgg:delivery-continues/v2 -->"):
+            conflicting = self.update_state(); conflicting["pull"]["body"] += existing
+            completed, _, calls = self.update(conflicting, extra=("--declare-delivery-continues",))
+            self.assertEqual(3, completed.returncode)
+            self.assertFalse(any(call["arguments"][2] == "PATCH" for call in calls))
+
     def test_legacy_adoption_is_explicit_preserves_metadata_and_uses_independent_readback(self):
         state = self.legacy_state()
         completed, result, calls = self.update(state)
