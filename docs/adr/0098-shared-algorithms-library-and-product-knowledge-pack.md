@@ -13,6 +13,9 @@
 - **Decision owner:** Root/fdev. The merge of this record's PR is its acceptance.
 - **Outcome / Delivery:** [.github#5222](https://github.com/FS-GG/.github/issues/5222) (ALGO-01) /
   [.github#5223](https://github.com/FS-GG/.github/issues/5223) (ALGO-01.1)
+- **Amended:** 2026-11-02 — §3 rules 8–10 (Fable numerics, including `bigint`) and §11 tranche 2
+  (planning and operations research), under [.github#5245](https://github.com/FS-GG/.github/issues/5245)
+  (ALGO-01.5).
 - **Inputs:** three analyst inventories on #5223
   ([coordination and formal](https://github.com/FS-GG/.github/issues/5223#issuecomment-6564262819),
   [games and netcode](https://github.com/FS-GG/.github/issues/5223#issuecomment-6564266523),
@@ -222,6 +225,43 @@ They start at `0.x`. The licence is MIT, matching FS.GG.Game.
    - Non-tail recursion whose depth grows with the input is refused outright.
    - Tail recursion is accepted only if that test passes, because Fable does not guarantee to turn
      every tail call into a loop.
+8. **int32 overflow is avoided by construction.** .NET wraps an overflowing `int` product. Fable
+   emits a plain JavaScript multiply, which returns an out-of-range double that may also be inexact.
+   For example, `46341 * 46341` is −2147479015 on .NET and 2147488281 under Fable 5.18.0
+   ([probe](https://github.com/FS-GG/.github/issues/5245#issuecomment-6571775027)).
+   - Every entry states a bound for each product and sum it forms, for example cost × flow < 2³¹.
+   - The entry checks that bound as a precondition, and its property generators reach the bound.
+   - No surface relies on wraparound. F4's multiplies keep `Math.imul` semantics.
+9. **No transcendentals in decision-critical code.** `exp`, `log`, `pow` and trigonometry on `float`
+   are not guaranteed to match across .NET and JavaScript engines.
+   - Integer, F2 (LUT or CORDIC) or rational arithmetic computes every value that selects an
+     action, orders a frontier, prunes, or ends a search.
+   - A transcendental may appear only in a `Portable` output that decides nothing, such as an
+     estimate or a report.
+10. **`bigint` (`System.Numerics.BigInteger`) is admitted for exact rationals, within limits.**
+    - **Byte identity, measured.** Fable 5.18.0 compiles `bigint` to JavaScript's native BigInt. The
+      [probe](https://github.com/FS-GG/.github/issues/5245#issuecomment-6571775027) compared 294
+      results between .NET and Node, and all matched. It covered `+`, `−`, `×`, truncating `/` and
+      `%`, `GreatestCommonDivisor`, `Pow`, `Abs`, `Sign`, comparison, decimal `Parse` and
+      `ToString`, and `int` conversion, with mixed signs and magnitudes up to about 2²⁵⁵. Surfaces
+      that use only these operations may be graded `LockstepExact`, and each still needs its own
+      §4 fixture corpus.
+    - **Excluded:**
+      - `ModPow`, which Fable computes as `(x ** e) % m`;
+      - formatted or culture-aware `ToString` and `Parse`;
+      - `Log`;
+      - conversion to or from floating point, which is `Portable` at most;
+      - bitwise operations on negative values, which were not measured.
+    - **Performance bound.** In the probe, plain arithmetic ran 0.44 to 0.60 times as long under
+      Node as under .NET. Reducing by gcd after every step ran 6.7 to 10.7 times as long under
+      Node, because Fable's `GreatestCommonDivisor` is a JavaScript Euclid loop.
+      - Exact-rational kernels therefore use fraction-free (Bareiss) pivoting, and reduce by gcd
+        only for output or a certificate.
+      - Each entry that uses `bigint` declares a size bound and benches on both runtimes (§4).
+      - Its **Bench** section reports the JavaScript-to-.NET median ratio.
+    - **Placement.** `bigint` is allowed only in `Optimization` exact-rational kernels, certificate
+      checkers and test oracles. It is never used in layer 0, and never in a per-frame or
+      per-expansion loop. This rule does not admit `int64` (open question 8 stands).
 
 **Foundations (tranche 1, before anything that depends on them).**
 
@@ -771,6 +811,123 @@ FS.GG.Algorithms never depends on Game.Core. Game.Core's `Replay` is one consume
   - `systems/bm25-fts`.
 - **New, in the survey's next-in-line order:** D* Lite, ORCA, Delaunay and Voronoi, simplex LP,
   flows, WHCA*, GJK/EPA, CMA-ES, LRU. The survey's P2 and P3 rows follow after these.
+  *(2026-11-02: tranche 2 below places D\* Lite (OR13), simplex LP (OR19), flows (OR3, OR17) and
+  WHCA\* (OR12). CMA-ES becomes knowledge-only.)*
+
+**Tranche 2: planning and operations research** *(amended 2026-11-02,
+[.github#5245](https://github.com/FS-GG/.github/issues/5245))*
+
+The OR orchestration design
+([`docs/coordination/2026-08-31-operations-research-first-agent-orchestration-design.md`](../coordination/2026-08-31-operations-research-first-agent-orchestration-design.md))
+is **Proposed**. Its only implementation is the bounded greedy ordinary-assignment kernel in
+FS.GG.Coordination. Tranche 2 adds the generic techniques behind that design and the game planners
+together. Its sources are Root's internal OR inventory and external survey, both summarised on #5245.
+
+- **Ids.** `OR1`–`OR26` are new. They do not reuse an F, N or harvest number. The family is the
+  entry id's first segment.
+- **Ranking.** Rows are ranked by value across both audiences × feasibility ÷ size. Within a
+  dependency chain, the prerequisite ranks first.
+- **Status.** Every row is `new`, implemented from the paper (§5). A named repository is a permissive
+  reading reference, ported only with its notice.
+- **Consumer.** "Game" means `audience-game`, "agents" means agent scheduling (`audience-framework`),
+  and "both" means `audience-both`.
+- **Filing.** After this amendment merges, Root files one Delivery per row in rank order.
+
+| # | Entry id | Grade | Oracle and properties | Consumer | Reference (licence) |
+|---|---|---|---|---|---|
+| OR1 | `search.multiagent/pibt` | LockstepExact | Every step is collision-free (no vertex or swap conflict). On tiny instances, goals are reached within a bound checked by joint-state BFS on F3 | game | Okumura et al., [arXiv:1901.11282](https://arxiv.org/abs/1901.11282); `Kei18/pibt2` (MIT) |
+| OR2 | `search.multiagent/lacam` (LaCAM, LaCAM\*) | LockstepExact | Solution validator. Converged LaCAM\* cost equals the joint-state optimum on tiny instances. Built on OR1 | game | Okumura, AAAI 2023, [doi](https://doi.org/10.1609/aaai.v37i10.26377); IJCAI 2023, [doi](https://doi.org/10.24963/ijcai.2023/28); `Kei18/lacam3` (MIT) |
+| OR3 | `graph/min-cost-flow` (successive shortest paths with potentials; network simplex optional) | LockstepExact | No negative cycle in the residual graph (Bellman–Ford). Equals exhaustive search on tiny instances. Integral. OR-Tools is a .NET test oracle only (§5) | both | Edmonds and Karp 1972, [doi](https://doi.org/10.1145/321694.321699); Király and Kovács, [arXiv:1207.6381](https://arxiv.org/abs/1207.6381) |
+| OR4 | `optimization/rcpsp-sgs` (serial and parallel schedule generation, priority rules, justification) | LockstepExact | Precedence and resource profiles hold. For n ≤ 7, some priority list reaches the exhaustive optimum. Tie-break determinism. Built on N1 | both | Kolisch 1996, [doi](https://doi.org/10.1016/0377-2217(95)00357-6); Kolisch and Hartmann 2006, [doi](https://doi.org/10.1016/j.ejor.2005.01.065) |
+| OR5 | `optimization/list-scheduling-heft` (Graham list scheduling, HEFT, SPT/EDD/WSPT dispatch) | LockstepExact | Makespan ≥ max(critical path, work ÷ m), and ≤ (2 − 1/m)·OPT on identical machines (exhaustive OPT). WSPT is optimal for 1‖ΣwC and EDD for 1‖Lmax by brute force. ATC is excluded (rule 9) | both | Graham 1969, [doi](https://doi.org/10.1137/0117039); Topcuoglu et al. 2002, [doi](https://doi.org/10.1109/71.993206) |
+| OR6 | `search.grid/flow-field-tiles` (sector integration fields with a portal graph) | LockstepExact | The integration field equals multi-source Dijkstra (F3). On unit costs, following the field reaches the goal in exactly the integration value. Extends harvest 4, which stays Game.Core's | game | Emerson, *Game AI Pro* ch. 23, [pdf](http://www.gameaipro.com/GameAIPro/GameAIPro_Chapter23_Crowd_Pathfinding_and_Steering_Using_Flow_Field_Tiles.pdf) (summarised, never copied) |
+| OR7 | `optimization/alns` (adaptive large-neighbourhood search driver over destroy and repair) | LockstepExact | Never worse than the start. The same seed gives the same trajectory. Every accepted move passes OR4's feasibility checker. Shares N16's move interface | both | Ropke and Pisinger 2006, [doi](https://doi.org/10.1287/trsc.1050.0135); Shaw 1998, [doi](https://doi.org/10.1007/3-540-49481-2_30); `N-Wouda/ALNS` (MIT) |
+| OR8 | `decision/htn-total-order` (ordered decomposition, method traversal record, partial replanning, repair of a failed subtree) | LockstepExact | Every plan replays in a simulator and meets method preconditions in order. Equals brute-force decomposition on tiny domains | both | Nau et al. 2003, [doi](https://doi.org/10.1613/jair.1141); `ptrefall/fluid-hierarchical-task-network` (MIT) |
+| OR9 | `decision/iw-bfws-novelty` (IW(k), BFWS over feature atoms) | LockstepExact | IW(n) with n atoms equals BFS. IW(1) expands at most one novel state per atom. Deterministic under a fixed successor order | game | Lipovetzky and Geffner, ECAI 2012, [doi](https://doi.org/10.3233/978-1-61499-098-7-540); AAAI 2017, [doi](https://doi.org/10.1609/aaai.v31i1.11027); `LAPKT-dev/LAPKT-public` (MIT) |
+| OR10 | `decision/strips-core-relaxed-heuristics` (STRIPS/SAS+ core, plan validator, h^max, h^add, h^FF) | LockstepExact | h^max ≤ h\* (BFS) on random instances of at most 12 facts; h = 0 at goals; every plan passes the independent validator. Shared by N21, OR8 and OR9 | both | Bonet and Geffner 2001, [doi](https://doi.org/10.1016/S0004-3702(01)00108-4); Hoffmann and Nebel 2001, [doi](https://doi.org/10.1613/jair.855); LAPKT (MIT) |
+| OR11 | `search.multiagent/cbs` (ECBS as a bounded-suboptimal option) | LockstepExact | Equals the joint-state A\* optimum for 2–3 agents on grids up to 5×5. Conflict-free. ECBS ≤ w × CBS. Becomes the oracle for OR1 and OR2 | game | Sharon et al. 2015, [doi](https://doi.org/10.1016/j.artint.2014.11.006); Barer et al., SoCS 2014, [doi](https://doi.org/10.1609/socs.v5i1.18315) |
+| OR12 | `search.multiagent/sipp-prioritized` (SIPP, prioritized planning, WHCA\* windowing) | LockstepExact | SIPP cost equals time-expanded A\* on random dynamic-obstacle grids. The prioritized result is conflict-free | both | Phillips and Likhachev 2011, [doi](https://doi.org/10.1109/ICRA.2011.5980306); Silver 2005, [doi](https://doi.org/10.1609/aiide.v1i1.18726) |
+| OR13 | `search.grid/d-star-lite` (LPA\* and D\* Lite on F1's indexed heap) | LockstepExact | After any random sequence of edge updates, the start's g-value equals a fresh Dijkstra (F3) | game | Koenig, Likhachev and Furcy 2004, [doi](https://doi.org/10.1016/j.artint.2003.12.001); Koenig and Likhachev, AAAI 2002, [pdf](https://aaai.org/Papers/AAAI/2002/AAAI02-072.pdf) |
+| OR14 | `systems/queueing` (Little's law, Erlang C by recurrence, Kingman) | Portable | A seeded discrete-event simulator on F1 and F4, in the test project, agrees within a declared tolerance. Little's law holds exactly on simulated paths | both | Little 1961, [doi](https://doi.org/10.1287/opre.9.3.383); Kingman 1961, [doi](https://doi.org/10.1017/S0305004100036094) |
+| OR15 | `decision/sequential-value-of-information` (Pandora's box, Gittins index, backward-induction stopping, EVPI) | Portable | Brute-force DP over open and stop policies for up to 4 boxes. EVPI ≥ 0, and it is 0 for an uninformative signal. Gittins equals a short-horizon two-arm DP | both | Weitzman 1979, [doi](https://doi.org/10.2307/1910412); Gittins 1979, [doi](https://doi.org/10.1111/j.2517-6161.1979.tb01068.x); Katehakis and Veinott 1987, [doi](https://doi.org/10.1287/moor.12.2.262); Ferguson, [*Optimal Stopping and Applications*](https://www.math.ucla.edu/~tom/Stopping/Contents.html) |
+| OR16 | `optimization/robust-schedule-evaluation` (Γ-budgeted makespan, Monte Carlo evaluation on F4, rolling-horizon driver with a frozen zone) | LockstepExact | The Γ-robust DP equals brute force over deviation subsets. Frozen-zone decisions never change. A zero stability penalty equals a from-scratch solve | agents | Bertsimas and Sim 2004, [doi](https://doi.org/10.1287/opre.1030.0065); Herroelen and Leus 2005, [doi](https://doi.org/10.1016/j.ejor.2004.04.002); Sethi and Sorger 1991, [doi](https://doi.org/10.1007/BF02283607) |
+| OR17 | `graph/max-flow-min-cut` (Dinic; push-relabel optional) | LockstepExact | The flow value equals the capacity of the cut read from the residual graph. Dinic equals Edmonds–Karp | both | Edmonds and Karp 1972, [doi](https://doi.org/10.1145/321694.321699); Goldberg and Tarjan 1988, [doi](https://doi.org/10.1145/48014.61051). Dinic's own paper is owed in the entry |
+| OR18 | `optimization/auction-assignment` (ε-scaling, warm start) | LockstepExact | With integer costs scaled by n + 1, equals N17's optimum | both | Bertsekas 1988, [doi](https://doi.org/10.1007/BF02186476) |
+| OR19 | `optimization/exact-rational-simplex` (dense bounded-variable dual simplex, Bland's rule, fraction-free pivots, certificate checker) | LockstepExact (rule 10) | The checker verifies primal and dual feasibility and complementary slackness exactly. Vertex enumeration for up to 4 variables. Weak duality on random LPs. Also validates out-of-process HiGHS or CP-SAT results | agents | Huangfu and Hall 2018, [doi](https://doi.org/10.1007/s12532-017-0130-5); Bareiss 1968, [doi](https://doi.org/10.1090/S0025-5718-1968-0226829-0); `ERGO-Code/HiGHS` (MIT), `scipopt/soplex` (Apache-2.0) |
+| OR20 | `optimization/bin-packing` (FFD and BFD; LPT for P‖Cmax) | LockstepExact | Exhaustive optimum for n ≤ 8. FFD ≤ 11/9·OPT + 6/9. LPT ≤ (4/3 − 1/(3m))·OPT | both | Dósa 2007, [doi](https://doi.org/10.1007/978-3-540-74450-4_1); Graham 1969, [doi](https://doi.org/10.1137/0117039) |
+| OR21 | `optimization/knapsack-dp` (0/1, bounded, multiple-choice) | LockstepExact | Brute force for n ≤ 15. DP equals branch and bound | both | Kellerer, Pferschy and Pisinger 2004, [doi](https://doi.org/10.1007/978-3-540-24777-7) |
+| OR22 | `optimization/greedy-set-cover` | LockstepExact | The result covers the universe and is ≤ H(n)·OPT against brute force for up to 15 sets. Ratios compare by cross-multiplication | both | Chvátal 1979, [doi](https://doi.org/10.1287/moor.4.3.233) |
+| OR23 | `optimization/pareto-lexicographic` (nondominated filter, lexicographic combinator, ε-constraint) | LockstepExact | Equals O(n²) brute-force dominance. Output is order-independent under a total tie-break | both | Kung, Luccio and Preparata 1975, [doi](https://doi.org/10.1145/321906.321910); Ehrgott 2005, [doi](https://doi.org/10.1007/3-540-27659-9) |
+| OR24 | `adversarial/pomcp` (an N6 variant with particle beliefs) | Portable | On the Tiger problem, the value matches exact belief-space value iteration. The same seed gives the same tree | game | Silver and Veness, NeurIPS 2010, [paper](https://papers.nips.cc/paper/4031-monte-carlo-planning-in-large-pomdps); `h2r/pomdp-py` (MIT), `JuliaPOMDP/BasicPOMCP.jl` (MIT) |
+| OR25 | `decision/mdp-value-iteration` (value and policy iteration, labelled RTDP) | Portable | Bellman residual ≤ ε. Equals exhaustive policy enumeration on tiny MDPs. RTDP values equal value iteration within ε | both | Puterman 1994, [doi](https://doi.org/10.1002/9780470316887); Barto, Bradtke and Singh 1995, [doi](https://doi.org/10.1016/0004-3702(94)00011-O). LRTDP's own paper is owed in the entry |
+| OR26 | `graph/stn-difference-constraints` (simple temporal networks) | LockstepExact | Consistent exactly when Bellman–Ford finds no negative cycle; cross-checked by Floyd–Warshall | both | Dechter, Meiri and Pearl 1991, [doi](https://doi.org/10.1016/0004-3702(91)90006-6) |
+
+**Tranche 2 improvements to existing ids.** Each improvement supersedes its entry when it lands. It
+takes no new id.
+
+| Id | Improvement | Owner | Reference |
+|---|---|---|---|
+| F1 | Bucket (Dial) and radix heaps for small non-negative `int` costs, as further `Collections` surfaces. The F1 ordering contract is unchanged | Algorithms | Dial 1969, [doi](https://doi.org/10.1145/363269.363610); Ahuja et al. 1990, [doi](https://doi.org/10.1145/77600.77615) |
+| 3 | JPS+ precomputed jump distances for static uniform-cost grids | Game (§1) | Harabor and Grastien, AAAI 2011, [paper](https://ojs.aaai.org/index.php/AAAI/article/view/7994); Rabin, *Game AI Pro 2* ch. 14, [pdf](http://www.gameaipro.com/GameAIPro2/GameAIPro2_Chapter14_JPS_Plus_An_Extreme_A_Star_Speed_Optimization_for_Static_Uniform_Cost_Grids.pdf) |
+| 5 | ALT as a caller-supplied F3 heuristic on general graphs, with bidirectional termination. Game.Core's grid ALT stays under §1 | Algorithms | Owed in the entry |
+| N1 | Monte Carlo PERT completion-time distributions on F4 | Algorithms | Van Slyke 1963, [doi](https://doi.org/10.1287/opre.11.5.839) |
+| N6 | PUCT with priors, progressive widening, and a Gumbel root with sequential halving. The Gumbel noise comes from a table (rule 9) | Algorithms | Silver et al. 2018, [doi](https://doi.org/10.1126/science.aar6404); Danihelka et al., [ICLR 2022](https://iclr.cc/virtual/2022/poster/6418); Karnin, Koren and Somekh, [ICML 2013](https://proceedings.mlr.press/v28/karnin13.html); `google-deepmind/mctx` (Apache-2.0) |
+| N15 | Conflict-directed backjumping and dom/wdeg weighting | Algorithms | Prosser 1993, [doi](https://doi.org/10.1111/j.1467-8640.1993.tb00310.x); dom/wdeg owed |
+| N16 | Late-acceptance hill climbing | Algorithms | Burke and Bykov 2017, [doi](https://doi.org/10.1016/j.ejor.2016.07.012) |
+| N17 | Jonker–Volgenant (LAPJV) for speed and rectangular matrices. Hungarian stays its oracle | Algorithms | Jonker and Volgenant 1987, [doi](https://doi.org/10.1007/BF02278710); `gatagat/lap` (BSD-2-Clause) |
+| N21 | Regression search with OR10's h^add, plus plan caching and repair | Algorithms | Bonet and Geffner 2001 (OR10); Orkin, GDC 2006, [pdf](https://www.gamedevs.org/uploads/three-states-plan-ai-of-fear.pdf) |
+
+**Tranche 2 knowledge-only entries** (`entry-only`, for the pack in
+[.github#5225](https://github.com/FS-GG/.github/issues/5225)):
+
+| Entry id | Kind | Content |
+|---|---|---|
+| `optimization/cp-sat-out-of-process` | decision | Call OR-Tools CP-SAT (Apache-2.0) out of process for scheduling models beyond library scale. Reproduce runs with a pinned binary, `num_workers = 1`, a fixed `random_seed` and `max_deterministic_time` rather than wall time. A timed-out incumbent is not optimal. Check every result in-library (OR4, OR19). Evidence: [MiniZinc Challenge 2025](https://www.minizinc.org/challenge/2025/results) |
+| `optimization/highs-out-of-process` | decision | Call HiGHS (MIT) out of process for LP and MILP, single-threaded with a fixed seed, and verify each result with OR19's certificate checker |
+| `decision/htn-in-shipped-games` | lesson | Killzone and Horizon patterns: expected effects in the world state, the method traversal record, squad tasks as compound tasks, and utility choosing the goal. *Game AI Pro* [ch. 12](http://www.gameaipro.com/GameAIPro/GameAIPro_Chapter12_Exploring_HTN_Planners_through_Example.pdf) and [ch. 29](https://www.gameaipro.com/GameAIPro/GameAIPro_Chapter29_Hierarchical_AI_for_Multiplayer_Bots_in_Killzone_3.pdf) |
+| `decision/llm-modulo` | decision | LLM workers propose plans, and sound validators (OR10, OR26, OR19, schedule checkers) dispose. [arXiv:2402.01817](https://arxiv.org/abs/2402.01817) |
+| `optimization/rolling-horizon-stability` | lesson | Frozen zones, warm starts, minimal-perturbation objectives, and tuning the horizon and step. Sethi and Sorger 1991 (OR16) |
+| `decision/determinization` | lesson | Plan on a deterministic model, replan on deviation, or solve sampled scenarios and aggregate. The baseline before an MDP. References owed |
+| `decision/classical-planning-landscape` | lesson | IPC 2023 results and the Fast Downward family, as ideas only. Helmert 2006, [doi](https://doi.org/10.1613/jair.1705); [IPC 2023](https://ipc2023-classical.github.io/) |
+| `search.multiagent/mapf-licence-map` | lesson | Which MAPF code is permissive and which is non-commercial (licence map below) |
+| `systems/factory-physics-for-agent-fleets` | lesson | Variability × utilisation × time, CONWIP, and why lead time explodes as utilisation nears 1. Sets WIP-limit policy. Little 1961 and Kingman 1961 (OR14) |
+| `learning/offline-tuning-tools` | decision | CMA-ES through `CMA-ES/pycma` (BSD-3-Clause) and routing through `PyVRP/PyVRP` or `vidalt/HGS-CVRP` (MIT), run out of process. Results land as constants or fixtures. [arXiv:1604.00772](https://arxiv.org/abs/1604.00772), [arXiv:2012.10384](https://arxiv.org/abs/2012.10384) |
+| `optimization/constraints-before-objectives` | decision | Hard constraints are not penalties. Choose lexicographic or weighted objectives explicitly (OR23) |
+| `optimization/certificate-checking` | lesson | Verify solver output with a checker that shares no solver code, and mutate constraints to test the checker |
+| `optimization/robust-optimization` | lesson | When to robustify, and the price of robustness. Bertsimas and Sim 2004 (OR16) |
+| `systems/wip-limits-admission` | lesson | Cap work in progress at the bottleneck, reserve recovery capacity, and hold when an input is unknown |
+| `systems/batch-and-bisect` | lesson | Optimistic batching with adaptive failure isolation by splitting |
+| `optimization/generalized-assignment` | lesson | GAP is NP-hard: use greedy plus a verifier, or CP-SAT out of process. OR18 covers the one-to-one case |
+| `numerics/censored-durations` | lesson | Never rewrite a cancellation or timeout as a success when estimating durations |
+
+**Tranche 2 licence map** (licences read from each repository on 2026-11-02):
+
+| Reference | Licence | Treatment |
+|---|---|---|
+| Fast Downward (`aibasel/downward`), Scorpion (`jendrikseipp/scorpion`), BFWS (`nirlipo/BFWS-public`) | GPL-3.0 | Ideas only. Never ported or read for porting |
+| SHOP3 (`shop-planner/shop3`) | MPL-1.1, GPL-2.0 and LGPL-2.1 files | Ideas only |
+| DESPOT (`AdaCompNUS/despot`) | GPL-3.0 for non-commercial use; commercial use needs a separate licence | Ideas only |
+| USC MAPF code (`Jiaoyang-Li/CBSH2-RTC`, `EECBS`, `MAPF-LNS`, `MAPF-LNS2`) | Educational, research and non-profit use only | Ideas only |
+| LKH (Helsgaun) | Not verified: the licence page was unreachable on 2026-11-02 | Ideas only until verified |
+| Recoil (`beyond-all-reason/RecoilEngine`) and BARb (CircuitAI lineage, `rlcevg/CircuitAI`) | GPL-2.0 | Ideas only. §5 already excludes RecoilEngine and HighBarV3 |
+| `Kei18/pibt2`, `Kei18/lacam3`, `LAPKT-dev/LAPKT-public`, `ptrefall/fluid-hierarchical-task-network`, `N-Wouda/ALNS`, `h2r/pomdp-py`, `JuliaPOMDP/BasicPOMCP.jl`, `ERGO-Code/HiGHS`, `PyVRP/PyVRP`, `vidalt/HGS-CVRP` | MIT | Permissive reading references (§5) |
+| `scipopt/soplex`, `google-deepmind/mctx` | Apache-2.0 | Permissive reading references (§5) |
+| `google/or-tools` | Apache-2.0 | .NET test oracle or out-of-process tool only (§5) |
+| `gatagat/lap` | BSD-2-Clause | Permissive reading reference (§5) |
+| `CMA-ES/pycma` | BSD-3-Clause | Out-of-process tool (§5 already lists it) |
+
+**Tranche 2 framework records.** The coordination-specific OR models stay framework Atlas records,
+tagged `algorithm`, never pack entries (§10):
+
+- `coordination/ordinary-assignment-kernel`
+- `github/conflict-free-batch-admission`
+- `coordination/recovery-reserve-and-pilot-budget`
+- `github/host-capacity-admission`
+- `github/lane-cut-analysis`
+- `platform/ci-obligation-closure-and-gate-selection`
+- `github/qualification-cadence-economics`
+- `platform/or-orchestration-planner-stack` (records the design as Proposed)
+- `github/learn-01-randomized-assignment`
 
 ## Consequences
 
