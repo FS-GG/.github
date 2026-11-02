@@ -197,6 +197,8 @@ module V2TendWrite =
     /// item as well as its issue, so an uncertain close blocks every later write to that item), and one outcome
     /// per record.
     val sweepOwn: context: Context -> Set<string> * Outcome list
+    val internal sweepOwnUsing:
+        isIncident: (string -> bool) -> isSettled: (string -> string -> bool) -> context: Context -> Set<string> * Outcome list
 
     /// The merge gate's custody pass (GR), under the writer lock: a read-only sweep of `possible-send` records,
     /// then, when `replay`, supersession per Delivery by `mergedAt` and one guarded send for each Delivery's

@@ -194,6 +194,49 @@ unresolved send, incomplete plan or unreadable custody can become success throug
 safeguard refusals are retained and investigated; hold the affected rule or activation when its safety is Unknown.
 This source change performs no installation, timer activation or board write.
 
+## The 2026-11-02 option-scalar incident (#5206)
+
+The first apply with the published0.114.3 engine returned three `send-unconfirmed` field outcomes. The original
+provider bodies were not retained and remain Unknown. An offline reconstruction using the authenticated installed
+assemblies reproduced all three complete requests; their `singleSelectOptionId` variables were declared `ID!`,
+while the live read-only GitHub input schema reports `String`. Independent native readback found the original
+Status preimages unchanged. The repaired renderer uses `String!`/`VString`. Selected field sends now retain
+private response status, request/body hashes, a bounded64KiB body prefix and bounded allowlisted headers before
+echo classification. Retention failure leaves the send uncertain. This does not change GR, C1 or O1.
+
+Keep **the installed service in plan-only mode** until the corrected engine is qualified; stopping only its timer
+cannot prevent a post-merge trigger from starting it. Preserve the original possible-send records. An unchanged
+Status alone does not prove no effect, and no operator may delete or rewrite custody merely to unblock a retry.
+
+The incident-specific `V2TendFieldRecovery.admit` API and checked `tools/tend-field-validation-settle.py` controller
+provide a separate local no-effect settlement. This is restricted by source-pinned hashes to the three original
+records, incident run, authenticated old runtime and independently reconstructed canonical requests. No private
+card identities, paths, body contents or credentials are embedded in the source allowlist. Production admission
+takes the actual Project3 writer lock, refreshes native schema and item/project/content/ref/field/preimage evidence,
+reconstructs the entire known-invalid request and requires byte equality with the authenticated installed-renderer
+proof. Arbitrary request JSON, a supplied readback or a Root string cannot admit another original.
+
+The controller previews by default: exact qualified runtime/SDK hashes and private input modes are checked, with
+no child process, provider read or certificate. Root supplies the reviewed qualified engine runtime directory,
+original runtime directory, original custody and reconstructed-request artifacts, exact hashes, existing private
+credentials, a fresh private output directory and the native #5206 admission-comment URL. Only explicit `--admit`
+launches the typed read-only admission. Run it under the admitted one-CPU/2GiB bound. Its child is capped120seconds;
+stdout/stderr/config stay0700/0600 private, and no mutation transport is ever invoked.
+
+Success appends0600 evidence and a final certificate with O_EXCL and file/directory fsync beneath the private
+custody root's `no-effect-settlements/<original-sha256>/`. The bundle joins exact original/request/runtime/schema/
+fresh-readback hashes and Root's admission reference. A conflict, partial write, stale artifact or missing proof
+keeps the original fenced. The original file is never replaced, renamed or marked target-verified. A valid
+certificate is terminal for that original: subsequent `sweepOwn` neither re-reads nor rewrites it, including after
+a later valid write changes the preimage. Missing/tampered evidence instead fences without rewriting the incident
+original, even if its former target is now observed.
+
+After settlement a corrected, separately admitted engine run derives a fresh plan and uses new run/request/custody
+identities, adjacent reads, one send, retained response and native readback. It never resubmits the invalid original.
+The normal coherent successor release and qualified published-engine adoption remain prerequisites; the checked
+controller does not install an unpublished hotfix or replace published0.114.3 bytes. Root owns settlement and
+activation/readback, separately from source integration. A local certificate establishes no native Status change.
+
 ## Related user units
 
 `fsgg-tmp-cleanup.{service,timer}` (hourly dead-run `/tmp` cleanup, #5240) are templated here and installed by their own
