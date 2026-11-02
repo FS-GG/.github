@@ -7,9 +7,12 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WRAPPER = os.path.join(HERE, "..", "..", "deployment", "fdev-chromium", "fdev-chromium-env")
-# Linux sun_path is 108 bytes including the NUL; a harness socket nests under TMPDIR (fsgg-sdd-tests-<pid>-<32 hex>/x/y.sock).
+# Linux sun_path is 108 bytes including the NUL. The SDD test that failed under a long TMPDIR binds
+#   Path.Combine(GetTempPath(), "sdd-race-characterization-" + Guid.ToString("N"), "inputs", "socket")
+# (FS.GG.SDD tests/FS.GG.SDD.Commands.Tests/GenerationSourceRaceCharacterizationTests.fs). Model it exactly.
 SOCKET_BUDGET = 107
-HARNESS_SUFFIX = len("/fsgg-sdd-tests-1234567-" + "0" * 32 + "/run/host.sock")
+RACE_SOCKET_SUFFIX = "/sdd-race-characterization-" + "0" * 32 + "/inputs/socket"
+HARNESS_SUFFIX = len(RACE_SOCKET_SUFFIX)
 
 
 class Wrapper(unittest.TestCase):
@@ -73,6 +76,20 @@ class Wrapper(unittest.TestCase):
         budget = int(done.stdout.split("-")[-1])
         self.assertLessEqual(len(default), budget)
         self.assertLessEqual(budget + HARNESS_SUFFIX, SOCKET_BUDGET)
+
+    def test_the_modelled_race_socket_path_fits_for_the_default_and_not_for_a_long_tmpdir(self):
+        default = "/home/developer/.cache/fsgg-tmp"
+        self.assertEqual(len(default + RACE_SOCKET_SUFFIX), 104)
+        self.assertLessEqual(len(default + RACE_SOCKET_SUFFIX), SOCKET_BUDGET)
+        long_tmpdir = "/home/developer/.fsgg-scratch/788b/tmp5"  # a lane TMPDIR that is merely 'a bit longer'
+        self.assertGreater(len(long_tmpdir + RACE_SOCKET_SUFFIX), SOCKET_BUDGET)
+
+    def test_an_existing_looser_directory_is_tightened_to_0700(self):
+        path = os.path.join(self.home, ".cache", "fsgg-tmp")
+        os.makedirs(path)
+        os.chmod(path, 0o755)
+        self.assertEqual(self.printed(self.run_wrapper("--print-env"))["TMPDIR"], path)
+        self.assertEqual(stat.S_IMODE(os.lstat(path).st_mode), 0o700)
 
     def test_a_symlink_or_foreign_default_is_refused(self):
         os.makedirs(os.path.join(self.home, ".cache"))

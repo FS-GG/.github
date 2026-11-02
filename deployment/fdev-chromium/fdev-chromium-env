@@ -17,8 +17,11 @@
 # trees filled it and failed unrelated tests. When TMPDIR is unset or empty, the command runs with a short
 # DISK-backed one, $HOME/.cache/fsgg-tmp (mode 0700, created if absent). A TMPDIR you already set is never changed
 # (set TMPDIR=/tmp to opt out). FDEV_TMPDIR overrides the default path. The path must stay short: a Unix socket
-# path is at most 107 bytes and harness trees nest under TMPDIR (fsgg-sdd-tests-<pid>-<32 hex>/...), so a path
+# path is at most 107 bytes and harness sockets nest under TMPDIR (the SDD race test binds
+# $TMPDIR/sdd-race-characterization-<32 hex>/inputs/socket, TMPDIR plus 73 bytes), so a path
 # longer than FDEV_TMPDIR_MAX (default 32) is refused with a warning and TMPDIR is left unset.
+# Caveat: MSBuild reuses build nodes (/nodeReuse) only between processes that share a TMPDIR, so lanes that run with
+# different TMPDIR values may start separate node pools instead of sharing one.
 set -euo pipefail
 
 # Short disk-backed TMPDIR unless the caller set one. Only the run, --print-env and --print-tmpdir actions resolve it.
@@ -33,8 +36,9 @@ resolve_tmpdir() {
     echo "fdev-chromium-env: warning: '$dir' is a symlink; leaving TMPDIR unset" >&2
     return 0
   fi
-  mkdir -p -m 0700 "$dir" 2>/dev/null || true
+  mkdir -p "$dir" 2>/dev/null || true
   if [ -d "$dir" ] && [ -O "$dir" ] && [ -w "$dir" ]; then
+    chmod 0700 "$dir"  # also tightens an existing looser directory of ours
     export TMPDIR="$dir"
   else
     echo "fdev-chromium-env: warning: '$dir' is not a writable directory of yours; leaving TMPDIR unset" >&2
@@ -45,7 +49,7 @@ mode=no-gpu
 bundle="${FDEV_CHROMIUM_BUNDLE:-$HOME/.local/share/fdev-chromium/current}"
 action=run
 
-usage() { sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//' >&2; }
+usage() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//' >&2; }
 
 while [ $# -gt 0 ]; do
   case "$1" in

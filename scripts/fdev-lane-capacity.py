@@ -175,6 +175,26 @@ def is_browser_main(argv):
     return headless and debugging
 
 
+def read_argv(proc_dir):
+    """argv of one process, tolerating a rewritten process title.
+
+    Chromium rewrites its process title, so /proc/<pid>/cmdline is ONE space-joined string with a trailing NUL
+    (observed on fdev with Chromium 153) instead of NUL-separated words. A single field that contains spaces
+    is therefore split on spaces. In that case <pid>/exe, when readable, supplies argv[0]'s basename, because a path with
+    a space in it cannot be recovered from the joined string.
+    """
+    fields = [a for a in read_text(os.path.join(proc_dir, "cmdline")).split("\0") if a]
+    if len(fields) == 1 and " " in fields[0]:
+        fields = [a for a in fields[0].split(" ") if a]
+        try:
+            exe = os.readlink(os.path.join(proc_dir, "exe"))
+        except OSError:
+            exe = None
+        if exe:  # only for a rewritten title: a script run by an interpreter keeps its argv[0]
+            fields[0] = os.path.basename(exe.replace(" (deleted)", ""))
+    return fields
+
+
 def scan_processes(proc_root, own_pid):
     """(heavy kinds, browser main pids) from one pass over <proc-root>/<pid>/cmdline."""
     kinds, browsers = {}, []
@@ -182,10 +202,9 @@ def scan_processes(proc_root, own_pid):
         if not entry.isdigit() or int(entry) == own_pid:
             continue
         try:
-            raw = read_text(os.path.join(proc_root, entry, "cmdline"))
+            argv = read_argv(os.path.join(proc_root, entry))
         except OSError:
             continue  # the process exited between listdir and read
-        argv = [a for a in raw.split("\0") if a]
         kind = heavy_kind(argv)
         if kind:
             kinds[kind] = kinds.get(kind, 0) + 1

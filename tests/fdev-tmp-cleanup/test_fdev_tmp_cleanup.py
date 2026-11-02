@@ -47,7 +47,7 @@ class Fixture(unittest.TestCase):
         self.now = time.time()
 
     # --- builders ------------------------------------------------------------------------------------------
-    def make(self, name, age_hours=3.0, files=("a/b/c.txt", "d.txt"), mode_dirs=None):
+    def make(self, name, age_hours=8.0, files=("a/b/c.txt", "d.txt"), mode_dirs=None):
         """A directory tree under the root, every node last modified age_hours ago."""
         top = os.path.join(self.root, name)
         os.makedirs(top)
@@ -80,6 +80,13 @@ class Fixture(unittest.TestCase):
             os.symlink(cwd, os.path.join(base, "cwd"))
         for number, target in enumerate(fds, 3):
             os.symlink(target, os.path.join(base, "fd", str(number)))
+
+    def write_status(self, pid, uid=None, comm="sleep"):
+        uid = os.geteuid() if uid is None else uid
+        with open(os.path.join(self.proc, str(pid), "status"), "w") as handle:
+            handle.write("Name:\t%s\nUid:\t%d\t%d\t%d\t%d\n" % (comm, uid, uid, uid, uid))
+        with open(os.path.join(self.proc, str(pid), "comm"), "w") as handle:
+            handle.write(comm + "\n")
 
     def unix_socket(self, path):
         os.makedirs(os.path.join(self.proc, "net"), exist_ok=True)
@@ -151,7 +158,7 @@ class DeadRunCleanup(Fixture):
         code, out, _ = self.run_script(apply=True)
         self.assertEqual((out["kept"], out["removed"]), ({"young": 1}, 0))
         self.assertTrue(os.path.exists(fresh))
-        os.utime(fresh, (self.now - 3 * HOUR, self.now - 3 * HOUR))
+        os.utime(fresh, (self.now - 8 * HOUR, self.now - 8 * HOUR))
         self.assertEqual(self.run_script(apply=True)[1]["removed"], 1)
 
     def test_pidless_run_is_kept_while_any_live_process_references_it_by_any_route(self):
@@ -194,15 +201,15 @@ class DeadRunCleanup(Fixture):
         self.assertEqual(self.run_script(apply=True)[1]["removed"], 1)
 
     def test_only_known_harness_names_are_matched(self):
-        keep = ["tmp.abcdefghij", "tmp.abcdefghij2", "fsgg-gate-engine", "fsgg-sdd-tests-xx-" + HEX, "fsgg-sdd-" + HEX[:-1],
-                "fsgg-sdd-" + HEX.upper(), "playwright_chromiumdev_profile-", "playwright-artifacts-abcde", "org.chromium.Chromium", "work-827",
+        keep = ["tmp.abcdefghij", "tmp.abcdefghij2", "fsgg-gate-engine", "fsgg-gate-nightly", "fsgg-sdd-tests-xx-" + HEX, "fsgg-sdd-" + HEX[:-1],
+                "fsgg-sdd-" + HEX.upper(), "playwright_chromiumdev_profile-", "playwright-artifacts-abcdef", "org.chromium.Chromium", "work-827",
                 "playwright_chromiumdev_profile-abcdef-more", "fsgg-tok-123", "some-user-data", "fsgg-sdd-" + HEX + ".bak"]
         for name in keep:
             self.make(name)
-        self.make("fsgg-gate-nightly")  # a fsgg-gate-* run that is not the shared engine cache
+        self.make("fsgg-sdd-" + "a" * 32)  # the one real match, as a control
         code, out, _ = self.run_script(apply=True)
         self.assertEqual((out["entries_matched"], out["removed"]), (1, 1))
-        self.assertFalse(self.exists("fsgg-gate-nightly"))
+        self.assertFalse(self.exists("fsgg-sdd-" + "a" * 32))
         for name in keep:
             self.assertTrue(self.exists(name), name)
 
@@ -324,12 +331,128 @@ class DeadRunCleanup(Fixture):
 
     def test_several_patterns_in_one_sweep_report_by_pattern(self):
         names = ["fsgg-sdd-tests-1-" + HEX, "fsgg-sdd-" + HEX, "fsgg-ai-tr-" + HEX, "fsgg-cli-tests-cache-sandbox-" + HEX,
-                 "playwright-artifacts-Zz9Zz9", "org.chromium.Chromium.Ab12Cd"]
+                 "playwright_chromiumdev_profile-Zz9Zz9", "org.chromium.Chromium.Ab12Cd"]
         for name in names:
             self.make(name)
         code, out, _ = self.run_script("--list-limit", "2")
         self.assertEqual((out["would_remove"], len(out["removable"]), out["removable_listed_of"]), (6, 2, 6))
-        self.assertEqual(set(out["by_pattern"]), {"fsgg-sdd-tests", "fsgg-sdd-run", "fsgg-test-root", "playwright-artifacts", "chromium-temp"})
+        self.assertEqual(set(out["by_pattern"]), {"fsgg-sdd-tests", "fsgg-sdd-run", "fsgg-test-root", "playwright-profile", "chromium-temp"})
+
+
+    def test_pidless_patterns_need_six_hours_and_pid_patterns_one(self):
+        for hours, name in ((5.5, "fsgg-sdd-" + "1" * 32), (6.5, "fsgg-sdd-" + "2" * 32), (1.5, "fsgg-sdd-tests-7-" + HEX), (0.5, "fsgg-sdd-tests-8-" + HEX),
+                            (5.5, "playwright_chromiumdev_profile-aaaaaa"), (6.5, "playwright_chromiumdev_profile-bbbbbb")):
+            self.make(name, age_hours=hours)
+        code, out, _ = self.run_script(apply=True)
+        self.assertEqual((out["min_age_hours"], out["min_age_hours_pidless"], out["removed"], out["kept"]), (1.0, 6.0, 3, {"young": 3}))
+        self.assertEqual([self.exists(n) for n in ("fsgg-sdd-" + "1" * 32, "fsgg-sdd-" + "2" * 32, "fsgg-sdd-tests-7-" + HEX, "fsgg-sdd-tests-8-" + HEX,
+                                                  "playwright_chromiumdev_profile-aaaaaa", "playwright_chromiumdev_profile-bbbbbb")],
+                         [True, False, False, True, True, False])
+        code, out, _ = self.run_script("--min-age-hours-pidless", "5", apply=True)
+        self.assertEqual(out["removed"], 2)
+
+    def test_a_relative_word_resolves_against_the_process_cwd_and_a_symlinked_alias_is_a_reference(self):
+        self.make("fsgg-sdd-" + "1" * 32)
+        self.make("fsgg-sdd-" + "2" * 32)
+        self.make("fsgg-sdd-" + "3" * 32)
+        self.make("fsgg-sdd-" + "5" * 32)
+        elsewhere = os.path.join(self.base, "elsewhere")
+        os.makedirs(elsewhere)
+        os.symlink(os.path.join(self.root, "fsgg-sdd-" + "2" * 32), os.path.join(elsewhere, "alias"))
+        self.process(10, ["node", "fsgg-sdd-" + "1" * 32 + "/driver/run.mjs"], cwd=self.root)           # relative, cwd is the root
+        self.process(11, ["tail", "-f", os.path.join(elsewhere, "alias", "a", "b", "c.txt")])             # symlinked alias
+        self.process(12, ["node", "../tmp/fsgg-sdd-" + "3" * 32 + "/x.mjs"], cwd=elsewhere)               # relative with ..
+        self.process(13, ["cat", "alias/d.txt"], cwd=elsewhere)                                           # alias, relative
+        self.process(14, ["cat", "--file=" + os.path.join(elsewhere, "alias") + "/d.txt"])                # flag value through the alias
+        code, out, _ = self.run_script(apply=True)
+        self.assertEqual(out["removed"], 1, out)  # only the unreferenced one
+        self.assertFalse(self.exists("fsgg-sdd-" + "5" * 32))
+        for n in "123":
+            self.assertTrue(self.exists("fsgg-sdd-" + n * 32), n)
+
+    def test_a_same_user_process_that_cannot_be_inspected_blocks_apply_even_if_its_cmdline_reads(self):
+        if os.geteuid() == 0:
+            self.skipTest("root can read everything")
+        self.make("fsgg-sdd-tests-4242-" + HEX)
+        self.process(30, ["sleep", "1"])
+        self.write_status(30)
+        environ = os.path.join(self.proc, "30", "environ")
+        os.chmod(environ, 0)
+        self.addCleanup(os.chmod, environ, 0o600)
+        before = self.snapshot()
+        code, out, err = self.run_script(apply=True)
+        self.assertEqual((code, out["mode"]), (3, "refused"))
+        self.assertIn("could not be inspected", err)
+        self.assertIn("30", err)
+        self.assertEqual(before, self.snapshot())
+        # a dry run still reports the removable entry and says apply is blocked
+        code, out, _ = self.run_script()
+        self.assertEqual((code, out["would_remove"], out["apply_blocked"], out["unreadable"]), (0, 1, True, [{"pid": 30, "comm": "sleep"}]))
+        # the fd directory is read the same way
+        os.chmod(environ, 0o600)
+        fd_dir = os.path.join(self.proc, "30", "fd")
+        os.chmod(fd_dir, 0)
+        self.addCleanup(os.chmod, fd_dir, 0o700)
+        self.assertEqual(self.run_script(apply=True)[0], 3)
+
+    def test_the_allowlist_a_vanished_process_and_other_users_processes_do_not_block(self):
+        if os.geteuid() == 0:
+            self.skipTest("root can read everything")
+        self.make("fsgg-sdd-tests-4242-" + HEX)
+        for pid, comm, argv in ((31, "(sd-pam)", ["(sd-pam)"]), (32, "sshd-session", ["sshd-session: dev"]), (33, "systemd", ["/usr/lib/systemd/systemd", "--user"])):
+            self.process(pid, argv)
+            self.write_status(pid, comm=comm)
+            os.chmod(os.path.join(self.proc, str(pid), "environ"), 0)
+            self.addCleanup(os.chmod, os.path.join(self.proc, str(pid), "environ"), 0o600)
+        self.process(34, ["sleep", "1"])
+        self.write_status(34, uid=os.geteuid() + 1)  # another user's process: the scan owes nothing about it
+        os.chmod(os.path.join(self.proc, "34", "environ"), 0)
+        self.addCleanup(os.chmod, os.path.join(self.proc, "34", "environ"), 0o600)
+        self.process(35, ["sleep", "1"])
+        self.write_status(35)
+        code, out, _ = self.run_script(apply=True)
+        self.assertEqual((code, out["removed"], out["unreadable"]), (0, 1, []), out)
+
+    def test_a_systemd_that_is_not_the_user_manager_is_not_allowlisted(self):
+        if os.geteuid() == 0:
+            self.skipTest("root can read everything")
+        self.make("fsgg-sdd-tests-4242-" + HEX)
+        self.process(40, ["/usr/lib/systemd/systemd", "--system"])
+        self.write_status(40, comm="init-ish")
+        os.chmod(os.path.join(self.proc, "40", "environ"), 0)
+        self.addCleanup(os.chmod, os.path.join(self.proc, "40", "environ"), 0o600)
+        self.assertEqual(self.run_script(apply=True)[0], 3)
+
+    def test_a_tree_deeper_than_the_recursion_limit_is_removed(self):
+        top = os.path.join(self.root, "fsgg-sdd-tests-4242-" + HEX)
+        os.mkdir(top)
+        path = top
+        for _ in range(1100):
+            path = os.path.join(path, "d")
+            os.mkdir(path)
+        with open(os.path.join(path, "leaf.txt"), "w") as handle:
+            handle.write("x")
+        os.symlink(self.outside, os.path.join(path, "out"))
+        stamp = self.now - 8 * HOUR
+        walk = top
+        os.utime(top, (stamp, stamp))
+        for _ in range(1100):
+            walk = os.path.join(walk, "d")
+            os.utime(walk, (stamp, stamp))
+        os.utime(os.path.join(path, "leaf.txt"), (stamp, stamp))
+        os.utime(os.path.join(path, "out"), (stamp, stamp), follow_symlinks=False)
+        self.assertGreater(sys.getrecursionlimit(), 0)
+        code, out, _ = self.run_script(apply=True)
+        self.assertEqual((code, out["removed"], out["failed"]), (0, 1, 0), out)
+        self.assertFalse(self.exists("fsgg-sdd-tests-4242-" + HEX))
+        self.assertTrue(os.path.isdir(self.outside))
+
+    def test_it_refuses_to_run_as_root(self):
+        module = load_module()
+        err = io.StringIO()
+        with mock.patch.object(module.os, "geteuid", return_value=0), contextlib.redirect_stderr(err):
+            self.assertEqual(module.main(["--root", self.root, "--proc-root", self.proc, "--apply"]), 2)
+        self.assertIn("not root", err.getvalue())
 
 
 class Refusals(Fixture):
@@ -371,9 +494,9 @@ class Refusals(Fixture):
 
 
 class LiveHost(unittest.TestCase):
-    def test_runs_on_the_real_proc_against_an_empty_root_and_removes_nothing(self):
+    def test_dry_run_on_the_real_proc_against_an_empty_root_matches_nothing(self):
         with tempfile.TemporaryDirectory() as root:
-            done = subprocess.run([sys.executable, "-I", SCRIPT, "--root", os.path.realpath(root), "--apply"], capture_output=True, text=True, check=False)
+            done = subprocess.run([sys.executable, "-I", SCRIPT, "--root", os.path.realpath(root)], capture_output=True, text=True, check=False)  # dry run: --apply may be refused by a host process
             self.assertEqual(done.returncode, 0, done.stderr)
             report = json.loads(done.stdout)
             self.assertEqual((report["entries_matched"], report["removed"]), (0, 0))

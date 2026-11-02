@@ -41,6 +41,15 @@ class Proc:
     def process(self, pid, *argv):
         self.write("%d/cmdline" % pid, "\0".join(argv) + "\0")
 
+    def process_raw(self, pid, raw, exe=None):
+        """A cmdline file with these exact bytes (a rewritten process title is one space-joined string), and an exe link."""
+        path = os.path.join(self.root, str(pid), "cmdline")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as handle:
+            handle.write(raw)
+        if exe:
+            os.symlink(exe, os.path.join(self.root, str(pid), "exe"))
+
 
 def run(proc_root, *flags, nproc="12", disk="0"):
     args = [sys.executable, "-I", PROBE, "--proc-root", proc_root, "--cgroup-root", os.path.join(proc_root, "cg"),
@@ -315,6 +324,39 @@ class CapacityProbe(unittest.TestCase):
         self.assertEqual(run(self.root, "--browser-hold-at", "3")[1]["thresholds"]["browser_hold_at"], 3)
         self.browser(proc, 300, "/usr/bin/chromium", "--headless=new", "--remote-debugging-port=9222")
         self.assertEqual(run(self.root, "--browser-hold-at", "3")[0], 3)
+
+    def test_a_rewritten_process_title_is_one_space_joined_field_and_still_counts(self):
+        # Captured from a real Playwright chrome-headless-shell 1243 on fdev (Chromium 153): the cmdline file is ONE
+        # string with spaces and a single trailing NUL, for the main process and for every --type= child alike.
+        def fixture(name):
+            with open(os.path.join(HERE, "fixtures", name), "rb") as handle:
+                return handle.read()
+        main, gpu, zygote = (fixture(n) for n in ("chromium-main.cmdline", "chromium-gpu-child.cmdline", "chromium-zygote-child.cmdline"))
+        self.assertEqual((main.count(b"\0"), gpu.count(b"\0")), (1, 1))  # the shape the fix is about
+        exe = "/home/u/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell"
+        proc = Proc(self.root)
+        proc.process_raw(100, main, exe)
+        proc.process_raw(101, gpu, exe)
+        proc.process_raw(102, zygote, exe)
+        code, out = run(self.root)
+        self.assertEqual((code, out["browsers"]), (0, {"count": 1, "pids": [100]}))
+        proc.process_raw(200, main.replace(b"profile-F7pDkp", b"profile-Other1"), exe)
+        code, out = run(self.root)
+        self.assertEqual((code, out["browsers"]["count"], out["verdict"]), (3, 2, "hold"))
+
+    def test_a_rewritten_title_without_a_readable_exe_is_classified_from_the_first_word(self):
+        with open(os.path.join(HERE, "fixtures", "chromium-main.cmdline"), "rb") as handle:
+            main = handle.read()
+        proc = Proc(self.root)
+        proc.process_raw(100, main)
+        self.assertEqual(run(self.root)[1]["browsers"]["count"], 1)
+
+    def test_a_launcher_keeps_its_own_argv0_even_when_it_names_chrome(self):
+        # Single-field cmdline of a shell wrapper: not a rewritten title of a browser, exe says bash.
+        proc = Proc(self.root)
+        proc.process_raw(100, b"/bin/bash -c /x/chrome --headless --remote-debugging-pipe\0", "/usr/bin/bash")
+        proc.process_raw(101, b"timeout 600 /x/chrome --headless --remote-debugging-pipe\0", "/usr/bin/timeout")
+        self.assertEqual(run(self.root)[1]["browsers"]["count"], 0)
 
     def test_one_browser_run_admits(self):
         proc = Proc(self.root)
