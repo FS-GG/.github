@@ -190,3 +190,9 @@ module V2Projection =
         { ItemId: string; Status: string option; Roadmap: string option; Track: string option
           Observation: string option; MembershipPages: int; WorkLevel: (string * string option) option; Archived: bool }
     val readPlanning: transport: IGitHubTransport -> binding: Binding -> request: Request -> IoResult<PlanningObservation>
+
+    /// Complete bounded native issue/project/item identity and archive state; queries only.
+    val exactMembership: transport: IGitHubTransport -> binding: Binding -> issue: IssueRef -> expectedNativeId: string -> IoResult<string * string * int * bool>
+
+    /// Fixed read-only document used by exactMembership; never accepts a supplied GraphQL document.
+    val exactMembershipQuery: string

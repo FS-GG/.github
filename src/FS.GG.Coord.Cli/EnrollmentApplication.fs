@@ -44,5 +44,5 @@ module EnrollmentApplication =
         | [ "enrollment" ] ->
             eprintfn "board-v2 successor refused: MalformedInput"
             Some 2
-        | "route-preflight" :: rest -> Some(V2EnrollmentCommands.run "preflight" (Array.ofList ("preflight" :: rest)))
+        | "route-preflight" :: rest -> Some(V2EnrollmentCommands.runHosted (System.Reflection.Assembly.GetExecutingAssembly()) "preflight" (Array.ofList ("preflight" :: rest)))
         | _ -> None

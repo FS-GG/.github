@@ -255,3 +255,19 @@ module V2NativeResolveTests =
         // No commits is a failed read (the closing gate treats empty commit messages as no verdict), as is a missing pull request.
         Assert.Equal(Error NativeReadFailed, readPullRequestCommits transport "FS-GG/.github" 8)
         Assert.Equal(Error NativeReadFailed, readPullRequestCommits transport "FS-GG/.github" 9)
+
+    [<Fact>]
+    let ``archived membership transport has no arbitrary document variable or mutation argument vector`` () =
+        let vars = [ "owner", Transport.VString "FS-GG"; "repo", Transport.VString ".github"; "number", Transport.VNumber 80001.0 ]
+        let request: Transport.Request =
+            { Method = "POST"; Path = "graphql"; Query = []; Body = Transport.Query(V2Projection.exactMembershipQuery, vars)
+              Budget = Transport.GraphQl; IfNoneMatch = None; Subject = "synthetic archived membership" }
+        Assert.True((membershipArguments request).IsSome)
+        Assert.True((membershipArguments { request with Body = Transport.Query(V2Projection.exactMembershipQuery, vars @ [ "after", Transport.VString "cursor1" ]) }).IsSome)
+        for bad in [ { request with Method = "PATCH" }; { request with Path = "other" }
+                     { request with Body = Transport.Query("mutation { deleteProjectV2(input:{}) { clientMutationId } }", vars) }
+                     { request with Body = Transport.Query(V2Projection.exactMembershipQuery, vars @ [ "query", Transport.VString "mutation" ]) }
+                     { request with Body = Transport.Query(V2Projection.exactMembershipQuery, vars @ [ "repo", Transport.VString "other" ]) }
+                     { request with Body = Transport.Query(V2Projection.exactMembershipQuery, [ "owner", Transport.VString "FS-GG"; "repo", Transport.VString ".github"; "number", Transport.VNumber 1.5 ]) }
+                     { request with Query = [ "query", "other" ] }; { request with IfNoneMatch = Some "old" } ] do
+            Assert.True((membershipArguments bad).IsNone)
