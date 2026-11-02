@@ -111,8 +111,11 @@ def validate_kit_read_only_successor(historical: dict[str, object], successor: d
     if "actions/create-github-app-token" in active or re.search(r"\$\{\{\s*secrets(?:\.|\[)", active):
         fail("Kit successor can read an App or repository secret")
     uses = [match.group(1) or match.group(2) for match in re.finditer(
-        r"(?m)^        uses:\s*(\S+)\s*$|^      - uses:\s*(\S+)\s*$", "\n".join(jobs))]
-    if sorted(uses) != sorted(["actions/checkout@v7", "actions/checkout@v7", "actions/checkout@v7",
+        r"(?m)^        uses:\s*(\S+)\s*(?:#.*)?$|^      - uses:\s*(\S+)\s*(?:#.*)?$", "\n".join(jobs))]
+    # The closing-keywords job pins its checkout to the v7 commit (a repository that requires full-SHA pins
+    # cannot call an unpinned workflow, .github#5195); the other two stay on the v7 tag.
+    if sorted(uses) != sorted(["actions/checkout@v7", "actions/checkout@v7",
+                             "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                              "actions/setup-dotnet@v6", "actions/setup-python@v7"]):
         fail("Kit successor introduces an unreviewed action")
     if provider_write_command(active):
