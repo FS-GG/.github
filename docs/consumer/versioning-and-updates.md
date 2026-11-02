@@ -129,6 +129,32 @@ pin silently omits them, so the CLI is treated as a first-class member of the
   a side effect, and it only rewrites state you own (your `.fsgg/providers.yml`), not
   the governed pin (that stays a PR in its owning repo).
 
+### Skills that ship with the CLI stay current too
+
+Some skills reach a workspace from packages compiled into the CLI: the driver skills (for
+example `atlas`, `work-board`) and the owner product skills (Rendering, Audio, Game). Their text
+changes upstream, so `fsgg-sdd upgrade` refreshes them from the CLI release that carries
+FS.GG.SDD#1155 onward, with a hard line around your edits:
+
+- **Replaced as one unit, only if untouched.** A skill is replaced only when none of its files
+  differs from the digests recorded at scaffold time, across the `.claude` and `.agents` copies
+  together. One edited file, or a recorded file with no digest, holds the whole skill; it keeps its
+  content-drift warning and the `upgrade` advisory names it.
+- **Never backwards.** The package version each skill came from is recorded in
+  `.fsgg/scaffold-provenance.json` (`ownerSkillVersions`). An older CLI will not replace a newer
+  pack; a workspace written before versions were recorded is only refreshed by a strictly newer CLI
+  than the one that wrote it.
+- **Files the upstream dropped** are removed with the skill when still unedited, and their records
+  are dropped; new digests are recorded after every replacement.
+- **Exact bytes.** `atlas.py` hashes the exact bytes of pack and skill files, so the workspace's
+  `.gitattributes` marks `.claude/skills/**`, `.agents/skills/**` and `docs/atlas/**` as `-text`.
+  New workspaces get the rules; `upgrade` appends any that are missing without editing your lines.
+
+Which CLI carries which skills is itself kept current: the CLI's skills-package pins
+(`FS.GG.Drivers` and the `FS.GG.*.Skills` packages) may trail their published feeds by at most five
+stable versions, checked when an SDD release is prepared. Update the CLI (`dotnet tool update`) before
+`upgrade`, because the skill text an upgrade lays down is the text compiled into the CLI that runs it.
+
 So "stay current" is one explicit command (`fsgg-sdd upgrade`), and CI won't let a
 behind-CLI scaffold pass unnoticed. Pin the tool in `dotnet-tools.json` as above; the
 fail-closed check *protects* that pin rather than fighting it.
