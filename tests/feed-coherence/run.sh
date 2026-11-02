@@ -72,6 +72,7 @@ contracts:
   - { id: game-skills,                   version: "0.7.0",           package-version: "0.7.0" }
   - { id: rendering-skills,              version: "0.1.0",           package-version: "0.1.0" }
   - { id: fsquint-replay, version: "0.1.0", package-version: "0.1.0" }
+  - { id: algorithms,                    version: "0.1.0",           package-version: "0.1.0" }
   - { id: audio-skills,                  version: "0.1.0",           package-version: "0.1.0" }
   - { id: shared-build-config,           version: "1.0.0" }
 YAML
@@ -109,6 +110,7 @@ cat > "$FEED" <<'JSON'
   "FS.GG.Game.Skills":                 ["0.7.0"],
   "FsQuint": ["0.1.0"],
   "FsQuint.Tooling": ["0.1.0"],
+  "FS.GG.Algorithms":                  ["0.1.0"],
   "FS.GG.Audio.Skills":                ["0.1.0"],
   "FS.GG.Rendering.Skills":            ["0.1.0"]
 }

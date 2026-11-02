@@ -40,6 +40,8 @@ from fsgg_feed import GateError  # noqa: E402  (path shim above must run first)
 # BESPOKE strategy for (it moves `version` on a framework release; every other row's `version` is
 # NOT feed-derived and the bot never writes it).
 CONTRACT_PACKAGES: dict[str, list[str]] = {
+    # ADR-0098's leaf algorithms library, first published 0.1.0 (FS-GG/.github#5224).
+    "algorithms": ["FS.GG.Algorithms"],
     "fsquint-replay": ["FsQuint", "FsQuint.Tooling"],
     "fsgg-contracts": ["FS.GG.Contracts"],
     "governance-config": ["FS.GG.Governance.Config"],

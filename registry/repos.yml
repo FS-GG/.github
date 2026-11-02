@@ -611,6 +611,7 @@ capabilities:
 outside-fabric:
   - { full: FS-GG/specairn, reason: "Public future monorepo for Specairn (FS.GG v3), reserved 2026-10-10; implementation starts after v2 completion per docs/roadmaps/2026-10-10-fsgg-v3-clean-rewrite.md. No active v2 board scope, kit or build-config adoption." }
   - { full: FS-GG/FsQuint, reason: "ADR-0085 independent public Quint–F# package owner; consumers qualify NuGet updates without board scope, kit, build-config or installed organization runtime" }
+  - { full: FS-GG/FS.GG.Algorithms, reason: "ADR-0098 public algorithms library owner; FS.GG.Algorithms 0.1.0 is published and consumers qualify NuGet updates by exact pin. Its roster row (skill producer for fsgg-skill-registry-check) lands with FS.GG.Algorithms.Skills, ADR-0098 §7" }
 
 # The coordination kit every `coordination-kit` receiver must hold. The slice-2 sync
 # (scripts/coordination-sync) writes these into each receiver; the coherence gate asserts the bytes.

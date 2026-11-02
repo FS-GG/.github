@@ -3,9 +3,10 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-11-01"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-11-02"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
+  algorithms: { name: FS.GG.Algorithms, role: "Shared FSharp.Core-only algorithms library — deterministic collections, numerics, random, graph, decision, grid search and spatial kernels, graded for Fable lockstep (ADR-0098)" }
   fsquint: { name: FsQuint, role: "Independent public Quint–F# decoding, replay and optional tooling" }
   coordination: { name: FS.GG.Coordination, role: "Coordination domain models, projections and qualified actor/PostgreSQL replay" }
   sdd:        { name: FS.GG.SDD,        role: "Lifecycle CLI to scaffold a workspace and drive it from charter to ship; ships the typed cross-repo contracts" }
@@ -79,6 +80,12 @@ repos:
 #     summary / note / impact / resolved_by / tracking / enforcement / unified_by — OPTIONAL prose;
 #                   date-stamp or past-tense historical claims (report §6.6) so present-tense text does not rot.
 contracts:
+  - id: algorithms
+    version: "0.1.0"
+    package-version: "0.1.0" # Published by release 41399115875 (tag v0.1.0 at 1d37bf8378e47a3b7f576cb52549ee971099d808; FS-GG/.github#5224): org feed then nuget.org via Trusted Publishing, archive sha256 eea4b9468d81e0b92eb1c242ed7cbaeb03b9437b094b7038d87e696b0c615720, hosted both-feed readback and a nuget.org-only consumer on .NET and Fable.
+    owner: algorithms
+    surface: "FS.GG.Algorithms package — FSharp.Core-only Collections (BinaryHeap, IndexedHeap), Numerics (Q16.16 Fixed, Percentile), Random (Xoshiro128), Graph (BestFirst, Scc, UnionFind, TopoSort/CPM), Decision (Arbitration, BehaviourTree), Search.Grid (DoorGrid), Spatial (KdTree); each surface graded LockstepExact, Portable or DotNetOnly in its packaged Fable compatibility profile (ADR-0098)"
+    consumers: []   # ADR-0098: Game.Core's exact pin and the call-site migrations are later Deliveries; nothing restores it yet.
   - id: fsquint-replay
     version: "0.1.0"
     package-version: "0.1.0"

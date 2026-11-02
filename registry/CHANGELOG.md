@@ -1,5 +1,22 @@
 # Registry changelog
 
+## 2026-11-02 — register FS.GG.Algorithms and its published 0.1.0 (FS-GG/.github#5224, FS-GG/.github#5222)
+
+Add the `algorithms` repo row and the `algorithms` contract at `version` and `package-version` **0.1.0**,
+owner `algorithms`, `consumers: []`. ADR-0098's leaf library is published. Game.Core's exact pin and the
+call-site migrations are later Deliveries, so nothing restores it yet. `FS-GG/FS.GG.Algorithms` joins
+`outside-fabric` beside FsQuint (ADR-0085 precedent): it holds no board scope, kit or build-config receiver. Its
+roster row as a skill producer lands with `FS.GG.Algorithms.Skills` (ADR-0098 §7). `CONTRACT_PACKAGES` maps the
+contract to `FS.GG.Algorithms`, so `check-feed-coherence` compares it on both feeds.
+
+- **Release 41399115875**, tag `v0.1.0` at `1d37bf8378e47a3b7f576cb52549ee971099d808`, after login-preflight
+  41398600754. The org publication-writer lock was held. The org feed received the archive first, then nuget.org
+  received it via Trusted Publishing.
+- **Archive** sha256 `eea4b9468d81e0b92eb1c242ed7cbaeb03b9437b094b7038d87e696b0c615720`. The GitHub Packages copy is
+  whole-file equal to it. The nuget.org copy's 37 payload entries equal it, excluding the repository signature and
+  core properties.
+- **Consumer.** A clean consumer restored from nuget.org alone printed the same line on .NET and under Fable.
+
 ## 2026-11-01 — reconcile published coherent 0.114.3 and Telemetry Host 0.9.0 (FS-GG/.github#5216)
 
 Flip `coord-engine` `version`, `package-version` and `package-tag` to **0.114.3** (`coherent-set/v0.114.3`), and
@@ -317,6 +334,8 @@ review M4). The typed validator (`fsgg-sdd registry validate`) never saw that co
 no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
+
+- **2026-11-02** — FS.GG.ALGORITHMS 0.1.0 REGISTERED (algorithms; FS-GG/.github#5224, FS-GG/.github#5222): add the `algorithms` repo row and contract (version/package-version 0.1.0, owner algorithms, consumers []), map it to FS.GG.Algorithms for feed coherence, and declare FS-GG/FS.GG.Algorithms outside-fabric until its skills producer lands (ADR-0098 §7). Tag v0.1.0 -> 1d37bf83; login-preflight 41398600754; release 41399115875 pushed the org feed then nuget.org and passed hosted both-feed readback (archive sha256 eea4b946…, GitHub copy whole-file equal, nuget.org 37 payload entries equal) and a nuget.org-only consumer on .NET and Fable.
 
 - **2026-11-01** — COHERENT 0.114.3 AND HOST 0.9.0 PUBLICATION RECONCILED (github; FS-GG/.github#5216): flip coord-engine version/package-version/package-tag to 0.114.3 (coherent-set/v0.114.3, release430687648, source5019a9d2) and telemetry-host package-version/package-tag to 0.9.0 (telemetry-host/v0.9.0, release429603937, source77871510); advance the canonical engine pin to 0.114.3. Both rows had been BEHIND both feeds since 0.114.0 and Host 0.9.0. No repack.
 
