@@ -165,10 +165,10 @@
     },
     {
       "path": "scripts/coord-board-archive.py",
-      "sha256": "a7b21a589777295c83339239dac2e3e786d1b8fb7382358351d569aead6fcc9b",
+      "sha256": "76f1d033aaa8298cc9f6366329aabd2c9852f6eb5114eccb274be8243d564a5e",
       "status": "root-run-gated-writer",
       "gs2089": "unresolved",
-      "reason": "Project 3 Done-retention archiver (#5119). Its only provider write, archiveProjectV2Item, runs only under --execute, which a Root operator runs on fdev with --expect-project-id, --max-archive, the private enrollment binding and the shared board-writer flock; the hosted workflow runs a counts-only dry run with a read-only App token and never --execute. Fence owner Root approved this route on 2026-11-01."
+      "reason": "Project 3 Done-retention archiver (#5119, #5170). Predecessor a7b21a589777295c83339239dac2e3e786d1b8fb7382358351d569aead6fcc9b was approved by fence owner Root on 2026-11-01. This reviewed #5170 ranking/reporting successor ranks all valid terminal Done cards before protecting older live blockers. The sole provider write remains archiveProjectV2Item behind --execute, --expect-project-id, --max-archive, the private enrollment binding, qualified reader guard and shared per-card board-writer flock/preimage/intent/one-send/readback; the Root admission boundary is unchanged. The hosted workflow remains a counts-only dry run with a read-only App token. Scheduled fdev installation, activation and native effects remain separately gated on Root acceptance of the first guarded archive. GS2-08.9 remains unresolved; no V1 retirement, historical-client refusal or protection is claimed."
     },
     {
       "path": "scripts/learn-dispatch.py",
