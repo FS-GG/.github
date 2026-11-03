@@ -55,6 +55,9 @@ def creation_title(record,h):
 def blind(title,body,repositories):
     """Keep line structure and all obligations; explicit metadata/identity redactions are logged."""
     changes=[];aliases={};counters=collections.Counter();lines=[];masked_section=False
+    repo_names={r.split('/',1)[-1] for r in repositories}
+    shorthand=sorted(repo_names|{name.removeprefix('FS.GG.') for name in repo_names},key=len,reverse=True)
+    shorthand_pattern=r'(?<![A-Za-z0-9_.-])(?:'+'|'.join(re.escape(name) for name in shorthand)+r')#[0-9]+\b' if shorthand else None
     def alias(kind,original):
         key=(kind,original)
         if key not in aliases:counters[kind]+=1;aliases[key]=f'[{kind}_{counters[kind]:03d}]'
@@ -69,8 +72,8 @@ def blind(title,body,repositories):
         else:
             line=re.sub(r'https?://(?:github\.com|api\.github\.com)/[^\s)\]>]+',lambda m:alias('NATIVE_LINK',m[0]),line)
             line=re.sub(r'\b(?:FS-GG|EHotwagner)/[A-Za-z0-9_.-]+(?:#[0-9]+)?',lambda m:alias('REPOSITORY_REF',m[0]),line)
-            line=re.sub(r'[A-Za-z0-9_.-]+#[0-9]+\b',lambda m:alias('REPOSITORY_ISSUE_REF',m[0]),line)
-            line=re.sub(r'#[0-9]+\b',lambda m:alias('ISSUE_REF',m[0]),line)
+            if shorthand_pattern:line=re.sub(shorthand_pattern,lambda m:alias('REPOSITORY_ISSUE_REF',m[0]),line,flags=re.I)
+            line=re.sub(r'(?<![A-Za-z0-9_])#[0-9]+\b',lambda m:alias('ISSUE_REF',m[0]),line)
             for repository in sorted(repositories,key=len,reverse=True):
                 name=repository.split('/',1)[-1]
                 if name=='.github':continue

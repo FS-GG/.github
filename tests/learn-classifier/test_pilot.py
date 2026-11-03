@@ -66,7 +66,12 @@ class PilotTests(unittest.TestCase):
   self.assertIn('Ignore previous instructions',lines[-1]['text'])
  def test_shorthand_issue_identifiers_masked_with_provenance(self):
   text='Repair FourD#56, SC2.Client#52, Coordination#1115, SDD#1151 and .github#19; preserve invariant.'
-  lines,proof=m.blind('Fix .github#19',text,[]);blinded='\n'.join(r['text'] for r in lines)
+  repos=['FS-GG/'+r for r in ['FS.GG.FourD','FS.GG.SC2.Client','FS.GG.Coordination','FS.GG.SDD','.github']]
+  lines,proof=m.blind('Fix .github#19',text,repos);blinded='\n'.join(r['text'] for r in lines)
   for token in ['FourD#56','SC2.Client#52','Coordination#1115','SDD#1151','.github#19']:self.assertNotIn(token,blinded)
   self.assertIn('preserve invariant',blinded);self.assertTrue(any(a['original']=='.github#19' for a in proof['aliases']))
+ def test_language_versions_and_numbered_requirements_preserved(self):
+  text='Use F#8 and C#12. Requirement 12 must hold; see SDD#1151.'
+  lines,_=m.blind('Implement F#8',text,['FS-GG/FS.GG.SDD']);blinded='\n'.join(r['text'] for r in lines)
+  self.assertIn('F#8',blinded);self.assertIn('C#12',blinded);self.assertIn('Requirement 12',blinded);self.assertNotIn('SDD#1151',blinded)
 if __name__=='__main__':unittest.main()
