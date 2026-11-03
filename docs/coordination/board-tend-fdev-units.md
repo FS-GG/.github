@@ -304,8 +304,9 @@ first-run directory creation cannot leave an otherwise durable latch or custody 
 Any preparation fsync failure prevents launch; a failure after latch creation preserves that hold. Successful
 custody must use the archiver's exact schema and supported sequence: one run header, per-item reasoned skips or
 immediately joined intent/archived pairs with complete identical identities, then one finished record. Duplicate,
-unknown or malformed records refuse; the complete planned count must fit the configured bound before any send. Settlement requires every planned
-item archived, zero preimage skips, and matching validated effects. A truncated prefix or skipped card keeps
+unknown or malformed records refuse; the complete planned count must fit the configured bound before any send. Settlement requires the header
+active Done count minus 50 to equal the complete planned count, every planned item archived, zero preimage
+skips, and matching validated effects. An underdeclared plan cannot claim a complete drain. A truncated prefix or skipped card keeps
 the latch; Root reads original custody and native effects, then selects a fresh continuation explicitly, even
 if the partial cycle has already reduced active Done below 200. No automatic resend or latch clearing occurs. An empty preprovisioned custody file is accepted only
 after the pinned child exits0 and reports a completed empty plan.
