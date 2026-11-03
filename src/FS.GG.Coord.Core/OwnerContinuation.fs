@@ -119,27 +119,57 @@ module OwnerContinuation =
             | _ when request.Original.IsNone && not (known EffectClear attested) -> RequestJudgment "locate-original-before-advancement", ["possible-write-unknown"], "original-custody-reference"
             | _ ->
                 match inferred with
-                | None when status SourceReady attested = Some true && status VerificationPassed attested = Some true && status NativePullRequest native |> Option.isNone -> Await "native-pr-association-refresh", ["native-pr-association-unknown"], "native-pr-association-readback"
-                | None -> RequestJudgment "supply-current-owner-stage-state", ["stage-state-unknown-or-conflicting"], "owner-stage-evidence"
-                | Some action when action <> VerifyIsolated && known UnregisteredOwnerRoute native -> RequestJudgment "unregistered-owner-activation-route", ["owner-route-not-registered"], "qualified-owner-route"
-                | Some action when action <> VerifyIsolated && (facts |> List.exists (fun fact -> fact.Predicate = BlockingPrerequisite && fact.Value <> Known false)) -> Await "action-specific-owner-prerequisites", ["owner-prerequisite-unmet-or-unknown"], "supplier-prerequisite-readback"
-                | Some Next -> RequestJudgment "unsupported-stage", ["invalid-stage"], "corrected-facts"
-                | Some VerifyIsolated when known Isolated attested && known ResourceShare attested -> ContinueOwner VerifyIsolated, ["owned-work";"adr0096-ordinary-verification"], "verification-result"
-                | Some VerifyIsolated -> Await "isolated-output-and-resource-share-evidence", ["isolation-or-resource-unknown"], "isolation-resource-refresh"
-                | Some (Implement | Review as action) when known Isolated attested && known ResourceShare attested -> ContinueOwner action, ["owned-work";"owned-isolated-source"], "owner-result"
-                | Some (Implement | Review) -> Await "isolated-output-and-resource-share-evidence", ["isolation-or-resource-unknown"], "isolation-resource-refresh"
-                | Some OpenDraft when known DraftPreflight native && not draftArtifactBound -> Await "source-artifact-verification", ["pre-draft-source-artifact-unbound"], "same-owner-source-artifact-result"
-                | Some OpenDraft when known DraftPreflight native -> ContinueOwner OpenDraft, ["owned-work";"registered-open-draft-preflight";"qualified-pr-helper-draft-at-create"], "native-draft-readback"
-                | Some OpenDraft -> RequestJudgment "registered-open-draft-preflight-required", ["draft-route-support-unobserved"], "registered-open-draft-preflight"
-                | Some Deliver when not (known NativePullRequest native) -> Await "native-draft-creation", ["native-pr-head-required-before-review-reuse-or-merge"], "native-draft-readback"
-                | Some Deliver when repairRequired -> Await "owner-source-repair", ["current-review-requires-changes"], "owner-repair-result"
-                | Some Deliver when changesGap || reviewConflict -> RequestJudgment "resolve-current-review-conflict", ["review-conflict-or-gap"], "review-supplier-resolution"
-                | Some Deliver when request.Envelope.IsSome && not (known EnvelopeCurrent native) -> RequestJudgment "refresh-current-finite-envelope", ["envelope-unknown-expired-or-changed"], "native-envelope-refresh"
-                | Some Deliver when known SourceDelivered native -> Await "delivery-acceptance-readback", ["source-merged-acceptance-distinct"], "native-acceptance-evidence"
-                | Some Deliver when not (known NativeRollup native) -> Await "native-check-qualification", ["observed-rollup-unknown-or-unsuccessful"], "existing-required-check-qualification"
-                | Some Deliver when not (known IndependentReview reviewer) -> Await "independent-source-review", ["review-unknown-or-not-independent"], "independent-review-result"
-                | Some Deliver when known RoutinePreflight native && (request.Envelope.IsNone || known EnvelopeCurrent native) -> ContinueOwner Deliver, ["owned-work";"registered-route-support-only";"executor-revalidates-native-merge-boundary"], "native-delivery-readback"
-                | Some Deliver -> RequestJudgment "qualified-protected-envelope-and-native-checks-required", ["registered-route-or-envelope-evidence-required"], "qualified-route-evidence"
+                | None ->
+                    if status SourceReady attested = Some true && status VerificationPassed attested = Some true && status NativePullRequest native |> Option.isNone then
+                        Await "native-pr-association-refresh", ["native-pr-association-unknown"], "native-pr-association-readback"
+                    else
+                        RequestJudgment "supply-current-owner-stage-state", ["stage-state-unknown-or-conflicting"], "owner-stage-evidence"
+                | Some action ->
+                    if action <> VerifyIsolated && known UnregisteredOwnerRoute native then
+                        RequestJudgment "unregistered-owner-activation-route", ["owner-route-not-registered"], "qualified-owner-route"
+                    elif action <> VerifyIsolated && (facts |> List.exists (fun fact -> fact.Predicate = BlockingPrerequisite && fact.Value <> Known false)) then
+                        Await "action-specific-owner-prerequisites", ["owner-prerequisite-unmet-or-unknown"], "supplier-prerequisite-readback"
+                    else
+                        // Unguarded cases keep this total without a compiler-generated source-path exception.
+                        match action with
+                        | Next ->
+                            RequestJudgment "unsupported-stage", ["invalid-stage"], "corrected-facts"
+                        | VerifyIsolated ->
+                            if known Isolated attested && known ResourceShare attested then
+                                ContinueOwner VerifyIsolated, ["owned-work";"adr0096-ordinary-verification"], "verification-result"
+                            else
+                                Await "isolated-output-and-resource-share-evidence", ["isolation-or-resource-unknown"], "isolation-resource-refresh"
+                        | Implement | Review ->
+                            if known Isolated attested && known ResourceShare attested then
+                                ContinueOwner action, ["owned-work";"owned-isolated-source"], "owner-result"
+                            else
+                                Await "isolated-output-and-resource-share-evidence", ["isolation-or-resource-unknown"], "isolation-resource-refresh"
+                        | OpenDraft ->
+                            if known DraftPreflight native && not draftArtifactBound then
+                                Await "source-artifact-verification", ["pre-draft-source-artifact-unbound"], "same-owner-source-artifact-result"
+                            elif known DraftPreflight native then
+                                ContinueOwner OpenDraft, ["owned-work";"registered-open-draft-preflight";"qualified-pr-helper-draft-at-create"], "native-draft-readback"
+                            else
+                                RequestJudgment "registered-open-draft-preflight-required", ["draft-route-support-unobserved"], "registered-open-draft-preflight"
+                        | Deliver ->
+                            if not (known NativePullRequest native) then
+                                Await "native-draft-creation", ["native-pr-head-required-before-review-reuse-or-merge"], "native-draft-readback"
+                            elif repairRequired then
+                                Await "owner-source-repair", ["current-review-requires-changes"], "owner-repair-result"
+                            elif changesGap || reviewConflict then
+                                RequestJudgment "resolve-current-review-conflict", ["review-conflict-or-gap"], "review-supplier-resolution"
+                            elif request.Envelope.IsSome && not (known EnvelopeCurrent native) then
+                                RequestJudgment "refresh-current-finite-envelope", ["envelope-unknown-expired-or-changed"], "native-envelope-refresh"
+                            elif known SourceDelivered native then
+                                Await "delivery-acceptance-readback", ["source-merged-acceptance-distinct"], "native-acceptance-evidence"
+                            elif not (known NativeRollup native) then
+                                Await "native-check-qualification", ["observed-rollup-unknown-or-unsuccessful"], "existing-required-check-qualification"
+                            elif not (known IndependentReview reviewer) then
+                                Await "independent-source-review", ["review-unknown-or-not-independent"], "independent-review-result"
+                            elif known RoutinePreflight native && (request.Envelope.IsNone || known EnvelopeCurrent native) then
+                                ContinueOwner Deliver, ["owned-work";"registered-route-support-only";"executor-revalidates-native-merge-boundary"], "native-delivery-readback"
+                            else
+                                RequestJudgment "qualified-protected-envelope-and-native-checks-required", ["registered-route-or-envelope-evidence-required"], "qualified-route-evidence"
         let input = inputDigest (now.ToUniversalTime().ToString("O")) request
         let recommendationWire =
             match recommendation with ContinueOwner a -> ["continue-owner";actionName a] | ObserveOriginal o -> ["observe-original";o] | Await e -> ["await";e] | RequestJudgment q -> ["request-judgment";q]
