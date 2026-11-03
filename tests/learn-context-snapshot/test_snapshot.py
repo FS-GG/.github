@@ -89,7 +89,7 @@ class TemporalTests(unittest.TestCase):
         task, provenance = m.task_at_boundary(issue(), CASE, m.history_module())
         self.assertEqual(task, {'title': 'Original title', 'body': 'Original task', 'comments': []})
         self.assertEqual(provenance['futureCommentsOmitted'], 1)
-        self.assertEqual(provenance['contextGaps'], [{'kind': 'earlier-comment-revision-unavailable'}])
+        self.assertEqual(provenance['contextGaps'], [{'kind': 'ambiguous-cutoff-comment-timestamp'}])
         self.assertNotIn(b'Later', m.safe_task_text(task))
 
     def test_truncated_missing_and_conflicting_revisions_refuse(self):
@@ -107,7 +107,7 @@ class TemporalTests(unittest.TestCase):
         witness = {'id': 'P1', 'repository': {'nameWithOwner': 'ORG/repo'}, 'baseRefName': 'main',
                    'mergedAt': '2026-02-02T00:00:00Z', 'authoredDate': '2020-01-01T00:00:00Z',
                    'mergeCommit': {'oid': 'a' * 40, 'tree': {'oid': 'b' * 40}}}
-        with self.assertRaisesRegex(m.Unavailable, 'visible-after-cutoff'):
+        with self.assertRaisesRegex(m.Unavailable, 'not-strictly-before-cutoff'):
             m.verify_checkpoint(witness, CASE, candidate, 'main')
         witness['mergedAt'] = candidate['pullRequest']['merged_at'] = '2026-01-30T00:00:00Z'
         result = m.verify_checkpoint(witness, CASE, candidate, 'main')
@@ -116,6 +116,27 @@ class TemporalTests(unittest.TestCase):
         witness['baseRefName'] = 'other'
         with self.assertRaisesRegex(m.Unavailable, 'other-branch'):
             m.verify_checkpoint(witness, CASE, candidate, 'main')
+
+    def test_same_timestamp_later_events_cannot_supply_creation_context(self):
+        record = issue()
+        # These later actions happened in the creation timestamp's precision bucket.
+        record['timelineItems']['nodes'][0]['createdAt'] = CASE['cutoffAt']
+        record['comments'] = connection([{'id': 'same-second-later-comment',
+                                         'createdAt': CASE['cutoffAt'], 'updatedAt': CASE['cutoffAt'],
+                                         'body': 'Solution posted after creation in the same second'}])
+        task, provenance = m.task_at_boundary(record, CASE, m.history_module())
+        self.assertEqual(task['title'], 'Original title')
+        self.assertEqual(task['comments'], [])
+        self.assertIn({'kind': 'ambiguous-cutoff-comment-timestamp'}, provenance['contextGaps'])
+        self.assertNotIn(b'Solution posted', m.safe_task_text(task))
+        candidate = {'node_id': 'P1', 'pullRequest': {'merged_at': CASE['cutoffAt']}}
+        witness = {'id': 'P1', 'repository': {'nameWithOwner': 'ORG/repo'}, 'baseRefName': 'main',
+                   'mergedAt': CASE['cutoffAt'],
+                   'mergeCommit': {'oid': 'a' * 40, 'tree': {'oid': 'b' * 40}}}
+        with self.assertRaisesRegex(m.Unavailable, 'not-strictly-before-cutoff'):
+            m.verify_checkpoint(witness, CASE, candidate, 'main')
+        rows = [dict(candidate, kind='pull_request', repository='ORG/repo')]
+        self.assertEqual(m.checkpoint_candidates(rows, CASE), [])
 
     def test_only_pre_cutoff_merge_candidates(self):
         rows = [{'kind': 'pull_request', 'repository': 'ORG/repo', 'node_id': 'P1',
@@ -167,6 +188,44 @@ class ExportTests(unittest.TestCase):
             self.assertIn({'kind': 'unmaterialized-lfs-object', 'path': 'asset.lfs'}, gaps)
             with self.assertRaisesRegex(m.Unavailable, 'native-local-tree-mismatch'):
                 m.export_tree(repo, {'commit': commit, 'tree': '0' * 40}, root / 'bad', m.Budget())
+
+    def test_missing_promisor_blob_refuses_without_source_store_write(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); source = root / 'source'; source.mkdir()
+            env = dict(os.environ, GIT_AUTHOR_NAME='Fixture', GIT_AUTHOR_EMAIL='fixture@example.invalid',
+                       GIT_COMMITTER_NAME='Fixture', GIT_COMMITTER_EMAIL='fixture@example.invalid',
+                       GIT_CONFIG_GLOBAL='/dev/null', GIT_CONFIG_NOSYSTEM='1', GIT_TERMINAL_PROMPT='0')
+            env.pop('GIT_NO_LAZY_FETCH', None)
+            def git(repo, *arguments):
+                return subprocess.check_output(['git', '-C', str(repo), *arguments], env=env,
+                                               stderr=subprocess.DEVNULL).decode().strip()
+            git(source, 'init', '-q'); (source / 'missing.txt').write_text('Local fixture promised bytes')
+            git(source, 'add', '.'); git(source, 'commit', '-qm', 'Promisor fixture')
+            oid = git(source, 'rev-parse', 'HEAD:missing.txt')
+            remote = root / 'remote.git'
+            subprocess.run(['git', 'clone', '-q', '--bare', str(source), str(remote)], env=env,
+                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            git(remote, 'config', 'uploadpack.allowFilter', 'true')
+            clones = []
+            for name in ['control', 'guarded']:
+                clone = root / name
+                subprocess.run(['git', '-c', 'protocol.file.allow=always', 'clone', '-q',
+                                '--filter=blob:none', '--no-checkout', remote.as_uri(), str(clone)],
+                               env=env, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                clones.append(clone)
+            def fingerprint(repo):
+                objects = repo / '.git/objects'
+                return {str(p.relative_to(objects)): m.digest(p.read_bytes())
+                        for p in objects.rglob('*') if p.is_file()}
+            control, guarded = clones
+            before_control, before_guard = fingerprint(control), fingerprint(guarded)
+            # Same missing object and local promisor: an ordinary read would fetch and write.
+            self.assertEqual(git(control, '-c', 'protocol.file.allow=always', 'cat-file', 'blob', oid),
+                             'Local fixture promised bytes')
+            self.assertNotEqual(before_control, fingerprint(control))
+            with self.assertRaisesRegex(m.Unavailable, 'subprocess-read-failed'):
+                m.git_read(guarded, ['cat-file', 'blob', oid], m.Budget(), 1024)
+            self.assertEqual(before_guard, fingerprint(guarded))
 
     def test_corrupt_blob_refuses_before_manifest_can_be_sealed(self):
         with tempfile.TemporaryDirectory() as temporary:

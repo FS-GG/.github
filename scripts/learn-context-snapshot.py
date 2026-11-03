@@ -187,7 +187,7 @@ def choose_cases(rows, development, count=16, seed=DEFAULT_SEED):
                    'excluded': dict(sorted(excluded_counts.items())),
                    'developmentTimeBlocks': [f'{year}-W{week:02d}' for year, week in sorted(development_weeks)],
                    'parentGraphSha256': digest(canonical({k: sorted(v) for k, v in sorted(graph.items())})),
-                   'limits': ['Current native parent graph may omit historical relationships.',
+                   'limits': ['Census-observed native parent graph may omit historical or later relationships.',
                               'No issue-history, code-context or work-clock eligibility is implied.',
                               'Unavailable fixed cases are retained without replacement.']}
 
@@ -286,7 +286,8 @@ def title_at_boundary(record, cutoff, h):
     times = [e['createdAt'] for e in renames]
     require(len(set(times)) == len(times), 'ambiguous-same-time-rename')
     for event in sorted(renames, key=lambda e: instant(e['createdAt']), reverse=True):
-        if instant(event['createdAt']) > instant(cutoff):
+        require(instant(event['createdAt']) >= instant(record['createdAt']), 'rename-before-creation')
+        if instant(event['createdAt']) >= instant(cutoff):
             require(title == event['currentTitle'], 'conflicting-rename-chain')
             title = event['previousTitle']
     return title
@@ -304,8 +305,11 @@ def task_at_boundary(record, case, h):
     for comment in comments:
         created, updated, cutoff = instant(comment['createdAt']), instant(comment['updatedAt']), instant(case['cutoffAt'])
         require(updated >= created, 'comment-time-conflict')
+        require(created >= instant(record['createdAt']), 'comment-before-issue-creation')
         if created > cutoff:
             future += 1
+        elif created == cutoff or updated == cutoff:
+            gaps.append({'kind': 'ambiguous-cutoff-comment-timestamp'})
         elif updated > cutoff:
             gaps.append({'kind': 'earlier-comment-revision-unavailable'})
         else:
@@ -324,7 +328,7 @@ def checkpoint_candidates(rows, case, maximum=3):
         if row['kind'] != 'pull_request' or row['repository'] != case['repository']:
             continue
         merged = (row.get('pullRequest') or {}).get('merged_at')
-        if merged is not None and instant(merged) <= cutoff:
+        if merged is not None and instant(merged) < cutoff:
             result.append(row)
     result.sort(key=lambda r: (instant(r['pullRequest']['merged_at']), r['node_id']), reverse=True)
     return result[:maximum]
@@ -335,7 +339,7 @@ def verify_checkpoint(witness, case, candidate, branch):
     require(witness.get('repository', {}).get('nameWithOwner') == case['repository'], 'checkpoint-repository')
     merged = witness.get('mergedAt')
     require(merged is not None and merged == candidate['pullRequest']['merged_at'], 'server-merge-witness-drift')
-    require(instant(merged) <= instant(case['cutoffAt']), 'checkpoint-visible-after-cutoff')
+    require(instant(merged) < instant(case['cutoffAt']), 'checkpoint-not-strictly-before-cutoff')
     require(witness.get('baseRefName') == branch, 'checkpoint-other-branch')
     commit = witness.get('mergeCommit') or {}
     require(SHA.fullmatch(commit.get('oid', '')) and SHA.fullmatch((commit.get('tree') or {}).get('oid', '')),
@@ -346,7 +350,7 @@ def verify_checkpoint(witness, case, candidate, branch):
 
 
 def git_read(repository, arguments, budget, maximum):
-    env = dict(os.environ, GIT_NO_REPLACE_OBJECTS='1', GIT_CONFIG_NOSYSTEM='1',
+    env = dict(os.environ, GIT_NO_REPLACE_OBJECTS='1', GIT_NO_LAZY_FETCH='1', GIT_CONFIG_NOSYSTEM='1',
                GIT_CONFIG_GLOBAL='/dev/null', GIT_TERMINAL_PROMPT='0', GIT_PAGER='cat')
     return run_bounded(['git', '--no-optional-locks', '-c', 'core.hooksPath=/dev/null',
                         '-c', 'core.fsmonitor=false', '-C', str(repository), *arguments],
@@ -476,6 +480,11 @@ def collect_case(args):
         record = native_read(query, budget, controller).get('node')
         require(isinstance(record, dict), 'native-issue-unavailable')
         task, task_provenance = task_at_boundary(record, case, h)
+        tied_merges = sum(1 for row in rows if row['kind'] == 'pull_request' and
+                          row['repository'] == case['repository'] and
+                          (row.get('pullRequest') or {}).get('merged_at') is not None and
+                          instant(row['pullRequest']['merged_at']) == instant(case['cutoffAt']))
+        outcome['sameTimestampMergeCandidatesOmitted'] = tied_merges
         candidates = checkpoint_candidates(rows, case)
         require(candidates, 'no-pre-cutoff-checkpoint-candidate')
         checkpoint = None
@@ -495,6 +504,8 @@ def collect_case(args):
         entries, gaps = export_tree(args.repository, checkpoint, rater / 'source', budget,
                                    max_files=args.max_files, max_blob_bytes=args.max_blob_bytes,
                                    max_total_bytes=args.max_total_bytes)
+        if tied_merges:
+            gaps.append({'kind': 'ambiguous-cutoff-merge-omitted'})
         task_bytes = safe_task_text(task)
         write_new(rater / 'task.md', task_bytes)
         safe = {'schema': SCHEMA, 'caseId': case['caseId'], 'boundaryKind': case['boundaryKind'],

@@ -38,7 +38,7 @@
     "gap": {
       "type": "object", "additionalProperties": false, "required": ["kind"],
       "properties": {
-        "kind": {"enum": ["earlier-comment-revision-unavailable", "unresolved-gitlink", "unmaterialized-lfs-object", "dependency-environment-not-reconstructed", "creator-private-context-unavailable", "related-discussion-and-external-research-not-reconstructed", "creation-before-first-work-not-established", "exact-branch-state-not-established"]},
+        "kind": {"enum": ["earlier-comment-revision-unavailable", "ambiguous-cutoff-comment-timestamp", "ambiguous-cutoff-merge-omitted", "unresolved-gitlink", "unmaterialized-lfs-object", "dependency-environment-not-reconstructed", "creator-private-context-unavailable", "related-discussion-and-external-research-not-reconstructed", "creation-before-first-work-not-established", "exact-branch-state-not-established"]},
         "path": {"type": "string", "minLength": 1, "maxLength": 4096},
         "object": {"$ref": "#/$defs/gitObject"}
       }
