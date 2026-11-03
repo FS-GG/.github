@@ -127,6 +127,8 @@ This is source guidance delivery, not a claim of a new package or installed rece
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-11-03** — SEMANTIC HARDNESS OPERATOR REGISTRY COMPLETENESS (.github; #5277, PR #5283): reconcile the missing `assess-task-hardness` row from the existing `registry/driver-skill-manifest.json`. Preserve `scope: operator`, `materializes-when: false`, the manifest source and canonical digest; this adds no automatic materialization or routing authority. The original projections run failed in all 14 preparation fixture setups because this own row was absent. Skill, schema, frozen pilot protocol, statistical source and results are unchanged.
+
 - **2026-11-03** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes. The sole row is `fs-gg-sdd-typed-author`, whose accepted [SDD #1165](https://github.com/FS-GG/FS.GG.SDD/pull/1165) producer bytes already ship in the public SDD 2.6.0 CLI. The maintained complete nine-producer read reconciles the hub snapshot before the coherent archive release; producer and receiver bytes, predicates and package identities stay unchanged.
 
 - **2026-10-20** — ADD (.github; user-requested work-board-coord): reconcile the Project 3 coordinator operator from the authored driver manifest. Both skill roots, normal discovery and bounded trigger coverage agree; aggressive useful parallelism reuses canonical work-board admission and whole-promise acceptance. Operator source only; no package, installation or board activation is claimed.
