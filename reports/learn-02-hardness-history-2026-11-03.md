@@ -342,6 +342,18 @@ failures. A first statistical diagnostic failed to normalize API parent URLs to 
 splitting clusters; it is retained privately and superseded by the corrected run used here. This materially
 changed confidence handling. No original evidence or failed run was rewritten. Final statistical source-manifest digest: `0b2c88828b89e7554fe61fd77669e5c8ee75bf40d913659ba6646f67c40b6b05`. Exploration source-manifest digest: `c3e4674dfd34716a5494bb4ab7ccbd637e3b445807f59f2f5f14f494f5087c9e`. The aggregate JSON files alongside this report preserve exact unrounded results.
 
+Source integration subsequently exposed two omissions: the original
+[always-gates run](https://github.com/FS-GG/.github/actions/runs/41630765488) rejected the
+unregistered read-only collector, and the original
+[test-selector run](https://github.com/FS-GG/.github/actions/runs/41630766016) found the history
+suite unwired. Both failures and all 36 original terminal run inventories are retained. The
+corrected existing `learn-02-selftest` workflow now selects the 63 history fixtures and multiverse
+synthetic self-test, with CPython 3.15.1 and the pinned NumPy/SciPy environment; the collector has
+an audited exact-hash read-only census entry. Local focused checks pass; the corrected hosted
+cohort is **pending**, not qualified by those local results. This integration repair changes no
+statistical results. The [reviewed report checkpoint](https://github.com/FS-GG/.github/blob/242ea5cbb354ff0c94456f9378ffa19b46bc8269/reports/learn-02-hardness-history-2026-11-03.md)
+remains immutable.
+
 Next work should expand outcome-blinded source qualification, independent task-demand labels, declared
 quality scoring and evidence-backed execution/pause intervals. Use stratified historical samples and
 frozen chronological/grouped heldouts, not a random split of related issues. The minimum controlled anchor
