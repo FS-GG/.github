@@ -141,7 +141,8 @@ def project(cohort):
             if not launch.get('afterVerifiedAppliedReceipt') or not launch.get('requestedModel') or not launch.get('requestedEffort'):
                 raise ValueError('accepted launch configuration is incomplete')
             identity, role = launch['agent'], 'Unknown'
-            configured = dict(model=launch['requestedModel'], effort=launch['requestedEffort'])
+            configured = dict(model=launch['requestedModel'], effort=launch['requestedEffort'],
+                provenance='root-recorded-launch-configuration', rawReturnedToolResponse='Unknown')
         else:
             match = re.fullmatch(r'fsgg-dispatch: item=(FS-GG/[\w.-]+#[1-9][0-9]*) role=(worker|critic|analyst|report)', launch['brief'].splitlines()[0])
             if not match or launch['itemId'] != match[1] or match[1] not in identities:
@@ -190,6 +191,8 @@ def project(cohort):
             gaps.append('original-dispatch-snapshot-unavailable')
         if not executions:
             gaps.append('attributed-execution-unavailable')
+        if any(value.get('launchConfiguration', {}).get('rawReturnedToolResponse') == 'Unknown' for value in executions if value.get('launchConfiguration')):
+            gaps.append('raw-launch-response-unavailable')
         if any(value['role'] == 'Unknown' for value in executions):
             gaps.append('execution-role-unavailable')
         if not executions or any(value['model'] == 'Unknown' for value in executions):

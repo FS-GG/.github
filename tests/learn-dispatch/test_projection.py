@@ -159,6 +159,8 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual('Unknown', execution['model'])
         self.assertEqual('Unknown', execution['effort'])
         self.assertEqual('configured-model', execution['launchConfiguration']['model'])
+        self.assertEqual('root-recorded-launch-configuration', execution['launchConfiguration']['provenance'])
+        self.assertIn('raw-launch-response-unavailable', result['records'][0]['gaps'])
         self.assertEqual(1, result['coverage']['launchConfirmedIdentities'])
         self.assertIn('configured-model [launch-confirmed]', m.assignment(result['records'][0], 'fixture:comment')['values']['Actual models'])
         self.assertEqual('Unknown', execution['role'])

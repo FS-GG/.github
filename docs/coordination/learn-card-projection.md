@@ -98,11 +98,13 @@ A replacement with a mismatched digest refuses; original absence is still report
 
 Classification payloads are original `fsgg.learn-dispatch/1` snapshots; retrospective current bodies,
 branch names and model selections cannot substitute. Launch payloads retain `itemId`, `invocationId`
-and the original `brief` beginning with the exact `fsgg-dispatch` marker. A retained original accepted collaboration launch observation may establish launch-confirmed model/effort
+and the original `brief` beginning with the exact `fsgg-dispatch` marker. A retained original Root-recorded accepted collaboration launch observation may establish launch-confirmed model/effort
 configuration, bound by its canonical returned agent identity and original snapshot digest. Cards show
 that useful configuration with `[launch-confirmed]` when provider-effective facts are missing; the
 record keeps provider-effective Unknown separate. The original observation must attest an accepted
-running/completed launch, never an unexecuted routing proposal. Missing role stays Unknown.
+running/completed launch, never an unexecuted routing proposal. Missing role stays Unknown. A Root-recorded launch confirmation is labelled with that provenance in
+the issue record; an unavailable raw returned tool response remains an explicit verification gap. It
+does not establish provider-resolved model, effective effort, or an exact child-turn usage join.
 
 Provider observations retain
 original `provider-usage-observation/1` payloads: the `threadId` joins the original invocation, and only
