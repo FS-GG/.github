@@ -50,14 +50,6 @@ def native_hardness(record):
     return 'Unknown'
 
 
-def owning_comment(item_id, comment_url):
-    repo, number = item_id.split('#')
-    if not re.fullmatch(r'https://github.com/' + re.escape(repo) + r'/issues/' + number +
-                        r'#issuecomment-[1-9][0-9]*', comment_url or ''):
-        raise ValueError('exact owning-issue comment URL required for projection')
-    return comment_url
-
-
 def classify(snapshot):
  for key in ('itemId','body','capturedAt','sourceRevision','dispatchBoundary','producer'):
   if not isinstance(snapshot.get(key),str) or not snapshot[key].strip():
@@ -230,7 +222,9 @@ def execution_summary(executions, key):
 
 def projection_scope(snapshot, comment_url, template):
     """Bind one durable issue record into the fixed annotation-only migration scope."""
-    owning_comment(snapshot['itemId'], comment_url)
+    if not re.fullmatch(r'https://github.com/' + re.escape(snapshot['itemId'].split('#')[0]) +
+                        r'/issues/' + snapshot['itemId'].split('#')[1] + r'#issuecomment-[1-9][0-9]*', comment_url or ''):
+        raise ValueError('exact owning-issue comment URL required for projection')
     if template.get('initialPlanning') != [] or template.get('views') != [] or 'workLevel' in template:
         raise ValueError('annotation projection template cannot select planning, membership or view migration')
     repo, number = snapshot['itemId'].split('#')

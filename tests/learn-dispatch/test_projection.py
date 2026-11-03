@@ -255,7 +255,7 @@ class ProjectionTests(unittest.TestCase):
                     'https://github.com/FS-GG/other/issues/1#issuecomment-17',
                     'https://github.com/FS-GG/test/issues/1#issuecomment-0']:
             with self.assertRaisesRegex(ValueError, 'owning-issue'):
-                m.assignment(record, url)
+                m.dispatch.projection_scope(self.original(), url, self.template())
 
     def test_completion_policy_mismatch_and_snapshot_tampering_refuse(self):
         record = m.project(self.cohort())['records'][0]

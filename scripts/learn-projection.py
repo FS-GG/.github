@@ -232,7 +232,6 @@ def assignment(record, comment_url):
     # Values are summaries; exact identities, roles, dimensions and requested profiles stay on the issue.
     def values(key):
         return dispatch.execution_summary(record['executions'], key)
-    dispatch.owning_comment(record['itemId'], comment_url)
     return dict(issueId=record['nodeId'], evidence=comment_url, values={
         'Hardness': dispatch.native_hardness(record), 'Actual models': values('model'), 'Actual effort': values('effort'),
         'Execution provenance': comment_url})
