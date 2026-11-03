@@ -69,7 +69,8 @@ def blind(title,body,repositories):
         else:
             line=re.sub(r'https?://(?:github\.com|api\.github\.com)/[^\s)\]>]+',lambda m:alias('NATIVE_LINK',m[0]),line)
             line=re.sub(r'\b(?:FS-GG|EHotwagner)/[A-Za-z0-9_.-]+(?:#[0-9]+)?',lambda m:alias('REPOSITORY_REF',m[0]),line)
-            line=re.sub(r'(?<![A-Za-z0-9_])#[0-9]+\b',lambda m:alias('ISSUE_REF',m[0]),line)
+            line=re.sub(r'[A-Za-z0-9_.-]+#[0-9]+\b',lambda m:alias('REPOSITORY_ISSUE_REF',m[0]),line)
+            line=re.sub(r'#[0-9]+\b',lambda m:alias('ISSUE_REF',m[0]),line)
             for repository in sorted(repositories,key=len,reverse=True):
                 name=repository.split('/',1)[-1]
                 if name=='.github':continue
