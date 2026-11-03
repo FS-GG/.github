@@ -10,6 +10,13 @@ is a valuable empirical hardness signal. This report calculates the strongest du
 supported by the retained records, preserves stopped/failed/open work, and quantifies the effect of pauses
 and feature timing. It does not substitute calendar age or silent commit gaps for measured active work.
 
+The most useful exploratory findings are:
+
+- H and the full D1–D8 vector fail to beat the training-median baseline in parent-group prediction.
+- Text length's pooled advantage reverses with equal-parent weighting or removal of the largest parent cluster.
+- D8 is constant at 3 across all 34 runtime items; D7 is nearly constant. This cohort cannot validate their full scale.
+- 33 of 34 runtime items were created in November, while most historical issues were created in July; broad historical transfer is untested.
+
 The broad census contains 12,175 native records. The actual timeline cohort is 34 issues and 74 attributed
 invocations, not 12,175 matched experiments. Observed worker model variation exists; worker effort variation
 does not. Both worker groups use observed `high` effort. Medium-effort observations belong to analysts,
