@@ -109,6 +109,9 @@ class CalibrationTests(unittest.TestCase):
  def test_missing_does_not_become_zero(self):
   r=self.mod.aggregate({'deliveries':[dict(hardness=0,observedTokens=None,reviewRounds=[],blockingFindings=None)]})
   self.assertEqual(0,r['tokenJoined']);self.assertIsNone(r['logTokenPearson']);self.assertEqual(0,r['knownBlockingCounts']);self.assertIsNone(r['blockingPearson'])
+ def test_current_scope_is_not_predispatch_calibration(self):
+  with self.assertRaisesRegex(ValueError,'not pre-dispatch'):
+   self.mod.aggregate({'deliveries':[dict(hardness=7,observedTokens=None,reviewRounds=[],blockingFindings=None,classificationBasis='current-scope')]})
  def test_known_inverse_and_dependent_prs(self):
   rows=[dict(hardness=i,observedTokens=2**(4-i),reviewRounds=[i+1,i+1],blockingFindings=3-i) for i in range(3)]
   r=self.mod.aggregate({'deliveries':rows})

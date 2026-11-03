@@ -34,7 +34,7 @@ module MigrationFixture =
           SelectedIssues = [ { Id = "synthetic-issue"; Repository = "FS-GG/.github"; Number = 42; Slice = "synthetic-parent" } ];
           StatusFieldId = "synthetic-status"; RoadmapFieldId = "synthetic-roadmap"; TrackFieldId = "synthetic-track";
           ObservationFieldId = "synthetic-observation"; InReviewColor = "BLUE"; InReviewDescription = "synthetic review";
-          Views = []; InitialPlanning = []; WorkLevel = None }
+          Views = []; InitialPlanning = []; WorkLevel = None; Learn = None }
     let snapshot : Snapshot =
         { ObservedAt = DateTimeOffset.UtcNow; PrincipalId = scope.PrincipalId; PrincipalLogin = scope.PrincipalLogin;
           OrganizationId = "O_kgDOEYAWYw"; ProjectId = "PVT_kwDOEYAWY84Bldpa"; ProjectTitle = "Coordination V2";
@@ -237,10 +237,11 @@ module MigrationFixture =
                 let name =
                     if query.Contains "createProjectV2Field(" then
                         let options: SelectOption list =
-                            input.GetProperty("singleSelectOptions").EnumerateArray() |> Seq.mapi (fun index option ->
+                            (if text "dataType" = "SINGLE_SELECT" then input.GetProperty("singleSelectOptions").EnumerateArray() |> Seq.toList else []) |> List.mapi (fun index option ->
                                 { Id = "synthetic-level-option-" + string index; Name = option.GetProperty("name").GetString()
-                                  Color = option.GetProperty("color").GetString(); Description = option.GetProperty("description").GetString() }) |> Seq.toList
-                        let field: Field = { Id = "synthetic-work-level"; Name = text "name"; DataType = text "dataType"; Options = options }
+                                  Color = option.GetProperty("color").GetString(); Description = option.GetProperty("description").GetString() })
+                        let createdId = if text "name" = "Work level" then "synthetic-work-level" else "synthetic-learn-" + string snapshot.Fields.Length
+                        let field: Field = { Id = createdId; Name = text "name"; DataType = text "dataType"; Options = options }
                         snapshot <- { snapshot with Fields = snapshot.Fields @ [ field ] }
                         "createProjectV2Field"
                     elif query.Contains "updateProjectV2Field(" then
@@ -307,7 +308,7 @@ module MigrationFixture =
                 else
                     let payloadName, nativeId =
                         match name with
-                        | "createProjectV2Field" -> "projectV2Field", "synthetic-work-level"
+                        | "createProjectV2Field" -> "projectV2Field", (snapshot.Fields |> List.last |> _.Id)
                         | "updateProjectV2Field" -> "projectV2Field", text "fieldId"
                         | "addProjectV2ItemById" -> "item", "synthetic-item-" + text "contentId"
                         | "updateProjectV2ItemFieldValue" -> "projectV2Item", text "itemId"

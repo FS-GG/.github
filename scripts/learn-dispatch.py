@@ -65,7 +65,8 @@ def classify(snapshot):
  return dict(schema='fsgg.learn-dispatch/1',itemId=snapshot['itemId'],rubricVersion=RUBRIC,policyVersion=POLICY,
   capturedAt=snapshot['capturedAt'],sourceRevision=snapshot['sourceRevision'],dispatchBoundary=snapshot['dispatchBoundary'],
   producer=snapshot['producer'],inputDigest=hashlib.sha256(text.encode()).hexdigest(),provenance='rule',
-  scores=scores,evidence=evidence,hardness=total,safetyFloor=safety,recommendedProfile=route,chosenProfile=chosen,
+  scores=scores,evidence=evidence,hardness=total,categoryVersion='learn-02-category-v1',
+  hardnessCategory=('Unknown' if total is None else 'High' if total>=13 or scores['D3']>=2 or scores['D5']>=2 else 'Medium' if total>=7 else 'Low'),safetyFloor=safety,recommendedProfile=route,chosenProfile=chosen,
   overrideReason=snapshot.get('overrideReason'),propensity=propensity,runtime=snapshot.get('runtime'),
   model=snapshot.get('model'),reviewActor='existing owner or authorized reviewer; no automatic critic dispatch')
 
@@ -80,7 +81,8 @@ def batch_for(snapshot):
 
 def comment_for(snapshot):
     digest = hashlib.sha256(canonical(snapshot)).hexdigest()
-    return '<!-- fsgg:learn-dispatch/v1 snapshot=' + digest + ' -->\n```json\n' + canonical(snapshot).decode() + '```\n'
+    marker = 'learn-completion' if snapshot['schema'] == 'fsgg.learn-completion/1' else 'learn-dispatch'
+    return '<!-- fsgg:' + marker + '/v1 snapshot=' + digest + ' -->\n```json\n' + canonical(snapshot).decode() + '```\n'
 
 
 def prepare(snapshot, out):
@@ -97,6 +99,30 @@ def prepare(snapshot, out):
         with (out / name).open('xb') as f:
             f.write(data)
     print(json.dumps(dict(snapshotDigest=batch_for(snapshot)['events'][0]['snapshotDigest'], files=3, effects=0)))
+
+
+def prepare_completion(native, completion, out):
+    # Completion observes execution; current body supplies only an adjacent recording preimage.
+    # It never becomes a replacement historical hardness input.
+    for key in ('itemId', 'body', 'capturedAt', 'sourceRevision', 'producer'):
+        if not isinstance(native.get(key), str) or not native[key].strip():
+            raise ValueError('missing ' + key)
+    if completion.get('schema') != 'fsgg.learn-completion/1' or completion['itemId'] != native['itemId']:
+        raise ValueError('completion identity/schema mismatch')
+    if completion.get('classificationBasis') == 'current-scope' and completion['classification']['nativeBodyDigest'] != hashlib.sha256(native['body'].encode()).hexdigest():
+        raise ValueError('current assessment body changed; retain original record and assess the new revision')
+    stamp = datetime.fromisoformat(native['capturedAt'].replace('Z', '+00:00'))
+    if stamp.utcoffset() is None or stamp.utcoffset().total_seconds() != 0:
+        raise ValueError('capturedAt must be UTC')
+    snapshot = dict(schema='fsgg.learn-completion/1', itemId=native['itemId'], producer=native['producer'],
+                    capturedAt=native['capturedAt'], sourceRevision=native['sourceRevision'],
+                    inputDigest=hashlib.sha256(native['body'].encode()).hexdigest(), completion=completion)
+    out.mkdir(parents=True, exist_ok=False, mode=0o700)
+    for name, payload in [('snapshot.json', canonical(snapshot)), ('observation.json', canonical(batch_for(snapshot))),
+                          ('comment.md', comment_for(snapshot).encode())]:
+        with (out / name).open('xb') as stream:
+            stream.write(payload)
+    print(json.dumps(dict(files=3, effects=0)))
 
 
 def durable_directory(path):
@@ -154,6 +180,66 @@ def submit_telemetry(repo, args, packet):
     return subprocess.check_output([args.engine, 'telemetry', 'workspace', 'submit', '--config', args.config,
         '--repository', repo, '--producer', args.producer, '--binding-digest', args.binding_digest,
         '--input', str(packet)], text=True)
+
+
+def projection_scope(snapshot, comment_url, template):
+    """Bind one durable issue record into the fixed annotation-only migration scope."""
+    if not re.fullmatch(r'https://github.com/' + re.escape(snapshot['itemId'].split('#')[0]) +
+                        r'/issues/' + snapshot['itemId'].split('#')[1] + r'#issuecomment-[1-9][0-9]*', comment_url or ''):
+        raise ValueError('exact owning-issue comment URL required for projection')
+    if template.get('initialPlanning') != [] or template.get('views') != [] or 'workLevel' in template:
+        raise ValueError('annotation projection template cannot select planning, membership or view migration')
+    repo, number = snapshot['itemId'].split('#')
+    selected = [issue for issue in template['selectedIssues'] if issue['repository'] == repo and issue['number'] == int(number)]
+    if len(selected) != 1:
+        raise ValueError('exact selected native issue required in projection template')
+    # JSON copy avoids mutating caller templates or shared lifecycle state.
+    scope = json.loads(canonical(template))
+    scope['selectedIssues'] = selected
+    plan = scope['learn']
+    if plan.get('schema') != 'fs.gg.board-v2.learn-annotations/1' or any(not field.get('fieldId') for field in plan['fields']):
+        raise ValueError('projection requires independently read-back fixed annotation field identities')
+    if snapshot['schema'] == 'fsgg.learn-completion/1':
+        completion = snapshot['completion']
+        if completion['nodeId'] != selected[0]['id']:
+            raise ValueError('completion native issue identity mismatch')
+        category = completion['hardnessCategory']
+        def summary(key):
+            return '; '.join(sorted({row['role'] + ': ' + (row[key] + ' [provider-observed]' if row[key] != 'Unknown' else row['launchConfiguration'][key] + ' [launch-confirmed]' if row.get('launchConfiguration') else 'Unknown') for row in completion['executions']})) or 'Unknown'
+        models, effort = summary('model'), summary('effort')
+    else:
+        category = snapshot['hardnessCategory']
+        # A requested model/profile in the dispatch snapshot is not execution evidence.
+        models, effort = 'Unknown', 'Unknown'
+    plan['assignments'] = [dict(issueId=selected[0]['id'], evidence=comment_url, values={
+        'Hardness': category, 'Actual models': models, 'Actual effort': effort, 'Execution provenance': comment_url})]
+    return scope
+
+
+def retain_projection_scope(snapshot, state, args):
+    template = getattr(args, 'projection_template', None)
+    output = getattr(args, 'projection_scope_output', None)
+    if not template and not output:
+        return
+    if not template or not output:
+        raise ValueError('projection requires both template and scope output')
+    value = projection_scope(snapshot, state.get('commentUrl'), json.loads(Path(template).read_bytes()))
+    payload = canonical(value)
+    output = Path(output)
+    if output.exists():
+        if output.read_bytes() != payload:
+            raise ValueError('retained projection scope differs; preserve original output')
+        return
+    descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, 'wb') as stream:
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    directory = os.open(output.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
 
 
 def record(out, args):
@@ -232,6 +318,7 @@ def record(out, args):
         if observed['id'] != comment['id'] or observed['body'] != expected:
             raise ValueError('native comment readback mismatch; retain possible-send custody')
         if state['phase'] == 'telemetry-submitted':
+            retain_projection_scope(snapshot, state, args)
             print('retained telemetry submission; native comment readback verified; inspect receipt acceptance before dispatch')
             return
         state.update(phase='comment-observed', commentId=observed['id'], commentUrl=observed.get('html_url'))
@@ -241,12 +328,16 @@ def record(out, args):
         receipt = submit_telemetry(repo, args, packet)
         state.update(phase='telemetry-submitted', receipt=receipt)
         durable_json(state_path, state)
+        retain_projection_scope(snapshot, state, args)
         print('native comment readback verified and telemetry submission retained; inspect receipt acceptance before dispatch')
     finally:
         os.close(lock)
 
 if __name__=='__main__':
  parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--input',type=Path);parser.add_argument('--output',type=Path,required=True)
+ parser.add_argument('--projection-template',type=Path,help='qualified fixed field/native issue migration scope template')
+ parser.add_argument('--projection-scope-output',type=Path,help='exclusive private annotation-only scope; never applies it')
+ parser.add_argument('--completion-input',type=Path,help='retained learn-projection completion record; current body is only the recording preimage')
  parser.add_argument('--record',action='store_true',help='explicit live comment and telemetry effects; needs separate authority')
  parser.add_argument('--state-root',type=Path,help='one shared private custody root per host; retain across retries')
  parser.add_argument('--telemetry-cli',dest='engine',default='fsgg-coord-engine');parser.add_argument('--config');parser.add_argument('--producer');parser.add_argument('--binding-digest')
@@ -257,5 +348,8 @@ if __name__=='__main__':
    record(args.output,args)
   else:
    if not args.input:raise ValueError('prepare requires input')
-   prepare(json.loads(args.input.read_text()),args.output)
+   if args.completion_input:
+    prepare_completion(json.loads(args.input.read_text()),json.loads(args.completion_input.read_text()),args.output)
+   else:
+    prepare(json.loads(args.input.read_text()),args.output)
  except (ValueError,OSError,subprocess.CalledProcessError) as error: parser.exit(2,str(error)+'\n')

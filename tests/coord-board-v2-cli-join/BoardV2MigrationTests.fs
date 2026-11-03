@@ -1366,3 +1366,45 @@ module BoardV2MigrationTests =
         Assert.True(File.Exists(Path.Combine(path + ".invocation", "005-group-native-readback.json")))
         Assert.False(File.Exists(Path.Combine(path + ".invocation", "005-group-readback.json")))
         Assert.False(File.Exists(Path.Combine(path + ".invocation", "completed.json")))
+
+    [<Fact>]
+    let ``actual CLI creates LEARN fields then projects observed metadata through the same custody path`` () =
+        use fixture = new Fixture()
+        let names = [ "Hardness"; "Actual models"; "Actual effort"; "Execution provenance" ]
+        fixture.Scope <- { fixture.Scope with Learn = Some { Fields = names |> List.map (fun name -> { Name = name; FieldId = None }); Assignments = [] } }
+        let code, path = fixture.Prepare "learn-create"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(4, fixture.Native.Mutations.Length)
+        Assert.Empty fixture.Native.Snapshot.Items
+        let issue = fixture.Scope.SelectedIssues.Head
+        fixture.Native.Snapshot <-
+            { fixture.Native.Snapshot with Items = [ { Id = "synthetic-item"; ContentId = issue.Id; ContentKind = "Issue";
+                Repository = Some issue.Repository; Number = Some issue.Number; UpdatedAt = "2026-10-17T12:00:00Z"; Archived = false; Values = [] } ] }
+        let fields = names |> List.map (fun name ->
+            { Name = name; FieldId = Some(fixture.Native.Snapshot.Fields |> List.find (fun field -> field.Name = name) |> _.Id) })
+        let assignment = { IssueId = issue.Id; Evidence = "https://github.com/FS-GG/.github/issues/42#issuecomment-17";
+                           Values = [ "Hardness", "Medium"; "Actual models", "worker: observed-model";
+                                      "Actual effort", "worker: Unknown"; "Execution provenance", "https://github.com/FS-GG/.github/issues/42#issuecomment-17" ] }
+        fixture.Scope <- { fixture.Scope with Learn = Some { Fields = fields; Assignments = [ assignment ] } }
+        let code, path = fixture.Prepare "learn-project"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(8, fixture.Native.Mutations.Length)
+        Assert.Equal(4, fixture.Native.Snapshot.Items.Head.Values.Length)
+        let code, path = fixture.Prepare "learn-current"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(8, fixture.Native.Mutations.Length)
+        let revisedValues =
+            assignment.Values |> List.map (fun (name, value) ->
+                name, if name = "Actual models" then "worker: observed-model; critic: observed-reviewer" else value)
+        let revised = { assignment with Values = revisedValues }
+        fixture.Scope <- { fixture.Scope with Learn = Some { Fields = fields; Assignments = [ revised ] } }
+        let code, path = fixture.Prepare "learn-observed-update"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(9, fixture.Native.Mutations.Length)
+        let metadataPath = Path.Combine(path + ".invocation", "001-intent-metadata.json")
+        use metadata = JsonDocument.Parse(File.ReadAllText metadataPath)
+        Assert.True(metadata.RootElement.GetProperty("itemScoped").GetBoolean())

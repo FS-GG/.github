@@ -449,10 +449,10 @@ module BoardV2Application =
     let private migrationResponse (change: V2Migration.Change) (request: Transport.Request) (response: Transport.Response) =
         let name =
             match change with
-            | V2Migration.CreateWorkLevel -> "createProjectV2Field"
+            | V2Migration.CreateWorkLevel | V2Migration.CreateLearnField _ -> "createProjectV2Field"
             | V2Migration.AddInReview _ -> "updateProjectV2Field"
             | V2Migration.AddMembership _ -> "addProjectV2ItemById"
-            | V2Migration.InitializePlanningValue _ -> "updateProjectV2ItemFieldValue"
+            | V2Migration.InitializePlanningValue _ | V2Migration.SetLearnValue _ -> "updateProjectV2ItemFieldValue"
             | V2Migration.CreateView _ -> "createProjectV2View"
             | V2Migration.UpdateView _ -> "updateProjectV2View"
         let expected =
@@ -469,10 +469,10 @@ module BoardV2Application =
                         let payload = data.GetProperty name
                         let identityName =
                             match change with
-                            | V2Migration.CreateWorkLevel -> "projectV2Field"
+                            | V2Migration.CreateWorkLevel | V2Migration.CreateLearnField _ -> "projectV2Field"
                             | V2Migration.AddInReview _ -> "projectV2Field"
                             | V2Migration.AddMembership _ -> "item"
-                            | V2Migration.InitializePlanningValue _ -> "projectV2Item"
+                            | V2Migration.InitializePlanningValue _ | V2Migration.SetLearnValue _ -> "projectV2Item"
                             | V2Migration.CreateView _ | V2Migration.UpdateView _ -> "projectV2View"
                         let identity = payload.GetProperty(identityName).GetProperty("id").GetString()
                         if payload.GetProperty("clientMutationId").GetString() = expected
@@ -591,7 +591,7 @@ module BoardV2Application =
                                                    repository = Option.toObj item.Repository; number = Option.toNullable item.Number; updatedAt = item.UpdatedAt
                                                    archived = item.Archived
                                                    values = item.Values |> List.map (fun (value: V2Migration.ItemValue) -> {| id = value.Id; fieldId = value.FieldId; kind = value.Kind; value = value.Value |}) |})
-                                        let isPlanning = function V2Migration.InitializePlanningValue _ -> true | _ -> false
+                                        let isPlanning = function V2Migration.InitializePlanningValue _ | V2Migration.SetLearnValue _ -> true | _ -> false
                                         let planningGroup (start: int) (groupBase: V2Migration.Prepared) (group: V2Migration.Change list) : Result<int * V2Migration.Change list, string> =
                                             let items = Collections.Generic.Dictionary<string, V2Migration.Item>()
                                             for item in groupBase.Snapshot.Items do items.[item.Id] <- item
@@ -601,7 +601,7 @@ module BoardV2Application =
                                                 | _ when clock.GetUtcNow() >= admission.WindowUntil ->
                                                     if applied.IsEmpty then Error "planning-window-expired" else Ok(sequence, List.rev applied)
                                                 | change :: rest ->
-                                                    let itemId = match change with V2Migration.InitializePlanningValue(_, itemId, _, _) -> itemId | _ -> ""
+                                                    let itemId = match change with V2Migration.InitializePlanningValue(_, itemId, _, _) | V2Migration.SetLearnValue(_, itemId, _, _, _) -> itemId | _ -> ""
                                                     match items.TryGetValue itemId with
                                                     | false, _ -> Error "group-item-absent-from-base"
                                                     | true, expectedItem ->
@@ -696,7 +696,7 @@ module BoardV2Application =
                                                             privateJson (Path.Combine(directory, "effect-budget.json"))
                                                                 (JsonSerializer.Serialize({| sent = sent; maxEffects = maxEffects; remaining = current.Changes.Length; next = "re-prepare to continue" |}))
                                                             Error "effect-budget-reached-reprepare-to-continue"
-                                                        | (V2Migration.InitializePlanningValue _ :: _) as changes ->
+                                                        | ((V2Migration.InitializePlanningValue _ | V2Migration.SetLearnValue _) :: _) as changes ->
                                                             let group = changes |> List.takeWhile isPlanning |> List.truncate (min migrationPlanningGroupSize (maxEffects - sent))
                                                             planningGroup sequence current group
                                                             |> Result.bind (fun (nextSequence, applied) ->
