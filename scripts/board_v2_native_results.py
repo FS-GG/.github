@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import unicodedata
 
 MAX_BYTES = 4 * 1024 * 1024
 
@@ -268,11 +269,132 @@ def decode_inspection(report, expected_binding):
     return {"family": "product3" if binding == 3 else "organization" + str(binding), "report": report}
 
 
+LEARN_NAMES = {"Hardness", "Actual models", "Actual effort", "Execution provenance"}
+LEARN_CATEGORIES = {"Low", "Medium", "High", "Unknown"}
+LEARN_OPTIONS = {
+    "Low": ("GREEN", "learn-02-category-v1: H <= 6"),
+    "Medium": ("YELLOW", "learn-02-category-v1: 7 <= H <= 12"),
+    "High": ("RED", "learn-02-category-v1: H >= 13 or D3/D5 >= 2"),
+    "Unknown": ("GRAY", "learn-02-category-v1: missing assessed dimension evidence"),
+}
+
+
+def _learn_text(value, maximum=4096):
+    require(isinstance(value, str) and bool(value.strip()) and value.strip() == value
+            and len(value.encode("utf-16-le", errors="surrogatepass")) // 2 <= maximum
+            and not any(unicodedata.category(character) == "Cc" for character in value), "migration-learn-text-shape")
+    return value
+
+
+def _learn_summary(value):
+    if value == "Unknown": return
+    entries = loads(value)
+    require(isinstance(entries, list) and bool(entries), "migration-learn-summary-shape")
+    for entry in entries:
+        require(isinstance(entry, str), "migration-learn-summary-shape")
+        role, separator, fact = entry.partition(": ")
+        require(separator and role in {"worker", "critic", "analyst", "report", "Unknown"}, "migration-learn-summary-role")
+        suffix = next((suffix for suffix in (" [provider-observed]", " [launch-confirmed]") if fact.endswith(suffix)), None)
+        require(suffix is not None or fact == "Unknown", "migration-learn-summary-confidence")
+        _learn_text(fact[:-len(suffix)] if suffix else fact, 256)
+
+
+def _learn_scope(scope, snapshot, *, readback=False):
+    plan = scope["learn"]
+    closed(plan, {"schema", "fields", "assignments"})
+    require(plan["schema"] == "fs.gg.board-v2.learn-annotations/1" and "workLevel" not in scope
+            and scope["initialPlanning"] == [], "migration-learn-scope-shape")
+    require(snapshot["header"][2:7] == ["O_kgDOEYAWYw", "PVT_kwDOEYAWY84Bldpa", "Coordination V2", "3", "True"], "migration-learn-project-identity")
+    require(isinstance(plan["fields"], list) and len(plan["fields"]) == 4, "migration-learn-fields-shape")
+    fields = {}
+    bound = []
+    planning = {scope[key] for key in ("statusFieldId", "trackFieldId", "roadmapFieldId", "observationFieldId")}
+    for field in plan["fields"]:
+        closed(field, {"name", "fieldId"})
+        _learn_text(field["name"], 100)
+        require(field["name"] in LEARN_NAMES and field["name"] not in fields, "migration-learn-field-name")
+        identity = field["fieldId"]
+        require(identity is None or (_learn_text(identity, 256) not in planning and identity not in bound), "migration-learn-field-identity")
+        if identity is not None: bound.append(identity)
+        fields[field["name"]] = identity
+        native = [value for value in snapshot["fields"].values() if value["tokens"][1] == field["name"]]
+        if identity is None and not readback:
+            require(not native, "migration-learn-existing-field-unbound")
+            continue
+        require((identity is None and not native) or len(native) == 1, "migration-learn-field-population")
+        if not native: continue
+        observed = native[0]
+        require(identity is None or observed["tokens"][0] == identity, "migration-learn-field-identity")
+        if field["name"] == "Hardness":
+            options = observed["options"]
+            require(observed["tokens"][2] == "SINGLE_SELECT" and len(options) == 4
+                    and {row[1] for row in options} == LEARN_CATEGORIES
+                    and all(tuple(row[2:]) == LEARN_OPTIONS[row[1]] for row in options), "migration-learn-hardness-options")
+        else:
+            require(observed["tokens"][2] == "TEXT" and not observed["options"], "migration-learn-field-type")
+    selected = {issue["id"]: issue for issue in scope["selectedIssues"]}
+    for item in snapshot["items"].values():
+        issue = selected.get(item["header"][1])
+        if issue is not None:
+            require(item["header"][2:5] == ["Issue", issue["repository"], str(issue["number"])], "migration-learn-member-identity")
+    require(isinstance(plan["assignments"], list) and len(plan["assignments"]) <= 100, "migration-learn-assignment-bound")
+    seen = set()
+    for assignment in plan["assignments"]:
+        closed(assignment, {"issueId", "values", "evidence"})
+        identity = _learn_text(assignment["issueId"], 256)
+        require(identity in selected and identity not in seen, "migration-learn-assignment-identity")
+        seen.add(identity); issue = selected[identity]
+        require(re.fullmatch(r"FS-GG/[A-Za-z0-9_.-]+", issue["repository"]) is not None
+                and type(issue["number"]) is int and issue["number"] > 0, "migration-learn-selected-issue-shape")
+        evidence = _learn_text(assignment["evidence"])
+        require(re.fullmatch(r"https://github\.com/" + re.escape(issue["repository"]) + "/issues/" + str(issue["number"]) + r"#issuecomment-[1-9][0-9]*", evidence) is not None, "migration-learn-owning-evidence")
+        closed(assignment["values"], LEARN_NAMES)
+        for name, value in assignment["values"].items():
+            _learn_text(value)
+            if name in {"Actual models", "Actual effort"}: _learn_summary(value)
+        require(assignment["values"]["Hardness"] in LEARN_CATEGORIES and assignment["values"]["Execution provenance"] == evidence, "migration-learn-assignment-value")
+    return fields
+
+
+def _learn_changes(prepared, snapshot, fields):
+    scope = prepared["scope"]
+    assignments = {value["issueId"]: value for value in scope["learn"]["assignments"]}
+    for change in prepared["changes"]:
+        require(isinstance(change, list) and all(isinstance(value, str) for value in change) and bool(change), "migration-learn-change-shape")
+        if change[0] == "create-learn-field/1":
+            require(len(change) == 2 and change[1] in fields and fields[change[1]] is None, "migration-learn-create-intent")
+        elif change[0] == "set-learn-value/1":
+            require(len(change) >= 7, "migration-learn-value-intent")
+            issue, item_id, field_id = change[1:4]
+            require(issue in assignments and item_id in snapshot["items"], "migration-learn-change-identity")
+            item = snapshot["items"][item_id]
+            selected = next(value for value in scope["selectedIssues"] if value["id"] == issue)
+            require(item["header"][1:5] == [issue, "Issue", selected["repository"], str(selected["number"])] and item["header"][6] == "False", "migration-learn-change-membership")
+            names = [name for name, identity in fields.items() if identity == field_id]
+            require(len(names) == 1, "migration-learn-change-field")
+            name = names[0]; desired = assignments[issue]["values"][name]
+            if name == "Hardness":
+                require(change[4] == "select" and len(change) >= 8, "migration-learn-change-union")
+                require(any(option[:2] == change[5:7] and option[1] == desired for option in snapshot["fields"][field_id]["options"]), "migration-learn-change-option")
+                rest = change[7:]
+            else:
+                require(change[4:6] == ["text", desired], "migration-learn-change-union")
+                rest = change[6:]
+            previous = item["values"].get(field_id)
+            require((previous is None and rest == ["absent"]) or
+                    (previous is not None and rest == ["present", *previous["tokens"]]), "migration-learn-change-preimage")
+        elif change[0] == "update-view":
+            require(len(change) >= 8 and any(change == ["update-view", view["id"], view["id"], view["name"], view["layout"], view["filter"], str(len(view["visibleFieldIds"])), *view["visibleFieldIds"]] for view in scope["views"]), "migration-learn-view-intent")
+        else:
+            raise Unknown("migration-learn-unsupported-change")
+
+
 def decode_prepared(prepared, prepared_path):
     closed(prepared, {"schema", "preparedPath", "observedAt", "scope", "snapshot", "changes", "ownerActions", "digest"})
     scope_keys = set("sourceRevision artifactSha256 cliArtifactSha256 principalId principalLogin selectedIssues statusFieldId roadmapFieldId trackFieldId observationFieldId inReviewColor inReviewDescription views initialPlanning".split())
     scope = prepared["scope"]
-    closed(scope, scope_keys | ({"workLevel"} if "workLevel" in scope else set()))
+    require(isinstance(scope, dict), "migration-scope-shape")
+    closed(scope, scope_keys | ({"workLevel"} if "workLevel" in scope else set()) | ({"learn"} if "learn" in scope else set()))
     require(re.fullmatch(r"[0-9a-f]{40}", scope["sourceRevision"]) is not None
             and all(re.fullmatch(r"[0-9a-f]{64}", scope[key]) is not None for key in ("artifactSha256", "cliArtifactSha256"))
             and re.fullmatch(r"[0-9a-f]{64}", prepared["digest"]) is not None, "migration-source-identity-shape")
@@ -290,7 +412,7 @@ def decode_prepared(prepared, prepared_path):
                 and isinstance(scope["workLevel"]["assignments"], list) and len(scope["workLevel"]["assignments"]) <= 100, "migration-work-level-shape")
         for assignment in scope["workLevel"]["assignments"]: closed(assignment, {"issueId", "name"})
     timestamp(prepared["observedAt"])
-    version = 2 if "workLevel" in scope else 1
+    version = 3 if "learn" in scope else 2 if "workLevel" in scope else 1
     require(prepared["schema"] == f"fs.gg.board-v2.migration-prepare/{version}"
             and prepared["preparedPath"] == str(prepared_path), "migration-original-prepared-identity-differs")
     snapshot = decode_snapshot(prepared["snapshot"])
@@ -303,19 +425,27 @@ def decode_prepared(prepared, prepared_path):
         selected.add(issue["id"])
     require(selected == {row[0] for row in snapshot["issues"]}, "migration-native-selected-cohort-differs")
     require(isinstance(prepared["changes"], list) and isinstance(prepared["ownerActions"], list) and all(isinstance(value, str) for value in prepared["ownerActions"]), "migration-original-intent-shape")
+    if "learn" in scope:
+        fields = _learn_scope(scope, snapshot)
+        _learn_changes(prepared, snapshot, fields)
     return snapshot
 
 
 def migration_readback(report, prepared, prepared_path):
     closed(report, {"schema", "observedAt", "scope", "snapshot", "snapshotDigest", "admission"})
     before = decode_prepared(prepared, prepared_path)
-    version = 2 if "workLevel" in prepared["scope"] else 1
+    version = 3 if "learn" in prepared["scope"] else 2 if "workLevel" in prepared["scope"] else 1
     timestamp(report["observedAt"])
     require(report["schema"] == f"fs.gg.board-v2.migration-readback/{version}", "migration-result-version-differs")
     require(report["scope"] == prepared["scope"], "migration-original-scope-differs")
     require(report["admission"] == "readback-only; original outcome and uncertainty retained"
             and re.fullmatch(r"[0-9a-f]{64}", report["snapshotDigest"]) is not None, "migration-readback-admission-differs")
-    return {"before": before, "after": decode_snapshot(report["snapshot"]), "report": report, "original": prepared}
+    after = decode_snapshot(report["snapshot"])
+    if "learn" in prepared["scope"]:
+        require(before["header"][:8] == after["header"][:8], "migration-learn-readback-project-identity")
+        require({tuple(row[:3]) for row in before["issues"]} == {tuple(row[:3]) for row in after["issues"]}, "migration-learn-readback-selected-identity")
+        _learn_scope(prepared["scope"], after, readback=True)
+    return {"before": before, "after": after, "report": report, "original": prepared}
 
 
 def require_preimage(observed, expected):

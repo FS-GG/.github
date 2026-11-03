@@ -6,7 +6,11 @@ qualified installed caller and independent native readback. A source build does 
 ## Fields and compatibility
 
 The maintained `board-v2 migration-prepare`, `migration-apply` and `migration-readback` path accepts the
-optional closed `learn` extension, `fs.gg.board-v2.learn-annotations/1`. Its prepared report uses version3.
+optional closed `learn` extension, `fs.gg.board-v2.learn-annotations/1`. Its prepared and recovery readback reports use version3. The maintained
+[`board_v2_native_results.py`](../../scripts/board_v2_native_results.py) consumer decodes that closed
+LEARN scope and checks selected identities, field/assignment shapes and original effect preimages;
+version1/2 reports retain their prior contracts. Actual CLI output is round-tripped through that
+consumer and its complete field-transition projection in the source qualification tests.
 It creates only these additive fields:
 
 | Field | Native type | Meaning |

@@ -479,6 +479,55 @@ class BoardNativeResultsTests(unittest.TestCase):
         prepared.write_text(json.dumps({**original, "snapshot": original["snapshot"][:-1]}))
         self.assertEqual(update.qualify_board_v2_result(record, **selected)["state"], "Unknown")
 
+    def test_work_level_v2_prepared_and_readback_keep_prior_closed_contract(self):
+        prepared_path, readback_path = self.custody()
+        prepared = json.loads(prepared_path.read_text())
+        prepared["schema"] = "fs.gg.board-v2.migration-prepare/2"
+        prepared["scope"]["workLevel"] = dict(schema="fs.gg.board-v2.work-level-migration/1", fieldId="level", assignments=[dict(issueId="issue", name="Delivery")])
+        readback = json.loads(readback_path.read_text())
+        readback.update(schema="fs.gg.board-v2.migration-readback/2", scope=prepared["scope"])
+        self.assertEqual(1, len(self.decoder["decode_prepared"](prepared, prepared_path)["items"]))
+        self.assertEqual(1, len(self.decoder["migration_readback"](readback, prepared, prepared_path)["after"]["items"]))
+        prepared["scope"]["workLevel"]["unexpected"] = True
+        with self.assertRaises(self.decoder["Unknown"]): self.decoder["decode_prepared"](prepared, prepared_path)
+
+    def learn_prepared(self):
+        prepared_path, _ = self.custody()
+        prepared = json.loads(prepared_path.read_text())
+        prepared["schema"] = "fs.gg.board-v2.migration-prepare/3"
+        prepared["snapshot"] = ["FS-GG/.github" if value == "Synthetic/Repo" else value for value in prepared["snapshot"]]
+        prepared["snapshot"][2:5] = ["O_kgDOEYAWYw", "PVT_kwDOEYAWY84Bldpa", "Coordination V2"]
+        prepared["scope"]["selectedIssues"][0]["repository"] = "FS-GG/.github"
+        evidence = "https://github.com/FS-GG/.github/issues/1#issuecomment-17"
+        names = ["Hardness", "Actual models", "Actual effort", "Execution provenance"]
+        prepared["scope"]["learn"] = dict(schema="fs.gg.board-v2.learn-annotations/1", fields=[dict(name=name, fieldId=None) for name in names],
+            assignments=[dict(issueId="issue", evidence=evidence, values={name: evidence if name == "Execution provenance" else "Unknown" for name in names})])
+        return prepared, prepared_path
+
+    def test_learn_v3_scope_closed_fields_assignments_summaries_and_identity_refuse_drift(self):
+        import copy
+        prepared, path = self.learn_prepared()
+        self.assertEqual(1, len(self.decoder["decode_prepared"](prepared, path)["items"]))
+        mutations = [lambda p: p["scope"]["learn"].update(unexpected=True),
+            lambda p: p["scope"]["learn"]["fields"][0].update(unexpected=True),
+            lambda p: p["scope"]["learn"]["assignments"][0].update(unexpected=True),
+            lambda p: p["scope"]["learn"]["assignments"][0]["values"].update(unexpected="value"),
+            lambda p: p["scope"]["learn"]["fields"][0].update(name="Status"),
+            lambda p: p["scope"]["learn"]["fields"][0].update(name={}),
+            lambda p: p["scope"]["learn"]["fields"][0].update(fieldId=p["scope"]["statusFieldId"]),
+            lambda p: p["scope"]["learn"]["assignments"][0].update(issueId="foreign"),
+            lambda p: p["scope"]["learn"]["assignments"][0].update(evidence="https://github.com/FS-GG/.github/issues/2#issuecomment-17"),
+            lambda p: p["scope"]["learn"]["assignments"][0]["values"].update(Hardness="Future"),
+            lambda p: p["scope"]["learn"]["assignments"][0]["values"].update({"Actual models": "worker: model"}),
+            lambda p: p["scope"].update(workLevel=dict(schema="fs.gg.board-v2.work-level-migration/1", fieldId="level", assignments=[]))]
+        for mutate in mutations:
+            with self.subTest(mutation=mutate):
+                changed = copy.deepcopy(prepared); mutate(changed)
+                with self.assertRaises(self.decoder["Unknown"]): self.decoder["decode_prepared"](changed, path)
+        for version in (1, 2, 4):
+            changed = copy.deepcopy(prepared); changed["schema"] = "fs.gg.board-v2.migration-prepare/" + str(version)
+            with self.assertRaises(self.decoder["Unknown"]): self.decoder["decode_prepared"](changed, path)
+
     def test_wrong_union_changed_preimage_and_unrelated_changes_refuse(self):
         decode = self.decoder["decode_field_value"]
         text_value = {"__typename": "ProjectV2ItemFieldTextValue", "field": {"id": "field"}, "text": "Owning plan"}

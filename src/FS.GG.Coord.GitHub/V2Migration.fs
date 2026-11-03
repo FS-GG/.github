@@ -29,8 +29,7 @@ module V2Migration =
     // read-back field/option identities then bind subsequent absent-only initialization.
     type WorkLevelPlan = { FieldId: string option; Assignments: WorkLevelAssignment list }
 
-    /// Additive LEARN annotations. Evidence is a durable owning-issue comment URL; values
-    /// are selected by the revision-bound evidence projector; original dispatch snapshots remain immutable.
+    // Annotation contract documentation lives in V2Migration.fsi.
     type LearnField = { Name: string; FieldId: string option }
     type LearnAssignment = { IssueId: string; Values: (string * string) list; Evidence: string }
     type LearnPlan = { Fields: LearnField list; Assignments: LearnAssignment list }
@@ -1321,7 +1320,7 @@ module V2Migration =
     let snapshotDigest (snapshot: Snapshot) = hash (snapshotTokens snapshot)
     let encodeReadback (scope: Scope) (snapshot: Snapshot) =
         let root =
-            objectNode [ "schema", jsonString (if scope.WorkLevel.IsSome then "fs.gg.board-v2.migration-readback/2" else "fs.gg.board-v2.migration-readback/1");
+            objectNode [ "schema", jsonString (if scope.Learn.IsSome then "fs.gg.board-v2.migration-readback/3" elif scope.WorkLevel.IsSome then "fs.gg.board-v2.migration-readback/2" else "fs.gg.board-v2.migration-readback/1");
                          "observedAt", jsonString (snapshot.ObservedAt.ToString "O");
                          "scope", scopeNode scope; "snapshot", stringsNode (snapshotTokens snapshot);
                          "snapshotDigest", jsonString (snapshotDigest snapshot);
