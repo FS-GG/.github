@@ -165,6 +165,10 @@
       "closed:not_planned": 4,
       "open:None": 22
     },
+    "runtimeStates": {
+      "closed:completed": 18,
+      "open:None": 16
+    },
     "unknowns": {},
     "creationVsDispatchHChanges": 0,
     "dispatchVsCurrentHChanges": 3,
@@ -630,6 +634,59 @@
         }
       }
     },
+    "creationH_nativeCompletedCalendarSeconds": {
+      "n": 27,
+      "clusters": 14,
+      "hardnessValues": [
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14,
+        15,
+        18
+      ],
+      "duration": {
+        "n": 27,
+        "secondsQuantiles": {
+          "p50": 17937.0,
+          "p90": 53134.60000000002,
+          "p99": 123118.25999999998,
+          "max": 127122.0
+        },
+        "log1pMedian": 9.794676646677948,
+        "log1pUnscaledMAD": 0.8398317388462075,
+        "threeMADFlags": 4,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.27710389291707416,
+      "kendall": 0.16163173753210963,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.12852992854955597,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "spearman": {
+          "validResamples": 500,
+          "percentile95": [
+            -0.062023077963813414,
+            0.6145201789980402
+          ]
+        },
+        "kendall": {
+          "validResamples": 500,
+          "percentile95": [
+            -0.0700678097986732,
+            0.4933028854992633
+          ]
+        }
+      }
+    },
     "currentH_responseEnvelopeUnionSeconds": {
       "n": 34,
       "clusters": 7,
@@ -817,5 +874,5 @@
     "First observed dispatch may follow actual work; creation, boundary and current bodies are separate.",
     "No causal effects or cross-profile latent invariance established."
   ],
-  "sourceManifestDigest": "1c69369a2cee9b5b1be5e4e8efc96deac4ed5c4e15a30830e2ede209bfb49b8e"
+  "sourceManifestDigest": "0b2c88828b89e7554fe61fd77669e5c8ee75bf40d913659ba6646f67c40b6b05"
 }

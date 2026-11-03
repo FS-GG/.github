@@ -5,7 +5,7 @@ This is a reproducible initial historical analysis, **not a completed validation
 The full Delivery remains open for independent labels, broader qualified outcomes and held-out evaluation.
 
 The existing hardness rubric has **weak, uncertain duration associations in the recovered cohort** and
-has **not established validity across models or effort levels**. Time worked until satisfactory completion
+has **not established validity across models or effort levels**. Expanded grouped prediction also finds no improvement from H or the full dimension vector over simple baselines; a text-length signal is sensitive to the largest parent cluster. Time worked until satisfactory completion
 is a valuable empirical hardness signal. This report calculates the strongest duration proxies actually
 supported by the retained records, preserves stopped/failed/open work, and quantifies the effect of pauses
 and feature timing. It does not substitute calendar age or silent commit gaps for measured active work.
@@ -37,7 +37,7 @@ terminal coverage. Source completeness is not task-lifetime completeness.
 The inventory retained native completed, not-planned, duplicate, open, reopened, merged and closed-unmerged
 states. It does not infer that every native completed closure passed the same independent quality contract.
 The 53-history issue sample contains 27 completed closures, four not-planned closures and 22 open issues.
-The runtime cohort contains 18 closed and 16 open issues. Open observations remain in the observed-envelope
+The runtime cohort contains 18 native-completed closed and 16 open issues; no closed runtime case has a missing reason or not-planned/duplicate reason. Open observations remain in the observed-envelope
 analysis and are right-censored for calendar completion; completed-only associations are explicitly conditional.
 
 ## Actual duration results
@@ -67,11 +67,12 @@ harmonized quality endpoint.
 | Hypothetical 1 h response-gap cap, union | 34 | 7 | 0.184 | 0.107 | 2.54 h |
 | Hypothetical 8 h gap cap, union | 34 | 7 | 0.097 | 0.048 | 2.64 h |
 | Hypothetical 24 h gap cap, union | 34 | 7 | 0.097 | 0.048 | 2.64 h |
-| Creation-body H versus creation-to-close calendar | 31 | 18 | 0.323 | 0.223 | 4.60 h |
+| Creation-body H versus calendar, all closures | 31 | 18 | 0.323 | 0.223 | 4.60 h |
+| Creation-body H versus calendar, native completed only | 27 | 14 | 0.277 | 0.162 | 4.98 h |
 
 The creation/calendar association's empirical parent-cluster bootstrap 95% interval is
 **[-0.047, 0.666]** for Spearman and **[-0.022, 0.516]** for Kendall, using 500 resamples and seed 5276.
-These are exploratory intervals conditional on the selected sample and observed native parent links,
+The native-completed-only creation/calendar result is rho **0.277**, 95% interval **[-0.062, 0.615]**, retaining the four not-planned closures separately in the all-closure diagnostic and the outcome registry. The 18-case runtime till-closure result already consists entirely of native completed issues. Native completion remains a stronger status proxy, not uniform accepted quality. These are exploratory intervals conditional on the selected sample and observed native parent links,
 not population-valid confidence guarantees. Supplier/duplicate/dependency relations are incompletely
 observed. Most runtime endpoints have fewer than eight parent clusters: the executable audit guard
 withholds their nominal bootstrap intervals rather than presenting 34 issues or 12,169 responses as
@@ -178,12 +179,134 @@ Native review objects alone miss comment-based review rounds: the failed-review 
 review objects. No failed case is dropped to improve correlation. Exact public controls and the structured
 sanitation design follow in the source-audit appendix.
 
+## Expanded exploratory relationships
+
+The continuation executes all 12 baseline features against five duration endpoints, plus feature
+co-occurrence, worker-profile strata, rank residuals, broad census strata and grouped prediction.
+All 60 baseline-feature/endpoint comparisons are retained in the aggregate JSON, including undefined
+constant-feature correlations. These are exploratory analyses of an already inspected cohort, with
+multiple comparisons and no untouched final test. No p-values, selected significant features or tuned
+routing threshold are reported. Subsequent feature selection must use a separate training/tuning process
+and genuinely held-out evaluation.
+
+### Individual dimensions and clock sensitivity
+
+| Baseline feature | All observed envelope rho, n=34 | Through native closure rho, n=18 | 1 h gap-cap rho, n=34 |
+| --- | ---: | ---: | ---: |
+| H total | 0.097 | 0.090 | 0.184 |
+| D1 scope | 0.058 | 0.117 | 0.102 |
+| D2 coupling | -0.021 | 0.135 | 0.085 |
+| D3 invariants | -0.166 | -0.041 | -0.152 |
+| D4 safety | 0.217 | -0.075 | 0.264 |
+| D5 numeric work | 0.011 | 0.296 | 0.077 |
+| D6 discovery | 0.190 | -0.145 | 0.186 |
+| D7 review | -0.134 | -0.023 | -0.125 |
+| D8 live evidence | Undefined | Undefined | Undefined |
+| Baseline body word count | -0.419 | -0.112 | -0.374 |
+| Baseline body character count | -0.401 | -0.108 | -0.358 |
+| Safety floor | 0.050 | -0.187 | 0.088 |
+
+D8 equals **3 for all 34 items**. D7 equals 2 for 30 items, 1 for one, and 3 for three. There is no
+observed D8 contrast and little D7 contrast. Undefined correlation is not evidence of no effect. D1–D6
+cover 0–3, but their combinations are not balanced. D4 and safety floor correlate 0.935; D3 and D7 correlate
+0.514; H correlates 0.671 with D2 and 0.595 with D4. Word and character counts correlate 0.996, so treating
+them as independent explanatory evidence would double-count nearly the same feature.
+
+The stronger inverse text-length association is present within both observed worker models: rho -0.692
+for Opus/high and -0.447 for Sonnet/high. It weakens to -0.112 in the closure-truncated cohort. Better
+specified work, task allocation, repository conventions, censoring or telemetry coverage could explain
+it; the data do not establish that adding text makes work faster. After rank-residualizing H and duration
+against baseline word count and repository indicators, partial rank correlation is 0.069 (34 rows,
+design rank 9, residual df 24, but only seven parent clusters). Corresponding values for D1–D7 are 0.007,
+0.008, -0.134, 0.138, 0.186, 0.019 and -0.225; D8 remains undefined. This descriptive adjustment is not a
+causal model or stable multivariable effect estimate. Postdispatch review and activity are excluded from
+these controls.
+
+The broader 31 closed creation-body histories give a different pattern: D7/calendar rho 0.527 and
+D8/calendar rho 0.524, compared with D8's complete lack of variation in the runtime cohort. Their H/calendar
+rho is 0.323 and word-count/calendar rho 0.168. This contrast exposes cohort selection, range and task-type
+sensitivity; it does not reconcile the two clocks or validate the dimensions. The full creation-body
+matrix is retained too.
+
+Observed H-level medians are not monotone: H=8, 13 and 16 each have five cases, with envelope medians
+4.76, 1.53 and 7.39 hours. Other levels have one to four cases. These sparse summaries challenge an assumed
+smooth relationship but cannot distinguish genuine nonlinearity from sample/task mix. The actual Low/
+Medium/High boundaries and overrides remain frozen; neither these summaries nor the tiny Low group
+justify selecting replacement cutoffs.
+
+### Grouped prediction and influence
+
+Seven folds leave one observed parent component out at a time. Ridge models use fixed alpha=10;
+standardization is fitted only on each training fold. The response is log(1+observed-envelope seconds).
+Both a training **mean** baseline (aligned with squared-error loss) and a training **median** baseline
+(aligned with absolute-error loss) are included. All candidate models are reported, with no tuning or
+selected winner. Per-fold counts and losses are retained without private identities.
+
+| Predictor | Pooled log MAE | Pooled log RMSE | Equal-parent mean log MAE |
+| --- | ---: | ---: | ---: |
+| Training mean only | 1.277 | 1.635 | 1.570 |
+| Training median only | 1.204 | 1.622 | 1.514 |
+| H total | 1.304 | 1.659 | 1.614 |
+| Baseline log word count | 1.136 | 1.546 | 1.527 |
+| D1–D8 | 1.498 | 1.820 | 1.808 |
+| D4 and D8 risk/evidence controls | 1.274 | 1.631 | 1.558 |
+| D1, D2, D3, D5, D6 demand candidates | 1.477 | 1.790 | 1.811 |
+
+H and the full dimension vector do not improve these fixed exploratory models over the baselines.
+Word count improves pooled error, but its equal-parent MAE is worse than the median baseline. Removing
+the largest parent component—16 of the 34 items—and repeating grouped evaluation on the remaining
+18 items/six groups reverses the pooled advantage: word-count MAE is **1.101 versus median baseline 1.065**.
+H gives 1.169 and D1–D8 gives 1.528. This sensitivity is retained alongside the full-cohort result; the large
+component is not removed from primary results. The apparent word-count advantage is therefore not a
+robust generalization claim.
+
+A separate outcome-blind temporal split at the median observed dispatch time purges every parent component
+that crosses the boundary. It leaves two training groups/nine rows, two test groups/seven rows and three
+purged groups. This does not meet the declared minimum of three training groups/ten rows and two test
+groups/five rows; no temporal prediction score is reported. These minimum guards do not imply that larger
+samples automatically provide reliable validation. A definitive grouped-and-temporal test remains open.
+
+### Selection, broad strata and process signals
+
+The runtime cohort covers 34/3,397 issues: 33 were created in November and one in October, versus a census
+dominated by 1,938 July issues. November coverage is 33/211 (15.6%); June–September coverage is zero.
+Open issues are overrepresented: 16/354 (4.52%) versus 18/3,043 closed issues (0.59%). The runtime sample
+is selected by retained attribution, not a random sample of the issue population. Extrapolating its
+correlations to all historical work would be unsupported.
+
+Closed-issue calendar medians by creation month are June 1.42 h, July 2.18 h, August 6.03 h, September
+0.69 h, October 9.22 h and November 3.83 h; open ages are reported separately. These are different
+follow-up windows and mixtures of work, not model performance trends. Repository medians also differ:
+Coordination 0.72 h, Game 1.24 h, Rendering 2.38 h, SDD 2.56 h and the hub 4.13 h. The aggregate preserves
+all eligible public repository strata and pools private repositories. Current exact Delivery headers
+appear on 273 issues, only 119 closed; their closed median is 4.48 h, versus 2.47 h among closed issues
+without that exact header. These retrospective text labels are incomplete and must not be promoted to
+historical class truth. In particular, long prose-classified Deliveries remain in the population.
+
+Bot and user PRs have almost identical closed medians, about 13.6 minutes, but very different p90 values:
+7.31 days for bots versus 0.83 days for users. This illustrates why medians alone miss stopped/abandoned
+or dependency-wait tails. Native completed issue closures have median 2.57 h, not-planned 0.89 h and
+duplicate 1.58 h, with wide tails preserved. No early unsuccessful closure is counted as efficient success.
+
+Postdispatch diagnostic correlations with all-observed envelope time are comment count **0.633**, unique
+cross-referenced PR count **0.664**, invocation count **0.412**, critic invocation count **0.301**, and
+response count **0.793**. These describe workflow activity; some are mechanically related to how the
+clock was constructed. Cross-references are not strict implementation/closing PR joins. They may indicate
+review, repair or broader coordination but cannot establish which, and are not available as frozen
+predispatch predictors. The 34 issue histories have no detected structured review declarations or reopen
+events; this is missing support for issue-level variation, not proof that reviews/repairs did not occur
+on their PRs. The separate known failed-review PR control remains preserved. Better strict PR/outcome
+joins are the next historical source improvement, not license to reinterpret references as accepted work.
+
+
 ## Reproducible source and remaining work
 
 The maintained scripts are `scripts/learn-history-evaluate.py` (inventory/history/provenance/support),
 `learn-history-fetch.py` (bounded explicit-node read-only fetch), `learn-history-telemetry.py` and SQL
 (attribution/profile support), `learn-history-response-timestamps.py` and SQL (timestamp normalization),
 and `learn-history-statistics.py` (NumPy/SciPy duration, rank, robust fit and cluster resampling).
+`learn-history-explore.py` adds complete feature/endpoint matrices, co-occurrence, stratified diagnostics,
+rank residuals, fixed grouped prediction, influence and chronological support checks.
 `requirements-learn-history.txt` pins actual NumPy 2.5.4 and SciPy 1.18.1; the run used CPython 3.15.1.
 The evaluator is offline. SQL requires the maintained telemetry schema and is executed with a read-only
 SQLite connection. Metadata outputs use private permissions and new output paths. Source rows, paths,
@@ -200,14 +323,17 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 "$ANALYSIS_VENV/bin/python" scripts/lea
   --histories "$PRIVATE_DURATION_HISTORIES" --first-dispatches "$PRIVATE_DISPATCHES" \
   --response-times "$PRIVATE_RESPONSE_TIMES" --scorer "$FROZEN_SCORER" \
   --seed 5276 --bootstrap 500 --output "$NEW_PRIVATE_OUTPUT"
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 "$ANALYSIS_VENV/bin/python" scripts/learn-history-explore.py \
+  --statistics-dir "$NEW_PRIVATE_OUTPUT" --inventory-dir "$PRIVATE_INVENTORY" \
+  --output "$NEW_PRIVATE_EXPLORATION_OUTPUT"
 ```
 
-Validation: 55 synthetic/adversarial controls pass, covering chronology, source completeness, body boundaries, duplicate/ambiguous identity, profile support, interval unions, gap caps, cluster resampling and lack of overlap. Python compilation passes. The full-dataset schema candidate is JSON-parsed; it has not been validated against a complete populated dataset or a JSON Schema metaschema. The committed aggregate evidence contains no private identities; individual inputs remain private. Each output includes a
+Validation: 63 synthetic/adversarial controls pass, covering chronology, source completeness, body boundaries, duplicate/ambiguous identity, profile support, interval unions, gap caps, cluster resampling and lack of overlap. Python compilation passes. The full-dataset schema candidate is JSON-parsed; it has not been validated against a complete populated dataset or a JSON Schema metaschema. The committed aggregate evidence contains no private identities; individual inputs remain private. Each output includes a
 hash manifest digest; immutable private custody supplies source-file hashes. The original collector's
 three failures remain, including one unknown cause and two diagnosed Go virtual-address allocation
 failures. A first statistical diagnostic failed to normalize API parent URLs to HTML URLs, incorrectly
 splitting clusters; it is retained privately and superseded by the corrected run used here. This materially
-changed confidence handling. No original evidence or failed run was rewritten. Final statistical source-manifest digest: `1c69369a2cee9b5b1be5e4e8efc96deac4ed5c4e15a30830e2ede209bfb49b8e`. The aggregate JSON files alongside this report preserve exact unrounded results.
+changed confidence handling. No original evidence or failed run was rewritten. Final statistical source-manifest digest: `0b2c88828b89e7554fe61fd77669e5c8ee75bf40d913659ba6646f67c40b6b05`. Exploration source-manifest digest: `c3e4674dfd34716a5494bb4ab7ccbd637e3b445807f59f2f5f14f494f5087c9e`. The aggregate JSON files alongside this report preserve exact unrounded results.
 
 Next work should expand outcome-blinded source qualification, independent task-demand labels, declared
 quality scoring and evidence-backed execution/pause intervals. Use stratified historical samples and

@@ -181,7 +181,16 @@ def main():
                 try:
                     body,provenance=h.body_at_boundary(record,boundary)
                     score=h.score_body(scorer,item,body,boundary);row[label]=score['hardness'];row[label+'Category']=score.get('hardnessCategory');row[label+'Provenance']=provenance
+                    prefix='baseline' if label=='H' else 'creation'
+                    row[prefix+'Dimensions']=score['scores'];row[prefix+'TextCharacters']=len(body);row[prefix+'TextWords']=len(body.split())
+                    row[prefix+'SafetyFloor']=score['safetyFloor'];row[prefix+'DeliveryHeader']='Work level: Delivery' in body;row[prefix+'OutcomeHeader']='Work level: Outcome' in body
+                    row[prefix+'Boundary']=boundary
                 except ValueError as exc:unknown[label+':'+str(exc)]+=1
+        row['nativeCommentCount']=len(h.connection(record['comments']))
+        declarations=h.review_declarations(record);row['reviewDeclarations']=len(declarations);row['changesRequiredDeclarations']=sum(r['verdict']=='changes-required' for r in declarations)
+        timeline=h.connection(record['timelineItems'],filtered=True)
+        row['reopenEvents']=sum(e['__typename']=='ReopenedEvent' for e in timeline)
+        row['crossReferencedPRs']=len({e['source']['id'] for e in timeline if e['__typename']=='CrossReferencedEvent' and e.get('source',{}).get('__typename')=='PullRequest'})
         row['currentH']=h.score_body(scorer,item,record['body'],record['createdAt'])['hardness']
         end=h.instant(source['closed_at']) if source['closed_at'] else cutoff
         row['calendarObservedSeconds']=(end-h.instant(source['created_at'])).total_seconds()
@@ -195,6 +204,7 @@ def main():
             row['responseEnvelopeUnionSeconds']=union_seconds(all_intervals)
             row['summedInvocationEnvelopeSeconds']=sum(b-a for a,b in all_intervals)
             row['responseEnvelopeThroughNativeCloseSeconds']=union_seconds([(a,min(b,end.timestamp())) for a,b in all_intervals if a<=end.timestamp()]) if source['state']=='closed' else None
+            row['invocationCount']=len(observed);row['workerInvocations']=sum(inv['role']=='worker' for inv in observed);row['criticInvocations']=sum(inv['role']=='critic' for inv in observed)
             row['responseCount']=sum(inv['responseCount'] for inv in observed)
             row['responsesAfterNativeClose']=sum(h.instant(t)>end for inv in observed for t in inv['occurredAt']) if source['state']=='closed' else None
             for cap in (3600,28800,86400):row['gapCappedUnionSeconds'+str(cap)]=union_seconds([pair for inv in observed for pair in intervals(inv['occurredAt'],cap)])
@@ -218,6 +228,7 @@ def main():
             adjusted=[dict(r,calendarClosedSeconds=r['calendarClosedSeconds']-seconds) if r is wait_case else r for r in creation]
             pause_scenario={'kind':'declared supplier park to readiness, not execution stop/resume','seconds':seconds,'rawCaseCalendarSeconds':wait_case['calendarClosedSeconds'],'adjustedCaseCalendarSeconds':wait_case['calendarClosedSeconds']-seconds,'association':association(adjusted,'calendarClosedSeconds',a.seed,a.bootstrap)}
     results['creationH_calendarClosedSeconds']=association(creation,'calendarClosedSeconds',a.seed,a.bootstrap)
+    results['creationH_nativeCompletedCalendarSeconds']=association([r for r in creation if r['stateReason']=='completed'],'calendarClosedSeconds',a.seed,a.bootstrap)
     results['currentH_responseEnvelopeUnionSeconds']=association([dict(r,H=r['currentH']) for r in rows],'responseEnvelopeUnionSeconds',a.seed,a.bootstrap)
     profiles=sorted({r.get('workerProfile') for r in rows if r.get('workerProfile')})
     for metric in metrics:
@@ -233,7 +244,7 @@ def main():
     for key,selected in [('completed',[r for r in census if r['kind']=='issue' and r['state_reason']=='completed' and r['closed_at']]),('not_planned',[r for r in census if r['kind']=='issue' and r['state_reason']=='not_planned' and r['closed_at']]),('duplicate',[r for r in census if r['kind']=='issue' and r['state_reason']=='duplicate' and r['closed_at']]),('merged_pr',[r for r in census if r['kind']=='pull_request' and r['pullRequest'].get('merged_at')]),('unmerged_closed_pr',[r for r in census if r['kind']=='pull_request' and r['state']=='closed' and not r['pullRequest'].get('merged_at')])]:
         outcome_strata[key]=describe([(h.instant(r['closed_at'])-h.instant(r['created_at'])).total_seconds() for r in selected])
     report={'schema':'fsgg.learn-history-statistics/1','versions':{'python':sys.version.split()[0],'numpy':np.__version__,'scipy':scipy.__version__},'seed':a.seed,
-       'population':population,'populationOutcomeStrata':outcome_strata,'stratifiedRuntimeTailAudit':{field:stratified_tails(rows,'responseEnvelopeUnionSeconds',field) for field in ('repository','era','workerProfile')},'cohort':{'qualifiedHistories':len(rows),'withDispatchH':sum(r['H'] is not None for r in rows),'withCreationH':sum(r['creationH'] is not None for r in rows),'withResponseTimelines':len(by_item),'invocations':len(seen),'responses':response['responses'],'states':dict(collections.Counter(r['state']+':'+str(r['stateReason']) for r in rows)),'unknowns':dict(unknown),'creationVsDispatchHChanges':sum(r['H']!=r['creationH'] for r in rows if r['H'] is not None),'dispatchVsCurrentHChanges':sum(r['H']!=r['currentH'] for r in rows if r['H'] is not None),'responsesAfterClose':sum(r.get('responsesAfterNativeClose') or 0 for r in rows)},
+       'population':population,'populationOutcomeStrata':outcome_strata,'stratifiedRuntimeTailAudit':{field:stratified_tails(rows,'responseEnvelopeUnionSeconds',field) for field in ('repository','era','workerProfile')},'cohort':{'qualifiedHistories':len(rows),'withDispatchH':sum(r['H'] is not None for r in rows),'withCreationH':sum(r['creationH'] is not None for r in rows),'withResponseTimelines':len(by_item),'invocations':len(seen),'responses':response['responses'],'states':dict(collections.Counter(r['state']+':'+str(r['stateReason']) for r in rows)),'runtimeStates':dict(collections.Counter(r['state']+':'+str(r['stateReason']) for r in rows if 'responseEnvelopeUnionSeconds' in r)),'unknowns':dict(unknown),'creationVsDispatchHChanges':sum(r['H']!=r['creationH'] for r in rows if r['H'] is not None),'dispatchVsCurrentHChanges':sum(r['H']!=r['currentH'] for r in rows if r['H'] is not None),'responsesAfterClose':sum(r.get('responsesAfterNativeClose') or 0 for r in rows)},
        'documentaryWaitScenario':pause_scenario,'categoryEnvelopeSummaries':{category:describe([r['responseEnvelopeUnionSeconds'] for r in rows if r.get('HCategory')==category and 'responseEnvelopeUnionSeconds' in r]) for category in ('Low','Medium','High','Unknown')},'associations':results,'workerProfiles':{p:association([r for r in rows if r.get('workerProfile')==p],'workerEnvelopeUnionSeconds',a.seed,a.bootstrap) for p in profiles},'profileInteraction':profile_interaction(rows,a.seed,a.bootstrap),
        'limitations':['No verified active execution intervals: response envelopes and gap caps are proxies, not active time.','Native closed cohort includes unsuccessful closure; native completion is not harmonized quality acceptance.','Timestamp data are partial telemetry, with unknown terminal coverage; no assertion full worked-time-to-done.','No automatic outlier exclusion, no measured pause adjustment without supported intervals.','Bootstrap conditions on selected cohort and observed parent components; missing dependencies can understate uncertainty.','First observed dispatch may follow actual work; creation, boundary and current bodies are separate.','No causal effects or cross-profile latent invariance established.']}
     for path in [a.first_dispatches,a.response_times,a.scorer,Path(__file__)]:sources.append({'path':str(path),'sha256':h.digest(path.read_bytes())})
