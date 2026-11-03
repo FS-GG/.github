@@ -109,3 +109,12 @@ ancestry, injected metadata, native drift, storage failure, lost acknowledgement
 readback and explicit successor recovery. These controls do not establish a native operation.
 Source review, ordinary required CI and protected integration precede the first actual qualification;
 that operation still needs its adjacent native inputs, Root declaration and complete readback.
+
+## Packaged dependency closure
+
+Drivers includes the admission entry point and its `tools/legacy-pr-update.py` sibling through the
+maintained workspace inventory. A source checkout uses `scripts/board-currency-rules.py`; the package
+projects those exact canonical bytes to `.fsgg/legacy-pr-root-rules.py` for this explicit mode. This
+preserves the shared Root trust and reference parser without installing the ordinary Root-only board
+gate into receiver workspaces. The actual stager records the delivered hashes. Source/staging controls
+do not establish publication, installed adoption or authorization for a native continuation.

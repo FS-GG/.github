@@ -273,4 +273,90 @@ class LegacyUpdateTests(unittest.TestCase):
             code,result=self.invoke();self.assertEqual(2,code,result)
         self.assertFalse(self.patches);self.assertFalse(list(self.root.glob('legacy-update-*/*.json')))
 
+class PackagedLegacyUpdateTests(unittest.TestCase):
+    """Exercise the actual maintained staging inventory and lazy CLI loader offline."""
+    def test_staged_mode_loads_exact_helper_and_missing_sibling_reproduces_the_defect(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as directory:
+            output = pathlib.Path(directory) / 'package'
+            stage = load('legacy_driver_stage', ROOT/'src/FS.GG.Drivers/stage-drivers.py')
+            with patch('subprocess.Popen', side_effect=AssertionError('no child or native effect allowed')), \
+                 patch('socket.socket.connect', side_effect=AssertionError('no network allowed')):
+                stage.stage_workspace(str(output))
+                files = output/'workspace/files'
+                manifest = json.loads((output/'workspace/workspace-files.json').read_text())
+                for relative in ('tools/pr-lane-admission.py', 'tools/legacy-pr-update.py'):
+                    selected = next(row for row in manifest['files'] if row['path'] == relative)
+                    raw = (files/relative).read_bytes()
+                    self.assertEqual(raw, (ROOT/relative).read_bytes())
+                    self.assertEqual(selected['sha256'], hashlib.sha256(raw).hexdigest())
+                    self.assertEqual(selected['executable'], bool((ROOT/relative).stat().st_mode & 0o111))
+                staged = load('staged_legacy_lane', files/'tools/pr-lane-admission.py')
+                plan = pathlib.Path(directory)/'plan.json'; plan.write_text('{}')
+                body = pathlib.Path(directory)/'body.md'; body.write_text('Refs #1\n')
+                args = staged.parser().parse_args(['--repo', 'FS-GG/example', '--recover-legacy-update', str(plan),
+                                                  '--title', 'Existing owner', '--body-file', str(body), '--inspect'])
+                with patch.object(staged, 'run_gh', side_effect=AssertionError('no native calls allowed')) as native:
+                    # The real lazy loader reaches the module's closed-plan guard: this is not a mocked import.
+                    with self.assertRaisesRegex(staged.ToolError, 'invalid closed continuation plan'):
+                        staged.execute(args)
+                    native.assert_not_called()
+                    (files/'tools/legacy-pr-update.py').unlink()
+                    # Causal negative: removing that packaged dependency recreates the original load failure.
+                    with self.assertRaises(FileNotFoundError):
+                        staged.execute(args)
+                    native.assert_not_called()
+
+    def test_staged_valid_plan_uses_identical_root_trust_and_refusals_without_enabling_receiver_gate(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as directory:
+            output = pathlib.Path(directory)/'package'
+            stage = load('valid_legacy_driver_stage', ROOT/'src/FS.GG.Drivers/stage-drivers.py')
+            with patch('subprocess.Popen', side_effect=AssertionError('no child allowed')), \
+                 patch('socket.socket.connect', side_effect=AssertionError('no network allowed')):
+                stage.stage_workspace(str(output))
+                files = output/'workspace/files'
+                alias = files/'.fsgg/legacy-pr-root-rules.py'
+                raw = (ROOT/'scripts/board-currency-rules.py').read_bytes()
+                self.assertEqual(alias.read_bytes(), raw)
+                manifest = json.loads((output/'workspace/workspace-files.json').read_text())
+                row = next(r for r in manifest['files'] if r['path'] == '.fsgg/legacy-pr-root-rules.py')
+                self.assertEqual(row['sha256'], hashlib.sha256(raw).hexdigest())
+                # Keep the existing receiver gate unavailable; only the explicit legacy mode loads this alias.
+                self.assertFalse((files/'scripts/board-currency-rules.py').exists())
+                import sys
+                spec = importlib.util.spec_from_file_location('staged_routine_delivery', files/'tools/routine-delivery.py')
+                delivery = importlib.util.module_from_spec(spec)
+                with patch.dict(sys.modules, {'staged_routine_delivery': delivery}):
+                    spec.loader.exec_module(delivery)
+                self.assertIsNone(delivery.load_board_rules())
+                staged = load('valid_staged_legacy_lane', files/'tools/pr-lane-admission.py')
+                helper = load('valid_staged_legacy_helper', files/'tools/legacy-pr-update.py')
+                canonical = load('canonical_legacy_root_rules', ROOT/'scripts/board-currency-rules.py')
+                roots, rules = helper.root_rules(staged)
+                self.assertEqual(roots, {r.lower() for r in canonical.PARAMS['rootLogins']})
+                self.assertEqual(rules.PARAMS, canonical.PARAMS)
+                body = 'Refs #142\n\n`Refs #999`\n\n```\nRefs #998\n```\n'
+                self.assertEqual(rules.pr_refs('FS-GG/example', body), canonical.pr_refs('FS-GG/example', body))
+                self.assertIn('FS-GG/example#142', rules.pr_refs('FS-GG/example', body))
+                self.assertNotIn('FS-GG/example#999', rules.pr_refs('FS-GG/example', body))
+                for case in ('valid', 'forged-root', 'wrong-owning-reference'):
+                    with self.subTest(case):
+                        fixture = LegacyUpdateTests(); fixture.setUp()
+                        try:
+                            if case == 'forged-root': fixture.node['author']['login'] = 'attacker'
+                            if case == 'wrong-owning-reference': fixture.body.write_text('Refs #143\n')
+                            lock = fixture.root/'locks'; lock.mkdir(mode=0o700)
+                            with patch.dict(globals(), {'lane': staged}), patch.object(staged, 'lock_root', return_value=lock):
+                                code, result = fixture.invoke(('--inspect',))
+                            self.assertEqual(code == 0, case == 'valid', result)
+                            self.assertFalse(fixture.patches)
+                            self.assertFalse(any(method == 'PATCH' for method, _ in fixture.calls))
+                            self.assertFalse(list(fixture.root.glob('legacy-update-*/*.json')))
+                        finally:
+                            fixture.doCleanups()
+                alias.unlink()
+                with self.assertRaises(FileNotFoundError):
+                    helper.root_rules(staged)
+
 if __name__=='__main__':unittest.main()

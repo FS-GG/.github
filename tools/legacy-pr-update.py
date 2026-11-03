@@ -85,7 +85,12 @@ def declaration(spec, row):
 
 
 def root_rules(lane):
-    path = pathlib.Path(__file__).resolve().parents[1] / "scripts/board-currency-rules.py"
+    root = pathlib.Path(__file__).resolve().parents[1]
+    path = root / "scripts/board-currency-rules.py"
+    if not path.is_file():
+        # The package projects the same canonical source to this dedicated alias;
+        # do not install the ordinary Root-only board gate into receiver workspaces.
+        path = root / ".fsgg/legacy-pr-root-rules.py"
     spec = importlib.util.spec_from_file_location("legacy_update_root_rules", path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
