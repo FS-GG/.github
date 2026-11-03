@@ -111,7 +111,7 @@ def configuration(path: Path) -> tuple[dict, dict[str, Path]]:
     for value in c["readerFiles"]:
         pin(value)
     receipt = json.loads(private_file(paths["acceptedReceipt"]))
-    expected = {"projectId": PROJECT, "keep": 200, "maxArchive": c["maxArchive"], "readerVersion": version,
+    expected = {"projectId": PROJECT, "keep": 50, "triggerAt": 200, "completeCycle": True, "maxArchive": c["maxArchive"], "readerVersion": version,
                 "readerFiles": c["readerFiles"], "scriptSha256": c["script"]["sha256"],
                 "bindingSha256": c["binding"]["sha256"], "commitmentSha256": c["commitment"]["sha256"]}
     if (not isinstance(receipt, dict) or receipt.get("schema") != "fsgg.board-archive-accepted/1"
@@ -150,11 +150,12 @@ def settled(run: Path, max_archive: int) -> bool:
     if len(rows) < 2:
         return False
     start, end = rows[0], rows[-1]
-    if (set(start) != common | {"project", "board", "done", "keep", "planned", "maxArchive"}
-            or start["step"] != "run" or start["project"] != PROJECT or start["keep"] != 200
+    if (set(start) != common | {"project", "board", "done", "keep", "triggerAt", "completeCycle", "planned", "maxArchive"}
+            or start["step"] != "run" or start["project"] != PROJECT or start["keep"] != 50
+            or start["triggerAt"] != 200 or type(start["triggerAt"]) is not int or start["completeCycle"] is not True
             or type(start["keep"]) is not int or start["maxArchive"] != max_archive
             or not all(integer(start[k]) for k in ("board", "done", "planned", "maxArchive"))
-            or not 0 < start["planned"] <= start["done"] - 200 or not 200 < start["done"] <= start["board"] <= 500
+            or not 0 < start["planned"] <= min(start["done"] - 50, max_archive) or not 200 <= start["done"] <= start["board"] <= 500
             or not 1 <= max_archive <= 500
             or set(end) != common | {"archived", "skipped"} or end["step"] != "finished"
             or not all(integer(end[k]) for k in ("archived", "skipped"))):
@@ -186,11 +187,11 @@ def settled(run: Path, max_archive: int) -> bool:
                 pending = ref
             else:
                 counts["skipped"] += 1
-    return (pending is None and sum(counts.values()) == min(start["planned"], max_archive)
+    return (pending is None and counts["skipped"] == 0 and counts["archived"] == start["planned"]
             and all(end[k] == count for k, count in counts.items()))
 
 
-def run(config: Path, credentials: Path, timeout: float = 720) -> int:
+def run(config: Path, credentials: Path, timeout: float = 1800) -> int:
     try:
         c, p = configuration(config)
         secrets = json.loads(private_file(credentials))
@@ -218,7 +219,7 @@ def run(config: Path, credentials: Path, timeout: float = 720) -> int:
         env = {key: os.environ[key] for key in ("HOME", "LANG", "LC_ALL", "XDG_RUNTIME_DIR", "DOTNET_ROOT") if key in os.environ}
         env.update(PATH="/usr/local/bin:/usr/bin:/bin", GH_TOKEN=token.strip(), COORD_ARCHIVE_GH=str(p["gh"]))
         command = ["/usr/bin/python3", "-I", str(p["script"]), "--owner", "FS-GG", "--project", "3",
-                   "--expect-project-id", PROJECT, "--keep", "200", "--max-archive", str(c["maxArchive"]),
+                   "--expect-project-id", PROJECT, "--keep", "50", "--trigger-at", "200", "--require-complete-cycle", "--max-archive", str(c["maxArchive"]),
                    "--enrollment-binding", str(p["binding"]), "--reader-version", c["readerVersion"],
                    "--custody-dir", str(directory / "custody"), "--execute"]
         with os.fdopen(os.open(directory / "stdout", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as stdout, \
