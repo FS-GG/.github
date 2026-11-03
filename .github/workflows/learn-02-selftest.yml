@@ -10,6 +10,14 @@ on:
       - 'scripts/learn-history-*'
       - 'scripts/requirements-learn-history.txt'
       - 'tests/learn-history/**'
+      - 'scripts/learn-classifier-pilot.py'
+      - 'scripts/learn-classifier-statistics.py'
+      - 'scripts/learn-classifier-requirements.txt'
+      - 'tests/learn-classifier/**'
+      - 'contracts/learn/semantic-hardness-v1.schema.json'
+      - '.agents/skills/assess-task-hardness/**'
+      - '.claude/skills/assess-task-hardness/**'
+      - 'reports/learn-03-semantic-classifier-protocol-v1.md'
       - '.github/workflows/learn-02-selftest.yml'
   push:
     branches: [main]
@@ -22,6 +30,14 @@ on:
       - 'scripts/learn-history-*'
       - 'scripts/requirements-learn-history.txt'
       - 'tests/learn-history/**'
+      - 'scripts/learn-classifier-pilot.py'
+      - 'scripts/learn-classifier-statistics.py'
+      - 'scripts/learn-classifier-requirements.txt'
+      - 'tests/learn-classifier/**'
+      - 'contracts/learn/semantic-hardness-v1.schema.json'
+      - '.agents/skills/assess-task-hardness/**'
+      - '.claude/skills/assess-task-hardness/**'
+      - 'reports/learn-03-semantic-classifier-protocol-v1.md'
       - '.github/workflows/learn-02-selftest.yml'
 permissions:
   contents: read
@@ -51,7 +67,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.15.1'
-      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-learn-history.txt
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-learn-history.txt -r scripts/learn-classifier-requirements.txt
       # Synthetic controls only; no historical data, native API or telemetry store access.
       - run: python3 -m unittest discover -s tests/learn-history -p 'test_*.py'
       - run: python3 scripts/learn-history-multiverse.py --self-test
+      - run: python3 -m unittest discover -s tests/learn-classifier -p 'test_*.py'
