@@ -122,6 +122,35 @@ class RunnerTests(unittest.TestCase):
         with self.assertRaises(r.Refused):r.request(payload)
         payload=self.payload();payload['taskPacket']['outcomes']='leaked'
         with self.assertRaises(r.Refused):r.request(payload)
+    def fifo_cli_refusal(self, argv):
+        # subprocess.run kills and reaps the child if the no-writer FIFO hangs.
+        # A blocking-open mutant must fail this control, not hang the suite.
+        done=subprocess.run([sys.executable,str(ROOT/'scripts/learn-context-rater.py'),*argv],
+                            input=b'{}',capture_output=True,timeout=2)
+        self.assertEqual(done.returncode,3,done.stderr)
+        self.assertIn(b'regular-unlinked-input-required',done.stderr)
+    def test_prepare_no_writer_fifos_refuse_before_read(self):
+        for target in ['manifest.json','task.md','source/parser.fs','file-plan.json']:
+            with self.subTest(target=target),tempfile.TemporaryDirectory() as scratch:
+                root=Path(scratch);bundle=root/'rater';_,seal,plan=make_bundle(bundle)
+                file_plan=bundle/'file-plan.json';file_plan.write_bytes(r.canonical(plan))
+                leaf=bundle/target;leaf.unlink();os.mkfifo(leaf)
+                self.fifo_cli_refusal(['prepare','--bundle',str(bundle),'--manifest-sha256',seal,
+                                      '--file-plan',str(file_plan),'--output',str(root/'out.json')])
+    def test_protocol_and_launch_no_writer_payload_fifos_refuse(self):
+        file=self.root/'payload.fifo';os.mkfifo(file)
+        for command in ['protocol','launch']:
+            with self.subTest(command=command):
+                self.fifo_cli_refusal([command,'--payload',str(file),'--payload-sha256','0'*64])
+    def test_inspect_wire_no_writer_payload_and_request_fifos_refuse(self):
+        payload=self.root/'payload.json';raw=r.canonical(self.payload());payload.write_bytes(raw)
+        request=self.root/'request.json';request.write_text('{}')
+        for target in [payload,request]:
+            with self.subTest(target=target.name):
+                original=target.read_bytes();target.unlink();os.mkfifo(target)
+                try:self.fifo_cli_refusal(['inspect-wire','--payload',str(payload),
+                                         '--payload-sha256',r.sha(raw),'--request',str(request)])
+                finally:target.unlink();target.write_bytes(original)
     def test_two_fresh_protocol_processes_and_cli_launch_refusal(self):
         file=self.root/'payload.json';raw=r.canonical(self.payload());file.write_bytes(raw);seal=r.sha(raw);argv=[sys.executable,str(ROOT/'scripts/learn-context-rater.py'),'protocol','--payload',str(file),'--payload-sha256',seal];pids=[]
         for _ in range(2):

@@ -84,7 +84,7 @@ def read_at(root, relative, limit):
         for component in parts[:-1]:
             child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
             os.close(fd); fd = child
-        child = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
+        child = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
         try:
             before = os.fstat(child)
             require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1, 'regular-unlinked-input-required')
