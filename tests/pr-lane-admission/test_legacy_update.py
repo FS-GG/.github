@@ -116,6 +116,8 @@ class LegacyUpdateTests(unittest.TestCase):
         journal=json.loads(next(self.root.glob('legacy-update-*/*.json')).read_text())
         self.assertEqual('complete',journal['phase']);self.assertEqual(6,len(journal['readbackPopulation']))
         self.assertEqual(journal['after']['metadataSha256'],journal['readbackPopulation']['42'])
+        self.assertEqual(journal['rootRulesSource'], result['rootRulesSource'])
+        self.assertEqual(journal['intent']['rootRulesSource'], result['rootRulesSource'])
 
     def test_inspect_is_no_effect_and_historical_base_is_preserved(self):
         code,result=self.invoke(('--inspect',));self.assertEqual(0,code,result)
@@ -336,6 +338,18 @@ class PackagedLegacyUpdateTests(unittest.TestCase):
                 roots, rules = helper.root_rules(staged)
                 self.assertEqual(roots, {r.lower() for r in canonical.PARAMS['rootLogins']})
                 self.assertEqual(rules.PARAMS, canonical.PARAMS)
+                expected_source = {'path': '.fsgg/legacy-pr-root-rules.py', 'sha256': hashlib.sha256(raw).hexdigest()}
+                self.assertEqual(rules.selected_source, expected_source)
+                source_roots, source_rules = recovery.root_rules(lane)
+                self.assertEqual(source_rules.selected_source,
+                                 {'path': 'scripts/board-currency-rules.py', 'sha256': hashlib.sha256(raw).hexdigest()})
+                self.assertEqual(source_roots, roots)
+                # A receiver-local same-named policy must not replace the selected packaged source.
+                shadow = files/'scripts/board-currency-rules.py'
+                shadow.write_text('PARAMS = {"rootLogins": ["attacker"]}\n')
+                shadow_roots, shadow_rules = helper.root_rules(staged)
+                self.assertEqual(shadow_roots, roots)
+                self.assertEqual(shadow_rules.selected_source, expected_source)
                 body = 'Refs #142\n\n`Refs #999`\n\n```\nRefs #998\n```\n'
                 self.assertEqual(rules.pr_refs('FS-GG/example', body), canonical.pr_refs('FS-GG/example', body))
                 self.assertIn('FS-GG/example#142', rules.pr_refs('FS-GG/example', body))
@@ -350,11 +364,22 @@ class PackagedLegacyUpdateTests(unittest.TestCase):
                             with patch.dict(globals(), {'lane': staged}), patch.object(staged, 'lock_root', return_value=lock):
                                 code, result = fixture.invoke(('--inspect',))
                             self.assertEqual(code == 0, case == 'valid', result)
+                            self.assertEqual(result['rootRulesSource'], expected_source)
                             self.assertFalse(fixture.patches)
                             self.assertFalse(any(method == 'PATCH' for method, _ in fixture.calls))
                             self.assertFalse(list(fixture.root.glob('legacy-update-*/*.json')))
                         finally:
                             fixture.doCleanups()
+                # A frozen installed alias may coexist with a newer checkout policy. Its
+                # exact selected bytes remain visible rather than claiming canonical freshness.
+                frozen = raw + b'\n# Synthetic retained package epoch for provenance control.\n'
+                alias.write_bytes(frozen)
+                frozen_roots, frozen_rules = helper.root_rules(staged)
+                self.assertEqual(frozen_roots, roots)
+                self.assertEqual(frozen_rules.selected_source,
+                                 {'path': expected_source['path'], 'sha256': hashlib.sha256(frozen).hexdigest()})
+                self.assertNotEqual(frozen_rules.selected_source['sha256'], source_rules.selected_source['sha256'])
+                shadow.unlink()
                 alias.unlink()
                 with self.assertRaises(FileNotFoundError):
                     helper.root_rules(staged)

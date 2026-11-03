@@ -113,8 +113,15 @@ that operation still needs its adjacent native inputs, Root declaration and comp
 ## Packaged dependency closure
 
 Drivers includes the admission entry point and its `tools/legacy-pr-update.py` sibling through the
-maintained workspace inventory. A source checkout uses `scripts/board-currency-rules.py`; the package
-projects those exact canonical bytes to `.fsgg/legacy-pr-root-rules.py` for this explicit mode. This
+maintained workspace inventory. The package
+projects the exact canonical rule bytes to `.fsgg/legacy-pr-root-rules.py` for this explicit mode. That
+alias wins when present; otherwise a source checkout uses `scripts/board-currency-rules.py`. This
 preserves the shared Root trust and reference parser without installing the ordinary Root-only board
 gate into receiver workspaces. The actual stager records the delivered hashes. Source/staging controls
 do not establish publication, installed adoption or authorization for a native continuation.
+
+The inspection result, intent and existing custody record carry `rootRulesSource` with the selected
+relative path and SHA256 of the exact executed rule bytes. Join that fingerprint to the selected
+caller/package BOM. An alias left by an older installation is identified as that frozen source, not
+silently reported as the current checkout policy. The fingerprint records provenance; it grants no
+Root identity or operation authority by itself.

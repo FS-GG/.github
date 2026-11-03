@@ -6,6 +6,7 @@ adopt reservations or alter admission, source, CI, integration or closure rules.
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import os
 import pathlib
@@ -86,15 +87,17 @@ def declaration(spec, row):
 
 def root_rules(lane):
     root = pathlib.Path(__file__).resolve().parents[1]
-    path = root / "scripts/board-currency-rules.py"
-    if not path.is_file():
-        # The package projects the same canonical source to this dedicated alias;
-        # do not install the ordinary Root-only board gate into receiver workspaces.
-        path = root / ".fsgg/legacy-pr-root-rules.py"
+    alias = root / ".fsgg/legacy-pr-root-rules.py"
+    # The selected packaged source wins over an unrelated receiver-local policy.
+    path = alias if alias.is_file() else root / "scripts/board-currency-rules.py"
+    raw = path.read_bytes()
     spec = importlib.util.spec_from_file_location("legacy_update_root_rules", path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
-    spec.loader.exec_module(module)
+    # Execute the exact bytes whose hash is exposed in this operation's existing proof/custody.
+    exec(compile(raw, str(path), "exec"), module.__dict__)
+    module.selected_source = {"path": path.relative_to(root).as_posix(),
+                              "sha256": hashlib.sha256(raw).hexdigest()}
     roots = module.PARAMS.get("rootLogins")
     if not isinstance(roots, list) or not roots or any(not isinstance(x, str) or not x.strip() for x in roots):
         raise lane.ToolError("maintained Root trust is unreadable")
@@ -114,9 +117,12 @@ def execute(lane, args):
         proposed = args.body_file.read_text(encoding="utf-8")
     except (OSError, ValueError, UnicodeError) as error:
         raise lane.ToolError("unreadable continuation body") from error
-    intent = {"plan": spec, "proposedBodySha256": lane.text_sha(proposed), "titleSha256": lane.text_sha(args.title)}
+    roots, rules = root_rules(lane)
+    intent = {"plan": spec, "proposedBodySha256": lane.text_sha(proposed), "titleSha256": lane.text_sha(args.title),
+              "rootRulesSource": rules.selected_source}
     intent_sha = lane.text_sha(encoded(intent))
-    identity = {"repo": args.repo, "number": selected["number"], "nativeId": selected["id"], "intentSha256": intent_sha}
+    identity = {"repo": args.repo, "number": selected["number"], "nativeId": selected["id"], "intentSha256": intent_sha,
+                "rootRulesSource": rules.selected_source}
     attempted = False
     def refuse(reason, **details):
         raise lane.Refusal("legacy-update-" + reason, **identity, writeAttempted=attempted, **details)
@@ -127,7 +133,6 @@ def execute(lane, args):
         if problems:
             refuse("native-unreadable")
         return guard
-    roots, rules = root_rules(lane)
     guards, issues = {}, {}
     authorization_before = None
     source_before = None
