@@ -42,10 +42,13 @@ scope are qualified and explicitly adopted. Until then retain the current qualif
 route. Never substitute an unqualified source build, change the global resolver or infer adoption from a
 source merge. Product binding3 retains its own qualified interface.
 
+Use the adopted profile’s physically verified absolute caller through the existing explicit-bin tier.
+An unrelated stale source build or PATH entry must not select the executable for this mode. This is
+an invocation selection; it does not replace other services’ callers or change the global resolver.
 The matching CLI is read-only:
 
 ```sh
-scripts/fsgg-coord board-v2 inspect --binding-file PRIVATE_BINDING --report-file NEW_PRIVATE_REPORT --owner-continuation-stdin < PRIVATE_OWNER_INPUT
+FSGG_COORD_ENGINE_BIN="${QUALIFIED_CALLER:?select the adopted caller}" scripts/fsgg-coord board-v2 inspect --binding-file PRIVATE_BINDING --report-file NEW_PRIVATE_REPORT --owner-continuation-stdin < PRIVATE_OWNER_INPUT
 ```
 
 Input is the closed `fsgg.coord.owner-continuation-input/1` document: the existing integrator document

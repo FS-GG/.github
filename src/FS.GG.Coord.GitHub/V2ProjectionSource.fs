@@ -1587,7 +1587,8 @@ module V2ProjectionSource =
 
     /// Semantic native source identity derives from typed complete observations, never by stripping
     /// arbitrary text from the legacy freshness revision. Native issue/plan/dependency clocks still
-    /// join exactly in ScopeCurrent; bodies, state, population, source blobs and hierarchy remain bound.
+    /// join exactly in ScopeCurrent. Own issue/plan bodies, dependency IDs/states/edges, population,
+    /// source blobs and hierarchy remain bound; the blocker reader does not supply dependency bodies.
     let continuationEnvelopeIdentity (report: InspectionReport) (slice: CurrentSlice) =
         let item = report.Items |> List.find (fun item -> item.Evidence.Issue = slice.Issue)
         let native (value: NativeObservation) = [value.NodeId; value.Url; value.BodySha256; value.State]
