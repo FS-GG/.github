@@ -1,0 +1,76 @@
+{
+  "schema": "fsgg.learn-content-probes/1",
+  "kind": "synthetic illustrative probes, not historical prevalence or independent human labels",
+  "cases": [
+    {
+      "name": "minimal",
+      "body": "Fix a spelling error in one inert prose label.",
+      "expectedHardness": 1,
+      "expectedCategory": "Low",
+      "expectedSafetyFloor": false
+    },
+    {
+      "name": "same scope with explicit exclusions",
+      "body": "Fix a spelling error in one inert prose label. Out of scope: concurrency, crash safety, fixed-point determinism, browser matrix, credentials, and publishing. These receive no changes.",
+      "expectedHardness": 19,
+      "expectedCategory": "High",
+      "expectedSafetyFloor": true
+    },
+    {
+      "name": "same scope with quoted context",
+      "body": "Fix a spelling error in one inert prose label. Historical example, not a requirement: \"research a cross-repo concurrency protocol, fixed-point determinism and browser matrix with installed evidence\".",
+      "expectedHardness": 18,
+      "expectedCategory": "High",
+      "expectedSafetyFloor": false
+    },
+    {
+      "name": "H6 boundary",
+      "body": "script fix pipeline algorithm visual",
+      "expectedHardness": 6,
+      "expectedCategory": "Low",
+      "expectedSafetyFloor": false
+    },
+    {
+      "name": "H7 boundary",
+      "body": "script fix pipeline algorithm visual criteria",
+      "expectedHardness": 7,
+      "expectedCategory": "Medium",
+      "expectedSafetyFloor": false
+    },
+    {
+      "name": "H12 boundary",
+      "body": "cross-repo research pipeline write algorithm visual acceptance",
+      "expectedHardness": 12,
+      "expectedCategory": "Medium",
+      "expectedSafetyFloor": false
+    },
+    {
+      "name": "H13 boundary",
+      "body": "cross-repo research pipeline write algorithm visual acceptance check",
+      "expectedHardness": 13,
+      "expectedCategory": "High",
+      "expectedSafetyFloor": false
+    },
+    {
+      "name": "D3 override below H13",
+      "body": "invariant",
+      "expectedHardness": 2,
+      "expectedCategory": "High",
+      "expectedSafetyFloor": false
+    },
+    {
+      "name": "D5 override below H13",
+      "body": "numeric",
+      "expectedHardness": 2,
+      "expectedCategory": "High",
+      "expectedSafetyFloor": false
+    },
+    {
+      "name": "safety floor distinct from category",
+      "body": "credentials",
+      "expectedHardness": 3,
+      "expectedCategory": "Low",
+      "expectedSafetyFloor": true
+    }
+  ]
+}
