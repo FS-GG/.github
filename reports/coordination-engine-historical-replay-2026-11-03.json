@@ -1,8 +1,8 @@
 {
   "schema": "fsgg.owner-history-safe-aggregate/1",
-  "sourceCommit": "46e27c66e3b94259ee8e513ecb76ae99e49cb699",
-  "sourceGitBlob": "9d14e65f6f507cb8db24feece27861544f786d0d",
-  "sourceSha256": "d651c583978cbbfbfc2085d1a59e712ff3ead08cdecf7dabce6384b65f61d30a",
+  "sourceCommit": "3c125a099bf5be372c287c8dce6c3db267862003",
+  "sourceGitBlob": "85c22176608cedf64c0c232dd54486148fc67705",
+  "sourceSha256": "d34f9bdf0671167d3c27fd35b43ece6940b2a7b25af8129d9cf1676f77cd9e84",
   "frozenInputSealSha256": "231020064077df96988968d8f6e4a6244b01adc1c612ffd6ac875c6a8a442193",
   "selectedRealCases": 5,
   "evaluatedRealCases": 4,
@@ -23,9 +23,9 @@
   "engineProcessRuns": 1,
   "pureRecommendCalls": 10,
   "returncode": 0,
-  "wallSeconds": 1.7167952570016496,
-  "cgroupMemoryPeakBytes": 190062592,
-  "peakChildRssKiB": 279408,
+  "wallSeconds": 2.6141184130101465,
+  "cgroupMemoryPeakBytes": 189796352,
+  "peakChildRssKiB": 278732,
   "enforcedCgroupLimits": {
     "memory.max": "805306368",
     "memory.swap.max": "0",
@@ -44,13 +44,17 @@
     "FSI workload verification notice; no workload update or rerun.",
     "FS0524 module use-binding treated as let; parsing and output checks succeeded."
   ],
-  "transientUnitRetirement": "inactive/dead success; post-retirement systemctl no longer retains transient resource properties; effective limits recorded from running process cgroup.",
-  "sourceCommitAvailability": "The tested contribution commit identifies local source; the integrated commit below carries byte-identical Core source in the delivery history.",
+  "transientUnitRetirement": "systemd-run wait returned success; no observer or recurring measurement launched.",
+  "previousSourceCommit": "46e27c66e3b94259ee8e513ecb76ae99e49cb699",
+  "priorFullEncodedOutputByteIdentical": true,
+  "sameFrozenAdapterBytes": true,
+  "encodedOutputSha256": "209f543e08f6264f48e0742e10d2f82f7c0f694a9c3cba85f241695a8dbb326a",
+  "sourceCommitAvailability": "The tested contribution commit identifies local source; the integrated commit below carries byte-identical Core source in delivery history.",
   "integratedSource": {
     "repository": "FS-GG/.github",
-    "revision": "2c2f364f2da7ef0207f7382d899ddcc86246df55",
+    "revision": "1d1511ce803c5c218cda775dd92617caadfe174a",
     "path": "src/FS.GG.Coord.Core/OwnerContinuation.fs",
-    "sha256": "d651c583978cbbfbfc2085d1a59e712ff3ead08cdecf7dabce6384b65f61d30a"
+    "sha256": "d34f9bdf0671167d3c27fd35b43ece6940b2a7b25af8129d9cf1676f77cd9e84"
   },
   "qualificationScope": "Bounded pure historical replay, not a rollout pilot or throughput/cost evaluation."
 }
