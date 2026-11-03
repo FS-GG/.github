@@ -6,9 +6,9 @@ description: Complete one selected Delivery through its full declared acceptance
 # Complete the selected Delivery
 
 One accountable owner carries implementation, verification, repair, review and permitted delivery through
-acceptance. Under [work-board](../work-board/SKILL.md), read the native issue's complete Done when and owning plan,
+acceptance. Under [work-board](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/SKILL.md), read the native issue's complete Done when and owning plan,
 including publication, installed, participant and recovery obligations. Follow the common **Normal execution**
-section of the [lifecycle contract](../work-board/references/lifecycle-contract.md). Ordinary isolated checks
+section of the [lifecycle contract](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md). Ordinary isolated checks
 need no Root runtime approval; covered successful steps need no repeated phase approval. Changed scope,
 authority, uncertain effects or exhausted bounds return for reconciliation.
 
@@ -33,7 +33,7 @@ weakening a gate or switching ceremony.
    continuous PR for the current slice.
 3. Request review without known-red required gates, except explicitly named inherited main failures.
    Keep the PR draft until required gates pass. Use the canonical creation
-   and delivery helpers from the [exact-source route](../work-board/references/lifecycle-contract.md#qualify-the-actual-path-and-deliver-exact-source).
+   and delivery helpers from the [exact-source route](https://github.com/FS-GG/.github/blob/main/.agents/skills/work-board/references/lifecycle-contract.md#qualify-the-actual-path-and-deliver-exact-source).
    A moved head needs fresh review and binding. The body has exactly one
    `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` and exactly one
    `<!-- fsgg:delivery-continues/v1 -->` or `<!-- fsgg:delivery-completes/v1 -->`.

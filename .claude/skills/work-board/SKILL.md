@@ -35,7 +35,7 @@ while that successor is unqualified.
    and aging. Reconsider older deferred work. Compare action-specific dependencies, ownership,
    touch-sets and remaining-after-active capacity, including known/Unknown reservations. Account actual
    worker, CPU/memory, integrator and hosted-CI demand; a free agent slot is insufficient.
-5. Execute an admitted Delivery through [pnext-item](../pnext-item/SKILL.md), retaining its full acceptance.
+5. Execute an admitted Delivery through [pnext-item](https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/SKILL.md), retaining its full acceptance.
    Native enrollment or explicit Root pending-batch admission is required; an Outcome is never an
    implementation assignment. Keep one independent review for substantive changes and preserve exact-head required CI and native gates.
    An explicitly selected technical plan uses [work-roadmap](../work-roadmap/SKILL.md) as the adapter.
@@ -49,6 +49,10 @@ Acceptance evidence. A dispatch brief starts `fsgg-dispatch: item=OWNER/REPO#N r
 passive usage attribution never grants authority. Report material process findings through the existing
 [host disposition](references/host-loop.md#own-process-findings-and-disposition), without duplicate packets,
 status tables or reporting-only workers. Capture reusable knowledge alongside delivery.
+
+Project 3 or the selected product board supplies current planning; owning issues/plans/native evidence
+retain assignment and acceptance.
+No fixed polling, unchanged-hold comments, reporting-only workers or CI-tick projections.
 
 ## Completion and waiting
 
