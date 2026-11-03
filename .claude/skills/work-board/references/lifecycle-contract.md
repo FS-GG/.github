@@ -5,6 +5,67 @@ This is the canonical coordinator for requested advancement and continuation. In
 maintenance and skill editing retain their requested scope. Reading instructions starts no development.
 Roadmaps define strategic scope, technical acceptance and owning-plan navigation, not scheduling.
 
+## Normal execution
+
+One coordinator selects new work and one accountable owner carries each admitted Delivery through its
+complete promise. Root owns priorities, shared-surface conflicts and genuine exceptions. Existing
+authorization persists; ordinary milestones need no repeated parent approval or file-by-file gate.
+Use the routine route unless explicit recorded human instruction selects heavyweight process.
+
+[ADR-0096](https://github.com/FS-GG/.github/blob/main/docs/adr/0096-proportionate-verification-and-unrecoverable-holds.md)
+permits local builds, tests and static checks of unpublished source in a fresh isolated output/cache
+root, without credentials, shared/remote writes, publication, live-store, Home, VM or native-capability
+effects. Within the stated CPU/memory share the owner runs these checks, retains first failures and
+reports results. No Root runtime admission, original clock, custody packet or pre-run peer review is required.
+
+Protected actions retain their effect-specific authority. A reviewed finite sequence may advance on
+verified covered success without per-step approval; each original clock and readback remains independent.
+Stop on failure, Unknown, determining drift or exhausted bounds. Observe uncertain sends through the
+original handler before any further send; expiry cannot renew authority or release reservations.
+
+Implement, verify, review, repair, deliver and read back accepted scope. Preserve independent exact-source
+review, required CI and ADR-0084 coherent validation. Use normal scoped PR and publication routes;
+exclude global `speckit-merge` branch sweeps, direct trunk pushes, mandatory repacks and cache purges.
+Debug-loop diagnosis cannot expand scope or impose unrelated evidence/retries.
+
+Return on meaningful results, changed blockers, required judgment or exhausted bounds. Reconcile native
+Status through its existing guard; equal value is a quiet no-op. Update the Delivery before its Outcome.
+One bounded observer owns each condition; unchanged ticks stay internal. Keep existing issues, PRs and
+journals, without another scheduler, approval service or planning ledger. Full acceptance, publication,
+installation and runtime remain distinct.
+
+## Owner continuation capability
+
+For organization scope, use this opt-in only after the exact caller, instruction discovery and named
+scope are qualified and explicitly adopted. Until then retain the current qualified inspection/integrator
+route. Never substitute an unqualified source build, change the global resolver or infer adoption from a
+source merge. Product binding3 retains its own qualified interface.
+
+The matching CLI is read-only:
+
+```sh
+scripts/fsgg-coord board-v2 inspect --binding-file PRIVATE_BINDING --report-file NEW_PRIVATE_REPORT --owner-continuation-stdin < PRIVATE_OWNER_INPUT
+```
+
+Input is the closed `fsgg.coord.owner-continuation-input/1` document: the existing integrator document
+plus requests joined to exact slice, attempt, owner, revision and scope digest. Follow the actual
+[decoder](https://github.com/FS-GG/.github/blob/main/src/FS.GG.Coord.Cli/BoardV2Application.fs),
+not an improvised fact packet. Caller facts remain attributed reports or attestations; they cannot
+impersonate native observations or create authority. Preserve unknown/conflicting/stale evidence.
+
+Output `fsgg.coord.board-v2-owner-inspection/1` adds `ownerContinuation`. ContinueOwner keeps the same
+owner: `verify-isolated` invokes only the ADR-0096 check within its actual share. ObserveOriginal routes
+the existing original to its qualified observation handler/cursor, never to another send. Await retains
+its reopening event; RequestJudgment returns only the affected question. These recommendations execute
+no effects. Protected delivery still requires its existing envelope/qualified executor; an unsupported
+stage is a hold, not permission. The canonical selector remains the only new-work selection path.
+
+Activation needs normal source review, required CI, actual caller/instruction adoption and the required
+real continuation/recovery/rollback evidence. The [user override](https://github.com/FS-GG/.github/issues/5281#issuecomment-6611681098)
+removes a calendar pilot and mandatory shadow/measurement campaign; it does not waive those safeguards.
+Preserve current [publication serialization](https://github.com/FS-GG/.github/blob/main/docs/adr/0097-one-org-wide-serialized-publication-writer.md)
+and live-main boundaries until policy and tools are separately qualified together.
+
 ## Select one explicit scope
 
 Resolve user scope before inspection. Missing product configuration never selects organization scope;
@@ -227,15 +288,11 @@ Keep existing journals/custody rather than a new recovery ledger.
 
 ## Keep one owner through accepted closure
 
-Observe results, reconcile scoped acceptance and blockers, update Status and verify native readback
-before selecting/admitting work; after dispatch, update Status and verify again. Reconcile after worker
-returns, CI/runtime completion, reviews, supplier replies and accepted closure, and before yielding or
-handoff. Any Root action that changes an item's actionability (a ruling that removes a blocker, a
-Delivery dispatch, a scope-completing merge, a new blocker, a supplier answer) writes its Status in
-that same turn through the guarded write; a brief or ruling without the matching write is incomplete.
-The scheduled `Board drift: Project 3` report issue only detects misses: Root resolves each finding
-with a Status write or a recorded disposition. Update the Delivery first, then reassess its parent
-against its whole remaining promise.
+At meaningful lifecycle boundaries follow the [Status lifecycle](status-lifecycle.md): reconcile results,
+acceptance and blockers before selection, after dispatch and before return. A changed desired Status
+requires the guarded native write and readback in that turn; an equal value is a quiet no-op. Root
+resolves scheduled drift findings through a correction or recorded disposition. Update the Delivery
+before reassessing its Outcome against its whole remaining promise.
 Apply the six [Status definitions and guarded write procedure](status-lifecycle.md). Workers provide
 evidence; the root integrator owns decisions and serializes participating writers' mutations of the
 selected board and owning issue inputs within the admitted snapshot/write window, including body edits,
@@ -248,11 +305,6 @@ Use the existing owning issue's Owner, Done when, Current deliverable, Next acti
 Acceptance evidence with native links. Preserve the complete Done when; a merged slice narrows the
 remainder without closing its parent. Do not manufacture an issue, claim, packet, lifecycle ledger,
 mandatory return or duplicate current-status/closure projection. Optional helpers are diagnostics.
-The parent owns scope, capacity, shared-surface conflicts and exceptions. One accountable owner carries
-implementation, repair, review, PR updates and ordinary delivery in an isolated worktree with explicit
-touch-set; one integrator owns each shared surface. Existing authorization persists. Ordinary milestones
-need no repeated parent approval or file-by-file gate. Reconcile scope/authority changes and unknown effects.
-
 Verify the accountable owner and issuer's actual authority before dependent action. Before relying on
 a scope-changing host ruling, record it under existing write authority in the owning
 issue or PR with the ruling, exact scope, source/author and durable citation, then independently read
@@ -336,13 +388,10 @@ assembled-candidate checks. Attribute known/Unknown demand to its affected opera
 is not zero and an authentic-runtime supplier gap does not block unrelated authorized source preparation.
 Inspect transitive launch closure: a Python/shell label does not make CLR/native/external execution pure.
 Use existing owned supplier requests and disposition relevant replies/deadlines; do not add another ledger.
-Ordinary development verification under [ADR-0096](https://github.com/FS-GG/.github/blob/main/docs/adr/0096-proportionate-verification-and-unrecoverable-holds.md) is a local build/test/static check of unpublished
-source in a fresh isolated root, without credentials, shared/remote writes or publication, live-store, Home,
-VM or native-capability effects. It needs no Root runtime admission, original clock, custody packet or pre-run
-peer review: the owner stays within the stated CPU/memory share, keeps first failures and reports results.
-Candidate source review, exact-head required CI and coherent validation are unchanged. For every other effect,
-before invocation apply [final inputs and operation horizons](delivery-reliability.md#final-inputs-and-failure-gated-invocation),
-including complete attribution, prerequisite truth and source/ref stability through final retention.
+Ordinary verification follows [Normal execution](#normal-execution), without another admission gate.
+Every other effect applies [final inputs and operation horizons](delivery-reliability.md#final-inputs-and-failure-gated-invocation)
+before invocation, preserving complete attribution, prerequisite truth and determining source/ref
+stability through final retention. Candidate source review, exact-head CI and coherent validation remain.
 A Root-reviewed finite sequence may conditionally advance without per-step approval under
 [ADR-0096 section C](https://github.com/FS-GG/.github/blob/main/docs/adr/0096-proportionate-verification-and-unrecoverable-holds.md#decision)
 and [the envelope/isolation guidance](delivery-reliability.md#finite-delegated-sequence-and-isolation).
