@@ -24,6 +24,10 @@ module BoardV2Application =
     /// or native acceptance. Errors never echo raw input. Current native joins remain mandatory.
     val parseIntegratorObservations:
         binding: V2Projection.Binding -> json: string -> Result<V2ProjectionSource.SelectionContext, string>
+    /// Opt-in closed owner-continuation-input/1: existing integrator document plus exact slice
+    /// requests and bounded attributed facts. Native support is refused; no caller grant is inferred.
+    val parseOwnerContinuationObservations:
+        binding: V2Projection.Binding -> json: string -> Result<V2ProjectionSource.SelectionContext * FS.GG.Coord.OwnerContinuation.Request list * string option, string>
     /// The bounded refresh/inspection transport: it stops before dispatch once the binding's scaled request ceiling
     /// (`V2Projection.refreshRequestCeiling`) or deadline (`V2Projection.refreshDeadlineSeconds`) is reached, reporting
     /// coverage Unknown, and never replays a durable mutation. `elapsed` is the invocation's own clock.

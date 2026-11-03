@@ -197,3 +197,25 @@ module V2ProjectionSource =
     /// Expiry never releases original holds; self exemption requires exact slice/attempt/operation/PR/head.
     /// Read-only existing-PR observation consumes no new slot. Never allocates, dispatches or accepts effects.
     val selectActions: report: InspectionReport -> context: SelectionContext option -> now: System.DateTimeOffset -> Selection list
+
+    /// Exact owner/slice/attempt/source/path/PR/head binding for opt-in owner continuation.
+    val continuationIdentity: slice: CurrentSlice -> FS.GG.Coord.OwnerContinuation.Identity
+    /// Canonical finite-envelope operands; excludes mutable observation clocks and envelope self-reference.
+    val continuationEnvelopeInputDigest: context: SelectionContext -> slice: CurrentSlice -> string
+    /// Pure read-only recommendations. Ordinary isolated verification bypasses dispatch selection.
+    /// Native source joins are supplied here; supplied native support is discarded.
+    val recommendOwnerContinuations:
+        report: InspectionReport -> context: SelectionContext -> now: DateTimeOffset ->
+        requests: FS.GG.Coord.OwnerContinuation.Request list -> FS.GG.Coord.OwnerContinuation.Decision list
+
+    /// Production supplies the existing registered route reader only when the inferred next step is delivery.
+    val recommendOwnerContinuationsWithPreflight:
+        preflight: Map<string, Result<string, string>> ->
+        report: InspectionReport -> context: SelectionContext -> now: DateTimeOffset ->
+        requests: FS.GG.Coord.OwnerContinuation.Request list -> FS.GG.Coord.OwnerContinuation.Decision list
+
+    /// Trusted adapter composition supplies live original/envelope facts; caller-reported native facts remain excluded.
+    val recommendOwnerContinuationsWithFacts:
+        additional: Map<string, FS.GG.Coord.OwnerContinuation.Fact list> ->
+        preflight: Map<string, Result<string, string>> -> report: InspectionReport -> context: SelectionContext ->
+        now: DateTimeOffset -> requests: FS.GG.Coord.OwnerContinuation.Request list -> FS.GG.Coord.OwnerContinuation.Decision list

@@ -735,7 +735,7 @@ module V2EnrollmentCommands =
                 | Error _ -> Error V2Preflight.ReadFailed
                 | Ok live -> if live = local then Ok local else Error V2Preflight.NotLive
 
-    let private preflightRoutine (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) (online: bool) : int =
+    let private collectRoutinePreflight (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) (online: bool) =
         let repository = programmePath values.["--repository"]
         let slug = slugOf values
         let defaultBranch = "main"
@@ -826,8 +826,23 @@ module V2EnrollmentCommands =
             finally
                 (try scratch.Delete true with _ -> ())
         let report = V2Preflight.runRoutine stage { DefaultBranch = defaultBranch; Candidate = candidate; LiveBaseSha = live; OpenPullRequests = openCount; RoutineGate = routineGate; ClosingGate = closingGate }
+        report, (match candidate with V2Preflight.Known value -> Some value.HeadSha | _ -> None)
+
+    let private preflightRoutine stage values online =
+        let report, _ = collectRoutinePreflight stage values online
         printfn "%s" (V2Preflight.toJson report)
         V2Preflight.exitCode report.Overall
+
+    /// The same registered native/gate path as route-preflight, joined to the exact inspected head.
+    let observeRoutineMerge (repository: string) (slug: string) (pullRequest: int) (expectedHead: string) =
+        try
+            let values = Collections.Generic.Dictionary<string, string>()
+            values.["--repository"] <- repository
+            values.["--slug"] <- slug
+            values.["--pr"] <- string pullRequest
+            let report, head = collectRoutinePreflight V2Preflight.MergePullRequest values true
+            if head = Some expectedHead then Ok report else Error "preflight-head-changed-or-unknown"
+        with _ -> Error "registered-routine-preflight-unavailable"
 
     let private preflightPublication (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) (online: bool) : int =
         requiredFor values [ "--workflow" ]

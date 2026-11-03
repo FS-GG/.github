@@ -794,7 +794,10 @@ module V2ProjectionSource =
                         && (login |> Seq.forall (fun character -> Char.IsAsciiLetterOrDigit character || character = '-'))
                     if parts.Length = 6 && parts[0] = "repos" && binding.Repositories.Contains(parts[1] + "/" + parts[2])
                        && parts[3] = "collaborators" && safeLogin parts[4] && parts[5] = "permission" then transport.Send request
-                    else Error(Malformed("read-only V2 inspection", "permission read escaped selected repository/canonical login scope"))
+                    elif parts.Length = 8 && parts[0] = "repos" && binding.Repositories.Contains(parts[1] + "/" + parts[2])
+                         && parts[3] = "actions" && parts[4] = "runs" && parts[6] = "attempts"
+                         && (match Int64.TryParse parts[5], Int32.TryParse parts[7] with (true, id), (true, attempt) -> id > 0L && attempt > 0 | _ -> false) then transport.Send request
+                    else Error(Malformed("read-only V2 inspection", "read escaped selected repository/canonical original scope"))
                 | _ -> Error(Malformed("read-only V2 inspection", "request is not a fixed canonical read"))
             member _.SendMutation _ = Error(Malformed("read-only V2 inspection", "mutation is unavailable"))
             member _.RetryMutation _ = Error(Malformed("read-only V2 inspection", "durable replay is unavailable")) }
@@ -1548,3 +1551,91 @@ module V2ProjectionSource =
                                         [ "Selected in explicit integrator order within action-specific remaining capacity, native in-flight scope and original reservations";
                                           "Integrator-reported observations grant no allocation or dispatch authority; recheck determining facts beside owner execution" ]
         proposals |> List.map evaluate
+
+
+    /// Exact continuation scope, including PR/head and path population; no execution authority.
+    let continuationIdentity (slice: CurrentSlice) : FS.GG.Coord.OwnerContinuation.Identity =
+        let scope =
+            [ slice.Repository; string slice.Operation; string slice.Action; slice.AccountableOwner
+              slice.Join.NativeId; slice.Join.BodySha256; slice.Join.SourceRevision
+              Option.defaultValue "" slice.Join.HierarchySha256; Option.defaultValue "" slice.PullRequest
+              Option.defaultValue "" slice.PullRequestId; Option.defaultValue "" slice.Head
+              System.Text.Json.JsonSerializer.Serialize(List.sort slice.Paths) ]
+        { Subject = $"{slice.Issue.Owner}/{slice.Issue.Repository}#{slice.Issue.Number}"
+          Owner = slice.Owner; Slice = slice.Id; Attempt = slice.Attempt; Revision = slice.Join.SourceRevision
+          ScopeDigest = FS.GG.Coord.OwnerContinuation.digest (System.Text.Json.JsonSerializer.Serialize scope) }
+
+    /// Stable finite-envelope operands exclude collection clocks and the envelope's own reference.
+    /// Exact current native metadata still joins independently beside each recommendation.
+    let continuationEnvelopeInputDigest (context: SelectionContext) (slice: CurrentSlice) =
+        let identity = continuationIdentity slice
+        FS.GG.Coord.OwnerContinuation.digest (System.Text.Json.JsonSerializer.Serialize
+            [identity.Subject; identity.Owner; identity.Slice; identity.Attempt; identity.Revision; identity.ScopeDigest
+             context.Invocation; context.ArtifactSha256; context.RecipeRevision; context.PopulationRevision; context.EnrollmentCommitment])
+
+    /// Extend canonical selection for owned work. Isolated checks do not acquire a dispatch slot.
+    /// Supplied facts are never native observations; originals remain with their original observer.
+    let recommendOwnerContinuationsWithFacts (additional: Map<string, FS.GG.Coord.OwnerContinuation.Fact list>) (preflight: Map<string, Result<string, string>>) (report: InspectionReport) (context: SelectionContext) (now: DateTimeOffset) (requests: FS.GG.Coord.OwnerContinuation.Request list) =
+        requests |> List.sortBy (fun r -> r.Subject.Slice) |> List.map (fun request ->
+            let slice = context.Slices |> List.tryFind (fun s -> continuationIdentity s = request.Subject)
+            let scopeCurrent =
+                slice |> Option.exists (fun s ->
+                    report.Items |> List.exists (fun item ->
+                        item.Evidence.Issue = s.Issue && item.SourceCurrentness = "Current" && item.Owner = Some s.AccountableOwner
+                        && s.Owner = s.AccountableOwner && item.SourceRevision = Some s.Join.SourceRevision
+                        && (item.WorkItem |> Option.bind _.Sha256) = s.Join.HierarchySha256
+                        && item.Evidence.Gap.IsNone
+                        && (item.Evidence.Native |> Option.exists (fun n -> n.State = "OPEN" && n.NodeId = s.Join.NativeId && n.UpdatedAt = s.Join.UpdatedAt && n.BodySha256 = s.Join.BodySha256))
+                        && (match s.PullRequest with
+                            | None -> s.Head.IsNone && s.PullRequestId.IsNone && s.PullRequestUpdatedAt.IsNone
+                            | Some url -> report.NativeIntegrator.PullRequests |> List.exists (fun p -> p.Url = url && p.Id = Option.defaultValue "" s.PullRequestId && p.Head = Option.defaultValue "" s.Head && Some p.UpdatedAt = s.PullRequestUpdatedAt && p.ScopeCurrent))))
+            let nativeFact predicate value suffix : FS.GG.Coord.OwnerContinuation.Fact =
+                { Id = "native-continuation-" + suffix; Subject = request.Subject; Predicate = predicate
+                  Value = FS.GG.Coord.OwnerContinuation.Known value
+                  Support = FS.GG.Coord.OwnerContinuation.NativeObservation("V2ProjectionSource/1", request.Subject.ScopeDigest)
+                  ObservedAt = report.NativeIntegrator.ObservedAt; ValidUntil = report.NativeIntegrator.ObservedAt.AddMinutes 5.0
+                  Evidence = [request.Subject.Subject]; Supersedes = [] }
+            let checksPassed = slice |> Option.exists (fun s ->
+                report.NativeIntegrator.PullRequests |> List.exists (fun p ->
+                    Some p.Url = s.PullRequest && Some p.Head = s.Head && p.ScopeCurrent && p.Gaps.IsEmpty && p.GapDetails.IsEmpty
+                    && not p.Checks.IsEmpty && p.Checks |> List.forall (fun c -> c.EndsWith(":COMPLETED:SUCCESS", StringComparison.Ordinal) || c.EndsWith(":SUCCESS", StringComparison.Ordinal))))
+            // No caller can mint native support or shadow adapter facts, even through the library seam.
+            let supplied = request.Facts |> List.filter (fun f -> match f.Support with FS.GG.Coord.OwnerContinuation.NativeObservation _ -> false | _ -> true)
+            let delivered = slice |> Option.exists (fun s -> report.NativeIntegrator.PullRequests |> List.exists (fun p -> Some p.Url = s.PullRequest && Some p.Head = s.Head && p.State = "MERGED" && p.ScopeCurrent))
+            let facts = nativeFact FS.GG.Coord.OwnerContinuation.SourceDelivered delivered "source-delivered" :: nativeFact FS.GG.Coord.OwnerContinuation.ScopeCurrent scopeCurrent "scope" :: nativeFact FS.GG.Coord.OwnerContinuation.NativeChecks checksPassed "checks" :: ((Map.tryFind request.Subject.Slice additional |> Option.defaultValue []) @ supplied)
+            let relevantOriginal =
+                slice |> Option.bind (fun current ->
+                    context.Reservations |> Option.bind (fun holds ->
+                        holds |> List.sortBy _.CustodyReference |> List.tryFind (fun hold ->
+                            let exactSelf = hold.SliceId = current.Id && hold.Attempt = current.Attempt && hold.Operation = current.Operation
+                                            && hold.Owner = current.Owner && hold.Repository = current.Repository && hold.Paths = current.Paths
+                                            && hold.PullRequest = current.PullRequest && hold.Head = current.Head
+                            let left = current.Repository.Split('/')
+                            let right = hold.Repository.Split('/')
+                            let paths values = FS.GG.Coord.TouchSet.parse ("Paths: " + String.concat " " values)
+                            not exactSelf && left.Length = 2 && right.Length = 2
+                            && not (FS.GG.Coord.TouchSet.scopedConflicts left[0] left[1] right[0] right[1] (paths current.Paths) (paths hold.Paths) |> List.isEmpty))
+                        |> Option.map _.CustodyReference))
+            // Expiry is not release. Same owner alone cannot hide a different attempt/operation/head.
+            let request = { request with Original = request.Original |> Option.orElse relevantOriginal }
+            let initial = FS.GG.Coord.OwnerContinuation.recommend now { request with Facts = facts }
+            match initial.Recommendation, slice with
+            | FS.GG.Coord.OwnerContinuation.RequestJudgment "qualified-protected-envelope-and-native-checks-required", Some current ->
+                let proof = Map.tryFind current.Id preflight |> Option.defaultValue (Error "preflight-not-supplied")
+                let supported =
+                    match proof with
+                    | Ok digest when digest.Length = 64 && digest |> Seq.forall Char.IsAsciiHexDigitLower -> true
+                    | _ -> false
+                let joined =
+                    let fact = nativeFact FS.GG.Coord.OwnerContinuation.RoutinePreflight supported "routine-preflight"
+                    match proof with
+                    | Ok hash when supported -> { fact with Support = FS.GG.Coord.OwnerContinuation.NativeObservation("V2Preflight/routine-merge", hash); Evidence = ["registered-preflight:" + hash] }
+                    | _ -> fact
+                FS.GG.Coord.OwnerContinuation.recommend now { request with Facts = joined :: facts }
+            | _ -> initial)
+
+    let recommendOwnerContinuationsWithPreflight preflight report context now requests =
+        recommendOwnerContinuationsWithFacts Map.empty preflight report context now requests
+
+    let recommendOwnerContinuations report context now requests =
+        recommendOwnerContinuationsWithPreflight Map.empty report context now requests

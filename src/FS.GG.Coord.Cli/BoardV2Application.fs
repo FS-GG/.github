@@ -142,6 +142,96 @@ module BoardV2Application =
             Ok context
         with _ -> Error "invalid integrator observations: organization-only closed bounded schema and exact binding required; no native authority inferred"
 
+    /// Separate opt-in document; old integrator and inspection schemas remain unchanged.
+    let parseOwnerContinuationObservations (binding: Binding) (json: string) =
+        try
+            if System.Text.Encoding.UTF8.GetByteCount json > 262144 then invalidArg "input" "byte bound"
+            use document = JsonDocument.Parse(json, JsonDocumentOptions(MaxDepth = 16))
+            let root = document.RootElement
+            closed ["schema"; "integrator"; "requests"; "repositoryCheckout"] root
+            if text "schema" root <> "fsgg.coord.owner-continuation-input/1" then invalidArg "schema" "unsupported"
+            let context = parseIntegratorObservations binding (root.GetProperty("integrator").GetRawText()) |> Result.defaultWith (fun _ -> invalidArg "integrator" "invalid")
+            let bounded name limit element =
+                let value = text name element
+                if String.IsNullOrWhiteSpace value || value.Length > limit || value.Contains('\u0000') then invalidArg "input" "text bound"
+                value
+            let entries limit (value: JsonElement) =
+                if value.ValueKind <> JsonValueKind.Array || value.GetArrayLength() > limit then invalidArg "input" "array bound"
+                value.EnumerateArray() |> Seq.toList
+            let strings limit element = entries limit element |> List.map (fun (e: JsonElement) ->
+                let value = e.GetString()
+                if String.IsNullOrWhiteSpace value || value.Length > 2048 then invalidArg "input" "text bound"
+                value)
+            let optionalText (name: string) (element: JsonElement) = if element.GetProperty(name).ValueKind = JsonValueKind.Null then None else Some(bounded name 2048 element)
+            let requests: FS.GG.Coord.OwnerContinuation.Request list = entries 64 (root.GetProperty "requests") |> List.map (fun value ->
+                closed ["sliceId";"attempt";"owner";"revision";"scopeDigest";"action";"original";"envelope";"facts"] value
+                let slice = context.Slices |> List.find (fun s -> s.Id = bounded "sliceId" 128 value)
+                let identity = continuationIdentity slice
+                if identity.Attempt <> bounded "attempt" 128 value || identity.Owner <> bounded "owner" 512 value
+                   || identity.Revision <> bounded "revision" 16384 value || identity.ScopeDigest <> bounded "scopeDigest" 64 value then invalidArg "identity" "exact join required"
+                let action =
+                    match text "action" value with
+                    | "next" -> FS.GG.Coord.OwnerContinuation.Next
+                    | "verify-isolated" -> FS.GG.Coord.OwnerContinuation.VerifyIsolated
+                    | "implement" -> FS.GG.Coord.OwnerContinuation.Implement
+                    | "review" -> FS.GG.Coord.OwnerContinuation.Review
+                    | "deliver" -> FS.GG.Coord.OwnerContinuation.Deliver
+                    | _ -> invalidArg "action" "unsupported"
+                let facts: FS.GG.Coord.OwnerContinuation.Fact list = entries 16 (value.GetProperty "facts") |> List.map (fun fact ->
+                    closed ["id";"predicate";"state";"value";"detail";"support";"observedAt";"validUntil";"evidence";"supersedes"] fact
+                    let id = bounded "id" 128 fact
+                    if id.StartsWith("native-", StringComparison.Ordinal) then invalidArg "id" "reserved"
+                    let predicate =
+                        match text "predicate" fact with
+                        | "source-ready" -> FS.GG.Coord.OwnerContinuation.SourceReady
+                        | "verification-passed" -> FS.GG.Coord.OwnerContinuation.VerificationPassed
+                        | "effect-clear" -> FS.GG.Coord.OwnerContinuation.EffectClear
+                        | "isolated" -> FS.GG.Coord.OwnerContinuation.Isolated
+                        | "resource-share" -> FS.GG.Coord.OwnerContinuation.ResourceShare
+                        | "native-checks" -> FS.GG.Coord.OwnerContinuation.NativeChecks
+                        | "independent-review" -> FS.GG.Coord.OwnerContinuation.IndependentReview
+                        | _ -> invalidArg "predicate" "unsupported caller predicate"
+                    let details = strings 16 (fact.GetProperty "detail")
+                    let knowledge =
+                        match text "state" fact with
+                        | "known" when details.IsEmpty -> FS.GG.Coord.OwnerContinuation.Known(fact.GetProperty("value").GetBoolean())
+                        | "unknown" when details.Length = 1 && fact.GetProperty("value").ValueKind = JsonValueKind.Null -> FS.GG.Coord.OwnerContinuation.Unknown details.Head
+                        | "conflict" when not details.IsEmpty && fact.GetProperty("value").ValueKind = JsonValueKind.Null -> FS.GG.Coord.OwnerContinuation.Conflict details
+                        | _ -> invalidArg "state" "unsupported"
+                    let support = fact.GetProperty "support"
+                    let provenance =
+                        match text "kind" support with
+                        | "reported" ->
+                            closed ["kind";"supplier"] support
+                            FS.GG.Coord.OwnerContinuation.Reported(bounded "supplier" 512 support)
+                        | "attestation" ->
+                            closed ["kind";"supplier";"role";"model";"effort";"method";"contributors";"contributorsComplete";"limitations"] support
+                            FS.GG.Coord.OwnerContinuation.AgentAttestation
+                                { Supplier = bounded "supplier" 512 support; Role = bounded "role" 128 support
+                                  ActualModel = optionalText "model" support; ActualEffort = optionalText "effort" support
+                                  Method = bounded "method" 2048 support; Contributors = strings 128 (support.GetProperty "contributors")
+                                  ContributorsComplete = support.GetProperty("contributorsComplete").GetBoolean(); Limitations = strings 16 (support.GetProperty "limitations") }
+                        | _ -> invalidArg "support" "caller cannot supply native facts"
+                    let observed = fact.GetProperty("observedAt").GetDateTimeOffset()
+                    let until = fact.GetProperty("validUntil").GetDateTimeOffset()
+                    if until < observed then invalidArg "time" "invalid interval"
+                    { Id = id; Subject = identity; Predicate = predicate; Value = knowledge; Support = provenance
+                      ObservedAt = observed; ValidUntil = until; Evidence = strings 16 (fact.GetProperty "evidence"); Supersedes = strings 16 (fact.GetProperty "supersedes") })
+                if facts |> List.map _.Id |> Set.ofList |> Set.count <> facts.Length then invalidArg "facts" "duplicate"
+                let envelope: FS.GG.Coord.OwnerContinuation.EnvelopeReference option =
+                    let reference = value.GetProperty "envelope"
+                    if reference.ValueKind = JsonValueKind.Null then None
+                    else
+                        closed ["nodeId";"updatedAt";"bodySha256"] reference
+                        let hash = bounded "bodySha256" 64 reference
+                        if hash.Length <> 64 || hash |> Seq.exists (Char.IsAsciiHexDigitLower >> not) then invalidArg "digest" "invalid"
+                        Some { NodeId = bounded "nodeId" 256 reference
+                               UpdatedAt = bounded "updatedAt" 128 reference; BodySha256 = hash }
+                { Subject = identity; Envelope = envelope; Action = action; Original = optionalText "original" value; Facts = facts })
+            if requests.IsEmpty || (requests |> List.map _.Subject.Slice |> Set.ofList |> Set.count) <> requests.Length then invalidArg "requests" "unique nonempty slices"
+            Ok(context, requests, optionalText "repositoryCheckout" root)
+        with _ -> Error "invalid owner continuation input: bounded closed schema and exact identities required; caller facts grant no authority"
+
     let private issueWire (issue: IssueRef) = {| owner = issue.Owner; repository = issue.Repository; number = issue.Number |}
     let private projectionWire (report: Report) =
         let outcome, itemId = match report.Outcome with AlreadyCurrent id -> "already-current", id | Updated id -> "updated", id
@@ -165,7 +255,7 @@ module BoardV2Application =
                       projection = item.Projection |> Option.map projectionWire; gap = item.Gap |> Option.map Errors.explain
                       lastVerified = item.LastVerified |> Option.map projectionWire |}) |}
 
-    let encodeInspectionWithContext (report: InspectionReport) (context: SelectionContext option) (now: DateTimeOffset) =
+    let private encodeInspectionProjection (report: InspectionReport) (context: SelectionContext option) (now: DateTimeOffset) includeSelection =
         let complete = isProgrammeBinding report.Binding && report.Evidence.PopulationGap.IsNone && report.MembershipGap.IsNone && report.NativeIntegrator.RepositoryGaps.IsEmpty && (report.NativeIntegrator.PullRequests |> List.forall (fun pull -> pull.Gaps.IsEmpty && pull.GapDetails.IsEmpty))
         let facts: IntegratorFacts =
             { OpenPullRequests = if complete then Some(report.NativeIntegrator.PullRequests |> List.filter (fun pull -> pull.State = "OPEN") |> List.map _.Url) else None
@@ -227,7 +317,7 @@ module BoardV2Application =
                                  repository = hold.Repository; paths = hold.Paths; pullRequest = hold.PullRequest; head = hold.Head; custodyReference = hold.CustodyReference |}))
                           slices = value.Slices |> List.map (fun slice -> {| id = slice.Id; attempt = slice.Attempt; accountableOwner = slice.AccountableOwner; observation = observationWire slice.Observation |}) |})
                    selectionCoverage = if context.IsNone then "Partial .8: native observations available; attributed action/prerequisite/intake/resource/reservation suppliers are missing" else "Attributed ephemeral integrator observations supplied; per-slice results retain native join failures and explicit ordered advisory selection; no allocation/dispatch authority"
-                   selection = selectActions report context now |> List.map (fun selected ->
+                   selection = (if includeSelection then selectActions report context now else []) |> List.map (fun selected ->
                        {| sliceId = selected.SliceId; attempt = selected.Attempt; operation = selected.Operation |> Option.map operationName
                           issue = issueWire selected.Issue; action = actionName selected.Action; decision = selected.Decision
                           owner = selected.Owner; pullRequest = selected.PullRequest; head = selected.Head; reasons = selected.Reasons; evidence = selected.Evidence
@@ -262,6 +352,8 @@ module BoardV2Application =
                        observedAt = if item.Intake.ObservedAt = DateTimeOffset.MinValue then None else Some item.Intake.ObservedAt
                        admission = item.Intake.Admission; allowed = item.Intake.Allowed; gap = item.Intake.Gap |> Option.map Errors.explain |}))
             wire.ToJsonString()
+
+    let encodeInspectionWithContext report context now = encodeInspectionProjection report context now true
 
     let encodeInspection report = encodeInspectionWithContext report None DateTimeOffset.UtcNow
 
@@ -866,13 +958,14 @@ module BoardV2Application =
             | [] ->
                 match Map.tryFind "--binding-file" values, Map.tryFind "--report-file" values with
                 | Some binding, Some report when binding <> report && Map.tryFind "--previous-report-file" values <> Some report ->
-                    Ok(binding, Map.tryFind "--previous-report-file" values, report, Map.containsKey "--integrator-stdin" values)
+                    Ok(binding, Map.tryFind "--previous-report-file" values, report, Map.containsKey "--integrator-stdin" values, Map.containsKey "--owner-continuation-stdin" values)
                 | _ -> Error "refresh requires distinct --binding-file PATH and --report-file PATH"
-            | "--integrator-stdin" :: rest when not (Map.containsKey "--integrator-stdin" values) -> flags (Map.add "--integrator-stdin" "true" values) rest
+            | "--owner-continuation-stdin" :: rest when not (Map.containsKey "--owner-continuation-stdin" values) && not (Map.containsKey "--integrator-stdin" values) -> flags (Map.add "--owner-continuation-stdin" "true" values) rest
+            | "--integrator-stdin" :: rest when not (Map.containsKey "--integrator-stdin" values) && not (Map.containsKey "--owner-continuation-stdin" values) -> flags (Map.add "--integrator-stdin" "true" values) rest
             | flag :: value :: rest when List.contains flag [ "--binding-file"; "--previous-report-file"; "--report-file" ] && not (Map.containsKey flag values) && not (String.IsNullOrWhiteSpace value) && not (value.StartsWith("--", StringComparison.Ordinal)) -> flags (Map.add flag value values) rest
             | _ -> Error "unknown, duplicate or incomplete refresh argument"
         match arguments with
-        | "refresh" :: rest when rest |> List.contains "--integrator-stdin" -> Error "integrator observations are read-only organization inspect input"
+        | "refresh" :: rest when rest |> List.exists (fun arg -> arg = "--integrator-stdin" || arg = "--owner-continuation-stdin") -> Error "integrator observations are read-only organization inspect input"
         | ("refresh" | "inspect") :: rest -> flags Map.empty rest
         | _ -> Error "expected board-v2 refresh or inspect"
 
@@ -988,7 +1081,7 @@ module BoardV2Application =
                 // Placeholders, wired before PR 5 and PR 8: the Root login (until the board-currency
                 // rootLogins parameter is read), an empty ledger (until the state directory) and no
                 // enrollment input (RM1 inert; P-READY reports cards as unenrolled).
-                let rootLogins = set [ "EHotwagner" ]
+                let rootLogins = FS.GG.Coord.RootIdentityPolicy.rootLogins |> Result.defaultWith (fun _ -> invalidOp "canonical Root policy unavailable")
                 let inputs: V2TendReads.Inputs =
                     { Owner = "FS-GG"; ProjectNumber = 3; RootLogins = rootLogins; ObservedAt = observed; Ledger = []; Enrolled = Map.empty }
                 let enable =
@@ -1107,20 +1200,23 @@ module BoardV2Application =
         | _ -> None
 
     let private parseArguments arguments =
-        parseSyntax arguments |> Result.bind (fun (binding, previous, report, integratorInput) ->
+        parseSyntax arguments |> Result.bind (fun (binding, previous, report, integratorInput, continuationInput) ->
             let bindingPath = Path.GetFullPath binding
             let reportPath = Path.GetFullPath report
             let previousPath = previous |> Option.map Path.GetFullPath
             if bindingPath = reportPath || previousPath = Some reportPath || File.Exists reportPath then
                 Error "report output must be a new path distinct from all inputs"
-            else Ok(bindingPath, previousPath, reportPath, integratorInput))
+            else Ok(bindingPath, previousPath, reportPath, integratorInput, continuationInput))
 
-    let private readIntegratorInput (reader: TextReader) (binding: Binding) =
+    let private readIntegratorInput (reader: TextReader) (binding: Binding) continuationInput =
         try
             let buffer = Array.zeroCreate<char> 262145
             let count = reader.ReadBlock(buffer, 0, buffer.Length)
             if count = buffer.Length then Error "integrator stdin exceeds its bounded single-document limit"
-            else parseIntegratorObservations binding (String(buffer, 0, count))
+            else
+                let json = String(buffer, 0, count)
+                if continuationInput then parseOwnerContinuationObservations binding json |> Result.map (fun (context, requests, checkout) -> context, Some(requests, checkout))
+                else parseIntegratorObservations binding json |> Result.map (fun context -> context, None)
         with _ -> Error "could not read bounded integrator stdin; no native authority inferred"
 
     let private readBindingFile (path: string) =
@@ -1137,7 +1233,7 @@ module BoardV2Application =
         System.Text.UTF8Encoding(false, true).GetString(buffer, 0, count)
 
     let private prepare (reader: TextReader) arguments =
-        (try parseArguments arguments with error -> Error("invalid input path: " + error.Message)) |> Result.bind (fun (bindingPath, previousPath, reportPath, integratorInput) ->
+        (try parseArguments arguments with error -> Error("invalid input path: " + error.Message)) |> Result.bind (fun (bindingPath, previousPath, reportPath, integratorInput, continuationInput) ->
             try
                 parseBinding (readBindingFile bindingPath) |> Result.bind (fun binding ->
                     if isProgrammeBinding binding then
@@ -1150,10 +1246,10 @@ module BoardV2Application =
                         let previous = match previousPath with None -> Ok None | Some path -> decodePreviousReport (File.ReadAllText path) |> Result.map Some
                         previous |> Result.bind (fun history ->
                             let context =
-                                if integratorInput && not (isProgrammeBinding binding) then Error "integrator stdin is restricted to organization binding 4 inspection"
-                                elif integratorInput then readIntegratorInput reader binding |> Result.map Some
-                                else Ok None
-                            context |> Result.map (fun supplied -> binding, history, reportPath, supplied)))
+                                if (integratorInput || continuationInput) && not (isProgrammeBinding binding) then Error "integrator stdin is restricted to organization binding 4 inspection"
+                                elif integratorInput || continuationInput then readIntegratorInput reader binding continuationInput |> Result.map (fun (context, requests) -> Some context, requests)
+                                else Ok(None, None)
+                            context |> Result.map (fun (supplied, requests) -> binding, history, reportPath, supplied, requests)))
             with _ -> Error "could not read refresh input: bounded binding/history input unavailable")
 
     // Leave enough time for the existing 30 second transport timeout. Stop before dispatch,
@@ -1181,7 +1277,7 @@ module BoardV2Application =
     let private refuse message =
         eprintfn "fsgg-coord-engine: board-v2 refresh refused: %s" message
         1
-    let private execute (writerLock: WriterLock) (transport: IGitHubTransport) ((binding: Binding), previous, reportPath, _) =
+    let private execute (writerLock: WriterLock) (transport: IGitHubTransport) ((binding: Binding), previous, reportPath, _, _) =
         try
             let report =
                 use lease = V2WriterLock.acquire (writerLock binding.ProjectId (V2WriterLock.observationLegacyName binding.ProjectId))
@@ -1193,10 +1289,49 @@ module BoardV2Application =
             else File.WriteAllText(reportPath, json)
             if report.PopulationGap.IsSome || report.Selected <> Some report.Verified then 3 else 0
         with error -> refuse (if isProgrammeBinding binding then "private refresh/report failed" else "refresh/report failed: " + error.Message)
-    let private executeInspection transport (binding, previous, reportPath, context) =
+    let private executeInspection transport (binding, previous, reportPath, context, requests: (FS.GG.Coord.OwnerContinuation.Request list * string option) option) =
         try
-            let report = V2ProjectionSource.inspectFixed (bounded binding transport) binding previous
-            let json = encodeInspectionWithContext report context DateTimeOffset.UtcNow + Environment.NewLine
+            let reads = bounded binding transport
+            let report = V2ProjectionSource.inspectFixed reads binding previous
+            let now = DateTimeOffset.UtcNow
+            let json =
+                match context, requests with
+                | Some supplied, Some(requested, checkout) ->
+                    let wire = System.Text.Json.Nodes.JsonNode.Parse(encodeInspectionProjection report context now false)
+                    wire.["schema"] <- JsonSerializer.SerializeToNode("fsgg.coord.board-v2-owner-inspection/1")
+                    wire.AsObject().Remove("selection") |> ignore
+                    wire.AsObject().Remove("selectionCoverage") |> ignore
+                    let additional = requested |> List.map (fun request -> request.Subject.Slice, OwnerContinuationReads.collect reads report supplied now request) |> Map.ofList
+                    let preliminary = recommendOwnerContinuationsWithFacts additional Map.empty report supplied now requested
+                    let observePreflight (slice: CurrentSlice) =
+                        match checkout, slice.PullRequest, slice.Head with
+                        | Some repository, Some url, Some head ->
+                            let number = url.Split('/') |> Array.last |> Int32.TryParse
+                            match number with
+                            | true, pr ->
+                                V2EnrollmentCommands.observeRoutineMerge repository slice.Repository pr head |> Result.bind (fun proof ->
+                                    if proof.Route = V2Preflight.RoutineDelivery && proof.Stage = V2Preflight.MergePullRequest
+                                       && proof.Overall = V2Preflight.AllSupported
+                                       && (proof.Findings |> List.map _.Check |> Set.ofList) = (V2Preflight.checksFor proof.Route proof.Stage |> Set.ofList)
+                                       && (proof.Findings |> List.forall (fun f -> match f.Verdict with V2Preflight.SupportedForNextStage _ -> true | _ -> false)) then
+                                        Ok(FS.GG.Coord.OwnerContinuation.digest (V2Preflight.toJson proof))
+                                    else Error "registered-routine-preflight-not-supported")
+                            | _ -> Error "invalid-native-pr"
+                        | _ -> Error "qualified-checkout-or-pr-not-supplied"
+                    let preflights =
+                        preliminary
+                        |> List.choose (fun decision ->
+                            match decision.Recommendation with
+                            | FS.GG.Coord.OwnerContinuation.RequestJudgment "qualified-protected-envelope-and-native-checks-required" ->
+                                supplied.Slices
+                                |> List.tryFind (fun slice -> slice.Id = decision.Subject.Slice)
+                                |> Option.map (fun slice -> slice.Id, observePreflight slice)
+                            | _ -> None)
+                        |> Map.ofList
+                    let decisions = recommendOwnerContinuationsWithFacts additional preflights report supplied DateTimeOffset.UtcNow requested
+                    wire.["ownerContinuation"] <- System.Text.Json.Nodes.JsonNode.Parse(FS.GG.Coord.OwnerContinuation.encode decisions)
+                    wire.ToJsonString() + Environment.NewLine
+                | _ -> encodeInspectionWithContext report context now + Environment.NewLine
             if isProgrammeBinding binding then privateJson syncMigrationDirectory reportPath json
             else File.WriteAllText(reportPath, json)
             if report.Evidence.PopulationGap.IsSome || report.MembershipGap.IsSome || (report.Items |> List.exists (fun item -> item.SourceCurrentness <> "Current" || item.PlanningGap.IsSome)) then 3 else 0
@@ -1261,7 +1396,7 @@ module BoardV2Application =
             Some(match prepare Console.In rest with
                  | Error message -> refuse message
                  | Ok input ->
-                     let binding, _, _, _ = input
+                     let binding, _, _, _, _ = input
                      let token =
                          let primary = Environment.GetEnvironmentVariable "GITHUB_TOKEN"
                          if String.IsNullOrWhiteSpace primary then Environment.GetEnvironmentVariable "GH_TOKEN" else primary

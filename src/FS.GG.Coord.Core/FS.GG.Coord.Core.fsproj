@@ -35,6 +35,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="../../scripts/root-identity-policy.json" LogicalName="FS.GG.Coord.Core.RootIdentityPolicy.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Accepted roadmap receipts are a capability of the live authority adapter, not a public
          constructor over caller-authored JSON. The core regression suite sees the boundary directly. -->
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
@@ -46,6 +50,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="RootIdentityPolicy.fs" />
+    <Compile Include="OwnerContinuation.fs" />
     <Compile Include="ExitCode.fsi" />
     <Compile Include="ExitCode.fs" />
     <Compile Include="RepoScope.fsi" />
