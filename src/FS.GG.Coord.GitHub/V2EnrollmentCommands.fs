@@ -833,7 +833,6 @@ module V2EnrollmentCommands =
         printfn "%s" (V2Preflight.toJson report)
         V2Preflight.exitCode report.Overall
 
-    /// The same registered native/gate path as route-preflight, joined to the exact inspected head.
     let observeRoutineMerge (repository: string) (slug: string) (pullRequest: int) (expectedHead: string) =
         try
             let values = Collections.Generic.Dictionary<string, string>()

@@ -1553,7 +1553,6 @@ module V2ProjectionSource =
         proposals |> List.map evaluate
 
 
-    /// Exact continuation scope, including PR/head and path population; no execution authority.
     let continuationIdentity (slice: CurrentSlice) : FS.GG.Coord.OwnerContinuation.Identity =
         let scope =
             [ slice.Repository; string slice.Operation; string slice.Action; slice.AccountableOwner
@@ -1585,10 +1584,6 @@ module V2ProjectionSource =
             | Some(path, blob) when path.StartsWith("docs/", StringComparison.Ordinal) && not (path.Contains("..") || path.Contains(':') || path.Contains('\\')) -> ["protected-docs-blob"; sourceRepository binding; path; blob]
             | _ -> ["unrecognized-protected-plan"; value]
 
-    /// Semantic native source identity derives from typed complete observations, never by stripping
-    /// arbitrary text from the legacy freshness revision. Native issue/plan/dependency clocks still
-    /// join exactly in ScopeCurrent. Own issue/plan bodies, dependency IDs/states/edges, population,
-    /// source blobs and hierarchy remain bound; the blocker reader does not supply dependency bodies.
     let continuationEnvelopeIdentity (report: InspectionReport) (slice: CurrentSlice) =
         let item = report.Items |> List.find (fun item -> item.Evidence.Issue = slice.Issue)
         let native (value: NativeObservation) = [value.NodeId; value.Url; value.BodySha256; value.State]
@@ -1609,7 +1604,6 @@ module V2ProjectionSource =
         let basis = continuationIdentity {slice with Join = {slice.Join with SourceRevision = revision}}
         {basis with Revision = revision}
 
-    /// The envelope itself and mutable clocks are excluded; exact current native joins remain mandatory.
     let continuationEnvelopeInputDigest report (context: SelectionContext) slice =
         let identity = continuationEnvelopeIdentity report slice
         FS.GG.Coord.OwnerContinuation.digest (System.Text.Json.JsonSerializer.Serialize
@@ -1618,8 +1612,6 @@ module V2ProjectionSource =
 
     type RegisteredOwnerPreflight = RoutineMerge of digest: string | RoutineDraft of digest: string * head: string
 
-    /// Extend canonical selection for owned work. Isolated checks do not acquire a dispatch slot.
-    /// Supplied facts are never native observations; originals remain with their original observer.
     let recommendOwnerContinuationsWithFacts (additional: Map<string, FS.GG.Coord.OwnerContinuation.Fact list>) (preflight: Map<string, Result<RegisteredOwnerPreflight, string>>) (report: InspectionReport) (context: SelectionContext) (now: DateTimeOffset) (requests: FS.GG.Coord.OwnerContinuation.Request list) =
         requests |> List.sortBy (fun r -> r.Subject.Slice) |> List.map (fun request ->
             let slice = context.Slices |> List.tryFind (fun s -> continuationIdentity s = request.Subject)

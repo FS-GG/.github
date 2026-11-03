@@ -142,7 +142,6 @@ module BoardV2Application =
             Ok context
         with _ -> Error "invalid integrator observations: organization-only closed bounded schema and exact binding required; no native authority inferred"
 
-    /// Separate opt-in document; old integrator and inspection schemas remain unchanged.
     let parseOwnerContinuationObservations (binding: Binding) (json: string) =
         try
             if System.Text.Encoding.UTF8.GetByteCount json > 262144 then invalidArg "input" "byte bound"

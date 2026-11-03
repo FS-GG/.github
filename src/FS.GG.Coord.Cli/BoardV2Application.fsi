@@ -26,6 +26,7 @@ module BoardV2Application =
         binding: V2Projection.Binding -> json: string -> Result<V2ProjectionSource.SelectionContext, string>
     /// Opt-in closed owner-continuation-input/1: existing integrator document plus exact slice
     /// requests and bounded attributed facts. Native support is refused; no caller grant is inferred.
+    /// Separate opt-in document; old integrator and inspection schemas remain unchanged.
     val parseOwnerContinuationObservations:
         binding: V2Projection.Binding -> json: string -> Result<V2ProjectionSource.SelectionContext * FS.GG.Coord.OwnerContinuation.Request list * string option * (string * string) option, string>
     /// The bounded refresh/inspection transport: it stops before dispatch once the binding's scaled request ceiling

@@ -28,6 +28,7 @@ module V2EnrollmentCommands =
 
     /// Reuse the actual registered merge preflight readers/gates without printing or writing native state.
     /// Refuse when its independently read PR head differs from the inspected head. No execution grant.
+    /// The same registered native/gate path as route-preflight, joined to the exact inspected head.
     val observeRoutineMerge:
         repository: string -> slug: string -> pullRequest: int -> expectedHead: string -> Result<V2Preflight.Report, string>
 
