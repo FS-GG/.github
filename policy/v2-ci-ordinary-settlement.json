@@ -42,7 +42,9 @@
       "claim-generation",
       "Lint every shell file in the repo (pinned shellcheck)",
       "claim-fence",
-      "architecture-map reconcile"
+      "architecture-map reconcile",
+      "no-silent-revert",
+      "board-linkage"
     ],
     "checkProducers": {
       "contract-coherence / coherence": {
@@ -89,6 +91,16 @@
         "workflowId": 305220590,
         "path": ".github/workflows/architecture-map.yml",
         "event": "pull_request"
+      },
+      "no-silent-revert": {
+        "workflowId": 402374173,
+        "path": ".github/workflows/landed-revert-guard.yml",
+        "event": "pull_request"
+      },
+      "board-linkage": {
+        "workflowId": 402881411,
+        "path": ".github/workflows/board-linkage.yml",
+        "event": "pull_request_target"
       }
     }
   },

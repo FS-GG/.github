@@ -121,7 +121,7 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         self.assertFalse(receipt["credentialAccess"])
         self.assertEqual({"contract-coherence / coherence", "routine-eligibility"},
                          {check["name"] for check in receipt["requiredChecks"]})
-        self.assertEqual(8, len(receipt["requiredGateChecks"]))
+        self.assertEqual(10, len(receipt["requiredGateChecks"]))
 
     def test_audio_profile_uses_only_code_owned_identity_checks_and_producers(self):
         self.select_audio()
@@ -213,6 +213,23 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         evidence = copy.deepcopy(self.evidence)
         evidence["checks"][0]["workflowId"] = 1
         self.refuses(evidence=evidence, contains="native producer")
+
+    def test_new_required_gates_bind_exact_producers_and_fresh_policy(self):
+        expected = {
+            "no-silent-revert": (402374173, ".github/workflows/landed-revert-guard.yml", "pull_request"),
+            "board-linkage": (402881411, ".github/workflows/board-linkage.yml", "pull_request_target"),
+        }
+        for name, (workflow_id, path, event) in expected.items():
+            self.assertIn(name, self.policy["qualification"]["requiredGateChecks"])
+            self.assertEqual({"workflowId": workflow_id, "path": path, "event": event},
+                             self.policy["qualification"]["checkProducers"][name])
+            evidence = copy.deepcopy(self.evidence)
+            next(c for c in evidence["gateChecks"] if c["name"] == name)["workflowId"] = 1
+            self.refuses(evidence=evidence, contains="native producer")
+        evidence = copy.deepcopy(self.evidence)
+        evidence["subject"]["policySha256"] = "0" * 64
+        self.refuses(evidence=evidence, contains="stale or mismatched")
+        self.assertFalse(self.qualify()["credentialAccess"])
 
     def test_policy_inventory_is_enrolled_and_keeps_current_gates(self):
         self.assertEqual("installed", self.policy["status"])
