@@ -23,6 +23,11 @@ if method == "GET" and endpoint.endswith("pulls?state=open&per_page=100"):
     state_path.write_text(json.dumps(state))
     print(json.dumps(value))
 elif method == "GET" and "/pulls/" in endpoint:
+    if state.get("created_effect") and state.get("fail_read_after_create"):
+        raise SystemExit(8)
+    if state.get("created_effect") and "raw_create_readback" in state:
+        print(state["raw_create_readback"])
+        raise SystemExit(0)
     if state.get("patched") and state.get("fail_read_after_patch"):
         raise SystemExit(8)
     sequence = state.get("read_sequence")
@@ -41,6 +46,13 @@ elif method == "PATCH" and "/pulls/" in endpoint:
 elif method == "GET" and "/git/ref/heads/" in endpoint:
     print(json.dumps({"object": {"sha": state["head_sha"]}}))
 elif method == "POST" and endpoint.endswith("/pulls"):
+    state["created_effect"] = True
+    state_path.write_text(json.dumps(state))
+    if state.get("create_fail_after"):
+        raise SystemExit(7)
+    if "raw_create_response" in state:
+        print(state["raw_create_response"])
+        raise SystemExit(0)
     print(json.dumps(state.get("created", {"number": 42, "html_url": "https://example.test/pull/42"})))
 else:
     print("unexpected fake gh invocation", file=sys.stderr)

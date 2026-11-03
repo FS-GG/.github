@@ -396,7 +396,7 @@ def update_pull(arguments: argparse.Namespace, proposed: str, identity: dict[str
                 "url": before["html_url"]}
 
 
-def run_gh(gh: str, arguments: list[str], stdin: str | None = None) -> Any:
+def run_gh(gh: str, arguments: list[str], stdin: str | None = None, *, strict_json: bool = False) -> Any:
     try:
         completed = subprocess.run(
             [gh, "api", *arguments],
@@ -412,6 +412,22 @@ def run_gh(gh: str, arguments: list[str], stdin: str | None = None) -> Any:
         # Do not repeat stderr: authentication tooling may include sensitive context.
         raise ToolError(f"gh api failed with exit code {completed.returncode}")
     try:
+        if strict_json:
+            def unique_object(pairs):
+                value = {}
+                for key, item in pairs:
+                    if key in value:
+                        raise ValueError("duplicate JSON key")
+                    value[key] = item
+                return value
+
+            def reject_constant(value):
+                raise ValueError("non-JSON constant")
+
+            try:
+                return json.loads(completed.stdout, object_pairs_hook=unique_object, parse_constant=reject_constant)
+            except (ValueError, RecursionError) as error:
+                raise ToolError("gh api returned invalid JSON") from error
         return json.loads(completed.stdout)
     except json.JSONDecodeError as error:
         raise ToolError("gh api returned invalid JSON") from error
@@ -831,6 +847,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--base")
     result.add_argument("--title")
     result.add_argument("--body-file", type=pathlib.Path)
+    result.add_argument("--draft", action="store_true",
+                        help="Create a draft PR and verify its native state (new PRs only)")
     result.add_argument("--update-pr", type=int, help="Update an existing managed PR, preserving native machine metadata")
     result.add_argument("--previous-head-sha", help="Explicit previous routine marker head for an update")
     result.add_argument("--adopt-legacy-pr", action="store_true",
@@ -846,6 +864,8 @@ def parser() -> argparse.ArgumentParser:
 def validate(arguments: argparse.Namespace) -> None:
     if not REPO_RE.fullmatch(arguments.repo):
         raise ToolError("repo must have owner/repository form")
+    if arguments.draft and (arguments.update_pr is not None or arguments.adopt_known_roster):
+        raise ToolError("--draft only supports new PR creation")
     if arguments.adopt_known_roster:
         if any(getattr(arguments, key) is not None for key in ("campaign_id", "dependency_chain_id", "head", "head_sha", "base", "title", "body_file", "update_pr", "previous_head_sha", "sc2_producer_predecessor_source")) or arguments.adopt_legacy_pr or arguments.declare_delivery_continues:
             raise ToolError("known-roster mode cannot mix ordinary PR arguments")
@@ -880,6 +900,37 @@ def validate(arguments: argparse.Namespace) -> None:
         raise ToolError("base branch must be non-empty and single-line")
     if not arguments.title or "\n" in arguments.title or "\r" in arguments.title:
         raise ToolError("title must be non-empty and single-line")
+
+
+def verify_created_draft(arguments: argparse.Namespace, created: dict[str, Any],
+                         body: str, common: dict[str, Any]) -> dict[str, Any]:
+    """A possible create is never repaired or repeated when native readback disagrees."""
+    def unresolved(stage: str) -> None:
+        raise Refusal("draft-create-unresolved", **common, number=created["number"],
+                      writeAttempted=True, stage=stage)
+
+    if created.get("draft") is not True:
+        unresolved("create-response")
+    try:
+        native = run_gh(arguments.gh, ["--method", "GET",
+                                      f"/repos/{arguments.repo}/pulls/{created['number']}"], strict_json=True)
+    except ToolError:
+        unresolved("readback")
+    if not isinstance(native, dict) or native.get("draft") is not True or native.get("merged") is not False:
+        unresolved("readback")
+    expected = {"number": created["number"], "state": "open", "title": arguments.title, "body": body,
+                "head.ref": arguments.head, "head.sha": arguments.head_sha, "base.ref": arguments.base}
+    if (type(native.get("number")) is not int
+            or any(metadata_field(native, field) != value for field, value in expected.items())):
+        unresolved("readback")
+    for field in ("head.repo.full_name", "base.repo.full_name"):
+        name = metadata_field(native, field)
+        if not isinstance(name, str) or name.lower() != arguments.repo.lower():
+            unresolved("readback")
+    url = f"https://github.com/{metadata_field(native, 'base.repo.full_name')}/pull/{created['number']}"
+    if native.get("html_url") != url:
+        unresolved("readback")
+    return native
 
 
 def execute(arguments: argparse.Namespace) -> dict[str, Any]:
@@ -950,35 +1001,38 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
             if current_head_sha(arguments.gh, arguments.repo, arguments.head) != arguments.head_sha:
                 raise Refusal("head-moved", **common)
 
-        payload = json.dumps(
-            {
-                "title": arguments.title,
-                "head": arguments.head,
-                "base": arguments.base,
-                "body": managed_body,
-            },
-            ensure_ascii=False,
-        )
+        creation = {"title": arguments.title, "head": arguments.head,
+                    "base": arguments.base, "body": managed_body}
+        if arguments.draft:
+            creation["draft"] = True
+        payload = json.dumps(creation, ensure_ascii=False)
         try:
-            created = run_gh(
-                arguments.gh,
-                ["--method", "POST", f"/repos/{arguments.repo}/pulls", "--input", "-"],
-                stdin=payload,
-            )
+            create_arguments = ["--method", "POST", f"/repos/{arguments.repo}/pulls", "--input", "-"]
+            if arguments.draft:
+                created = run_gh(arguments.gh, create_arguments, stdin=payload, strict_json=True)
+            else:
+                created = run_gh(arguments.gh, create_arguments, stdin=payload)
         except ToolError as error:
+            if arguments.draft:
+                raise Refusal("draft-create-unresolved", **common, writeAttempted=True, stage="create") from error
             if bootstrap:
                 raise Refusal("sc2-predecessor-create-unresolved", **common, writeAttempted=True) from error
             raise
         if not isinstance(created, dict) or type(created.get("number")) is not int or created["number"] <= 0:
+            if arguments.draft:
+                raise Refusal("draft-create-unresolved", **common, writeAttempted=True, stage="create-response")
             if bootstrap:
                 raise Refusal("sc2-predecessor-create-unresolved", **common, writeAttempted=True)
             raise ToolError("created pull-request response did not contain a number")
+        if arguments.draft:
+            created = verify_created_draft(arguments, created, managed_body, common)
         return {
             "ok": True,
             "action": "created",
             **common,
             "number": created["number"],
             "url": created.get("html_url"),
+            **({"draft": True} if arguments.draft else {}),
         }
 
 
