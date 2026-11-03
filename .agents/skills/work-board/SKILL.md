@@ -23,7 +23,8 @@ while that successor is unqualified.
 1. **Understand the whole promise.** Recover native issues and full owning-plan acceptance, existing
    owners, PRs/heads, dirty worktrees, original effects, pending replies and relevant reservations.
    Continue the unambiguous owner/branch/PR/attempt; do not create a competing lane.
-2. Reconcile complete unfiltered All items at entry/resume, meaningful coordination boundaries or relevant native fact changes,
+2. Reconcile complete unfiltered All items at entry/resume, meaningful coordination boundaries
+   or relevant native fact changes,
    including missing Status, Work level or enrollment. Use [intake and decomposition](references/intake.md).
    Local repair refreshes relevant context, not the full census. Keep unfinished intake's owner,
    next action and reconsideration event.

@@ -67,7 +67,7 @@ owner work, not another critic or report; inert prose needs none of it.
 - **Reviewer probes:** when repairing after review, re-run all of the reviewer's probes on the new head and add their classes to your tests.
 - **Cross-cutting defects** (sizing, concurrency, lifecycle): write the invariant first, then the code, not point fixes.
 
-## Conditional references
+## Conditional instructions
 
 Load [control-plane provenance](references/control-plane-provenance.md) when directives occur.
 Interactive/game implementation loads [performance-first planning](references/performance-first.md)
