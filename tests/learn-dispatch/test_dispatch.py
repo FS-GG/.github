@@ -92,6 +92,25 @@ class DispatchTests(unittest.TestCase):
    with patch.object(m,'read_issue',return_value={'body':snap['body']}),patch.object(m,'read_comments',return_value=[]),patch.object(m,'post_comment',return_value=comment),patch.object(m,'read_comment',return_value=dict(id=17,body='different')),patch.object(m,'submit_telemetry') as submit:
     with self.assertRaisesRegex(ValueError,'readback mismatch'):m.record(out,self.args(d))
     submit.assert_not_called()
+ def test_hardness_disposition_is_bound_and_invalid_policy_refuses_before_io(self):
+  policy=dict(schema='fsgg.learn-hardness-projection/1',mode='withhold-unvalidated',dispositionReference='https://github.com/FS-GG/.github/issues/5273#issuecomment-17')
+  with tempfile.TemporaryDirectory() as d:
+   out=Path(d)/'intent'
+   m.prepare(self.snapshot('atomic',runtime='fixture',model='requested',hardnessProjection=policy),out)
+   snapshot=json.loads((out/'snapshot.json').read_bytes())
+   self.assertEqual(policy,snapshot['hardnessProjection'])
+   self.assertEqual('High',snapshot['hardnessCategory'])
+   self.assertEqual('Unknown',m.native_hardness(snapshot))
+   snapshot['hardnessProjection']['dispositionReference']='https://github.com/FS-GG/.github/issues/5273#issuecomment-18'
+   (out/'snapshot.json').write_bytes(m.canonical(snapshot))
+   with patch.object(m,'read_issue') as read:
+    with self.assertRaisesRegex(ValueError,'exact full batch'):m.record(out,self.args(d))
+    read.assert_not_called()
+   snapshot['hardnessProjection']['mode']='validated'
+   (out/'snapshot.json').write_bytes(m.canonical(snapshot))
+   with patch.object(m,'read_issue') as read:
+    with self.assertRaisesRegex(ValueError,'known native labels'):m.record(out,self.args(d))
+    read.assert_not_called()
  def test_floor_preserves_delta_review(self):
   with self.assertRaisesRegex(ValueError,'floor'):
    m.classify(self.snapshot('upgrade',chosenProfile=dict(tier='best',criticTier='best',effort='high',reviewDepth='single-source-review'),overrideReason='less review'))
