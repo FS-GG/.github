@@ -48,7 +48,7 @@ an invocation selection; it does not replace other services’ callers or change
 The matching CLI is read-only:
 
 ```sh
-FSGG_COORD_ENGINE_BIN="${QUALIFIED_CALLER:?select the adopted caller}" scripts/fsgg-coord board-v2 inspect --binding-file PRIVATE_BINDING --report-file NEW_PRIVATE_REPORT --owner-continuation-stdin < PRIVATE_OWNER_INPUT
+cat PRIVATE_OWNER_INPUT | FSGG_COORD_ENGINE_BIN="${QUALIFIED_CALLER:?select the adopted caller}" scripts/fsgg-coord board-v2 inspect --binding-file PRIVATE_BINDING --report-file NEW_PRIVATE_REPORT --owner-continuation-stdin
 ```
 
 Input is the closed `fsgg.coord.owner-continuation-input/1` document: the existing integrator document

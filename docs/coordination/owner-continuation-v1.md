@@ -14,7 +14,7 @@ build must not select it; other services' callers and the global resolver remain
 Invocation template; replace private-path operands using the adopted tuple:
 
 ```sh
-FSGG_COORD_ENGINE_BIN="${QUALIFIED_CALLER:?select the adopted caller}" scripts/fsgg-coord board-v2 inspect --binding-file PRIVATE_BINDING --report-file NEW_PRIVATE_REPORT --owner-continuation-stdin < PRIVATE_OWNER_INPUT
+cat PRIVATE_OWNER_INPUT | FSGG_COORD_ENGINE_BIN="${QUALIFIED_CALLER:?select the adopted caller}" scripts/fsgg-coord board-v2 inspect --binding-file PRIVATE_BINDING --report-file NEW_PRIVATE_REPORT --owner-continuation-stdin
 ```
 
 The opt-in is organization inspection only, mutually exclusive with `--integrator-stdin` and invalid
