@@ -596,7 +596,7 @@ module V2MigrationTests =
         start.RedirectStandardOutput <- true
         start.RedirectStandardError <- true
         use child = System.Diagnostics.Process.Start start
-        child.StandardInput.Write(JsonSerializer.Serialize {| nodeId = "synthetic-issue"; hardnessCategory = "Low"; executions = executions |})
+        child.StandardInput.Write(JsonSerializer.Serialize {| itemId = "FS-GG/.github#42"; nodeId = "synthetic-issue"; hardnessCategory = "Low"; executions = executions |})
         child.StandardInput.Close()
         let exited = child.WaitForExit 30000
         if not exited then

@@ -87,6 +87,7 @@ def assess_scope(native):
 def project(cohort):
     if cohort.get('schema') != 'fsgg.learn-projection-input/1' or cohort.get('complete') is not True:
         raise ValueError('qualified complete selected population required')
+    projection_policy = dispatch.hardness_projection(cohort.get('hardnessProjection'))
     population = cohort['population']
     identities = [row['itemId'] for row in population]
     if not population or len(set(identities)) != len(identities) or len({row['nodeId'] for row in population}) != len(population):
@@ -201,6 +202,7 @@ def project(cohort):
             gaps.append('actual-effort-unavailable')
         records.append(dict(schema='fsgg.learn-completion/1', itemId=item, nodeId=native['nodeId'],
             categoryVersion=CATEGORY_VERSION, hardnessCategory=hardness,
+            hardnessProjection=dict(projection_policy),
             classificationBasis='current-scope' if retained is current and current else 'pre-dispatch' if original else 'Unknown',
             originalClassification=original[0] if original else None,
             classification=retained[0] if retained else None, classificationSource=retained[1] if retained else None,
@@ -210,6 +212,7 @@ def project(cohort):
     summary = dict(selectedDeliveries=len(records), closedDeliveries=sum(row['state'] == 'CLOSED' for row in records),
         archivedDeliveries=sum(row['archived'] for row in records),
         knownHardness=sum(row['hardnessCategory'] != 'Unknown' for row in records),
+        projectedNativeHardnessKnown=0,
         originalHardnessKnown=sum(row['originalClassification'] is not None and category(row['originalClassification']['scores']) != 'Unknown' for row in records),
         currentScopeHardnessKnown=sum(row['classificationBasis'] == 'current-scope' and row['hardnessCategory'] != 'Unknown' for row in records),
         observedExecutionIdentities=len(launches), actualModelKnown=sum('actual-model-unavailable' not in row['gaps'] for row in records),
@@ -229,8 +232,9 @@ def assignment(record, comment_url):
     # Values are summaries; exact identities, roles, dimensions and requested profiles stay on the issue.
     def values(key):
         return dispatch.execution_summary(record['executions'], key)
+    dispatch.owning_comment(record['itemId'], comment_url)
     return dict(issueId=record['nodeId'], evidence=comment_url, values={
-        'Hardness': record['hardnessCategory'], 'Actual models': values('model'), 'Actual effort': values('effort'),
+        'Hardness': dispatch.native_hardness(record), 'Actual models': values('model'), 'Actual effort': values('effort'),
         'Execution provenance': comment_url})
 
 
