@@ -165,3 +165,5 @@ hashes were verified. Its scoped original findings remain applicable. The new cr
 and outcome-composition sensitivity need a reviewed immutable appendix citation before a reusable
 Atlas extension; the #5276 owner retains that capture gap. This appendix does not supersede the
 original diagnostic, operational authority or held-out acceptance requirements.
+
+The initial report’s tied-largest sensitivity prose is corrected in this same source revision: runtime parent sizes are 1, 1, 3, 6, 7, 8, 8; removing both tied largest groups leaves 18 items/five groups. Earlier wording said one 16-item group and six remaining groups. Code and numerical errors already used the correct two-group removal; no evidence was rewritten.

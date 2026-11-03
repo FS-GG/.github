@@ -5,7 +5,7 @@ This is a reproducible initial historical analysis, **not a completed validation
 The full Delivery remains open for independent labels, broader qualified outcomes and held-out evaluation.
 
 The existing hardness rubric has **weak, uncertain duration associations in the recovered cohort** and
-has **not established validity across models or effort levels**. Expanded grouped prediction also finds no improvement from H or the full dimension vector over simple baselines; a text-length signal is sensitive to the largest parent cluster. Time worked until satisfactory completion
+has **not established validity across models or effort levels**. Expanded grouped prediction also finds no improvement from H or the full dimension vector over simple baselines; a text-length signal is sensitive to the two tied largest parent clusters. Time worked until satisfactory completion
 is a valuable empirical hardness signal. This report calculates the strongest duration proxies actually
 supported by the retained records, preserves stopped/failed/open work, and quantifies the effect of pauses
 and feature timing. It does not substitute calendar age or silent commit gaps for measured active work.
@@ -13,7 +13,7 @@ and feature timing. It does not substitute calendar age or silent commit gaps fo
 The most useful exploratory findings are:
 
 - H and the full D1–D8 vector fail to beat the training-median baseline in parent-group prediction.
-- Text length's pooled advantage reverses with equal-parent weighting or removal of the largest parent cluster.
+- Text length's pooled advantage reverses with equal-parent weighting or removal of the two tied largest parent clusters.
 - D8 is constant at 3 across all 34 runtime items; D7 is nearly constant. This cohort cannot validate their full scale.
 - 33 of 34 runtime items were created in November, while most historical issues were created in July; broad historical transfer is untested.
 
@@ -261,10 +261,10 @@ selected winner. Per-fold counts and losses are retained without private identit
 
 H and the full dimension vector do not improve these fixed exploratory models over the baselines.
 Word count improves pooled error, but its equal-parent MAE is worse than the median baseline. Removing
-the largest parent component—16 of the 34 items—and repeating grouped evaluation on the remaining
-18 items/six groups reverses the pooled advantage: word-count MAE is **1.101 versus median baseline 1.065**.
-H gives 1.169 and D1–D8 gives 1.528. This sensitivity is retained alongside the full-cohort result; the large
-component is not removed from primary results. The apparent word-count advantage is therefore not a
+both tied largest parent components—eight items each, 16 of the 34 in total—and repeating grouped evaluation on the remaining
+18 items/five groups reverses the pooled advantage: word-count MAE is **1.101 versus median baseline 1.065**.
+H gives 1.169 and D1–D8 gives 1.528. This sensitivity is retained alongside the full-cohort result; these two
+components are not removed from primary results. The apparent word-count advantage is therefore not a
 robust generalization claim.
 
 A separate outcome-blind temporal split at the median observed dispatch time purges every parent component
@@ -854,3 +854,9 @@ The following primary sources support the methodology, not empirical claims abou
   event-specific risk and cumulative incidence answer different questions when outcomes compete.
 - [Dudík, Langford and Li, doubly robust policy evaluation](https://arxiv.org/abs/1103.4601):
   logged policy and reward assumptions matter for offline action comparisons.
+
+## Posthoc sensitivity extension and reporting correction
+
+The separately declared [posthoc multiverse](learn-02-posthoc-multiverse-2026-11-03.md) retains all 34,680 planned cells, including unsupported comparisons, and all fixed group-removal/control/clock choices. It is exploratory fishing, not independent validation or evidence of cause. The original cohort and unfavorable results remain intact.
+
+The extension review corrected a description in the initial report: the seven runtime parent components have sizes 1, 1, 3, 6, 7, 8 and 8. The existing executable sensitivity removed both tied largest eight-item groups, leaving 18 items in five groups. The earlier prose incorrectly described one sixteen-item component and six remaining groups. The reported numerical errors and original code are unchanged; the immutable initial checkpoint remains available.
