@@ -269,6 +269,8 @@ def validate_invocations(root: Path, contract_path: Path, errors: list[str]) -> 
         commands[f"board-v2 {operation}"] = {
             "--binding-file", "--previous-report-file", "--report-file",
         }
+    inspect_stdin_flags = {"--integrator-stdin", "--owner-continuation-stdin"}
+    commands["board-v2 inspect"].update(inspect_stdin_flags)
     if len(commands) < 35:
         fail(errors, f"command contract is implausibly small ({len(commands)} commands)")
         return
@@ -310,13 +312,19 @@ def validate_invocations(root: Path, contract_path: Path, errors: list[str]) -> 
                         continue
                     values: dict[str, str] = {}
                     while arguments:
-                        if (len(arguments) < 2 or arguments[0] not in allowed
-                                or arguments[0] in values or not arguments[1].strip()
-                                or arguments[1].startswith("--")):
+                        flag = arguments[0]
+                        if (flag in allowed and flag in inspect_stdin_flags
+                                and not inspect_stdin_flags.intersection(values)):
+                            values[flag] = "true"
+                            arguments = arguments[1:]
+                        elif (len(arguments) >= 2 and flag in allowed
+                                and flag not in inspect_stdin_flags and flag not in values
+                                and arguments[1].strip() and not arguments[1].startswith("--")):
+                            values[flag] = arguments[1]
+                            arguments = arguments[2:]
+                        else:
                             fail(errors, f"{source.relative_to(root)}:{line}: unknown, duplicate or incomplete Board V2 argument")
                             break
-                        values[arguments[0]] = arguments[1]
-                        arguments = arguments[2:]
                     else:
                         binding = values.get("--binding-file")
                         report = values.get("--report-file")
