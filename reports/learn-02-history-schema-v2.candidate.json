@@ -1,0 +1,771 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fsgg:learn-history:2",
+  "title": "FS.GG hardness validity and historical evaluation v2 design candidate",
+  "description": "Private normalized evidence. Structural candidate; referential, chronology, completeness, privacy and partition invariants require the implementation validator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "manifest",
+    "units",
+    "sources",
+    "features",
+    "events",
+    "intervals",
+    "relations",
+    "assignments",
+    "outcomes",
+    "splits",
+    "adjudications",
+    "construct",
+    "frozenTasks",
+    "profiles",
+    "responses",
+    "anchorSupport",
+    "validityResults"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fsgg.learn-history/2"
+    },
+    "manifest": {
+      "type": "object",
+      "required": [
+        "datasetId",
+        "extractorRevision",
+        "adapterVersion",
+        "sanitizerVersion",
+        "rubricVersion",
+        "collectionStartedAt",
+        "collectionEndedAt",
+        "populationCutoff",
+        "outcomeCutoff",
+        "sourceManifestSha256",
+        "coverage",
+        "failures",
+        "priority",
+        "constructVersion",
+        "qualityContractVersion",
+        "supportAuditVersion"
+      ],
+      "properties": {
+        "priority": {
+          "const": "construct_validity_and_cross_profile_invariance"
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unit"
+      }
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/feature"
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    },
+    "intervals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/interval"
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relation"
+      }
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assignment"
+      }
+    },
+    "outcomes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/outcome"
+      }
+    },
+    "splits": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/split"
+      }
+    },
+    "adjudications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "adjudicationId",
+          "sourceIds",
+          "originalLabel",
+          "revisedLabel",
+          "reason",
+          "reviewer",
+          "version",
+          "affectedRowIds"
+        ]
+      }
+    },
+    "construct": {
+      "type": "object",
+      "required": [
+        "constructVersion",
+        "targetPopulation",
+        "qualityContractVersion",
+        "attemptBudgetDefinition",
+        "demandDimensions",
+        "riskConstraints",
+        "processCovariates",
+        "comparisonTarget",
+        "equivalenceMargins",
+        "decisionAuthority"
+      ],
+      "properties": {
+        "comparisonTarget": {
+          "enum": [
+            "requested_profile",
+            "provider_effective_profile"
+          ]
+        }
+      }
+    },
+    "frozenTasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "frozenTaskId",
+          "unitId",
+          "inputHash",
+          "startCommit",
+          "environmentHash",
+          "contextHash",
+          "qualityContractHash",
+          "protocolHash",
+          "role",
+          "stage",
+          "priorAttemptInformation",
+          "provenanceComplete",
+          "missingReasons",
+          "sourceIds"
+        ],
+        "properties": {
+          "provenanceComplete": {
+            "type": "boolean"
+          },
+          "priorAttemptInformation": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "sourceIds": {
+            "$ref": "#/$defs/sources"
+          }
+        }
+      }
+    },
+    "profiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "profileId",
+          "runtime",
+          "requestedModelVersion",
+          "requestedEffort",
+          "effectiveModelVersion",
+          "effectiveEffort",
+          "budgetUnits",
+          "budgetValue",
+          "family",
+          "familyProvenance",
+          "toolProtocolHash",
+          "contextProtocolHash",
+          "configurationObservedAt",
+          "sourceIds"
+        ],
+        "properties": {
+          "sourceIds": {
+            "$ref": "#/$defs/sources"
+          },
+          "configurationObservedAt": {
+            "$ref": "#/$defs/nullableTimestamp"
+          }
+        }
+      }
+    },
+    "responses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "responseId",
+          "frozenTaskId",
+          "profileId",
+          "invocationId",
+          "replicateId",
+          "attemptStartedAt",
+          "priorAttemptInformation",
+          "qualityPass",
+          "criterionScores",
+          "blockingFindingSeverity",
+          "outcomeKind",
+          "qualitySourceIds",
+          "evaluatorVersion",
+          "evaluatorBlinded",
+          "observable",
+          "excludedFromMatchedComparisonReason"
+        ],
+        "properties": {
+          "qualityPass": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "priorAttemptInformation": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "outcomeKind": {
+            "enum": [
+              "pass",
+              "quality_failure",
+              "infrastructure_failure",
+              "stopped",
+              "cancelled",
+              "unscored",
+              "unknown"
+            ]
+          },
+          "evaluatorBlinded": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "observable": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "anchorSupport": {
+      "type": "object",
+      "required": [
+        "auditVersion",
+        "sourceScope",
+        "comparisonTarget",
+        "candidateEdges",
+        "qualifiedEdges",
+        "connectedComponents",
+        "pairwiseAnchorCounts",
+        "designMatrixRank",
+        "bridgeSensitivity",
+        "missingness",
+        "identifiabilityStatus"
+      ],
+      "properties": {
+        "identifiabilityStatus": {
+          "enum": [
+            "not_identified",
+            "weak_support",
+            "qualified_for_declared_model",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "validityResults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "resultId",
+          "constructVersion",
+          "modelSpecVersion",
+          "contrastFamily",
+          "taskPartition",
+          "profilePartition",
+          "calibrationAnchorIds",
+          "testTaskIds",
+          "supportScope",
+          "estimate",
+          "interval",
+          "equivalenceMargin",
+          "multiplicityRule",
+          "qualityMetrics",
+          "rankStability",
+          "negativeControls",
+          "parameterRecovery",
+          "decision",
+          "limitations"
+        ],
+        "properties": {
+          "decision": {
+            "enum": [
+              "inconclusive",
+              "non_invariant_for_scope",
+              "equivalent_within_declared_margin",
+              "predictive_only"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "nullableTimestamp": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "sourceId",
+        "repository",
+        "nativeId",
+        "observedAt",
+        "sourceTime",
+        "queryHash",
+        "payloadHash",
+        "complete",
+        "deleted",
+        "visibility",
+        "cursor",
+        "error"
+      ],
+      "properties": {
+        "sourceId": {
+          "type": "string"
+        },
+        "observedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "sourceTime": {
+          "$ref": "#/$defs/nullableTimestamp"
+        },
+        "payloadHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "deleted": {
+          "type": "boolean"
+        },
+        "visibility": {
+          "enum": [
+            "public",
+            "private",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "unit": {
+      "type": "object",
+      "required": [
+        "unitId",
+        "nativeNodeId",
+        "kind",
+        "kindSourceIds",
+        "eligibility",
+        "createdAt",
+        "originalScopeHash",
+        "censorAt",
+        "inclusionReason"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "explicit_delivery",
+            "legacy_task",
+            "legacy_bug",
+            "outcome",
+            "coordination_container",
+            "pr_only",
+            "unknown"
+          ]
+        },
+        "eligibility": {
+          "enum": [
+            "qualified",
+            "diagnostic_only",
+            "unknown"
+          ]
+        },
+        "kindSourceIds": {
+          "$ref": "#/$defs/sources"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "censorAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "feature": {
+      "type": "object",
+      "required": [
+        "featureId",
+        "unitId",
+        "boundaryKind",
+        "boundaryAt",
+        "firstWorkKnown",
+        "bodyHash",
+        "titleHash",
+        "sourceIds",
+        "knowledgeAt",
+        "adapterVersion",
+        "provenance",
+        "eligibleForPrediction",
+        "scores",
+        "unknownReasons"
+      ],
+      "properties": {
+        "boundaryKind": {
+          "enum": [
+            "creation",
+            "observed_dispatch",
+            "verified_dispatch"
+          ]
+        },
+        "boundaryAt": {
+          "$ref": "#/$defs/nullableTimestamp"
+        },
+        "knowledgeAt": {
+          "$ref": "#/$defs/nullableTimestamp"
+        },
+        "firstWorkKnown": {
+          "type": "boolean"
+        },
+        "sourceIds": {
+          "$ref": "#/$defs/sources"
+        },
+        "provenance": {
+          "enum": [
+            "frozen_dispatch",
+            "verified_unedited",
+            "qualified_native_revision",
+            "retrospective",
+            "current_scope",
+            "unknown"
+          ]
+        },
+        "eligibleForPrediction": {
+          "type": "boolean"
+        },
+        "scores": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6",
+            "D7",
+            "D8"
+          ],
+          "patternProperties": {
+            "^D[1-8]$": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": [
+        "eventId",
+        "unitId",
+        "nativeOrProviderId",
+        "eventAt",
+        "observedAt",
+        "kind",
+        "outcome",
+        "sourceIds",
+        "attemptId",
+        "invocationId",
+        "pullRequestId"
+      ],
+      "properties": {
+        "eventAt": {
+          "$ref": "#/$defs/nullableTimestamp"
+        },
+        "observedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "sourceIds": {
+          "$ref": "#/$defs/sources"
+        },
+        "kind": {
+          "enum": [
+            "created",
+            "dispatched",
+            "execution_started",
+            "execution_stopped",
+            "explicit_stop",
+            "queue",
+            "supplier_wait",
+            "handoff",
+            "native_closed",
+            "native_reopened",
+            "accepted",
+            "abandoned",
+            "not_planned",
+            "duplicate",
+            "review",
+            "repair",
+            "ci_attempt",
+            "regression",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "interval": {
+      "type": "object",
+      "required": [
+        "intervalId",
+        "unitId",
+        "kind",
+        "startLower",
+        "startUpper",
+        "endLower",
+        "endUpper",
+        "durationLowerSeconds",
+        "durationUpperSeconds",
+        "observedDurationSeconds",
+        "sourceIds",
+        "coverage",
+        "overlapGroup",
+        "unknownReason"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "execution_wall",
+            "agent_time",
+            "session_envelope",
+            "supplier_wait",
+            "queue",
+            "explicit_stop",
+            "review",
+            "ci",
+            "unobserved"
+          ]
+        },
+        "sourceIds": {
+          "$ref": "#/$defs/sources"
+        },
+        "coverage": {
+          "enum": [
+            "complete",
+            "bounded",
+            "partial",
+            "unknown"
+          ]
+        },
+        "observedDurationSeconds": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "required": [
+        "relationId",
+        "fromId",
+        "toId",
+        "kind",
+        "validAt",
+        "sourceIds",
+        "certainty",
+        "ambiguous"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "parent",
+            "supplier",
+            "duplicate",
+            "continuation",
+            "strict_pr_delivery",
+            "citation_only"
+          ]
+        },
+        "sourceIds": {
+          "$ref": "#/$defs/sources"
+        },
+        "ambiguous": {
+          "type": "boolean"
+        }
+      }
+    },
+    "assignment": {
+      "type": "object",
+      "required": [
+        "assignmentId",
+        "unitId",
+        "invocationId",
+        "role",
+        "requestedModel",
+        "requestedEffort",
+        "rootRecordedModel",
+        "rootRecordedEffort",
+        "providerEffectiveModel",
+        "providerEffectiveEffort",
+        "sourceIds",
+        "ambiguous",
+        "propensity",
+        "actionSupport"
+      ],
+      "properties": {
+        "sourceIds": {
+          "$ref": "#/$defs/sources"
+        },
+        "ambiguous": {
+          "type": "boolean"
+        },
+        "propensity": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "required": [
+        "outcomeId",
+        "unitId",
+        "kind",
+        "value",
+        "eventAt",
+        "ascertainmentThrough",
+        "sourceIds",
+        "labelMethod",
+        "coverage",
+        "maturity",
+        "censorReason"
+      ],
+      "properties": {
+        "sourceIds": {
+          "$ref": "#/$defs/sources"
+        },
+        "coverage": {
+          "enum": [
+            "complete",
+            "bounded",
+            "partial",
+            "unknown"
+          ]
+        },
+        "maturity": {
+          "enum": [
+            "mature",
+            "immature",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "split": {
+      "type": "object",
+      "required": [
+        "unitId",
+        "componentId",
+        "edgePolicyVersion",
+        "partition",
+        "featureCutoff",
+        "labelCutoff",
+        "reason"
+      ],
+      "properties": {
+        "partition": {
+          "enum": [
+            "train",
+            "tune",
+            "test",
+            "quarantine",
+            "diagnostic"
+          ]
+        }
+      }
+    }
+  }
+}

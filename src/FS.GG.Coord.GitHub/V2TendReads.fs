@@ -343,7 +343,7 @@ module V2TendReads =
             subIssues(first: 50) { totalCount nodes { number state repository { nameWithOwner } } }
             blockedBy(first: 50) { totalCount nodes { number state repository { nameWithOwner } } }
           }
-          ... on PullRequest { number repository { nameWithOwner } }
+          ... on PullRequest { number state closedAt repository { nameWithOwner } }
         }
       }
     }
@@ -492,7 +492,7 @@ module V2TendReads =
                     let enrolled = inputs.Enrolled |> Map.tryFind (reference.ToLowerInvariant())
                     Some(issue.GetProperty("id").GetString(),
                          { emptyCard itemId inputs.ObservedAt with
-                             Ref = reference; Kind = V2Tend.Issue; Open = (str issue "state" = Some "OPEN")
+                             Ref = reference; Kind = V2Tend.Issue; Open = (str issue "state" <> Some "CLOSED")
                              CreatedAt = (time issue "createdAt").Value; UpdatedAt = (time issue "updatedAt").Value; ClosedAt = time issue "closedAt"
                              Status = status |> Option.bind statusOf
                              StatusUpdatedAt = obj node "status" |> Option.bind (fun v -> time v "updatedAt")
@@ -506,9 +506,14 @@ module V2TendReads =
                              Enrolled = enrolled.IsSome; EnrolledRoadmap = enrolled |> Option.flatten })
                 | Some "PullRequest", Some pr ->
                     let repo = (obj pr "repository" |> Option.bind (fun r -> str r "nameWithOwner")).Value
-                    Some("", { emptyCard itemId inputs.ObservedAt with Ref = repo + "#" + string (pr.GetProperty("number").GetInt32()); Kind = V2Tend.PullRequestCard })
+                    Some("", { emptyCard itemId inputs.ObservedAt with
+                                   Ref = repo + "#" + string (pr.GetProperty("number").GetInt32()); Kind = V2Tend.PullRequestCard
+                                   Open = not (List.contains (str pr "state") [ Some "CLOSED"; Some "MERGED" ])
+                                   ClosedAt = time pr "closedAt"; Status = status |> Option.bind statusOf })
                 | other, _ ->
-                    Some("", { emptyCard itemId inputs.ObservedAt with Kind = (match other with Some "DraftIssue" -> V2Tend.DraftCard | _ -> V2Tend.Unreadable) })
+                    Some("", { emptyCard itemId inputs.ObservedAt with
+                                   Status = status |> Option.bind statusOf
+                                   Kind = (match other with Some "DraftIssue" -> V2Tend.DraftCard | _ -> V2Tend.Unreadable) })
             let decoded = items |> Seq.choose cardOf |> List.ofSeq
             let cards = decoded |> List.map snd
             // Pull-request and draft cards are never a Delivery: they are off the board for linkage, as in

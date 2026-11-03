@@ -137,7 +137,7 @@ module V2TendWrite =
           RootLogins: Set<string>
           MaxItemsPerRun: int
           MinimumMutationInterval: TimeSpan
-          /// Done and closed cards beyond this many (newest first) are the archiver's: never written.
+          /// Newest closed, readable Done cards retained once active Done reaches 200; default 50.
           ArchiveRetention: int }
 
     val defaultSettings: projectId: string -> rootLogins: Set<string> -> Settings
@@ -166,7 +166,10 @@ module V2TendWrite =
     /// Item ids the gate's custody holds as `possible-send` and as `deferred`.
     val gateHolds: records: GateRecord list -> Set<string> * Set<string>
 
-    /// Done and closed cards beyond the newest `retention`, which the reconciler never writes (design §8).
+    /// With at least 200 active Done cards, rank closed readable issue/PR cards by descending close time,
+    /// then ordinal repository, numeric issue/PR number and item id. Keep the newest `retention` before
+    /// excluding native blockers of live cards. Incomplete live blocker lists refuse eligibility.
+    /// These candidates are never written by the reconciler; Python owns guarded archive execution.
     val archiveEligible: snapshot: V2Tend.Snapshot -> retention: int -> Set<string>
 
     type IssueReread =

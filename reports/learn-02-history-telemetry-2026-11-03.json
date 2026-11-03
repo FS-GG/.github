@@ -1,0 +1,111 @@
+{
+  "attributedResponses": 12169,
+  "attribution": {
+    "ambiguousInvocations": 0,
+    "assignments": 74,
+    "invocations": 74,
+    "items": 34,
+    "rawAssignments": 74,
+    "runtimeMismatches": 0
+  },
+  "boundaryFacts": [
+    {
+      "attributedFacts": 0,
+      "kind": "runtime-start"
+    },
+    {
+      "attributedFacts": 0,
+      "kind": "runtime-terminal"
+    },
+    {
+      "attributedFacts": 0,
+      "kind": "activity-span"
+    },
+    {
+      "attributedFacts": 0,
+      "kind": "runtime-gap"
+    }
+  ],
+  "invarianceDecision": "inconclusive",
+  "launchResolvedModelMatchesObserved": 74,
+  "matchedAnchorStatus": "Unknown; metadata projection does not establish equal input/start/context/environment/quality",
+  "naiveItemProfileGraph": {
+    "components": [
+      {
+        "items": 34,
+        "profiles": 3
+      }
+    ],
+    "isMatchedAnchorGraph": false,
+    "multiProfileItems": 4
+  },
+  "newBoundaryFactsRequireReview": false,
+  "nullProfileResponses": {
+    "effort": 0,
+    "model": 0
+  },
+  "observedAt": "2026-11-03T07:51:21.163834+00:00",
+  "observedProfiles": [
+    {
+      "effort": "high",
+      "invocations": 26,
+      "model": "claude-opus-5-5",
+      "runtime": "claude-code-subagent"
+    },
+    {
+      "effort": "medium",
+      "invocations": 2,
+      "model": "claude-opus-5-5",
+      "runtime": "claude-code-subagent"
+    },
+    {
+      "effort": "high",
+      "invocations": 46,
+      "model": "claude-sonnet-5-5",
+      "runtime": "claude-code-subagent"
+    }
+  ],
+  "population": {
+    "nullEffortResponses": 169,
+    "nullModelResponses": 169,
+    "partialPopulationResponses": 36335,
+    "passiveResponses": 36335,
+    "unknownTerminalResponses": 36335
+  },
+  "profileProvenance": {
+    "launchResolvedModel": "Claude launch result; historical requested_model column is not original requested setting",
+    "observedEffort": "assistant root.effort",
+    "observedModel": "assistant.message.model"
+  },
+  "qualifiedMatchedAnchors": 0,
+  "registeredSnapshots": {
+    "facts": 0,
+    "items": 0
+  },
+  "roles": {
+    "analyst": 9,
+    "critic": 23,
+    "worker": 42
+  },
+  "schema": "fsgg.learn-telemetry-support/2",
+  "sourceOutputSha256": "6faec8920cc1207d6ed0911e842f97263a8489eb6ef86664e00e8a298216068a",
+  "sourceQuerySha256": "b569a383af4d454d395a148f38a7e4f4e71f99bc3b3c424abea9147506bbc161",
+  "sourceScope": "existing local Store14 fdev-vm-20261030; no full-history claim",
+  "storedRequestedEffortKnown": 0,
+  "unknownProfileInvocations": 0,
+  "unknownProfileReasons": {},
+  "workerOnlyItemProfileGraph": {
+    "components": [
+      {
+        "items": 13,
+        "profiles": 1
+      },
+      {
+        "items": 16,
+        "profiles": 1
+      }
+    ],
+    "isMatchedAnchorGraph": false,
+    "multiProfileItems": 0
+  }
+}
