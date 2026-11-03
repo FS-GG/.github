@@ -67,7 +67,7 @@ let private itemNode (i: Issue) =
     node["content"] <- (if i.State = "UNREADABLE" then null else content :> JsonNode)
     node
 
-type private Board(issues: Issue list, openPrs: JsonObject list, ?total: int, ?issueCount: int) =
+type private Board(issues: Issue list, openPrs: JsonObject list, ?total: int, ?issueCount: int, ?transformCard: JsonObject -> JsonObject) =
     let mutable requests: Request list = []
     member _.Requests = List.rev requests
     interface IGitHubTransport with
@@ -83,7 +83,7 @@ type private Board(issues: Issue list, openPrs: JsonObject list, ?total: int, ?i
                 let items = JsonObject()
                 items["totalCount"] <- defaultArg total issues.Length
                 items["pageInfo"] <- JsonObject(dict [ "hasNextPage", JsonValue.Create (next < issues.Length) :> JsonNode; "endCursor", JsonValue.Create (string next) :> JsonNode ])
-                items["nodes"] <- JsonArray([| for i in page -> itemNode i :> JsonNode |])
+                items["nodes"] <- JsonArray([| for i in page -> (defaultArg transformCard id) (itemNode i) :> JsonNode |])
                 data["organization"] <- JsonObject(dict [ "projectV2", JsonObject(dict [ "items", items :> JsonNode ]) :> JsonNode ])
             elif document.Contains "search(type: ISSUE" then
                 let search = JsonObject()
@@ -278,3 +278,34 @@ let ``an unreadable card makes an off-board reference Unknown, never a strict li
     let snapshot, _ = read board
     let linked = (card snapshot 11).Prs |> List.find (fun p -> p.Id = "FS-GG/x#101")
     Assert.Equal(V2Tend.Loose "r1-reference-unreadable", linked.Linkage)
+
+
+[<Fact>]
+let ``archive acquisition preserves PR Done state and close time and unreadable Done status`` () =
+    let transform (node: JsonObject) =
+        let number = (node["content"]["number"]).GetValue<int>()
+        if number = 200 then
+            node["content"]["__typename"] <- "PullRequest"
+            node["content"]["state"] <- "MERGED"
+        if number = 201 then node["content"] <- null
+        node
+    let issues = [ for n in 1 .. 201 -> { issue n with State = "CLOSED"; Status = Some "Done" } ]
+    let board = Board(issues, [], transformCard = transform)
+    let snapshot, _ = read board
+    let prCard = card snapshot 200
+    Assert.Equal(V2Tend.PullRequestCard, prCard.Kind)
+    Assert.False(prCard.Open)
+    Assert.Equal(Some V2Tend.Done, prCard.Status)
+    Assert.Equal(Some(DateTimeOffset.Parse "2026-10-31T00:00:00Z"), prCard.ClosedAt)
+    let unreadable = snapshot.Cards |> List.find (fun c -> c.ItemId = "PVTI_201")
+    Assert.Equal(V2Tend.Unreadable, unreadable.Kind)
+    Assert.Equal(Some V2Tend.Done, unreadable.Status)
+    Assert.Equal(150, (V2TendWrite.archiveEligible snapshot 50).Count)
+    let documents = board.Requests |> List.choose (fun r -> match r.Body with Query(d, _) -> Some d | _ -> None)
+    Assert.Contains(documents, fun d -> d.Contains "... on PullRequest { number state closedAt repository")
+
+[<Fact>]
+let ``archive acquisition cannot treat an unknown issue terminal state as closed`` () =
+    let board = Board([ { issue 1 with State = "UNKNOWN"; Status = Some "Done" } ], [])
+    let snapshot, _ = read board
+    Assert.True((card snapshot 1).Open)

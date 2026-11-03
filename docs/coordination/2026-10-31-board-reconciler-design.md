@@ -7,6 +7,13 @@ owns approval and all acceptance. [Root's decisions](https://github.com/FS-GG/.g
 on D1-D12 (2026-10-31), Root's rulings on the independent reviews, and the owner-authorized decision 9 on
 Delivery closure ([#4730 comment](https://github.com/FS-GG/.github/issues/4730#issuecomment-6551301543), 2026-11-01) are folded in below and listed in §13. Phase 2 (implementation PRs, §12) starts only after this design passes independent review.
 
+
+**November 3 retention supersession (#5170):** the user replaced the original strictly-over-200/keep-200
+policy with an inclusive trigger of 200 active Done cards and retention of the newest 50. References below
+use that successor policy. Original eight-card acceptance and the first old-policy scheduled run remain
+historical evidence; source changes do not qualify successor installed operation. Python remains the
+archive writer, and the reconciler excludes its candidates from field writes.
+
 ## Why
 
 The user asked for automatic checking, updating and fixing of Coordination Project 3
@@ -23,7 +30,7 @@ write:
 | [Merge gate](../../tools/routine-delivery.py) `--board-gate` (#5106) | One post-merge Delivery Status write (In review, or In progress with `fsgg:delivery-continues/v1`) through an item-scoped guard with durable custody; from §12 PR 5, the continues/completes declaration check | Any other field, any card other than the merged Delivery |
 | Built-in "Item closed → Done" workflow | Sets Done when an issue closes; Root decision 2 made it the only writer of Done | Cards added after closure, or closed before it was enabled |
 | `board-v2 migration-apply` | Absent-value initialization of explicitly declared values ([`V2Migration`](../../src/FS.GG.Coord.GitHub/V2Migration.fsi)) | Infer a value; replace a populated value; scale (#5123) |
-| [Done-retention archiver](https://github.com/FS-GG/.github/issues/5119) (#5119 PR 5, held; Python, hosted workflow) | Archive Done beyond the newest 200 | Anything else |
+| [Done-retention archiver](https://github.com/FS-GG/.github/issues/5119) (#5119 PR 5, held; Python, hosted workflow) | At 200 active Done, archive eligible cards beyond the newest 50 | Anything else |
 
 The coordination engine does not derive Status, Track or Work level from native issue facts anywhere:
 `board-v2 refresh` writes only Observation, migration initializes only values its caller declares, and
@@ -216,7 +223,8 @@ Two properties follow, both over the **enabled** rule set and both tested (§10)
 | `activityHours` | 48 | The same as board-currency R4 |
 | `doneSettleMinutes` | 15 | Gives the built-in Done workflow time to act before the backstop writes (S1) |
 | `reviewSettleHours` | 48 | An In review card must have stayed so this long before S4 moves it, so a PR about to open is not raced |
-| `doneVisible` | 200 | #5119's retention bound |
+| `doneTrigger` | 200 | #5170: inclusive active Done trigger |
+| `doneVisible` | 50 | #5170: newest retained Done cards |
 | `closeSettleHours` | 48 | C1 closes a Delivery only this long after its most recent merge (review of #5150) |
 | `leafSettleHours` | 24 | W1h writes Delivery on a leaf only once the issue is this old (round-4 ruling 2) |
 | `maxItemsPerRun` | 100 | Write ceiling per run (§6) |
@@ -430,8 +438,11 @@ row is spent only on work that can still be scheduled (D7, accepted). Other case
 
 ### Archived state
 
-The desired archived state follows #5119: when more than `doneVisible` cards are Done, every Done and
-closed card older than the newest 200 by `closedAt` should be archived. The four existing archive guards
+The desired archived state follows the #5170 user supersession: when at least `doneTrigger` active cards
+are Done, retain the newest `doneVisible` closed readable cards by descending `closedAt`, then ordinal
+repository, numeric issue/PR number and item identity. Apply older live-blocker protection after this cutoff;
+a protected card already in the newest 50 counts toward retention. Open/unrankable Done or older protected
+cards remain visible and block a scheduled complete cycle before writes. The four existing archive guards
 are kept: terminal only, never a live row's blocker, never an unreadable row, and the explicit bound.
 An archived enrolled row stays enrolled and reads as `Archived` (#5132). Until the Python archiver is
 retired (§9) it remains the only archive writer, and the reconciler only plans archives for parity.
@@ -469,7 +480,7 @@ Every card lands in exactly one class for each field, and a test pins that. The 
 | O1 | Outcome roll-up among Backlog, Ready and In progress | A function of children's Statuses over a complete child list | Set the recorded preimage |
 | E1 | Add membership for an enrollment candidate, with Status, Work level and Track filled in the same run (D12) | Every input is native, including the archived-item check; the card is never left bare (§7) | `deleteProjectV2Item`, only for an item that the reconciler's own E1 custody record proves it created, and only while its values are still the reconciler's |
 | E2 | Prepare the enrollment successor and open its carrier PR | Offline; the carrier's title, body and commit messages must pass `check-closing-keywords` before the push; the merge is Root's | Close the PR |
-| A1 | Archive Done beyond 200 (after the Python archiver retires) | #5119's guards | `unarchiveProjectV2Item` |
+| A1 | At 200 active Done, retain newest 50 (after the Python archiver retires) | #5119's guards | `unarchiveProjectV2Item` |
 | C1 | Close an In review Delivery (populated Work level) whose strictly linked PRs are all merged, none open, the last merge at least 48 h old and carrying `fsgg:delivery-completes/v1`, and never reopened after a tend close (decision 9) | Decided from native PR state and strict linkage; never an Outcome or a Blocked card; the complete open-PR set is re-read before the send | `reopenIssue` on an issue the reconciler's own custody proves it closed; the comment stays as the record, and the reopen guard then keeps C1 off that issue |
 
 Each Apply effect also has a preimage condition: if the adjacent re-read differs from the snapshot, in
@@ -757,7 +768,7 @@ it is accepted and delivered, E2 refuses above 450 rows and files a proposal.
   `lock-held`, never a queued writer. The merge gate waits up to 60 seconds and then defers (§6).
 - **A writer outside fdev cannot share the lock.** The Done-retention archiver currently runs as a hosted
   workflow, where no fdev lock exists. Until it runs from fdev under the lock, or A1 replaces it, the
-  reconciler writes nothing to archive-eligible cards (Done and closed, beyond the newest 200), so the two
+  reconciler writes nothing to archive-eligible cards (at least 200 active Done; closed readable cards beyond the newest 50, excluding protected blockers), so the two
   are disjoint by construction. Root accepted this mitigation.
 - **Dry run by default.** `--apply` is ignored unless
   `$XDG_CONFIG_HOME/fsgg/board-tend.json` exists, is owned by the user with mode 0600, and lists the
