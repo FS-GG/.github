@@ -326,6 +326,12 @@ the newest 50 count toward that retained set.
 The new accepted receipt binds both threshold and retention plus the complete-cycle requirement. Existing
 activation inputs deliberately refuse under changed source until Root selects a new qualified receipt/config.
 
+The F# reconciler's `archiveEligible` write exclusion mirrors the pure Python candidate planner: the same
+inclusive active Done trigger, default retention of 50, close-time/repository/number/item ranking and native
+blocker protection after the cutoff. Acquisition preserves PR state/close time/Status and unreadable-card
+Status so those cards cannot silently disappear from the trigger population. Incomplete live blocker lists
+refuse eligibility. This does not add an F# archive sender or qualify publication/installed adoption.
+
 The existing 500-item board cap gives at most 450 archive candidates (500 minus 50). A scheduled cap of 450
 covers every admissible complete plan; a smaller cap refuses before writes when insufficient. At most ten
 initial GraphQL page requests plus three requests per candidate give a conservative 1360-request ceiling

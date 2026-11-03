@@ -143,10 +143,34 @@ class Plan(unittest.TestCase):
                     self.assertEqual([r["number"] for r in kept], list(range(count, count-50, -1)))
                     self.assertEqual(fixture_plan(kept, trigger_at=200)[0], [])
 
+    def test_new_policy_ties_rank_repository_numeric_number_and_item_identity(self):
+        rows = [row(n+1, "2026-10-01T00:00:00Z", repo="FS-GG/a" if n < 100 else "FS-GG/b", number=n % 100 + 1) for n in range(200)]
+        expected = {f"PVTI_{n}" for n in range(51, 201)}
+        for ordered in (rows, list(reversed(rows))):
+            archive, kept, held = A.plan(ordered)
+            self.assertEqual({r["itemId"] for r in archive}, expected)
+            self.assertEqual(len(kept), 50)
+            self.assertEqual(held, [])
+        # Same repository/number/time uses item identity as the final tie.
+        rows[0]["itemId"], rows[1]["itemId"] = "A", "B"
+        rows[0]["repo"] = rows[1]["repo"] = "FS-GG/z"
+        rows[0]["number"] = rows[1]["number"] = 1
+        for r in rows[2:]: r["closedAt"] = "2026-10-02T00:00:00Z"
+        self.assertEqual([r["itemId"] for r in A.plan(rows, keep=199)[0]], ["B"])
+
+    def test_new_policy_protection_follows_cutoff_without_shifting_newest_fifty(self):
+        archive, kept, held = A.plan(done_history(200), protected={"I_1", "I_200"})
+        self.assertEqual({r["number"] for r in archive}, set(range(2, 151)))
+        self.assertEqual({r["number"] for r in kept}, set(range(151, 201)))
+        self.assertEqual([r["number"] for r, _ in held], [1])
+
     def test_trigger_counts_active_done_and_not_archived_history(self):
         rows = done_history(199) + [row(200, archived=True)]
         self.assertEqual(fixture_plan(rows, trigger_at=200)[0], [])
         rows[-1]["archived"] = False
+        rows[-1]["status"] = "Ready"
+        self.assertEqual(A.plan(rows)[0], [])
+        rows[-1]["status"] = "Done"
         rows[-1]["state"] = "OPEN"
         archive, kept, excluded = fixture_plan(rows, trigger_at=200)
         self.assertEqual((len(archive), len(kept), len(excluded)), (149, 50, 1))
