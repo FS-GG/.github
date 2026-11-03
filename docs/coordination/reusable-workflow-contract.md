@@ -747,14 +747,14 @@ Any one of these, and the decision is re-opened rather than eroded:
 
 The PR-body closing-keyword lint ([#4730](https://github.com/FS-GG/.github/issues/4730)) is the same
 route again: a job in `kit-materialize.yml`, so every receiver that calls that file at `@main` reports it
-with no receiver-side edit. That is six of the seven: FS.GG.Templates calls it at the pinned commit
-`941a82c0e06c9afe9db4c88fc29997d7627a5895`, which predates the job, so Templates does not report it until
-its pin moves. GitHub binds a closing keyword next to an issue reference and ignores the
+with no receiver-side edit. That is all seven kit receivers: six call it at `@main`, and FS.GG.Templates
+calls it at a pinned commit, which until FS.GG.Templates#835 (merged 2026-11-02) was `941a82c0…`, before
+the job existed, and now is `f1ac83ac4f5c2c60251dd6e5f07ffe4f745de5eb`, past it. GitHub binds a closing keyword next to an issue reference and ignores the
 words around it, so a body saying a PR does *not* close an issue closes it; FS.GG.Game#731 did exactly
 that to FS.GG.Game#730.
 
 **The context string is `materialize / closing-keywords`**, and like `kit-bump-shape` it is required in
-zero repositories: a red is visible in the check list and blocks nothing. Arm it the way this page
+zero repositories (the per-repo inventory below, measured 2026-11-02): a red is visible in the check list and blocks nothing. Arm it the way this page
 arms any context (dry run, watch it report, then `repos.sh require-context`), never first.
 
 | | |
@@ -763,13 +763,14 @@ arms any context (dry run, watch it report, then `repos.sh require-context`), ne
 | Subject | the PR body as raw text, and the PR **title** (plain text, no opt-in: under `COMMIT_OR_PR_TITLE` it becomes the squash commit subject, as .github#4963 showed). Live read first, event payload as fallback, so a re-run after an edit or retitle judges the edit. Commit subjects are read through the API and only **warn** |
 | Fails | any of the nine GitHub keywords next to `#N`, `GH-N`, `owner/repo#N` or an issue URL, negated or not, in prose, a code span, a fence or an indented block |
 | Passes | `Refs #N`; a keyword with no reference after it; `resolving`/`closing`/`fixing` (not GitHub keywords); the **opt-in** declaration line, `Closes #N.` alone on a line |
-| Reach | six of seven on opened, synchronize and reopened: SDD, Rendering, Governance, Game, Audio and Net. **Templates is excluded** (pinned to `941a82c0…`, before the job existed). A caller re-checks an edit or retitle only if it lists `edited`: SDD and Rendering did already; Governance, Game, Audio and Net were adopted by one PR each adding `edited` to the `pull_request` types |
+| Reach | all seven kit receivers on opened, synchronize and reopened: SDD, Rendering, Governance, Game, Audio, Net and, since FS.GG.Templates#835, Templates (`materialize / closing-keywords` reported on that PR's own head). A caller re-checks an edit or retitle only if it lists `edited`: SDD and Rendering did already; Governance, Game, Audio and Net were adopted by one PR each adding `edited` to the `pull_request` types |
 | Proof | [`tests/closing-keywords/product-lint.sh`](../../tests/closing-keywords/product-lint.sh): the keyword matrix, the code-span and fence decision, and the real job step run against a stub `gh` |
 
 **Before arming `materialize / closing-keywords` as required**, all of these must hold:
 
-1. **Move the Templates pin** past a commit that carries the job. Until then the context never reports on
-   Templates, and requiring it holds every Templates pull request at "Expected" (#1508).
+1. ~~Move the Templates pin~~ Done: FS.GG.Templates#835 merged 2026-11-02 (`5dfa33f4`) and moved the pin to
+   `f1ac83ac…`, past the job; the context reported on that PR. Requiring a context that never reports holds
+   every pull request at "Expected" (#1508), which is why this came first.
 2. ~~Merge the four `edited` adoption PRs~~ Done: measured 2026-11-01, the `kit-materialize.yml` callers of
    SDD, Rendering, Governance, Game, Audio and Net all list `edited`.
 3. **Resolve the Renovate pattern.** Some Renovate bodies close an issue in prose, for example
@@ -777,6 +778,12 @@ arms any context (dry run, watch it report, then `repos.sh require-context`), ne
    correctly, because it will close the issue. Either the coordinated-migration template declares the close
    on a line of its own, or an explicit exemption is decided. Otherwise a required context reds those
    bot pull requests. A 696-pull-request backtest (2026-10-30) found 5 findings, 2 of them Renovate.
+   **Still open.** Re-measured 2026-11-02 over the `app/renovate` pull requests of the seven kit receivers
+   (554 scanned, `gh pr list --author app/renovate`, case-insensitive keyword-plus-reference match): 6
+   matched, one each in Audio, Net, Game, SDD, Rendering and Templates, all created 2026-08-11 to
+   2026-08-14 (the coordinated-migration wave); none since, and Governance has none. Audio#251 and Net#69
+   are merged. Neither a template change nor an exemption is decided, so a recurrence would red a required
+   context.
 4. The usual dry run and a period of observed real reports.
 
 Not covered, by design: whole commit messages beyond their subject line (the hub's own check reads them;
@@ -799,3 +806,43 @@ the two differ). A caller is one thin file that names it at `@main`, as every ot
 | Reach | one caller per repository; `edited` in its `pull_request` types re-checks a retitle or body edit |
 | Pin | `@main`, except where the repository's Actions policy requires full-SHA pins (`sha_pinning_required`), where the caller pins a commit of the receiver workflow and rebinds it when the rule changes |
 | Arming | not armed anywhere by the change that adds a caller. A private repository on a plan without branch protection (GitHub answers 403 "Upgrade to GitHub Pro or make this repository public") cannot arm it; there the check is advisory |
+
+### Per-repo inventory of the gate and its required-context state (.github#5195)
+
+Measured 2026-11-02 UTC; refreshed after the receiver caller merges by reading each default branch's branch protection and rulesets
+(`gh api repos/FS-GG/<repo>/branches/<default>/protection/required_status_checks` and `.../rules/branches/<default>`; HighBarV3 and RecoilEngine use `master`)
+and its workflows. The route is how the repository gets the lint: **kit** (`materialize / closing-keywords`,
+through `kit-materialize.yml`), **receiver** (a thin caller of `closing-keywords-receiver.yml`, context
+`closing-keywords / title-and-body`) or **standalone** (a copy of the job that fetches the rule at a pinned hub
+commit, context `closing-keywords`). A private repository on this plan cannot be protected at all (GitHub answers
+403 "Upgrade to GitHub Pro or make this repository public"); the plan is fixed, so there the check can report but
+can never be required.
+
+| Repository | Visibility | Route | Required today | Arming possible |
+| --- | --- | --- | --- | --- |
+| .github | public | its own `closing-keywords` workflow (the hub's check, with the commit messages) | no | yes, by protection |
+| FS.GG.Game, SDD, Governance, Audio, Rendering, Net | public | kit, at `@main` | no | yes, by protection (Governance also has a ruleset) |
+| FS.GG.Templates | public | kit, pinned to `f1ac83ac…` | no | yes, by protection |
+| FS.GG.Algorithms | public | standalone | **yes**, `closing-keywords` in its `main-protection` ruleset | already armed |
+| FS.GG.Coordination | public | receiver pending: caller FS.GG.Coordination#1118 remains open (pinned to the receiver's merge commit: its execution-pin validator refuses `@main`); no caller on the default branch | no | yes, by its ruleset |
+| FsQuint, FSBarV2 | public | receiver on the default branch, callers FsQuint#51 and FSBarV2#54 merged; both caller heads reported the check successfully | no | only after the repository gets a protection or a ruleset: it has neither |
+| FS.GG.RuneScape | private | standalone | no | no, advisory only |
+| FS.GG.FourD, SC2.Client, Unity.Client, Native.Qualification | private | receiver on the default branch; the four caller PRs are merged and successful native Actions jobs now observed (Native.Qualification pins the merge commit: it enforces full-SHA pins) | no | no, advisory only |
+| HighBarV3, RecoilEngine | public | absent on the default branch; minimal read-only receiver callers prepared locally under #5195, not yet pushed or installed at measurement | no | only after a protection or ruleset is added; neither currently has one |
+
+The public receiver caller heads reported `closing-keywords / title-and-body` successfully, including the
+still-open Coordination caller. The earlier four-private-repository reporting Unknown is resolved by
+fresh authenticated Actions run/job metadata: each has a completed successful `title-and-body` job,
+matching run/head/attempt and its native `check_run_url`. This is execution/reporting evidence, not a
+claim that the previously denied check-runs-list endpoint became readable. Private raw evidence is
+retained by the delivery owner, not copied into this document.
+
+HighBarV3 and RecoilEngine now reference Project3 Deliveries, so the original repository set is no
+longer complete: HighBarV3#18 and RecoilEngine#3 are concrete new examples. Both default branches lack
+the lint. Their prepared callers reuse the maintained read-only hub workflow; they are neither installed
+nor required at measurement. This is an explicit #5195 remainder, not evidence of fleet completion.
+The table is a dated observation; refresh native source/reporting before declaring the rollout complete.
+No branch protection or ruleset was changed by this inventory. Not in the inventory because no pull request
+there references a Project 3 Delivery at the original measurement: FS.GG.Coordination.Authority and the two Sandbox repositories.
+Algorithms is the only repository where the lint is already a merge gate, and its standalone job is the reason
+the receiver exists: that copy carries its own pin to move by hand.
