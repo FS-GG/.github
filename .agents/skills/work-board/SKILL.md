@@ -27,7 +27,8 @@ while that successor is unqualified.
    including missing Status, Work level or enrollment. Use [intake and decomposition](references/intake.md).
    Local repair refreshes relevant context, not the full census. Keep unfinished intake's owner,
    next action and reconsideration event.
-3. Reconcile results against acceptance and blockers using the [Status lifecycle](references/status-lifecycle.md).
+3. Use the adopted continuation route to derive the owner's next stage from fresh determining facts.
+   Reconcile results against acceptance and blockers using the [Status lifecycle](references/status-lifecycle.md).
    Root decides native Status through its qualified guarded route; workers provide evidence. Equal
    Status is a quiet no-op. Verify changed effects; update each Delivery before reassessing its Outcome.
 4. Select executable native Deliveries by user priority, finishing owned acceptance, shared prerequisites

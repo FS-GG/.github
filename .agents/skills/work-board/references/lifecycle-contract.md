@@ -18,7 +18,8 @@ root, without credentials, shared/remote writes, publication, live-store, Home, 
 effects. Within the stated CPU/memory share the owner runs these checks, retains first failures and
 reports results. No Root runtime admission, original clock, custody packet or pre-run peer review is required.
 
-Protected actions retain their effect-specific authority. A reviewed finite sequence may advance on
+Protected actions, including operations with explicit owning-plan custody requirements, retain their
+effect-specific authority. A reviewed finite sequence may advance on
 verified covered success without per-step approval; each original clock and readback remains independent.
 Stop on failure, Unknown, determining drift or exhausted bounds. Observe uncertain sends through the
 original handler before any further send; expiry cannot renew authority or release reservations.
@@ -48,13 +49,17 @@ scripts/fsgg-coord board-v2 inspect --binding-file PRIVATE_BINDING --report-file
 ```
 
 Input is the closed `fsgg.coord.owner-continuation-input/1` document: the existing integrator document
-plus requests joined to exact slice, attempt, owner, revision and scope digest. Follow the actual
+plus requests joined to exact slice, attempt, owner, revision and scope digest. For the adopted owner
+pipeline request `action: "next"`; the fold derives the needed stage from fresh attributed source,
+verification and review evidence plus native route facts. Explicit `verify-isolated` remains a diagnostic
+choice. Missing predicates stay unknown rather than invented success. Follow the actual
 [decoder](https://github.com/FS-GG/.github/blob/main/src/FS.GG.Coord.Cli/BoardV2Application.fs),
 not an improvised fact packet. Caller facts remain attributed reports or attestations; they cannot
 impersonate native observations or create authority. Preserve unknown/conflicting/stale evidence.
 
 Output `fsgg.coord.board-v2-owner-inspection/1` adds `ownerContinuation`. ContinueOwner keeps the same
-owner: `verify-isolated` invokes only the ADR-0096 check within its actual share. ObserveOriginal routes
+owner and names the next permitted stage; `verify-isolated` invokes only the ADR-0096 check within its
+actual share. ObserveOriginal routes
 the existing original to its qualified observation handler/cursor, never to another send. Await retains
 its reopening event; RequestJudgment returns only the affected question. These recommendations execute
 no effects. Protected delivery still requires its existing envelope/qualified executor; an unsupported

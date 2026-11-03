@@ -24,13 +24,15 @@ weakening a gate or switching ceremony.
    Fresh work starts from the current default branch on `routine/<item-slug>`. A board projection's lag
    cannot justify another assignment. The coordinator retains intake and Status decisions; workers
    supply evidence rather than creating claims, identities, ledgers or mandatory return packets.
-2. Implement the admitted promise in the isolated worktree, within the stated resource share. Run
+2. Implement the admitted promise in the isolated worktree, within the stated resource share. At meaningful
+   results consume the adopted continuation fold's next stage without another phase owner or approval. Run
    proportionate checks, the [owner self-check](#owner-self-check-before-review) and the same touched-path
    gates as CI before requesting independent review. Preserve first failures; after repeated same-class
    failures inspect relevant callers, failure and cleanup paths before coherent repair. Split independent
    concerns into separately reviewable PRs under the existing one-chain/two-managed-PR limits; retain one
    continuous PR for the current slice.
-3. Keep the PR draft until required gates pass; name inherited main failures. Use the canonical creation
+3. Request review without known-red required gates, except explicitly named inherited main failures.
+   Keep the PR draft until required gates pass. Use the canonical creation
    and delivery helpers from the [exact-source route](../work-board/references/lifecycle-contract.md#qualify-the-actual-path-and-deliver-exact-source).
    A moved head needs fresh review and binding. The body has exactly one
    `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` and exactly one
