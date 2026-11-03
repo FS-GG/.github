@@ -10,6 +10,8 @@
     <Compile Include="TestLock.fs" />
     <Compile Include="../coord-board-v2-projection/ProgrammeFixture.fs" />
     <Compile Include="../coord-board-v2-projection/MigrationFixture.fs" Link="MigrationFixture.fs" />
+    <Compile Include="OwnerContinuationTests.fs" />
+    <Compile Include="OwnerEnvelopeTests.fs" />
     <Compile Include="BoardV2ApplicationTests.fs" />
     <Compile Include="BoardV2MigrationTests.fs" />
     <Compile Include="V2WriterLockTests.fs" />

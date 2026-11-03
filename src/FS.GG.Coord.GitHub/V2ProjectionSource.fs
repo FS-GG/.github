@@ -794,7 +794,10 @@ module V2ProjectionSource =
                         && (login |> Seq.forall (fun character -> Char.IsAsciiLetterOrDigit character || character = '-'))
                     if parts.Length = 6 && parts[0] = "repos" && binding.Repositories.Contains(parts[1] + "/" + parts[2])
                        && parts[3] = "collaborators" && safeLogin parts[4] && parts[5] = "permission" then transport.Send request
-                    else Error(Malformed("read-only V2 inspection", "permission read escaped selected repository/canonical login scope"))
+                    elif parts.Length = 8 && parts[0] = "repos" && binding.Repositories.Contains(parts[1] + "/" + parts[2])
+                         && parts[3] = "actions" && parts[4] = "runs" && parts[6] = "attempts"
+                         && (match Int64.TryParse parts[5], Int32.TryParse parts[7] with (true, id), (true, attempt) -> id > 0L && attempt > 0 | _ -> false) then transport.Send request
+                    else Error(Malformed("read-only V2 inspection", "read escaped selected repository/canonical original scope"))
                 | _ -> Error(Malformed("read-only V2 inspection", "request is not a fixed canonical read"))
             member _.SendMutation _ = Error(Malformed("read-only V2 inspection", "mutation is unavailable"))
             member _.RetryMutation _ = Error(Malformed("read-only V2 inspection", "durable replay is unavailable")) }
@@ -1548,3 +1551,166 @@ module V2ProjectionSource =
                                         [ "Selected in explicit integrator order within action-specific remaining capacity, native in-flight scope and original reservations";
                                           "Integrator-reported observations grant no allocation or dispatch authority; recheck determining facts beside owner execution" ]
         proposals |> List.map evaluate
+
+
+    let continuationIdentity (slice: CurrentSlice) : FS.GG.Coord.OwnerContinuation.Identity =
+        let scope =
+            [ slice.Repository; string slice.Operation; string slice.Action; slice.AccountableOwner
+              slice.Join.NativeId; slice.Join.BodySha256; slice.Join.SourceRevision
+              Option.defaultValue "" slice.Join.HierarchySha256; Option.defaultValue "" slice.PullRequest
+              Option.defaultValue "" slice.PullRequestId; Option.defaultValue "" slice.Head
+              System.Text.Json.JsonSerializer.Serialize(List.sort slice.Paths) ]
+        { Subject = $"{slice.Issue.Owner}/{slice.Issue.Repository}#{slice.Issue.Number}"
+          Owner = slice.Owner; Slice = slice.Id; Attempt = slice.Attempt; Revision = slice.Join.SourceRevision
+          ScopeDigest = FS.GG.Coord.OwnerContinuation.digest (System.Text.Json.JsonSerializer.Serialize scope) }
+
+    let private immutablePlanBlobOperand (binding: Binding) (value: string) =
+        let hex40 (value: string) = value.Length = 40 && value |> Seq.forall Char.IsAsciiHexDigitLower
+        let parseHeader (header: string) =
+            if header.Length < 83 then None
+            else
+                let at = header.Length - 82
+                let commit = header.Substring(at + 1, 40)
+                let blob = header.Substring(at + 42, 40)
+                if header[at] = '@' && header[at + 41] = ':' && hex40 commit && hex40 blob then Some(header.Substring(0, at), blob) else None
+        let urlAt = value.IndexOf(":https://github.com/", StringComparison.Ordinal)
+        if urlAt >= 0 then
+            let header, declaration = value.Substring(0, urlAt), value.Substring(urlAt + 1)
+            match parseHeader header, programmePlanBlobGrammar binding.Repositories declaration with
+            | Some(prefix, blob), Ok(repository, _, path) when prefix = repository + "/" + path -> ["declared-blob"; repository; path; blob; declaration]
+            | _ -> ["unrecognized-declared-plan"; value]
+        else
+            match parseHeader value with
+            | Some(path, blob) when path.StartsWith("docs/", StringComparison.Ordinal) && not (path.Contains("..") || path.Contains(':') || path.Contains('\\')) -> ["protected-docs-blob"; sourceRepository binding; path; blob]
+            | _ -> ["unrecognized-protected-plan"; value]
+
+    let continuationEnvelopeIdentity (report: InspectionReport) (slice: CurrentSlice) =
+        let item = report.Items |> List.find (fun item -> item.Evidence.Issue = slice.Issue)
+        let native (value: NativeObservation) = [value.NodeId; value.Url; value.BodySha256; value.State]
+        let plan =
+            match item.Evidence.PlanObservation with
+            | Some observed -> native observed
+            | None ->
+                // The source producer's immutable blob operand contains commit, blob and declared URL.
+                let marker = slice.Join.SourceRevision.LastIndexOf(";plan=", StringComparison.Ordinal)
+                let recipe = slice.Join.SourceRevision.LastIndexOf(";recipe=", StringComparison.Ordinal)
+                if marker < 0 || recipe <= marker then ["unrecognized-source"; slice.Join.SourceRevision]
+                else immutablePlanBlobOperand report.Binding (slice.Join.SourceRevision.Substring(marker + 6, recipe - marker - 6))
+        let source = System.Text.Json.JsonSerializer.Serialize
+                        {| native = item.Evidence.Native |> Option.map native
+                           dependencies = item.Evidence.DependencyObservations |> List.sortBy _.NodeId |> List.map native
+                           complete = item.Evidence.DependencyReadComplete; plan = plan; recipe = report.Binding.RecipeRevision |}
+        let revision = "fsgg.native-owner-source/1:" + FS.GG.Coord.OwnerContinuation.digest source
+        let basis = continuationIdentity {slice with Join = {slice.Join with SourceRevision = revision}}
+        {basis with Revision = revision}
+
+    let continuationEnvelopeInputDigest report (context: SelectionContext) slice =
+        let identity = continuationEnvelopeIdentity report slice
+        FS.GG.Coord.OwnerContinuation.digest (System.Text.Json.JsonSerializer.Serialize
+            [identity.Subject; identity.Owner; identity.Slice; identity.Attempt; identity.Revision; identity.ScopeDigest
+             context.Invocation; context.ArtifactSha256; context.RecipeRevision; context.PopulationRevision; context.EnrollmentCommitment])
+
+    type RegisteredOwnerPreflight = RoutineMerge of digest: string | RoutineDraft of digest: string * head: string
+
+    let recommendOwnerContinuationsWithFacts (additional: Map<string, FS.GG.Coord.OwnerContinuation.Fact list>) (preflight: Map<string, Result<RegisteredOwnerPreflight, string>>) (report: InspectionReport) (context: SelectionContext) (now: DateTimeOffset) (requests: FS.GG.Coord.OwnerContinuation.Request list) =
+        requests |> List.sortBy (fun r -> r.Subject.Slice) |> List.map (fun request ->
+            let slice = context.Slices |> List.tryFind (fun s -> continuationIdentity s = request.Subject)
+            let scopeCurrent =
+                slice |> Option.exists (fun s ->
+                    report.Items |> List.exists (fun item ->
+                        item.Evidence.Issue = s.Issue && item.SourceCurrentness = "Current" && item.Owner = Some s.AccountableOwner
+                        && s.Owner = s.AccountableOwner && item.SourceRevision = Some s.Join.SourceRevision
+                        && (item.WorkItem |> Option.bind _.Sha256) = s.Join.HierarchySha256
+                        && item.Evidence.Gap.IsNone
+                        && (item.Evidence.Native |> Option.exists (fun n -> (n.State = "OPEN" || n.State = "CLOSED") && n.NodeId = s.Join.NativeId && n.UpdatedAt = s.Join.UpdatedAt && n.BodySha256 = s.Join.BodySha256))
+                        && (match s.PullRequest with
+                            | None -> s.Head.IsNone && s.PullRequestId.IsNone && s.PullRequestUpdatedAt.IsNone
+                            | Some url ->
+                                report.NativeIntegrator.PullRequests
+                                |> List.exists (fun p ->
+                                    p.Url = url && p.Id = Option.defaultValue "" s.PullRequestId
+                                    && (List.contains request.Subject.Subject p.Issues || List.contains p.Url item.Deliverables)
+                                    && p.Head = Option.defaultValue "" s.Head && Some p.UpdatedAt = s.PullRequestUpdatedAt
+                                    && (p.ScopeCurrent || (p.State = "MERGED" && p.Gaps.IsEmpty && p.GapDetails.IsEmpty && List.contains p.Url item.Deliverables))))))
+            let nativeFact predicate value suffix : FS.GG.Coord.OwnerContinuation.Fact =
+                { Id = "native-continuation-" + suffix; Subject = request.Subject; Predicate = predicate
+                  Value = FS.GG.Coord.OwnerContinuation.Known value
+                  Support = FS.GG.Coord.OwnerContinuation.NativeObservation("V2ProjectionSource/1", request.Subject.ScopeDigest)
+                  ObservedAt = report.NativeIntegrator.ObservedAt; ValidUntil = report.NativeIntegrator.ObservedAt.AddMinutes 5.0
+                  Evidence = [request.Subject.Subject]; Supersedes = []; ArtifactRevision = None }
+            let checksPassed = slice |> Option.exists (fun s ->
+                report.NativeIntegrator.PullRequests |> List.exists (fun p ->
+                    Some p.Url = s.PullRequest && Some p.Head = s.Head && p.ScopeCurrent && p.Gaps.IsEmpty && p.GapDetails.IsEmpty
+                    && not p.Checks.IsEmpty && p.Checks |> List.forall (fun c ->
+                        [":COMPLETED:SUCCESS"; ":COMPLETED:SKIPPED"; ":COMPLETED:NEUTRAL"; ":SUCCESS"] |> List.exists (fun suffix -> c.EndsWith(suffix, StringComparison.Ordinal)))))
+            // No caller can mint native support or shadow adapter facts, even through the library seam.
+            let supplied = request.Facts |> List.filter (fun f -> match f.Support with FS.GG.Coord.OwnerContinuation.NativeObservation _ -> false | _ -> true)
+            let delivered =
+                slice |> Option.exists (fun s ->
+                    report.NativeIntegrator.PullRequests |> List.exists (fun p ->
+                        Some p.Url = s.PullRequest && Some p.Head = s.Head && p.State = "MERGED" && p.Gaps.IsEmpty && p.GapDetails.IsEmpty
+                        && (report.Items |> List.exists (fun item -> item.Evidence.Issue = s.Issue && List.contains p.Url item.Deliverables))))
+            let changesRequired = slice |> Option.exists (fun s -> report.NativeIntegrator.PullRequests |> List.exists (fun p -> Some p.Url = s.PullRequest && Some p.Head = s.Head && p.ScopeCurrent && p.ReviewDecision = Some "CHANGES_REQUESTED"))
+            let immutableIdentity =
+                try continuationEnvelopeIdentity report (Option.get slice) with _ -> request.Subject
+            let semanticScope =
+                let fact = nativeFact FS.GG.Coord.OwnerContinuation.ImmutableScope scopeCurrent "immutable-scope"
+                {fact with Support = FS.GG.Coord.OwnerContinuation.NativeObservation("V2ProjectionSource/immutable-owner-source/1", immutableIdentity.ScopeDigest); Evidence = [immutableIdentity.Revision]}
+            let subjectClosed = report.Items |> List.exists (fun item -> item.Evidence.Issue = (slice |> Option.map _.Issue |> Option.defaultValue item.Evidence.Issue) && (item.Evidence.Native |> Option.exists (fun n -> n.State = "CLOSED")))
+            let nativePrFact =
+                let fact = nativeFact FS.GG.Coord.OwnerContinuation.NativePullRequest false "native-pr"
+                match slice with
+                | Some s when s.PullRequest.IsSome && scopeCurrent -> {fact with Value = FS.GG.Coord.OwnerContinuation.Known true; Evidence = ["source-head:" + Option.defaultValue "unknown" s.Head]; ArtifactRevision = s.Head}
+                | Some s when s.PullRequest.IsNone && report.NativeIntegrator.RepositoryGaps.ContainsKey s.Repository -> {fact with Value = FS.GG.Coord.OwnerContinuation.Unknown "native-pr-inventory-unavailable"}
+                | Some s when s.PullRequest.IsNone && report.NativeIntegrator.PullRequests |> List.exists (fun p -> p.State = "OPEN" && (List.contains request.Subject.Subject p.Issues || report.Items |> List.exists (fun item -> item.Evidence.Issue = s.Issue && List.contains p.Url item.Deliverables))) -> {fact with Value = FS.GG.Coord.OwnerContinuation.Unknown "native-pr-needs-exact-slice-join"}
+                | _ -> fact
+            let scopeChanged = slice |> Option.exists (fun current -> report.Items |> List.exists (fun item ->
+                item.Evidence.Issue = current.Issue
+                && ((item.Owner |> Option.exists (fun owner -> owner <> current.AccountableOwner))
+                    || (item.Evidence.Native |> Option.exists (fun native -> native.NodeId = current.Join.NativeId && native.BodySha256 <> current.Join.BodySha256)))))
+            let prerequisiteHold = slice |> Option.exists (fun current ->
+                not current.PrerequisitesComplete || current.Prerequisites |> List.exists (fun prerequisite -> prerequisite.Action = current.Action && prerequisite.Satisfied <> Some true))
+            let prerequisites =
+                let fact = nativeFact FS.GG.Coord.OwnerContinuation.BlockingPrerequisite prerequisiteHold "owner-prerequisites"
+                {fact with Support = FS.GG.Coord.OwnerContinuation.Reported "attributed-integrator-prerequisites"}
+            let unregistered = slice |> Option.exists (fun current -> current.Action = Activation || current.Operation = ActivateWork)
+            let unsupported = nativeFact FS.GG.Coord.OwnerContinuation.UnregisteredOwnerRoute unregistered "unregistered-owner-route"
+            let facts = prerequisites :: unsupported :: nativeFact FS.GG.Coord.OwnerContinuation.ScopeChanged scopeChanged "scope-changed" :: nativePrFact :: semanticScope :: nativeFact FS.GG.Coord.OwnerContinuation.SubjectClosed subjectClosed "subject-closed" :: nativeFact FS.GG.Coord.OwnerContinuation.ChangesRequired changesRequired "changes-required" :: nativeFact FS.GG.Coord.OwnerContinuation.SourceDelivered delivered "source-delivered" :: nativeFact FS.GG.Coord.OwnerContinuation.ScopeCurrent scopeCurrent "scope" :: nativeFact FS.GG.Coord.OwnerContinuation.NativeRollup checksPassed "checks" :: ((Map.tryFind request.Subject.Slice additional |> Option.defaultValue []) @ supplied)
+            let relevantOriginal =
+                slice |> Option.bind (fun current ->
+                    context.Reservations |> Option.bind (fun holds ->
+                        holds |> List.sortBy _.CustodyReference |> List.tryFind (fun hold ->
+                            let exactSelf = hold.SliceId = current.Id && hold.Attempt = current.Attempt && hold.Operation = current.Operation
+                                            && hold.Owner = current.Owner && hold.Repository = current.Repository && hold.Paths = current.Paths
+                                            && hold.PullRequest = current.PullRequest && hold.Head = current.Head && current.PullRequest.IsSome
+                            let left = current.Repository.Split('/')
+                            let right = hold.Repository.Split('/')
+                            let paths values = FS.GG.Coord.TouchSet.parse ("Paths: " + String.concat " " values)
+                            not exactSelf && left.Length = 2 && right.Length = 2
+                            && not (FS.GG.Coord.TouchSet.scopedConflicts left[0] left[1] right[0] right[1] (paths current.Paths) (paths hold.Paths) |> List.isEmpty))
+                        |> Option.map _.CustodyReference))
+            // Expiry is not release. Same owner alone cannot hide a different attempt/operation/head.
+            let request = { request with Original = relevantOriginal |> Option.orElse request.Original }
+            let initial = FS.GG.Coord.OwnerContinuation.recommend now { request with Facts = facts }
+            match initial.Recommendation, slice with
+            | FS.GG.Coord.OwnerContinuation.RequestJudgment route, Some current
+                when route = "qualified-protected-envelope-and-native-checks-required" || route = "registered-open-draft-preflight-required" ->
+                let proof = Map.tryFind current.Id preflight |> Option.defaultValue (Error "preflight-not-supplied")
+                let digestValid (value: string) = value.Length = 64 && value |> Seq.forall Char.IsAsciiHexDigitLower
+                let predicate, supported, hash, artifact =
+                    match proof with
+                    | Ok(RoutineDraft(hash, head)) when route = "registered-open-draft-preflight-required" && digestValid hash && head.Length = 40 && head |> Seq.forall Char.IsAsciiHexDigitLower -> FS.GG.Coord.OwnerContinuation.DraftPreflight, true, hash, ["source-head:" + head]
+                    | Ok(RoutineMerge hash) when route = "qualified-protected-envelope-and-native-checks-required" && digestValid hash -> FS.GG.Coord.OwnerContinuation.RoutinePreflight, true, hash, []
+                    | _ -> (if route = "registered-open-draft-preflight-required" then FS.GG.Coord.OwnerContinuation.DraftPreflight else FS.GG.Coord.OwnerContinuation.RoutinePreflight), false, request.Subject.ScopeDigest, []
+                let joined =
+                    let fact = nativeFact predicate supported "registered-owner-preflight"
+                    {fact with Support = FS.GG.Coord.OwnerContinuation.NativeObservation("V2Preflight/registered-owner-route", hash); Evidence = ("registered-preflight:" + hash) :: artifact
+                               ArtifactRevision = artifact |> List.tryHead |> Option.map (fun value -> value.Substring 12)}
+                FS.GG.Coord.OwnerContinuation.recommend now { request with Facts = joined :: facts }
+            | _ -> initial)
+
+    let recommendOwnerContinuationsWithPreflight preflight report context now requests =
+        recommendOwnerContinuationsWithFacts Map.empty preflight report context now requests
+
+    let recommendOwnerContinuations report context now requests =
+        recommendOwnerContinuationsWithPreflight Map.empty report context now requests

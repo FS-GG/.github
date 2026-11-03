@@ -5,91 +5,61 @@ description: Continuously clear authorized organization or selected product work
 
 # Clear the selected board scope
 
-Use [$atlas](../atlas/SKILL.md) first. Resolve organization Project 3 versus the explicitly configured
-product scope; a filter is neither membership nor authority. Read the
-[lifecycle contract](references/lifecycle-contract.md) for the applicable caller/binding, recovery,
-qualification and effect rules; load further references just in time for the affected action.
-Qualified organization and PRODUCT contracts remain distinct. Instruction loading activates no executable, binding or enrollment.
+One coordinator selects work; each Delivery retains one accountable owner through acceptance.
+Existing authorization persists. Owners implement, check, repair and complete covered delivery steps
+without repeated phase approval; Root handles priorities, shared-surface conflicts and genuine exceptions.
+Use [Atlas](../atlas/SKILL.md) and the common **Normal execution** section of the
+[lifecycle contract](references/lifecycle-contract.md). Load its scope, recovery and effect details when relevant.
+Instruction loading activates no executable, binding or enrollment.
 
-## FS-GG delivery routing
+Resolve organization Project 3 versus the explicitly configured product scope. A nearby checkout,
+filtered view or missing product configuration cannot select scope or grant authority. Keep qualified
+organization and PRODUCT contracts distinct. Use the continuation integration described in the core
+only for an explicitly qualified installed caller/instruction tuple; retain the current qualified route
+while that successor is unqualified.
 
-For landing or shipping FS-GG work, use the existing scoped normal PR and canonical
-publication routes. Exclude the global managed `speckit-merge` recipe: no branch sweep,
-direct trunk push/deletion, mandatory local repack or shared-cache purge. Do not edit
-vendored global skills. Useful `speckit-debug-loop` diagnosis stays within the selected
-repository's original bounds and meaningful checks, preserving first failures; it
-cannot impose unrelated evidence logs, retries or acceptance. An unresolved actual
-routing conflict retains an owner and blocks its affected effect. Future deterministic
-controller conversion remains owned by the governing LEARN outcome, not this adapter.
+## Coordination loop
 
-## Continuous clearing loop
+1. **Understand the whole promise.** Recover native issues and full owning-plan acceptance, existing
+   owners, PRs/heads, dirty worktrees, original effects, pending replies and relevant reservations.
+   Continue the unambiguous owner/branch/PR/attempt; do not create a competing lane.
+2. Reconcile complete unfiltered All items at entry/resume, meaningful coordination boundaries
+   or relevant native fact changes,
+   including missing Status, Work level or enrollment. Use [intake and decomposition](references/intake.md).
+   Local repair refreshes relevant context, not the full census. Keep unfinished intake's owner,
+   next action and reconsideration event.
+3. Use the adopted continuation route to derive the owner's next stage from fresh determining facts.
+   Reconcile results against acceptance and blockers using the [Status lifecycle](references/status-lifecycle.md).
+   Root decides native Status through its qualified guarded route; workers provide evidence. Equal
+   Status is a quiet no-op. Verify changed effects; update each Delivery before reassessing its Outcome.
+4. Select executable native Deliveries by user priority, finishing owned acceptance, shared prerequisites
+   and aging. Reconsider older deferred work. Compare action-specific dependencies, ownership,
+   touch-sets and remaining-after-active capacity, including known/Unknown reservations. Account actual
+   worker, CPU/memory, integrator and hosted-CI demand; a free agent slot is insufficient.
+5. Execute an admitted Delivery through [pnext-item](https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/SKILL.md), retaining its full acceptance.
+   Native enrollment or explicit Root pending-batch admission is required; an Outcome is never an
+   implementation assignment. Keep one independent review for substantive changes and preserve exact-head required CI and native gates.
+   An explicitly selected technical plan uses [work-roadmap](../work-roadmap/SKILL.md) as the adapter.
+6. On meaningful results or the start of a bounded wait, reconcile Status and return to selection.
+   Seek useful disjoint work within remaining capacity. A blocked sibling does not automatically block
+   independent work. One integrator owns each shared surface; one observer owns each awaited condition.
+   Unchanged ticks stay inside the bounded mechanical observer.
 
-1. Understand the whole promise. Recover current native issues, full owning-plan acceptance, owners, PRs/heads, dirty worktrees,
-   pending replies, original effects and relevant known/Unknown reservations. Continue the existing
-   unambiguous owner/branch/PR/attempt before creating another lane.
-2. For clearing, reconcile complete unfiltered All items at entry/resume, meaningful coordination boundaries
-   or relevant native fact changes, including cards missing Status, Work level or enrollment.
-   Use [intake and decomposition](references/intake.md); unfinished intake retains its owner, next action and reconsideration event.
-   Local repair refreshes relevant context, not the full census.
-3. Reconcile observed results against acceptance and blockers, then update Status through the guarded
-   native route and verify readback. Update each Delivery before reassessing its parent Outcome.
-   Follow the mandatory [Status lifecycle](references/status-lifecycle.md); workers supply evidence and
-   the root integrator decides Status. Inspection remains read-only.
-4. Compare eligible Deliveries against full acceptance, real prerequisites, explicit user priority and
-   remaining-after-active capacity. Use [operation-specific admission](references/context.md#capacity-window-and-assembled-test-candidate):
-   account conservative CPU quota/demand, combined memory peaks/headroom, storage/backing, transitive
-   children and known/Unknown write domains. Preserve selected exclusive/large-image profiles; a safe
-   supported fit needs no additional blanket one-expensive-operation limit. Prefer finishing owned
-   acceptance and useful prerequisites; reconsider
-   older deferred work and explain material repeated bypasses. Do not let new easy fixes starve product work.
-   An Outcome is never an implementation assignment; linked but unenrolled Deliveries stay unschedulable unless Root admits one pending batch enrollment.
-5. Admit a dispatch only with its native Delivery issue
-   ([rules](references/lifecycle-contract.md#file-the-delivery-issue-at-dispatch)). Execute one bounded admitted Delivery through [$pnext-item](https://github.com/FS-GG/.github/blob/main/.agents/skills/pnext-item/SKILL.md), then update Status and verify readback after dispatch. The same owner carries
-   implementation/relevant tests, one independent review for substantive changes, repair, delivery and whole-promise verification.
-   Apply the lifecycle contract's risk rules and preserve exact-head required CI and native gates.
-   Before invocation read [final-input and operation-horizon guidance](references/delivery-reliability.md#final-inputs-and-failure-gated-invocation);
-   reservations cover the actual launch through terminal collection/retention, including determining refs.
-   Selected technical plans use [$work-roadmap](../work-roadmap/SKILL.md) as an adapter to that executor.
-6. After worker returns, CI/runtime completion, reviews, supplier replies, accepted closure and the start
-   of a bounded wait, repeat Status reconciliation before reconsidering suppliers, intake and
-   useful disjoint preparation/review/evidence work. Account actual runtime, machine, integrator and
-   hosted capacity; delegate only when authorized and useful. Otherwise continue eligible serial work
-   and name its constraint/reopening event. A free agent slot is not resource capacity.
-7. Read back accepted scope and remaining assertions, reconcile Delivery Status before its parent and return to selection.
-   Root's closing comment quotes the generator's own printed counts, not a paraphrase.
-   A merge, worker return, completed milestone or stopped watcher does not end a clearing invocation.
+Use the existing owning issue's Owner, Done when, Current deliverable, Next action, Blocked on and
+Acceptance evidence. A dispatch brief starts `fsgg-dispatch: item=OWNER/REPO#N role=worker|critic|analyst|report`;
+passive usage attribution never grants authority. Report material process findings through the existing
+[host disposition](references/host-loop.md#own-process-findings-and-disposition), without duplicate packets,
+status tables or reporting-only workers. Capture reusable knowledge alongside delivery.
 
-The boundary order is: observe results → reconcile acceptance/blockers → update Status and verify
-readback → select/admit work → dispatch → update Status and verify readback. Reconcile before yielding
-or handing off. A periodic freshness sweep is a backstop, not the primary mechanism.
-
-Every dispatch brief starts with the exact line `fsgg-dispatch: item=OWNER/REPO#N role=worker|critic|analyst|report`,
-naming the admitted Delivery and the dispatch's role. Passive telemetry attributes the subagent's usage to that
-item from this line only; a missing or malformed marker is recorded as unattributed, never inferred from prose.
-
-Keep Owner, Done when, Current deliverable, Next action, Blocked on and Acceptance evidence in the
-existing owning issue. Preserve complete Done when and native history. No routine claim, mandatory
-packet, second filing owner, lifecycle ledger or duplicate status/closure table is required.
-Optional [finding analysis](https://github.com/FS-GG/.github/blob/main/.agents/skills/board-analyst/SKILL.md) and [lane diagnosis](https://github.com/FS-GG/.github/blob/main/.agents/skills/lane-steward/SKILL.md)
-provide bounded advice; neither selects work or grants effects. Executing agents proactively report
-material process problems; existing review completion, worker returns and handoffs check for unreported
-findings. The root ensures reasoned, owned disposition through [host guidance](references/host-loop.md).
-Normal/best wrappers select routing only.
+Project 3 or the selected product board supplies current planning; owning issues/plans/native evidence
+retain assignment and acceptance.
+No fixed polling, unchanged-hold comments, reporting-only workers or CI-tick projections.
 
 ## Completion and waiting
 
-Finish only when the requested scope's full acceptance is established. A clearing run is quiescent
-when complete current intake is reconciled and no authorized action is eligible within capacity;
-all remaining work has a blocker/supplier, deferred-scope decision or attributed Unknown and reopening
-condition. Quiescence is not board completion. Untriaged cards or an empty Ready view cannot establish it.
-
-When an owned job/reply can resolve the next step inside its admitted bounded window, continue useful
-work and observe through that deadline. Use bounded watchers without unchanged model-turn polling.
-When only external dependencies remain, return durable native/Atlas restart pointers and the next
-observation condition, stating whether an actual monitor remains running. Ending implies no monitoring.
-A user stop/cancel stops new selection immediately; use [$stop-with-handoff](../stop-with-handoff/SKILL.md)
-for retirement and missing recovery state. Resume through [$continue-from-handoff](../continue-from-handoff/SKILL.md).
-
-Project 3 or the selected product board supplies current planning; owning issues/plans/native evidence
-retain assignment and acceptance. No fixed polling, unchanged-hold comments, reporting-only workers or CI-tick projections.
-Source delivery, publication, installation and selected native acceptance remain distinct claims.
+Finish only on full requested acceptance. Quiescence is not board completion: held work retains its
+supplier, missing fact and reopening condition; untriaged cards remain unfinished intake. Source delivery,
+publication, installation and native acceptance are separate claims. Continue owned jobs/replies through
+admitted windows and preserve originals after uncertain effects. A user stop/cancel stops new selection immediately;
+use [stop-with-handoff](../stop-with-handoff/SKILL.md) and [continue-from-handoff](../continue-from-handoff/SKILL.md).
+Returning implies no monitoring unless an actual retained observer is named.

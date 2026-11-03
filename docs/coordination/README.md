@@ -59,7 +59,9 @@ notified, threaded, assignable, searchable, and scriptable via `gh`.
 > [F# decision-engine design](2026-11-03-deterministic-coordination-engine-design.md)
 > extends the canonical selector with typed facts, standing owner authority and event-driven
 > continuation. It preserves native planning and qualified execution, and defines replay,
-> migration, rollback and operational acceptance before implementation adoption.
+> migration, rollback and operational acceptance before implementation adoption. See the
+> implemented [owner-continuation v1 interface](owner-continuation-v1.md) for closed wire fields and
+> qualified caller selection; source support alone establishes no live adoption.
 
 ## Requests and responses → cross-repo issues
 

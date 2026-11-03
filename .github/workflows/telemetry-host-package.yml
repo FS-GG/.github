@@ -613,6 +613,7 @@ jobs:
             dotnet pack "$root/src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj" -c Release --no-restore -o "$GITHUB_WORKSPACE/$output"
           done
       - name: Bind and compare normalized producer payloads
+        id: host_payload_comparison
         run: |
           version="$(dotnet msbuild src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -getProperty:Version | tr -d '[:space:]')"
           package_a="artifacts/telemetry-host-pack-a/FS.GG.Telemetry.Host.$version.nupkg"
@@ -622,10 +623,42 @@ jobs:
             --assets src/FS.GG.Telemetry.Dashboard/Assets --source-sha "$GITHUB_SHA" \
             --version "$version" --tag "telemetry-host/v$version" --output artifacts/telemetry-host-manifest.json
           python3 scripts/telemetry-host-release.py verify --manifest artifacts/telemetry-host-manifest.json --package "$package_a"
+          python3 - "$package_a" "$package_b" artifacts/telemetry-host-payload-delta.json <<'PY'
+          # BEGIN normalized producer payload diagnostic
+          import hashlib, json, pathlib, runpy, sys
+          saga = runpy.run_path("scripts/release-saga.py")
+          a, b, output = map(pathlib.Path, sys.argv[1:])
+          left, right = saga["payload"](a), saga["payload"](b)
+          delta = {
+              "schema": "fsgg.telemetry-host-producer-payload-delta/1",
+              "packageA": {"archiveSha256": hashlib.sha256(a.read_bytes()).hexdigest(),
+                           "payloadSha256": saga["payload_id"](a)},
+              "packageB": {"archiveSha256": hashlib.sha256(b.read_bytes()).hexdigest(),
+                           "payloadSha256": saga["payload_id"](b)},
+              "equal": left == right,
+              "changedEntries": [{"path": name, "aSha256": left.get(name), "bSha256": right.get(name)}
+                                 for name in sorted(left.keys() | right.keys()) if left.get(name) != right.get(name)],
+          }
+          output.write_text(json.dumps(delta, sort_keys=True, separators=(",", ":")) + "\n")
+          print(json.dumps(delta, sort_keys=True, separators=(",", ":")))
+          # END normalized producer payload diagnostic
+          PY
           python3 scripts/telemetry-host-release.py verify --manifest artifacts/telemetry-host-manifest.json --package "$package_b" --payload-only
           bash tests/standalone-telemetry-host-package/run.sh "$package_a" artifacts/telemetry-host-package-evidence.json
           python3 -c 'import json,sys; e=json.load(open(sys.argv[1])); assert e["productionStorage"]=="eligible-linux-x64" and e["passiveReceiptQualified"] is True and e["failed"]==0' artifacts/telemetry-host-package-evidence.json
           bash tests/telemetry-host-release/run.sh
+      - name: Retain original producer payload comparison failure
+        if: ${{ failure() && steps.host_payload_comparison.outcome == 'failure' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: telemetry-host-payload-failure-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/telemetry-host-pack-a/FS.GG.Telemetry.Host.*.nupkg
+            artifacts/telemetry-host-pack-b/FS.GG.Telemetry.Host.*.nupkg
+            artifacts/telemetry-host-manifest.json
+            artifacts/telemetry-host-payload-delta.json
+          if-no-files-found: warn
+          retention-days: 7
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: telemetry-host-candidate-${{ github.sha }}
