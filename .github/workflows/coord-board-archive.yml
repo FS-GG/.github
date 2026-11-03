@@ -3,8 +3,8 @@ name: Done retention dry run for the Coordination board
 # WHAT THIS IS (#5119)
 # ====================
 #
-# The user limited Coordination Project 3 and its readers to 500 items. When Done holds more than 200 cards, every
-# Done card older than the newest 200 (by close time) is archived. `scripts/coord-board-archive.py` plans that and,
+# The user limited Coordination Project 3 and its readers to 500 items. When active Done holds 200 or more cards, every
+# Done card older than the newest 50 (by close time) is archived. `scripts/coord-board-archive.py` plans that and,
 # with --execute, archives with a preimage re-read, one send and a readback per card, keeping private custody.
 #
 # THIS WORKFLOW ONLY EVER RUNS A DRY RUN. It reports the board size against the 500-item limit, the Done count and

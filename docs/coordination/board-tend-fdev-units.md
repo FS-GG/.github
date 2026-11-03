@@ -260,7 +260,7 @@ The service uses the existing fdev credentials file, with its 0600 owner check; 
 or grants. The child receives only the credential file's `GH_TOKEN` and the explicitly pinned `gh` executable,
 never an inherited token/test override. `XDG_RUNTIME_DIR=%t`, the preserved `fsgg` runtime directory and the
 absence of `PrivateTmp` preserve the archiver's per-card shared and legacy writer locks. The adapter does not
-hold those locks outside the child. Type=exec, a 900-second service bound, 720-second child bound, one CPU and
+hold those locks outside the child. Type=exec, a 1860-second service bound, 1800-second child bound, one CPU and
 1GiB cap bound the run; no Restart directive retries failures.
 
 **Activation is separate and remains Root's effect, after the first real archive is accepted.** The service's
@@ -269,7 +269,7 @@ hold those locks outside the child. Type=exec, a 900-second service bound, 720-s
 | Key | Required value |
 |---|---|
 | `schema`, `enabled` | `fsgg.board-archive-config/1`, explicitly `true`; no configuration is installed by default |
-| `maxArchive` | Root's positive per-run bound, at most 500; keep is fixed 200, owner FS-GG/project 3/exact projectID are fixed in the adapter |
+| `maxArchive` | Root's positive per-run bound, at most 500; trigger is inclusive 200 active Done and retention is fixed 50, owner FS-GG/project 3/exact projectID are fixed in the adapter |
 | `script`, `gh`, `binding`, `commitment`, `acceptedReceipt` | each exactly `{"path":"<absolute path>","sha256":"<64 hex>"}` |
 | `readerVersion`, `readerFiles` | qualified installed reader version >=0.114.1 and a nonempty list of exact file pins for its executable/CLI/adapter closure |
 | `stateDir`, `outDir`, `workdir` | absolute private runtime paths; cwd must equal the fixed non-checkout workdir |
@@ -284,7 +284,7 @@ unreadable private credentials refuse before the child starts.
 The private `acceptedReceipt` is Root's accepted first-real-run evidence, not automatically fabricated by the
 installer. Its exact shape is `{"schema":"fsgg.board-archive-accepted/1","accepted":true,"evidenceUrl":
 "https://github.com/FS-GG/.github/issues/5170#issuecomment-<id>","inputs":{...}}`. `inputs` contains exactly
-`projectId`, `keep`200, `maxArchive`, `readerVersion`, `readerFiles`, `scriptSha256`, `bindingSha256` and
+`projectId`, `keep`50, `triggerAt`200, `completeCycle`true, `maxArchive`, `readerVersion`, `readerFiles`, `scriptSha256`, `bindingSha256` and
 `commitmentSha256`, all equal to the accepted activation inputs. The URL points to Root's native acceptance;
 the local file retains the private identity join. The adapter verifies the pinned receipt and join locally;
 it does not grant acceptance, reinterpret the comment or make an authorization decision from GitHub text.
@@ -304,8 +304,10 @@ first-run directory creation cannot leave an otherwise durable latch or custody 
 Any preparation fsync failure prevents launch; a failure after latch creation preserves that hold. Successful
 custody must use the archiver's exact schema and supported sequence: one run header, per-item reasoned skips or
 immediately joined intent/archived pairs with complete identical identities, then one finished record. Duplicate,
-unknown or malformed records refuse; processed items must equal min(planned, configured bound), and the final
-archived/skipped totals must equal the validated effects. An empty preprovisioned custody file is accepted only
+unknown or malformed records refuse; the complete planned count must fit the configured bound before any send. Settlement requires every planned
+item archived, zero preimage skips, and matching validated effects. A truncated prefix or skipped card keeps
+the latch; Root reads original custody and native effects, then selects a fresh continuation explicitly, even
+if the partial cycle has already reduced active Done below 200. No automatic resend or latch clearing occurs. An empty preprovisioned custody file is accepted only
 after the pinned child exits0 and reports a completed empty plan.
 
 Root's remaining sequence is: integrate reviewed ranking source; review the nonzero native plan; admit and
@@ -314,6 +316,23 @@ activation pair; stage disabled and read back hashes/modes/units; then explicitl
 `fsgg-board-archive.timer`. Read back its next trigger and the first scheduled run's private custody/native
 effects before accepting #5170's schedule promise. The timer is daily 04:43 UTC, Persistent=true (one catch-up,
 no backlog replay). Disable the timer and set `enabled:false` as the kill switch, preserving all custody.
+
+The November 3 user policy supersedes the original keep-200/strictly-over-200 policy. Original eight-card
+acceptance and the old-policy scheduled result remain historical evidence; neither qualifies keep-50 operation.
+Guarded older blockers or open/unrankable active Done rows block the scheduled cycle before writes and
+report the held remainder; the adapter does not claim the target was met. Protected rows already inside
+the newest 50 count toward that retained set.
+The new accepted receipt binds both threshold and retention plus the complete-cycle requirement. Existing
+activation inputs deliberately refuse under changed source until Root selects a new qualified receipt/config.
+
+The existing 500-item board cap gives at most 450 archive candidates (500 minus 50). A scheduled cap of 450
+covers every admissible complete plan; a smaller cap refuses before writes when insufficient. At most ten
+initial GraphQL page requests plus three requests per candidate give a conservative 1360-request ceiling
+(460 for a 200-Done/150-archive cycle). Each request retains its 120-second timeout, while the independent
+1800-second child deadline stops the whole process group and retains unresolved custody. Thus slow execution
+can stop for Root recovery; the bound is not a promise that every 450-card cycle finishes within 30 minutes.
+A successful maximum cycle appends 902 fsynced custody records (run + 450 intent/readback pairs + finished),
+plus fixed private adapter state/output entries. Output and custody are retained; no deletion/pruning is added.
 
 Preflight is the offline recording-child/archiver fixture: positive exact pins, disabled/stale inputs,
 environment/output privacy, actual shared-lock contention, successful settlement and failure/crash/timeout
