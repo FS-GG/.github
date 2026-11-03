@@ -267,6 +267,9 @@ class BundleTests(unittest.TestCase):
             candidate = {'kind': 'pull_request', 'node_id': 'P1', 'repository': 'ORG/repo',
                          'pullRequest': {'merged_at': '2026-01-30T00:00:00Z'}}
             rows.append(candidate)
+            tied_candidate = {'kind': 'pull_request', 'node_id': 'P2', 'repository': 'ORG/repo',
+                              'pullRequest': {'merged_at': CASE['cutoffAt']}}
+            rows.append(tied_candidate)
             devpath = root / 'development.json'; devpath.write_text(json.dumps(development(first)))
             cases, coverage = m.choose_cases(rows, development(first), count=1)
             selection = {'schema': m.SELECTION_SCHEMA, 'seed': m.DEFAULT_SEED,
@@ -293,7 +296,9 @@ class BundleTests(unittest.TestCase):
                                    wall_seconds=120, max_requests=2, max_files=10,
                                    max_blob_bytes=1024, max_total_bytes=4096)
             h = m.history_module()
-            responses = iter([{'node': issue()}, {'node': witness}])
+            later_record = issue()
+            later_record['timelineItems']['nodes'][0]['createdAt'] = CASE['cutoffAt']
+            responses = iter([{'node': later_record}, {'node': witness}])
             def native(query, budget, controller):
                 budget.charge(); response = next(responses)
                 m.write_new(controller / f'mocked-native-{budget.charged}.json', m.canonical(response))
@@ -314,6 +319,26 @@ class BundleTests(unittest.TestCase):
             self.assertNotIn('Future closing answer', ''.join(p.read_text() for p in (args.output / 'rater').rglob('*') if p.is_file()))
             self.assertIn('Future closing answer', (args.output / 'controller/mocked-native-1.json').read_text())
             self.assertFalse((args.output / 'rater/source/.git').exists())
+            # Paired contrast: same allowed historical evidence, no future event hints in ANY rater bytes.
+            baseline = issue()
+            baseline.update(title='Original title', body='Original task', lastEditedAt=None,
+                            userContentEdits=connection([]), timelineItems=connection([]), comments=connection([]))
+            responses = iter([{'node': baseline}, {'node': witness}])
+            baseline_rows = [r for r in rows if r.get('node_id') != 'P2']
+            baseline_args = SimpleNamespace(**vars(args)); baseline_args.output = root / 'baseline-result'
+            with mock.patch.object(h, 'inventory', return_value=({}, baseline_rows, [])), \
+                 mock.patch.object(m, 'history_module', return_value=h), \
+                 mock.patch.object(m, 'native_read', side_effect=native), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(m.collect_case(baseline_args), 0)
+            def rater_bytes(output):
+                return {str(p.relative_to(output / 'rater')): p.read_bytes()
+                        for p in (output / 'rater').rglob('*') if p.is_file()}
+            self.assertEqual(rater_bytes(args.output), rater_bytes(baseline_args.output))
+            baseline_controller = json.loads((baseline_args.output / 'controller/result.json').read_text())
+            self.assertEqual(controller['sameTimestampMergeCandidatesOmitted'], 1)
+            self.assertEqual(baseline_controller['sameTimestampMergeCandidatesOmitted'], 0)
+            self.assertNotEqual(controller['taskProvenance'], baseline_controller['taskProvenance'])
             # An existing original output cannot be overwritten or replayed as a fresh case.
             with mock.patch.object(h, 'inventory', return_value=({}, rows, [])), \
                  mock.patch.object(m, 'history_module', return_value=h), \

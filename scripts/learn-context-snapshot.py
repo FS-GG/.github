@@ -504,15 +504,13 @@ def collect_case(args):
         entries, gaps = export_tree(args.repository, checkpoint, rater / 'source', budget,
                                    max_files=args.max_files, max_blob_bytes=args.max_blob_bytes,
                                    max_total_bytes=args.max_total_bytes)
-        if tied_merges:
-            gaps.append({'kind': 'ambiguous-cutoff-merge-omitted'})
         task_bytes = safe_task_text(task)
         write_new(rater / 'task.md', task_bytes)
         safe = {'schema': SCHEMA, 'caseId': case['caseId'], 'boundaryKind': case['boundaryKind'],
                 'checkpointKind': 'proven-before-cutoff', 'checkpointLagSeconds': checkpoint['lagSeconds'],
                 'exactHistoricalHead': False,
                 'taskSha256': digest(task_bytes), 'taskRedactionVersion': 'github-identity-links/1', 'files': entries,
-                'contextGaps': task_provenance['contextGaps'] + gaps + [
+                'contextGaps': gaps + [
                     {'kind': 'creator-private-context-unavailable'},
                     {'kind': 'related-discussion-and-external-research-not-reconstructed'},
                     {'kind': 'creation-before-first-work-not-established'},
