@@ -7,6 +7,9 @@ on:
       - 'scripts/learn-calibration.py'
       - 'scripts/learn-calibration-join.sql'
       - 'tests/learn-dispatch/**'
+      - 'scripts/learn-history-*'
+      - 'scripts/requirements-learn-history.txt'
+      - 'tests/learn-history/**'
       - '.github/workflows/learn-02-selftest.yml'
   push:
     branches: [main]
@@ -16,6 +19,9 @@ on:
       - 'scripts/learn-calibration.py'
       - 'scripts/learn-calibration-join.sql'
       - 'tests/learn-dispatch/**'
+      - 'scripts/learn-history-*'
+      - 'scripts/requirements-learn-history.txt'
+      - 'tests/learn-history/**'
       - '.github/workflows/learn-02-selftest.yml'
 permissions:
   contents: read
@@ -32,3 +38,20 @@ jobs:
           persist-credentials: false
       # Fixed synthetic snapshots and mocked native/receiver IO; no live credentials or store effects.
       - run: python3 -m unittest discover -s tests/learn-dispatch -p 'test_*.py'
+  offline-history-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.15.1'
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-learn-history.txt
+      # Synthetic controls only; no historical data, native API or telemetry store access.
+      - run: python3 -m unittest discover -s tests/learn-history -p 'test_*.py'
+      - run: python3 scripts/learn-history-multiverse.py --self-test
