@@ -271,7 +271,8 @@ module V2Preflight =
           ClosureEntries: int
           ChangedOutsideClosure: int
           /// Changed paths between the two commits that are inside the closure, including added paths that shadow it.
-          ChangedInsideClosure: int }
+          ChangedInsideClosure: int
+          SelfRegistration: V2ConstructorClosure.SelfRegistration option }
 
     type EnrollmentInputs =
         { Request: V2Enrollment.Request

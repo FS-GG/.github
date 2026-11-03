@@ -658,7 +658,7 @@
     <!-- Unpublished 0.114.4 source cut also carries the ordinary active Core 10.1.403
          baseline (#5253) and reviewed LEARN Atlas records (#5249). Existing published
          identities and frozen runtime/profile inputs remain separately qualified. -->
-    <FsggCoherentSetVersion>0.114.4</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.114.5</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

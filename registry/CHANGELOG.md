@@ -1,5 +1,19 @@
 # Registry changelog
 
+## 2026-11-02 — prepare coherent 0.114.5 source for protected enrollment (#5263)
+
+Advance the producer's shared source scalar, coord-engine source version and evaluated CLI release notes to 0.114.5.
+The maintained preflight gains narrow executing-release self-registration equivalence and complete
+archived-enrolled membership reconciliation. Source, current main and native identities remain joined;
+no general source waiver or native write capability is added. The public Atlas records the original
+self-pin and active-inventory failures and the separate qualification boundaries.
+
+The published package-version, package tag and canonical tool pin remain 0.114.4; installed callers are unchanged.
+This source preparation is neither publication nor adoption: Root retains the original candidate,
+preflight, serialized org-wide writer window, both-feed publication and postpromotion registry flip.
+Actual successor enrollment and archive binding/commitment/reader/acceptance receipt qualification
+remain part of the same Delivery; original pairs and archive custody remain unchanged.
+
 ## 2026-11-02 — reconcile coherent 0.114.4 after canonical promotion (FS-GG/.github#5253)
 
 The canonical [coherent-set/v0.114.4 release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.114.4)
