@@ -128,7 +128,7 @@ concurrency:
 jobs:
   semantic-skill-quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:

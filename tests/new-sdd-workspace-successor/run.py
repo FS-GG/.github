@@ -745,8 +745,11 @@ class WizardReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'unknown Creator package binding'):
                 board_package_closure(package, 'a' * 40, source_root=root, release_binding=forged)
             # A different selected source scalar cannot borrow this module checkout's version.
+            major, minor, _ = SOURCE_COHERENT_VERSION.split('.')
+            different_source_version = f'{major}.{int(minor) + 1}.0'
+            self.assertNotEqual(different_source_version, SOURCE_COHERENT_VERSION)
             selected_props = root / 'Directory.Build.props'
-            selected_props.write_text('<Project><PropertyGroup><FsggCoherentSetVersion>0.115.0</FsggCoherentSetVersion></PropertyGroup></Project>')
+            selected_props.write_text(f'<Project><PropertyGroup><FsggCoherentSetVersion>{different_source_version}</FsggCoherentSetVersion></PropertyGroup></Project>')
             with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
                 board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_023)
             selected_props.unlink()
@@ -772,7 +775,7 @@ class WizardReleaseTests(unittest.TestCase):
             forged = type(SOURCE_0231)(SOURCE_0231.package, SOURCE_0231.version, SOURCE_0231.tag)
             with self.assertRaisesRegex(ValueError, 'unknown Creator package binding'):
                 board_package_closure(package, 'a' * 40, source_root=root, release_binding=forged)
-            selected_props.write_text('<Project><PropertyGroup><FsggCoherentSetVersion>0.115.0</FsggCoherentSetVersion></PropertyGroup></Project>')
+            selected_props.write_text(f'<Project><PropertyGroup><FsggCoherentSetVersion>{different_source_version}</FsggCoherentSetVersion></PropertyGroup></Project>')
             with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
                 board_package_closure(package, 'a' * 40, source_root=root, release_binding=SOURCE_0231)
             selected_props.unlink()

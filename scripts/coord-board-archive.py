@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Done retention for the Coordination board (Project 3): archive the Done cards beyond the newest 200 (#5119).
+"""Done retention for the Coordination board (Project 3): trigger at 200 active Done; retain the newest 50 (#5119).
 
-THE POLICY (user requirement, 2026-10-31, FS-GG/.github#5119)
+THE POLICY (user supersession, 2026-11-03, FS-GG/.github#5170)
 =============================================================
 
-Coordination Project 3 and its readers are limited to 500 items. When Done holds more than 200 cards, every Done
-card older than the newest 200 is ARCHIVED, never deleted. "Older" is the card's issue or pull request close time
+Coordination Project 3 and its readers are limited to 500 items. When active Done holds 200 or more cards, every Done
+card older than the newest 50 is ARCHIVED, never deleted. "Older" is the card's issue or pull request close time
 (`closedAt`), newest first. Archiving is reversible with `unarchiveProjectV2Item`, and the custody file records
 every item id this tool touched.
 
@@ -16,11 +16,14 @@ This path used to hold the Project 1 sweeper from .github#2420 and #3052: 30-day
 rows, scheduled daily with `--execute`. Root disabled that workflow on 2026-10-31 and retired its policy for three
 reasons:
 - It targeted Project 1, not the Coordination V2 board (Project 3).
-- Its policy (30 days, 100 visible, any terminal row) contradicts the user's rule (keep the newest 200 Done).
+- Its policy (30 days, 100 visible, any terminal row) contradicts the user's rule (trigger at 200 active Done and keep the newest 50 Done).
 - It failed every day. Its typed `archive-items` route is refused by the engine's v1 admission ("production v1
   admission is not installed"), and that refusal was the only thing stopping it from archiving 211 rows a day.
 The read and write guards below replace it. The scheduled workflow runs a dry run only, until Root accepts the
-first real run.
+first real run. The host adapter requires a complete bounded cycle, processing oldest first;
+an insufficient send bound refuses before any archive. Its cross-run latch holds partial or skipped cycles
+for Root readback, including when Done has fallen below the trigger. A fresh below-trigger scan cannot
+settle that earlier drain. Legacy keep-200 receipts remain history and cannot activate this new policy.
 
 THE GUARDS, ALL FAIL-CLOSED
 ===========================
@@ -30,10 +33,10 @@ THE GUARDS, ALL FAIL-CLOSED
    its reason reported. A Done card over an open issue is drift that must stay visible. A Done card that a live
    (not Done) card still names as a native `blockedBy` blocker stays visible too; the live cards' blocker lists are
    read completely or the run refuses. This is the "never a live row's blocker" guard the reconciler design keeps.
-2. Newest 200 kept. Candidates are ranked by `closedAt` descending, with ties broken by repository, number and
+2. Newest 50 kept after the inclusive 200-card trigger. Candidates are ranked by `closedAt` descending, with ties broken by repository, number and
    item id, so the selection never depends on connection order. The first `--keep` stay; only the rest are
    considered for archiving. Protected cards count in this ranking; older protected cards also stay visible,
-   without shifting the newest-200 cutoff. The reconciler (tend) must use exactly this ranking (closedAt, then
+   without shifting the newest-50 cutoff. The reconciler (tend) must use exactly this ranking (closedAt, then
    repository, number and item id); a shared test pins the two together when tend lands (#5136).
 3. Complete read or nothing. The scan reads `items(query: "status:Done")` in pages of 100, at most 5 pages, the
    500-item board limit. A partial page set, a count mismatch, a GraphQL error or an over-limit board refuses
@@ -80,7 +83,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-KEEP = 200
+KEEP = 50
+TRIGGER_AT = 200
 PAGE = 100
 MAX_PAGES = 5
 BOARD_LIMIT = PAGE * MAX_PAGES
@@ -283,15 +287,15 @@ def live_blockers(owner: str, number: int) -> tuple[set[str], int]:
     return protected, total
 
 
-def plan(rows: list[dict], keep: int = KEEP, protected: set[str] | None = None) -> tuple[list[dict], list[dict], list[tuple[dict, str]]]:
+def plan(rows: list[dict], keep: int = KEEP, protected: set[str] | None = None, trigger_at: int = TRIGGER_AT) -> tuple[list[dict], list[dict], list[tuple[dict, str]]]:
     """Split Done rows into (archive, newest-kept, excluded-with-reason). Pure, so every guard is testable.
 
     Ranked: Done, issue or PR, terminal state, parseable `closedAt`, not already archived. Newest first by
     `closedAt`, ties broken by (repo, number, itemId) so connection order never decides. The first `keep` stay.
     Only then exclude live blockers from the older candidates; protection never shifts the retention cutoff.
     """
-    if keep < 0:
-        raise ValueError("keep must not be negative")
+    if keep < 0 or trigger_at < 0:
+        raise ValueError("keep and trigger must not be negative")
     ranked: list[tuple[dt.datetime, str, int, str, dict]] = []
     unranked: list[tuple[dict, str]] = []
     for row in rows:
@@ -313,6 +317,10 @@ def plan(rows: list[dict], keep: int = KEEP, protected: set[str] | None = None) 
         else:
             ranked.append((closed, str(row["repo"]), int(row["number"]), str(row["itemId"]), row))
     ranked.sort(key=lambda entry: (-entry[0].timestamp(), entry[1], entry[2], entry[3]))
+    # Count active Done cards, including guarded drift, separately from rankable history.
+    active_done = sum(row.get("archived") is False and row.get("status") == "Done" for row in rows)
+    if active_done < trigger_at:
+        return [], [entry[4] for entry in ranked], unranked
     kept = [entry[4] for entry in ranked[:keep]]
     archive = []
     for entry in ranked[keep:]:
@@ -509,6 +517,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--owner", default="FS-GG")
     ap.add_argument("--project", type=int, default=3, help="organization project number (default 3, Coordination V2)")
     ap.add_argument("--keep", type=int, default=KEEP, help=f"newest Done cards kept visible (default {KEEP})")
+    ap.add_argument("--trigger-at", type=int, default=TRIGGER_AT, help="inclusive active Done threshold (default 200)")
+    ap.add_argument("--require-complete-cycle", action="store_true", help="refuse before writes if the full plan exceeds --max-archive")
     ap.add_argument("--execute", action="store_true", help="archive; without it this is a dry run")
     ap.add_argument("--expect-project-id", default=None, help="required with --execute: the exact ProjectV2 node id")
     ap.add_argument("--max-archive", type=int, default=0, help="required with --execute: at most this many sends")
@@ -521,8 +531,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--counts-only", action="store_true",
                     help="print counts only, never a repository or number (for public logs; refused with --execute)")
     args = ap.parse_args(argv)
-    if args.keep < 0:
-        ap.error("--keep must not be negative")
+    if args.keep < 0 or args.trigger_at < 0:
+        ap.error("--keep and --trigger-at must not be negative")
     if args.execute and (not args.expect_project_id or args.max_archive < 1 or not args.enrollment_binding):
         ap.error("--execute requires --expect-project-id, a positive --max-archive and --enrollment-binding")
     if args.execute and args.counts_only:
@@ -541,7 +551,7 @@ def main(argv: list[str] | None = None) -> int:
         print("coord-board-archive: REFUSED, nothing archived: the project id differs from --expect-project-id", file=sys.stderr)
         return 1
 
-    archive, kept, unranked = plan(rows, args.keep, protected)
+    archive, kept, unranked = plan(rows, args.keep, protected, args.trigger_at)
     ranked_count = len(archive) + len(kept) + sum(why == LIVE_BLOCKER_REASON for _, why in unranked)
     print(f"board: {project.get('totalCount')} item(s) (limit {BOARD_LIMIT}); Done: {len(rows)}; "
           f"ranked {ranked_count}, keep newest {len(kept)}, plan to archive {len(archive)}")
@@ -554,6 +564,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.counts_only:
         for row in archive:
             print(f"  ARCHIVE {ref_of(row)} closed {row['closedAt']}")
+    active_done = sum(row.get("archived") is False and row.get("status") == "Done" for row in rows)
+    held = sum(row.get("archived") is False and row.get("status") == "Done" for row, _ in unranked)
+    if args.execute and args.require_complete_cycle and active_done >= args.trigger_at and held:
+        print(f"coord-board-archive: REFUSED, nothing archived: {held} guarded active Done card(s) prevent the retention target", file=sys.stderr)
+        return 1
     if not archive:
         print("nothing to archive.")
         return 0
@@ -561,7 +576,10 @@ def main(argv: list[str] | None = None) -> int:
         print("DRY RUN: nothing archived.")
         return 0
 
-    batch = archive[: args.max_archive]
+    if args.require_complete_cycle and len(archive) > args.max_archive:
+        print("coord-board-archive: REFUSED, nothing archived: complete cycle exceeds --max-archive", file=sys.stderr)
+        return 1
+    batch = list(reversed(archive)) if args.require_complete_cycle else archive[: args.max_archive]
     enrolled_planned = [row for row in batch if row["contentId"] in (enrolled or set())]
     if enrolled_planned and not reader_admits_archived(args.reader_version):
         print(f"coord-board-archive: REFUSED, nothing archived: {len(enrolled_planned)} planned card(s) are enrolled V2 rows; "
@@ -575,8 +593,9 @@ def main(argv: list[str] | None = None) -> int:
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     directory = Path(args.custody_dir) if args.custody_dir else Path.home() / ".local/share/fs-gg-private/board-done-retention" / stamp
     custody = Custody(directory)
-    custody.record(step="run", project=project.get("id"), board=project.get("totalCount"), done=len(rows),
-                   keep=args.keep, planned=len(archive), maxArchive=args.max_archive)
+    custody.record(step="run", project=project.get("id"), board=project.get("totalCount"), done=active_done,
+                   keep=args.keep, triggerAt=args.trigger_at, completeCycle=args.require_complete_cycle,
+                   planned=len(archive), maxArchive=args.max_archive)
     counts = {"archived": 0, "skipped": 0}
     try:
         for row in batch:

@@ -37,11 +37,17 @@ base={'schema':'fsgg.board-done-retention-custody/1','at':'2026-11-02T00:00:00+0
 ref={'itemId':'PRIVATE-ID','contentId':'PRIVATE-CONTENT','repo':'fixture/repo','number':1,
      'closedAt':'2026-01-01T00:00:00Z','enrolled':False}
 def record(step,**kw): return dict(base,step=step,**kw)
-rows=[record('run',project='PVT_kwDOEYAWY84Bldpa',board=203,done=203,keep=200,planned=1,maxArchive=3),
-      record('intent',**ref)]
-if mode=='success': rows += [record('archived',**ref),record('finished',archived=1,skipped=0)]
-if mode=='unresolved': rows += [record('finished',archived=0,skipped=0)]
-if mode=='failed': rows += [record('uncertain',reason='fixture failure',**ref)]
+rows=[record('run',project='PVT_kwDOEYAWY84Bldpa',board=200,done=200,keep=50,triggerAt=200,completeCycle=True,planned=150,maxArchive=450)]
+if mode in ('success','prefix','underdeclared'):
+    count=150 if mode=='success' else 1
+    for n in range(count):
+        r=dict(ref,itemId='PRIVATE-ID-'+str(n),contentId='PRIVATE-CONTENT-'+str(n),number=n+1)
+        rows += [record('intent',**r),record('archived',**r)]
+    rows += [record('finished',archived=count,skipped=0)]
+    if mode=='prefix': rows[0]['maxArchive']=1
+    if mode=='underdeclared': rows[0]['planned']=1
+if mode=='unresolved': rows += [record('intent',**ref),record('finished',archived=0,skipped=0)]
+if mode=='failed': rows += [record('intent',**ref),record('uncertain',reason='fixture failure',**ref)]
 (p/'custody.jsonl').write_text(''.join(json.dumps(x)+'\\n' for x in rows))
 sys.exit(3 if mode=='failed' else 0)
 '''
@@ -65,7 +71,7 @@ class ArchiveSchedule(unittest.TestCase):
         self.commitment = self.write("commitment.json", {"commitmentSha256": "fixture"})
         self.reader = self.write("reader", "qualified fixture reader")
         self.receipt = self.home / "receipt.json"
-        self.c = {"schema": A.SCHEMA, "enabled": True, "maxArchive": 3, "readerVersion": "0.114.1",
+        self.c = {"schema": A.SCHEMA, "enabled": True, "maxArchive": 450, "readerVersion": "0.114.1",
                   "script": self.pin(self.script), "gh": self.pin(self.gh), "binding": self.pin(self.binding),
                   "commitment": self.pin(self.commitment), "readerFiles": [self.pin(self.reader)],
                   "stateDir": str(self.home / "state"), "outDir": str(self.home / "out"), "workdir": str(self.home)}
@@ -82,7 +88,7 @@ class ArchiveSchedule(unittest.TestCase):
 
     def rebind(self):
         self.c["script"] = self.pin(self.script)
-        inputs = {"projectId": A.PROJECT, "keep": 200, "maxArchive": self.c["maxArchive"],
+        inputs = {"projectId": A.PROJECT, "keep": 50, "triggerAt": 200, "completeCycle": True, "maxArchive": self.c["maxArchive"],
                   "readerVersion": self.c["readerVersion"], "readerFiles": self.c["readerFiles"],
                   "scriptSha256": self.c["script"]["sha256"], "bindingSha256": self.c["binding"]["sha256"],
                   "commitmentSha256": self.c["commitment"]["sha256"]}
@@ -108,11 +114,12 @@ class ArchiveSchedule(unittest.TestCase):
         run = next((self.home / "out").iterdir())
         child = json.loads((run / "child.json").read_text())
         args, env = child["argv"], child["env"]
-        for flag, value in (("--keep", "200"), ("--max-archive", "3"), ("--project", "3"),
+        for flag, value in (("--keep", "50"), ("--trigger-at", "200"), ("--max-archive", "450"), ("--project", "3"),
                             ("--expect-project-id", A.PROJECT), ("--enrollment-binding", str(self.binding)),
                             ("--reader-version", "0.114.1")):
             self.assertEqual(args[args.index(flag) + 1], value)
         self.assertIn("--execute", args)
+        self.assertIn("--require-complete-cycle", args)
         self.assertEqual(env["GH_TOKEN"], "FIXTURE-TOKEN")
         self.assertEqual(env["COORD_ARCHIVE_GH"], str(self.gh))
         self.assertNotIn("GITHUB_TOKEN", env); self.assertNotIn("TMPDIR", env)
@@ -122,6 +129,35 @@ class ArchiveSchedule(unittest.TestCase):
         for path in run.rglob("*"):
             if path.is_file(): self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.invoke(), 0)
+
+    def test_bounded_prefix_cannot_clear_latch_after_dropping_below_trigger(self):
+        # A forged/old bounded child archives one of 150 and exits zero. The current
+        # population would be 199; that cannot settle or forget the armed drain.
+        self.c["maxArchive"] = 1
+        self.script.write_text(FAKE.replace("MODE", repr("prefix")))
+        self.rebind()
+        self.assertEqual(self.invoke(), 3)
+        self.assertTrue((self.home / "state/in-progress.json").exists())
+        self.assertEqual(self.invoke(), 2)
+        self.assertEqual(len(list((self.home / "out").iterdir())), 1)
+
+    def test_underdeclared_plan_cannot_claim_complete_retention(self):
+        self.script.write_text(FAKE.replace("MODE", repr("underdeclared")))
+        self.rebind()
+        self.assertEqual(self.invoke(), 3)
+        self.assertTrue((self.home / "state/in-progress.json").exists())
+        self.assertEqual(self.invoke(), 2)
+
+    def test_legacy_keep200_receipt_cannot_activate_new_policy(self):
+        receipt = json.loads(self.receipt.read_text())
+        receipt["inputs"]["keep"] = 200
+        del receipt["inputs"]["triggerAt"]
+        del receipt["inputs"]["completeCycle"]
+        self.receipt.write_text(json.dumps(receipt))
+        self.c["acceptedReceipt"] = self.pin(self.receipt)
+        self.save()
+        self.assertEqual(self.invoke(), 2)
+        self.assertFalse((self.home / "out").exists())
 
     def test_disabled_missing_receipt_and_stale_acceptance_refuse_before_child(self):
         self.c["enabled"] = False; self.save(); self.assertEqual(self.invoke(), 2)
@@ -167,8 +203,12 @@ class ArchiveSchedule(unittest.TestCase):
         ref = {"itemId": "card", "contentId": "content", "repo": "fixture/repo", "number": 1,
                "closedAt": "2026-01-01T00:00:00Z", "enrolled": False}
         record = lambda step, **kw: dict(base, step=step, **kw)
-        good = [record("run", project=A.PROJECT, board=203, done=203, keep=200, planned=1, maxArchive=3),
-                record("intent", **ref), record("archived", **ref), record("finished", archived=1, skipped=0)]
+        good = [record("run", project=A.PROJECT, board=200, done=200, keep=50, triggerAt=200,
+                       completeCycle=True, planned=150, maxArchive=450)]
+        for n in range(150):
+            r = dict(ref, itemId=f"card-{n}", contentId=f"content-{n}", number=n+1)
+            good += [record("intent", **r), record("archived", **r)]
+        good += [record("finished", archived=150, skipped=0)]
         bad = {}
         bad["review probe: missing identities"] = [{"step": "run"}, {"step": "intent"},
                                                   {"step": "archived"}, {"step": "finished"}]
@@ -190,19 +230,19 @@ class ArchiveSchedule(unittest.TestCase):
             ("boolean count", lambda x: x[-1].update(archived=True)),
         ]:
             value = copy.deepcopy(good); mutate(value); bad[label] = value
-        bad["terminal without intent"] = [good[0], good[2], good[3]]
-        bad["repeated terminal"] = good[:3] + [good[2], good[3]]
-        bad["repeated item"] = [dict(good[0], planned=2)] + good[1:3] * 2 + [dict(good[-1], archived=2)]
-        bad["unfinished intent"] = good[:2] + [dict(good[-1], archived=0)]
+        bad["terminal without intent"] = [good[0], good[2], *good[3:]]
+        bad["repeated terminal"] = good[:3] + [good[2], *good[3:]]
+        bad["repeated item"] = good[:3] + good[1:3] + good[5:]
+        bad["unfinished intent"] = good[:-2] + [dict(good[-1], archived=149)]
         for label, rows in bad.items():
             with self.subTest(probe=label):
                 (run / "custody/custody.jsonl").write_text("".join(json.dumps(x) + "\n" for x in rows))
-                self.assertFalse(A.settled(run, 3))
+                self.assertFalse(A.settled(run, 450))
         (run / "custody/custody.jsonl").write_text("".join(json.dumps(x) + "\n" for x in good))
-        self.assertTrue(A.settled(run, 3))
+        self.assertTrue(A.settled(run, 450))
         skipped = [good[0], record("skipped", reason="preimage changed", **ref), record("finished", archived=0, skipped=1)]
         (run / "custody/custody.jsonl").write_text("".join(json.dumps(x) + "\n" for x in skipped))
-        self.assertTrue(A.settled(run, 3))
+        self.assertFalse(A.settled(run, 450))
 
     def test_actual_archiver_custody_joins_bounded_archives_and_skips(self):
         rows = FIXTURE.done_history(203)
@@ -213,12 +253,12 @@ class ArchiveSchedule(unittest.TestCase):
                             item=[FIXTURE.item_read(first), FIXTURE.item_read(first, archived=True),
                                   FIXTURE.item_read(second, status="Ready")],
                             mutation=[{"data": {"archiveProjectV2Item": {"item": {"id": first["itemId"], "isArchived": True}}}}])
-        code, stdout, _ = FIXTURE.run(["--execute", "--expect-project-id", A.PROJECT, "--max-archive", "2",
+        code, stdout, _ = FIXTURE.run(["--keep", "200", "--execute", "--expect-project-id", A.PROJECT, "--max-archive", "2",
                                       "--enrollment-binding", str(self.binding), "--reader-version", "0.114.1",
                                       "--custody-dir", str(stub.custody), "--lock-dir", str(stub.locks)])
         self.assertEqual(code, 0, stdout)
         (Path(stub.dir.name) / "stdout").write_text(stdout)
-        self.assertTrue(A.settled(Path(stub.dir.name), 2))
+        self.assertFalse(A.settled(Path(stub.dir.name), 2))
         self.assertFalse(A.settled(Path(stub.dir.name), 3))
         self.assertEqual(len(stub.calls("mutation")), 1)
         self.assertEqual(stub.records()[-1]["archived"], 1)
@@ -311,7 +351,7 @@ class ArchiveSchedule(unittest.TestCase):
         units = self.home / ".config/systemd/user"
         self.assertEqual({x.name for x in units.iterdir()}, {"fsgg-board-archive.service", "fsgg-board-archive.timer"})
         service = (units / "fsgg-board-archive.service").read_text()
-        self.assertIn("Type=exec", service); self.assertIn("RuntimeMaxSec=900", service)
+        self.assertIn("Type=exec", service); self.assertIn("RuntimeMaxSec=1860", service)
         self.assertIn("Environment=XDG_RUNTIME_DIR=%t", service)
         self.assertIn("CPUQuota=100%", service); self.assertIn("MemoryMax=1G", service)
         self.assertNotIn("PrivateTmp=", service); self.assertNotIn("Restart=", service)

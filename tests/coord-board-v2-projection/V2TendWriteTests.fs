@@ -400,6 +400,88 @@ let ``items held by the gate's custody or eligible for archiving are never writt
         Assert.Equal<Set<string>>(set [ "PVTI_done_0" ], V2TendWrite.archiveEligible { (snapshotOf board []) with Cards = cards } 200)
     finally Directory.Delete(root, true)
 
+// #5170 retention fixtures use a fixed synthetic close-time history, no clock or GitHub effects.
+let private retentionSnapshot count =
+    let board = Board()
+    board.AddItem("template", item "FS-GG/x#1" "template" [ "Status", "Done" ])
+    let template = (snapshotOf board []).Cards.Head
+    let cards =
+        [ for n in 1 .. count ->
+            { template with ItemId = sprintf "PVTI_%d" n; Ref = sprintf "FS-GG/x#%d" n
+                            Open = false; ClosedAt = Some(FakeClock.Anchor.AddHours(float n)) } ]
+    { (snapshotOf board []) with Cards = cards }
+
+[<Theory>]
+[<InlineData(199, 0)>]
+[<InlineData(200, 150)>]
+[<InlineData(201, 151)>]
+[<InlineData(500, 450)>]
+let ``archive exclusion separates inclusive active Done trigger from newest fifty retention`` count expected =
+    let snapshot = retentionSnapshot count
+    let settings = V2TendWrite.defaultSettings projectId Set.empty
+    Assert.Equal(50, settings.ArchiveRetention)
+    let eligible = V2TendWrite.archiveEligible snapshot settings.ArchiveRetention
+    Assert.Equal(expected, eligible.Count)
+    if expected > 0 then
+        Assert.Equal<Set<string>>(set [ for n in 1 .. count-50 -> sprintf "PVTI_%d" n ], eligible)
+        let retained = { snapshot with Cards = snapshot.Cards |> List.filter (fun c -> not (eligible.Contains c.ItemId)) }
+        Assert.Empty(V2TendWrite.archiveEligible retained 50)
+
+[<Fact>]
+let ``archive exclusion ranks ties by ordinal repository numeric number then item identity`` () =
+    let snapshot = retentionSnapshot 200
+    let cards = snapshot.Cards |> List.mapi (fun i c ->
+        { c with Ref = sprintf "FS-GG/%s#%d" (if i < 100 then "a" else "b") (i % 100 + 1)
+                 ClosedAt = Some FakeClock.Anchor })
+    let expected = cards |> List.skip 50 |> List.map (fun c -> c.ItemId) |> Set.ofList
+    Assert.Equal<Set<string>>(expected, V2TendWrite.archiveEligible { snapshot with Cards = cards } 50)
+    Assert.Equal<Set<string>>(expected, V2TendWrite.archiveEligible { snapshot with Cards = List.rev cards } 50)
+    // Item-id is the final tie, independent of connection order.
+    let sameRef = cards |> List.mapi (fun i c ->
+        if i < 2 then { c with Ref = "FS-GG/z#1"; ItemId = (if i=0 then "A" else "B") }
+        else { c with ClosedAt = Some(FakeClock.Anchor.AddHours 1.0) })
+    Assert.Equal<Set<string>>(set [ "B" ], V2TendWrite.archiveEligible { snapshot with Cards = sameRef } 199)
+
+[<Fact>]
+let ``archive exclusion protects native blockers after cutoff and refuses incomplete live lists`` () =
+    let snapshot = retentionSnapshot 200
+    let live =
+        { snapshot.Cards.Head with
+            ItemId = "live"; Ref = "FS-GG/live#1"; Status = Some V2Tend.Blocked; Open = true
+            Blockers = [ { Ref = "FS-GG/x#1"; Open = false }; { Ref = "FS-GG/x#200"; Open = false } ] }
+    let protectedSnapshot = { snapshot with Cards = live :: snapshot.Cards }
+    let expected = set [ for n in 2 .. 150 -> sprintf "PVTI_%d" n ]
+    Assert.Equal<Set<string>>(expected, V2TendWrite.archiveEligible protectedSnapshot 50)
+    Assert.Empty(V2TendWrite.archiveEligible { protectedSnapshot with Cards = { live with BlockersComplete = false } :: snapshot.Cards } 50)
+
+[<Fact>]
+let ``archive exclusion counts Done drift but never ranks open unreadable draft or malformed cards`` () =
+    let snapshot = retentionSnapshot 199
+    for change in [ (fun (c: V2Tend.Card) -> { c with Open = true }); (fun c -> { c with ClosedAt = None })
+                    (fun c -> { c with Kind = V2Tend.DraftCard }); (fun c -> { c with Kind = V2Tend.Unreadable })
+                    (fun c -> { c with Ref = "unreadable" }); (fun c -> { c with ItemId = "" }) ] do
+        let drift = change { snapshot.Cards.Head with ItemId = "drift"; Ref = "FS-GG/x#200" }
+        let eligible = V2TendWrite.archiveEligible { snapshot with Cards = drift :: snapshot.Cards } 50
+        Assert.Equal(149, eligible.Count)
+        Assert.DoesNotContain(drift.ItemId, eligible)
+    Assert.Empty(V2TendWrite.archiveEligible snapshot -1)
+    let live = { snapshot.Cards.Head with ItemId = "live"; Status = Some V2Tend.Ready }
+    Assert.Empty(V2TendWrite.archiveEligible { snapshot with Cards = live :: snapshot.Cards } 50)
+
+[<Fact>]
+let ``reconciler excludes an oldest Done card from actual field writes at the inclusive trigger`` () =
+    let root = temporary ()
+    try
+        let board = Board()
+        board.AddItem("PVTI_1", { item "FS-GG/x#1" "I_1" [ "Status", "Done" ] with Open = false })
+        let h = harness "archive-retention" root board
+        let planned = effect "T1f:old" "PVTI_1" "FS-GG/x#1" V2Tend.TrackField None "Follow-up" [ "T1f" ] []
+        let outcomes = run h (plan [ planned ] []) (retentionSnapshot 200)
+        Assert.Equal<string list>([ "archive-eligible" ], outcomes |> List.map (fun o -> o.Detail))
+        Assert.Empty(board.Mutations)
+        Assert.Empty(board.Calls)
+    finally Directory.Delete(root, true)
+
 let private closureBoard () =
     let board = Board()
     board.AddItem("PVTI_d", item "FS-GG/x#20" "I_d" [ "Status", "In review"; "Work level", "Delivery" ])
