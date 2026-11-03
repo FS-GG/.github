@@ -10,6 +10,10 @@ on:
       - 'scripts/learn-history-*'
       - 'scripts/requirements-learn-history.txt'
       - 'tests/learn-history/**'
+      - 'scripts/learn-context-snapshot.py'
+      - 'contracts/learn/context-snapshot-v1.schema.json'
+      - 'tests/learn-context-snapshot/**'
+      - 'docs/coordination/2026-11-03-learn-context-replay-protocol-v1.md'
       - 'scripts/learn-classifier-pilot.py'
       - 'scripts/learn-classifier-statistics.py'
       - 'scripts/learn-classifier-requirements.txt'
@@ -30,6 +34,10 @@ on:
       - 'scripts/learn-history-*'
       - 'scripts/requirements-learn-history.txt'
       - 'tests/learn-history/**'
+      - 'scripts/learn-context-snapshot.py'
+      - 'contracts/learn/context-snapshot-v1.schema.json'
+      - 'tests/learn-context-snapshot/**'
+      - 'docs/coordination/2026-11-03-learn-context-replay-protocol-v1.md'
       - 'scripts/learn-classifier-pilot.py'
       - 'scripts/learn-classifier-statistics.py'
       - 'scripts/learn-classifier-requirements.txt'
@@ -72,3 +80,5 @@ jobs:
       - run: python3 -m unittest discover -s tests/learn-history -p 'test_*.py'
       - run: python3 scripts/learn-history-multiverse.py --self-test
       - run: python3 -m unittest discover -s tests/learn-classifier -p 'test_*.py'
+      # Synthetic local Git/promisor fixtures and mocked reads; no native context audit or model calls.
+      - run: python3 -m unittest discover -s tests/learn-context-snapshot -p 'test_*.py'
