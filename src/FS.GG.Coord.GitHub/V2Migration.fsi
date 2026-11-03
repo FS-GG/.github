@@ -34,12 +34,18 @@ module V2Migration =
     /// read-back field/option identities then bind subsequent absent-only initialization.
     type WorkLevelPlan = { FieldId: string option; Assignments: WorkLevelAssignment list }
 
+    /// Additive LEARN annotations. Evidence is a durable owning-issue comment URL; values
+    /// are selected by the revision-bound evidence projector; original dispatch snapshots remain immutable.
+    type LearnField = { Name: string; FieldId: string option }
+    type LearnAssignment = { IssueId: string; Values: (string * string) list; Evidence: string }
+    type LearnPlan = { Fields: LearnField list; Assignments: LearnAssignment list }
+
     type Scope =
         { SourceRevision: string; ArtifactSha256: string; CliArtifactSha256: string; PrincipalId: string;
           PrincipalLogin: string; SelectedIssues: SelectedIssue list;
           StatusFieldId: string; RoadmapFieldId: string; TrackFieldId: string;
           ObservationFieldId: string; InReviewColor: string; InReviewDescription: string;
-          Views: DesiredView list; InitialPlanning: InitialPlanning list; WorkLevel: WorkLevelPlan option }
+          Views: DesiredView list; InitialPlanning: InitialPlanning list; WorkLevel: WorkLevelPlan option; Learn: LearnPlan option }
 
     type SelectOption =
         { Id: string; Name: string; Color: string; Description: string }
@@ -72,6 +78,8 @@ module V2Migration =
 
     type Change =
         | CreateWorkLevel
+        | CreateLearnField of name: string
+        | SetLearnValue of issueId: string * itemId: string * fieldId: string * value: PlanningValue * previous: ItemValue option
         | AddInReview of fieldId: string * retained: SelectOption list * color: string * description: string
         | AddMembership of issueId: string
         | InitializePlanningValue of issueId: string * itemId: string * fieldId: string * value: PlanningValue
@@ -151,7 +159,7 @@ module V2Migration =
 
     /// Check one item readback after an initialization: `ItemEffect` when only the selected value appeared (the
     /// item timestamp may move), `ItemPending` when the item still shows its exact pre-effect values, and an
-    /// error for anything else. Only `InitializePlanningValue` is item-scoped.
+    /// error for anything else. `InitializePlanningValue` and `SetLearnValue` are item-scoped; replacements retain their exact original value.
     val itemTransition: before: Item -> after: Item -> change: Change -> IoResult<ItemObservation>
 
     /// Check one complete readback after a group of initializations from one base snapshot: every applied

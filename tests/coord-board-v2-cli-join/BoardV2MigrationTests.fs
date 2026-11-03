@@ -1366,3 +1366,131 @@ module BoardV2MigrationTests =
         Assert.True(File.Exists(Path.Combine(path + ".invocation", "005-group-native-readback.json")))
         Assert.False(File.Exists(Path.Combine(path + ".invocation", "005-group-readback.json")))
         Assert.False(File.Exists(Path.Combine(path + ".invocation", "completed.json")))
+
+    [<Fact>]
+    let ``actual CLI creates LEARN fields then projects observed metadata through the same custody path`` () =
+        use fixture = new Fixture()
+        let names = [ "Hardness"; "Actual models"; "Actual effort"; "Execution provenance" ]
+        fixture.Scope <- { fixture.Scope with Learn = Some { Fields = names |> List.map (fun name -> { Name = name; FieldId = None }); Assignments = [] } }
+        let code, path = fixture.Prepare "learn-create"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(4, fixture.Native.Mutations.Length)
+        Assert.Empty fixture.Native.Snapshot.Items
+        let issue = fixture.Scope.SelectedIssues.Head
+        fixture.Native.Snapshot <-
+            { fixture.Native.Snapshot with Items = [ { Id = "synthetic-item"; ContentId = issue.Id; ContentKind = "Issue";
+                Repository = Some issue.Repository; Number = Some issue.Number; UpdatedAt = "2026-10-17T12:00:00Z"; Archived = false; Values = [] } ] }
+        let fields = names |> List.map (fun name ->
+            { Name = name; FieldId = Some(fixture.Native.Snapshot.Fields |> List.find (fun field -> field.Name = name) |> _.Id) })
+        let assignment = { IssueId = issue.Id; Evidence = "https://github.com/FS-GG/.github/issues/42#issuecomment-17";
+                           Values = [ "Hardness", "Medium"; "Actual models", "[\"worker: observed-model [provider-observed]\"]";
+                                      "Actual effort", "[\"worker: Unknown\"]"; "Execution provenance", "https://github.com/FS-GG/.github/issues/42#issuecomment-17" ] }
+        fixture.Scope <- { fixture.Scope with Learn = Some { Fields = fields; Assignments = [ assignment ] } }
+        let code, path = fixture.Prepare "learn-project"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(8, fixture.Native.Mutations.Length)
+        Assert.Equal(4, fixture.Native.Snapshot.Items.Head.Values.Length)
+        let code, path = fixture.Prepare "learn-current"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(8, fixture.Native.Mutations.Length)
+        let revisedValues =
+            assignment.Values |> List.map (fun (name, value) ->
+                name, if name = "Actual models" then "[\"worker: observed-model [provider-observed]\",\"critic: observed-reviewer [provider-observed]\"]" else value)
+        let revised = { assignment with Values = revisedValues }
+        fixture.Scope <- { fixture.Scope with Learn = Some { Fields = fields; Assignments = [ revised ] } }
+        let code, path = fixture.Prepare "learn-observed-update"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments path))
+        Assert.Equal(9, fixture.Native.Mutations.Length)
+        let metadataPath = Path.Combine(path + ".invocation", "001-intent-metadata.json")
+        use metadata = JsonDocument.Parse(File.ReadAllText metadataPath)
+        Assert.True(metadata.RootElement.GetProperty("itemScoped").GetBoolean())
+        // Native confidence is monotonic even when the same role/model text survives.
+        use successful = JsonDocument.Parse(File.ReadAllText path)
+        let scopeJson = System.Text.Json.Nodes.JsonNode.Parse(successful.RootElement.GetProperty("scope").GetRawText())
+        let values = scopeJson.["learn"].["assignments"].[0].["values"]
+        values.["Actual models"] <- System.Text.Json.Nodes.JsonValue.Create "[\"worker: observed-model [launch-confirmed]\",\"critic: observed-reviewer [provider-observed]\"]"
+        let downgradeScope = Path.Combine(fixture.Directory, "learn-confidence-downgrade-scope.json")
+        let downgradeReport = Path.Combine(fixture.Directory, "learn-confidence-downgrade-prepared.json")
+        File.WriteAllText(downgradeScope, scopeJson.ToJsonString())
+        Assert.Equal(3, fixture.Run [ "migration-prepare"; "--scope-file"; downgradeScope; "--report-file"; downgradeReport ])
+        Assert.False(File.Exists downgradeReport)
+        Assert.Equal(9, fixture.Native.Mutations.Length)
+
+    [<Fact>]
+    let ``actual LEARN CLI prepare and readback round trip through the maintained native result decoder`` () =
+        use fixture = new Fixture()
+        let names = [ "Hardness"; "Actual models"; "Actual effort"; "Execution provenance" ]
+        fixture.Scope <- { fixture.Scope with Learn = Some { Fields = names |> List.map (fun name -> { Name = name; FieldId = None }); Assignments = [] } }
+        let code, createPath = fixture.Prepare "codec-create-fields"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments createPath))
+        let issue = fixture.Scope.SelectedIssues.Head
+        fixture.Native.Snapshot <-
+            { fixture.Native.Snapshot with Items = [ { Id = "synthetic-item"; ContentId = issue.Id; ContentKind = "Issue";
+                Repository = Some issue.Repository; Number = Some issue.Number; UpdatedAt = "2026-10-17T12:00:00Z"; Archived = false; Values = [] } ] }
+        let fields = names |> List.map (fun name ->
+            { Name = name; FieldId = Some(fixture.Native.Snapshot.Fields |> List.find (fun field -> field.Name = name) |> _.Id) })
+        let evidence = "https://github.com/FS-GG/.github/issues/42#issuecomment-17"
+        let assignment = { IssueId = issue.Id; Evidence = evidence;
+                           Values = [ "Hardness", "Low"; "Actual models", "Unknown"; "Actual effort", "Unknown"; "Execution provenance", evidence ] }
+        fixture.Scope <- { fixture.Scope with Learn = Some { Fields = fields; Assignments = [ assignment ] } }
+        let code, initializePath = fixture.Prepare "codec-initialize"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments initializePath))
+        let model = "[\"worker: observed-model [provider-observed]\"]"
+        let updatedValues = assignment.Values |> List.map (fun (name, value) -> name, if name = "Actual models" then model else value)
+        fixture.Scope <- { fixture.Scope with Learn = Some { Fields = fields; Assignments = [ { assignment with Values = updatedValues } ] } }
+        let code, preparedPath = fixture.Prepare "codec-observed-model"
+        Assert.Equal(0, code)
+        Assert.Equal(0, fixture.Run(fixture.ApplyArguments preparedPath))
+        Assert.Equal(0, fixture.Run [ "migration-readback"; "--prepared-file"; preparedPath ])
+        let readbackPath = Directory.GetFiles(preparedPath + ".invocation", "readback-*.json") |> Assert.Single
+        let script = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "..", "..", "scripts", "board_v2_native_results.py"))
+        let python = """
+import copy,json,pathlib,runpy,sys
+m=runpy.run_path(sys.argv[1]); path=pathlib.Path(sys.argv[2]); p=m['loads'](path.read_bytes()); r=m['loads'](pathlib.Path(sys.argv[3]).read_bytes())
+assert p['schema']=='fs.gg.board-v2.migration-prepare/3' and r['schema']=='fs.gg.board-v2.migration-readback/3'
+facts=m['migration_readback'](r,p,path)
+field=next(f['fieldId'] for f in p['scope']['learn']['fields'] if f['name']=='Actual models')
+expected=dict(kind='ProjectV2ItemFieldTextValue',fieldId=field,text='Unknown'); desired=dict(expected,text=p['scope']['learn']['assignments'][0]['values']['Actual models'])
+proof=m['verify_field_transition'](facts['before'],facts['after'],'synthetic-item',field,expected,desired)
+assert proof['memberships']==1 and proof['fields']==8
+count=0
+def refuses(prepared,report=r):
+ global count
+ try: m['migration_readback'](report,prepared,path)
+ except m['Unknown']: count+=1
+ else: raise AssertionError('malformed LEARN report accepted')
+for version in [1,2]:
+ bad=copy.deepcopy(p); bad['schema']='fs.gg.board-v2.migration-prepare/'+str(version); refuses(bad)
+ bad=copy.deepcopy(r); bad['schema']='fs.gg.board-v2.migration-readback/'+str(version); refuses(p,bad)
+for key in ['scope','field','assignment','values']:
+ bad=copy.deepcopy(p); node=bad['scope'] if key=='scope' else bad['scope']['learn']['fields'][0] if key=='field' else bad['scope']['learn']['assignments'][0] if key=='assignment' else bad['scope']['learn']['assignments'][0]['values']; node['unexpected']=True; refuses(bad)
+bad=copy.deepcopy(p); bad['scope']['selectedIssues'][0]['id']='foreign'; refuses(bad)
+bad=copy.deepcopy(p); bad['scope']['learn']['fields'][0]['fieldId']=bad['scope']['statusFieldId']; refuses(bad)
+bad=copy.deepcopy(p); bad['scope']['learn']['assignments'][0]['evidence']='https://github.com/FS-GG/.github/issues/43#issuecomment-17'; refuses(bad)
+bad=copy.deepcopy(p); bad['changes'][0][-1]='altered-preimage'; refuses(bad)
+bad=copy.deepcopy(r); bad['snapshot'][3]='foreign-project'; refuses(p,bad)
+assert count==13
+print(json.dumps(dict(actualCliReports=2,fieldTransitions=1,closedVersionIdentityRefusals=count)))
+"""
+        let start = System.Diagnostics.ProcessStartInfo("python3")
+        for argument in [ "-B"; "-c"; python; script; preparedPath; readbackPath ] do start.ArgumentList.Add argument
+        start.RedirectStandardOutput <- true
+        start.RedirectStandardError <- true
+        use child = System.Diagnostics.Process.Start start
+        let exited = child.WaitForExit 30000
+        if not exited then
+            child.Kill(true)
+            child.WaitForExit()
+        let output, error = child.StandardOutput.ReadToEnd(), child.StandardError.ReadToEnd()
+        Assert.True(exited, "bounded native result decoder")
+        Assert.True(child.ExitCode = 0, error + output)
+        use result = JsonDocument.Parse output
+        Assert.Equal(2, result.RootElement.GetProperty("actualCliReports").GetInt32())
+        Assert.Equal(13, result.RootElement.GetProperty("closedVersionIdentityRefusals").GetInt32())
+        Assert.Equal(9, fixture.Native.Mutations.Length)

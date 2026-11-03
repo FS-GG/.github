@@ -17,6 +17,7 @@ def aggregate(data):
  rows=data['deliveries']
  if not rows:raise ValueError('empty cohort')
  for r in rows:
+  if r.get('classificationBasis')=='current-scope':raise ValueError('current-scope assessment is not pre-dispatch calibration evidence')
   if type(r['hardness']) is not int or not 0<=r['hardness']<=24:raise ValueError('invalid hardness')
   if r['observedTokens'] is not None and (type(r['observedTokens']) is not int or r['observedTokens']<=0):raise ValueError('invalid tokens')
   if any(type(n) is not int or n<1 for n in r['reviewRounds']):raise ValueError('invalid review rounds')

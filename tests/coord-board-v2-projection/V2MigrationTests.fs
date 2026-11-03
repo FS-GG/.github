@@ -314,7 +314,7 @@ module V2MigrationTests =
             let after = collect connection.Reads selected |> get
             let operation, payload, kind =
                 match change with
-                | CreateWorkLevel -> failwith "legacy manual fixture unexpectedly selected successor field creation"
+                | CreateWorkLevel | CreateLearnField _ | SetLearnValue _ -> failwith "legacy manual fixture unexpectedly selected successor annotation"
                 | AddInReview _ -> "updateProjectV2Field", "projectV2Field", "status"
                 | AddMembership _ -> "addProjectV2ItemById", "item", "membership"
                 | InitializePlanningValue _ -> "updateProjectV2ItemFieldValue", "projectV2Item", "initialize"
@@ -454,3 +454,215 @@ module V2MigrationTests =
                          { desired with VisibleFieldIds = [ scope.StatusFieldId ] } ] do
             Assert.True(Result.isError(prepare { selected with Views = [ mutated ] } current))
         Assert.True(Result.isOk(prepare { selected with Views = [ desired ] } current))
+
+    let private learnScope () =
+        let names = [ "Hardness"; "Actual models"; "Actual effort"; "Execution provenance" ]
+        { scope with Learn = Some { Fields = names |> List.map (fun name -> { Name = name; FieldId = None })
+                                    Assignments = [ { IssueId = "synthetic-issue";
+                                                      Evidence = "https://github.com/FS-GG/.github/issues/42#issuecomment-17";
+                                                      Values = names |> List.map (fun name -> name, if name = "Hardness" then "Low" elif name = "Execution provenance" then "https://github.com/FS-GG/.github/issues/42#issuecomment-17" else "Unknown") } ] } }
+
+    let private learnNative () =
+        let selected = scope.SelectedIssues.Head
+        Native { snapshot with Items = [ { Id = "synthetic-item"; ContentId = selected.Id; ContentKind = "Issue";
+                                           Repository = Some selected.Repository; Number = Some selected.Number;
+                                           UpdatedAt = "2026-10-17T12:00:00Z"; Archived = false; Values = [] } ] }
+
+    [<Fact>]
+    let ``LEARN typed migration creates four fields and projects exact values with original full snapshot guards`` () =
+        let native = learnNative ()
+        use connection = native.Connection()
+        let mutable selected = learnScope ()
+        let mutable before = collect connection.Reads selected |> get
+        let first = prepare selected before |> get
+        Assert.Equal(4, first.Changes.Length)
+        let bound = { first with PreparedPath = Some(System.IO.Path.GetFullPath "synthetic-learn-prepared.json") }
+        let wire = encodePrepared bound
+        Assert.Contains("fs.gg.board-v2.migration-prepare/3", wire)
+        let decoded, _, _, _ = decodePrepared wire |> get
+        Assert.Equal(selected, decoded)
+        for _ in 1 .. 8 do
+            let prepared = prepare selected before |> get
+            let change = prepared.Changes.Head
+            Assert.True(match change with CreateLearnField _ | SetLearnValue _ -> true | _ -> false)
+            connection.Dispatch(prepared, change, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
+            let after = collect connection.Reads selected |> get
+            validateTransition selected before after change |> get
+            let changed = { after with Issues = after.Issues |> List.map (fun issue -> { issue with State = "CLOSED" }) }
+            Assert.True(Result.isError (validateTransition selected before changed change))
+            selected <- resolveReadback selected before after change |> get
+            before <- after
+        Assert.Empty((prepare selected before |> get).Changes)
+        Assert.Equal(8, native.Mutations.Length)
+        Assert.Equal(4, before.Items.Head.Values.Length)
+        // No Status option, membership or existing field was changed by this additive path.
+        Assert.Equal<Field list>(snapshot.Fields, before.Fields |> List.take snapshot.Fields.Length)
+        let updateValue name value (scope: Scope) =
+            let plan = scope.Learn.Value
+            let assignments =
+                plan.Assignments |> List.map (fun assignment ->
+                    { assignment with Values = assignment.Values |> List.map (fun (key, old) -> key, if key = name then value else old) })
+            { scope with Learn = Some { plan with Assignments = assignments } }
+        let updated = updateValue "Actual models" "[\"worker: observed-model [provider-observed]\",\"critic: observed-reviewer [provider-observed]\"]" selected
+        let prepared = prepare updated before |> get
+        Assert.Single(prepared.Changes) |> ignore
+        let change = prepared.Changes.Head
+        connection.Dispatch(prepared, change, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
+        let after = collect connection.Reads updated |> get
+        validateTransition updated before after change |> get
+        Assert.Empty((prepare updated after |> get).Changes)
+        // A changed scope gets a new explicit assessment, while its original native preimage is retained.
+        let changedWithoutRecord = updateValue "Hardness" "High" updated
+        Assert.True(Result.isError (prepare changedWithoutRecord after))
+        let newRecord = "https://github.com/FS-GG/.github/issues/42#issuecomment-18"
+        let plan = (updateValue "Execution provenance" newRecord changedWithoutRecord).Learn.Value
+        let changedScope = { changedWithoutRecord with Learn = Some { plan with Assignments = plan.Assignments |> List.map (fun assignment -> { assignment with Evidence = newRecord }) } }
+        let revised = prepare changedScope after |> get
+        Assert.Equal(2, revised.Changes.Length)
+        let mutable advanced = after
+        for _ in 1 .. 2 do
+            let step = prepare changedScope advanced |> get
+            let change = step.Changes.Head
+            match change with
+            | SetLearnValue(_, _, _, _, Some _) -> ()
+            | _ -> failwith "assessment replacement must carry its exact original native preimage"
+            connection.Dispatch(step, change, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
+            let settled = collect connection.Reads changedScope |> get
+            validateTransition changedScope advanced settled change |> get
+            advanced <- settled
+        let missing = updateValue "Hardness" "Unknown" changedScope
+        Assert.Empty((prepare missing advanced |> get).Changes)
+
+    [<Fact>]
+    let ``LEARN refuses collisions unrelated values archived mutation and view repurposing`` () =
+        let selected = learnScope ()
+        let colliding = { snapshot with Fields = snapshot.Fields @ [ { Id = "existing"; Name = "Hardness"; DataType = "TEXT"; Options = [] } ] }
+        Assert.True(Result.isError (prepare selected colliding))
+        let native = learnNative ()
+        use connection = native.Connection()
+        let before = collect connection.Reads selected |> get
+        let archived = { before with Items = before.Items |> List.map (fun item -> { item with Archived = true }) }
+        // Resolve fields first; archived cards never become writable projection targets.
+        let plan = selected.Learn.Value
+        let foreign = { selected with Learn = Some { plan with Assignments = [ { plan.Assignments.Head with IssueId = "foreign" } ] } }
+        Assert.True(Result.isError (validateScope foreign))
+        let forbidden = { selected with InitialPlanning = [ { IssueId = "synthetic-issue"; Track = { Id = "t"; Name = "Active delivery" }; Roadmap = "x"; Status = None } ] }
+        Assert.True(Result.isError (validateScope forbidden))
+        let prepared = prepare selected before |> get
+        Assert.True(Result.isError (request { prepared with Snapshot = archived } (CreateLearnField "Hardness")))
+
+    [<Fact>]
+    let ``LEARN appends hardness on board cards and rejects filter layout prefix and grouping drift`` () =
+        let native = learnNative ()
+        use connection = native.Connection()
+        let mutable selected = { (learnScope ()) with Learn = Some { (learnScope ()).Learn.Value with Assignments = [] } }
+        for _ in 1 .. 4 do
+            let before = collect connection.Reads selected |> get
+            let prepared = prepare selected before |> get
+            let change = prepared.Changes.Head
+            connection.Dispatch(prepared, change, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
+            let after = collect connection.Reads selected |> get
+            selected <- resolveReadback selected before after change |> get
+        let hardness = selected.Learn.Value.Fields |> List.find (fun field -> field.Name = "Hardness") |> _.FieldId |> Option.get
+        let view: View = { Id = "board"; Name = "Deliveries"; Layout = "BOARD_LAYOUT"; Filter = "is:open";
+                           VisibleFieldIds = [ scope.StatusFieldId ]; UnsupportedConfiguration = "[]" }
+        native.Snapshot <- { native.Snapshot with Views = [ view ] }
+        let before = collect connection.Reads selected |> get
+        let desired: DesiredView = { Id = Some view.Id; Name = view.Name; Layout = view.Layout; Filter = view.Filter;
+                                    VisibleFieldIds = view.VisibleFieldIds @ [ hardness ] }
+        selected <- { selected with Views = [ desired ] }
+        let prepared = prepare selected before |> get
+        Assert.Equal<Change list>([ UpdateView(view.Id, desired) ], prepared.Changes)
+        for changed in [ { desired with Filter = "" }; { desired with Layout = "TABLE_LAYOUT" };
+                         { desired with VisibleFieldIds = [ hardness ] }; { desired with Name = "Repurposed" } ] do
+            Assert.True(Result.isError (prepare { selected with Views = [ changed ] } before))
+        let change = prepared.Changes.Head
+        connection.Dispatch(prepared, change, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
+        let after = collect connection.Reads selected |> get
+        validateTransition selected before after change |> get
+        let movedViews =
+            after.Views |> List.map (fun view ->
+                { view with UnsupportedConfiguration = "[[\"native-view\"],[\"unselected-group\"],[],[]]" })
+        let moved = { after with Views = movedViews }
+        Assert.True(Result.isError (validateTransition selected before moved change))
+
+    let private actualProjectorValues (executions: obj list) =
+        let script = System.IO.Path.GetFullPath(System.IO.Path.Combine(__SOURCE_DIRECTORY__, "..", "..", "scripts", "learn-projection.py"))
+        let code = "import importlib.util,json,sys; s=importlib.util.spec_from_file_location('p',sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); print(json.dumps(m.assignment(json.load(sys.stdin),sys.argv[2])['values']))"
+        let start = System.Diagnostics.ProcessStartInfo("python3")
+        for argument in [ "-B"; "-c"; code; script; "https://github.com/FS-GG/.github/issues/42#issuecomment-17" ] do
+            start.ArgumentList.Add argument
+        start.RedirectStandardInput <- true
+        start.RedirectStandardOutput <- true
+        start.RedirectStandardError <- true
+        use child = System.Diagnostics.Process.Start start
+        child.StandardInput.Write(JsonSerializer.Serialize {| nodeId = "synthetic-issue"; hardnessCategory = "Low"; executions = executions |})
+        child.StandardInput.Close()
+        let exited = child.WaitForExit 30000
+        if not exited then
+            child.Kill(true)
+            child.WaitForExit()
+        let output = child.StandardOutput.ReadToEnd()
+        let error = child.StandardError.ReadToEnd()
+        Assert.True(exited, "bounded actual projector invocation")
+        Assert.True(child.ExitCode = 0, error)
+        use parsed = JsonDocument.Parse output
+        parsed.RootElement.EnumerateObject() |> Seq.map (fun property -> property.Name, property.Value.GetString()) |> Seq.toList
+
+    [<Fact>]
+    let ``actual projector summaries cannot erase known executions or split punctuation into invented roles`` () =
+        let execution role model effort configured : obj =
+            box {| role = role; model = model; effort = effort; launchConfiguration = configured |}
+        let workerModel = "model; critic: other"
+        let confirmed: obj = box {| model = workerModel; effort = "medium" |}
+        let original =
+            [ execution "Unknown" "Unknown" "Unknown" confirmed
+              execution "critic" "reviewer" "high" null ]
+        let values = actualProjectorValues original
+        let plan = (learnScope ()).Learn.Value
+        let mutable selected = { scope with Learn = Some { plan with Assignments = [ { plan.Assignments.Head with Values = values } ] } }
+        let native = learnNative ()
+        use connection = native.Connection()
+        for _ in 1 .. 8 do
+            let before = collect connection.Reads selected |> get
+            let prepared = prepare selected before |> get
+            let change = prepared.Changes.Head
+            connection.Dispatch(prepared, change, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
+            let after = collect connection.Reads selected |> get
+            validateTransition selected before after change |> get
+            selected <- resolveReadback selected before after change |> get
+        let before = collect connection.Reads selected |> get
+        let withValues values =
+            let plan = selected.Learn.Value
+            { selected with Learn = Some { plan with Assignments = [ { plan.Assignments.Head with Values = values } ] } }
+        let worker = execution "worker" workerModel "medium" null
+        let critic = execution "critic" "reviewer" "high" null
+        for incoming in [ []; [ execution "worker" "Unknown" "Unknown" null ]; [ worker ];
+                          [ execution "worker" "model" "medium" null; execution "critic" "other" "high" null; critic ] ] do
+            let projected = actualProjectorValues incoming
+            Assert.True(Result.isError (prepare (withValues projected) before))
+        // Same facts can advance from launch-confirmed/unknown role to observed/known role.
+        let upgraded = withValues (actualProjectorValues [ worker; critic ])
+        Assert.Equal(2, (prepare upgraded before |> get).Changes.Length)
+        let mutable observed = before
+        for _ in 1 .. 2 do
+            let prepared = prepare upgraded observed |> get
+            let change = prepared.Changes.Head
+            connection.Dispatch(prepared, change, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
+            let after = collect connection.Reads upgraded |> get
+            validateTransition upgraded observed after change |> get
+            observed <- after
+        // The exact same role/value cannot regress from provider-observed to launch-confirmed.
+        let downgrade = withValues (actualProjectorValues [ execution "worker" "Unknown" "Unknown" confirmed; critic ])
+        Assert.True(Result.isError (prepare downgrade observed))
+        // A missing or wrong owning comment never reaches the native send boundary.
+        for evidence in [ "https://github.com/FS-GG/other/issues/42#issuecomment-17";
+                          "https://github.com/FS-GG/.github/issues/43#issuecomment-17";
+                          "https://github.com/FS-GG/.github/issues/42#issuecomment-abc";
+                          "https://github.com/FS-GG/.github/issues/42#issuecomment-0" ] do
+            let plan = selected.Learn.Value
+            let assignment = plan.Assignments.Head
+            let values = assignment.Values |> List.map (fun (name, value) -> name, if name = "Execution provenance" then evidence else value)
+            let wrong = { selected with Learn = Some { plan with Assignments = [ { assignment with Evidence = evidence; Values = values } ] } }
+            Assert.True(Result.isError (prepare wrong before))
+        Assert.Equal(10, native.Mutations.Length)
