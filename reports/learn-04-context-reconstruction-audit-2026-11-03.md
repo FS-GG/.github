@@ -45,7 +45,7 @@ The audited source was candidate `219a29add6688f3287636842ffb03bb3479cf459`, tre
 | Memory-max events / OOM events / OOM kills | 25 / 0 / 0 |
 | Rating calls / native mutations / replacements / retries | 0 / 0 / 0 / 0 |
 
-Invocation counts are bounded CLI acquisitions, not independently measured wire-level HTTP attempts. All 16 originals ran sequentially under one CPU, 512 MiB physical cgroup memory, zero swap and a 128-task ceiling. No virtual-address cap was imposed on Go/Git. The memory limit was reached with reclaim pressure; it was not an OOM-free run with abundant headroom. None of the three unavailable outcomes was attributed to a memory failure.
+Invocation counts are bounded CLI acquisitions, not independently measured wire-level HTTP attempts. All 16 originals ran sequentially under one CPU, 512 MiB physical cgroup memory, zero swap and a 128-task ceiling. No virtual-address cap was imposed on Go/Git. The memory limit was reached with reclaim pressure; no OOM event or kill was observed. None of the three unavailable outcomes was attributed to a memory failure.
 
 The original aggregate clock conservatively began at 16:22 UTC before retained setup/preflight, with a 17:02 UTC deadline and a three-minute final reserve. Collection and readback completed within that unchanged horizon. Private disk stayed below 2 GiB. Every original case group was waited and retired, captures were closed after termination, and outside readback confirmed the original controller PID absent, both ephemeral scopes inactive and their cgroups gone in the same boot/namespace. No persistent timer or watcher remains.
 
@@ -57,7 +57,7 @@ Checkpoint lag was **57 seconds minimum, 89,662 seconds median (about 24.9 hours
 
 Source manifests declare unresolved Gitlinks and unmaterialized Git LFS objects rather than importing later dependency checkouts. Binary bytes are retained without a claim that they have been interpreted. Lockfiles do not establish a reconstructed runtime. Related discussions, external research and private creator conversation remain incomplete. The common task text and available code do not recover everything an orchestrating agent knew when it filed an item.
 
-Artifact separation was checked, but **shared-agent filesystem/network isolation is not qualified**. All manifests retain `ratingLaunchAllowed: false`. No rater was launched, no source snapshot was built or executed, and no prediction/routing policy was fitted or activated. Calendar time and historical response envelopes remain imperfect outcomes; richer context does not repair a missing active-work clock.
+Artifact separation was checked, but **shared-agent filesystem/network isolation is not qualified**. All manifests retain `ratingLaunchAllowed: false`. No rater was launched, no repository build or snapshot-code execution was performed, and no prediction/routing policy was fitted or activated. Calendar time and historical response envelopes remain imperfect outcomes; richer context does not repair a missing active-work clock.
 
 ## Reproduction, custody and next bounded steps
 
