@@ -149,6 +149,7 @@ def main() -> int:
                 return 1
             mutated = Path(tmp) / "board-currency-rules.py"
             mutated.write_text(original.replace(old, new), encoding="utf-8")
+            mutated.with_name("root-identity-policy.json").write_bytes(SOURCE.with_name("root-identity-policy.json").read_bytes())
             killed = not run(mutated)
             print(f"{'killed  ' if killed else 'SURVIVED'} {name}")
             if not killed:
@@ -165,6 +166,7 @@ def main() -> int:
             work = Path(tmp) / "linkage"
             work.mkdir(exist_ok=True)
             (work / "board-currency-rules.py").write_text(original, encoding="utf-8")
+            (work / "root-identity-policy.json").write_bytes(SOURCE.with_name("root-identity-policy.json").read_bytes())
             mutated = work / "board-linkage.py"
             mutated.write_text(linkage.replace(old, new), encoding="utf-8")
             killed = not run_linkage(mutated)

@@ -31,6 +31,40 @@ def load(path: Path, name: str):
 
 
 R = load(RULES_PATH, "board_currency_rules")
+class RootIdentityPolicyTests(unittest.TestCase):
+    def test_existing_principals_preserved(self):
+        self.assertEqual(R.PARAMS["rootLogins"], ["EHotwagner"])
+        # A repo admin is not implicitly Root; the existing override path consumes this list.
+        roots = {login.lower() for login in R.PARAMS["rootLogins"]}
+        pr = {"body": '<!-- fsgg:board-gate-override/v1 rule=R1 reason="reviewed" -->',
+              "author": "repository-admin", "edited": False}
+        self.assertIsNone(R.override_of(pr, roots))
+        pr["author"] = "EHotwagner"
+        self.assertIsNotNone(R.override_of(pr, roots))
+
+    def test_missing_malformed_duplicate_and_noncanonical_policy_refuse(self):
+        valid = RULES_PATH.with_name("root-identity-policy.json").read_bytes()
+        controls = [None, b"{", valid.replace(b"v1", b"v9"),
+                    valid.replace(b'["EHotwagner"]', b'["EHotwagner","ehotwagner"]'),
+                    valid.replace(b'"schema":', b'"schema":"fsgg.root-identity-policy/v1","schema":'),
+                    valid.replace(b'"rootLogins":', b'"admin":true,"rootLogins":'),
+                    valid + b" ", valid.replace(b'["EHotwagner"]', b'[]')]
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "board-currency-rules.py"
+            script.write_bytes(RULES_PATH.read_bytes())
+            policy = script.with_name("root-identity-policy.json")
+            for index, raw in enumerate(controls):
+                with self.subTest(control=index):
+                    if raw is None:
+                        policy.unlink(missing_ok=True)
+                    else:
+                        policy.write_bytes(raw)
+                    with self.assertRaises((ValueError, OSError)):
+                        load(script, "invalid_root_policy")
+            policy.write_bytes(valid)
+            self.assertEqual(load(script, "valid_root_policy").PARAMS["rootLogins"], R.PARAMS["rootLogins"])
+
+
 NOW = "2026-10-31T12:00:00Z"
 RECENT = "2026-10-31T10:00:00Z"
 OLD = "2026-10-20T10:00:00Z"
