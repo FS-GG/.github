@@ -139,7 +139,7 @@ closed sources.</FsggStandingAdvisories>
 
     <PackageReleaseNotes>0.115.0 — Minor release of the coherent set: Kit, Drivers and CLI advance together.
 The maintained migration CLI adds guarded LEARN annotation creation and evidence-bound replacement, optional Learn scopes, and version3 scope/prepared/readback output. Legacy scope codecs remain accepted; typed callers constructing Scope must supply the new optional Learn field. This is a receiver-visible protocol addition (#5273).
-The F# board-tend archive projection and maintained Python archive host align on retaining the newest50 closed Done cards once the native Done population reaches200. Eligible archive batches remain bounded at100 and retain native blocker, parent/child, pair/reader and receipt checks (#5170). Source and package publication do not activate or qualify installed timers.
+The F# board-tend archive projection and maintained Python archive host align on retaining the newest50 closed Done cards once the native Done population reaches200. Archive batches retain native blocker, parent/child, pair/reader and receipt checks (#5170). Source and package publication do not activate or qualify installed timers.
 Protected enrollment still accepts only authenticated executing-release tool-pin registration and exact archived predecessor membership; all original pair and effect custody remains separate (#5263). The set carries the accepted read-only delivery preflight and process guidance (#5272).
 $(FsggStandingAdvisories)
 
