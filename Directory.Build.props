@@ -658,7 +658,13 @@
     <!-- Unpublished 0.114.4 source cut also carries the ordinary active Core 10.1.403
          baseline (#5253) and reviewed LEARN Atlas records (#5249). Existing published
          identities and frozen runtime/profile inputs remain separately qualified. -->
-    <FsggCoherentSetVersion>0.114.5</FsggCoherentSetVersion>
+    <!-- 0.114.5 -> 0.115.0 (#5273, #5170): MINOR coherent source successor. The maintained
+         migration CLI adds receiver-visible LEARN scope/serialization v3 and guarded annotation
+         creation/replacement; this is a new receiver protocol boundary, not only public F# types.
+         The same cut aligns the F# and host archive policy with the selected newest-50 retention.
+         Source preparation only: published 0.114.5, canonical installed pins, original release
+         journals and scheduled adoption remain unchanged until separately qualified publication. -->
+    <FsggCoherentSetVersion>0.115.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
