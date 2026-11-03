@@ -226,3 +226,33 @@ an observer failure, retain its original custody and use fresh bounded native re
 a fresh600second watcher for the same expired window. Report actual parent/worker/reviewer usage,
 coverage omissions and native request costs. Zero unchanged-tick model invocations follows from the
 finite code path; measured whole-family savings and installed acceptance require their own evidence.
+
+
+## LEARN card recording at lifecycle boundaries
+
+For Coordination Project 3 Deliveries, the coordinator records LEARN annotations at each normal
+initial dispatch and completion boundary through the [LEARN card path](https://github.com/FS-GG/.github/blob/main/docs/coordination/learn-card-projection.md).
+Freeze the original dispatch-time body once; do not score completion-time prose as historical hardness.
+On explicit scope growth, a reviewed revision-bound current assessment may advance the card category
+with new durable provenance while retaining the original dispatch features for calibration.
+Run the existing `learn-dispatch.py` prepare/record path before the initial dispatch. The versioned
+category and dimension evidence stay on the owning issue; requested model/profile remain requested.
+
+After terminal `finish` and bounded `usage-reconcile`, run `learn-projection.py` over the complete
+selected metadata population and the original retained evidence. Preserve worker/critic roles,
+invocation identities, all observed model/effort pairs and Unknown gaps. Record that completion through
+`learn-dispatch.py --completion-input` and its existing exact-comment custody. At each boundary,
+`--projection-template` plus `--projection-scope-output` binds the independently read-back issue comment
+into one annotation-only scope. The coordinator then runs the supported installed `board-v2
+migration-prepare` / `migration-apply` path and verifies its native field readback; it does not start
+another worker, timer, queue or generic field writer. Include this invocation in the ordinary existing
+coordinator boundary work, rather than relying on a human to remember a separate metadata task.
+
+Run native recording/projection only after the reviewed source is published and the actual installed
+caller, exact field identities and selected metadata scope are qualified for that effect. Existing
+bindings/enrollment, automatic timers and planning writers retain their authority. Missing provider
+facts leave actual model/effort Unknown and do not block independent dispatch. Capture the attributed
+recording/adoption gap once; retry no uncertain send. A Delivery whose acceptance includes this native
+metadata stays open while that effect is held. Before closing or archiving, retain the original
+classification and all available execution evidence on the owning issue so card retention cannot
+remove provenance. Later observed evidence updates the same issue's provenance chain and card summary.

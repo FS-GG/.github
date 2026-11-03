@@ -29,12 +29,17 @@ module V2Migration =
     // read-back field/option identities then bind subsequent absent-only initialization.
     type WorkLevelPlan = { FieldId: string option; Assignments: WorkLevelAssignment list }
 
+    // Annotation contract documentation lives in V2Migration.fsi.
+    type LearnField = { Name: string; FieldId: string option }
+    type LearnAssignment = { IssueId: string; Values: (string * string) list; Evidence: string }
+    type LearnPlan = { Fields: LearnField list; Assignments: LearnAssignment list }
+
     type Scope =
         { SourceRevision: string; ArtifactSha256: string; CliArtifactSha256: string; PrincipalId: string;
           PrincipalLogin: string; SelectedIssues: SelectedIssue list;
           StatusFieldId: string; RoadmapFieldId: string; TrackFieldId: string;
           ObservationFieldId: string; InReviewColor: string; InReviewDescription: string;
-          Views: DesiredView list; InitialPlanning: InitialPlanning list; WorkLevel: WorkLevelPlan option }
+          Views: DesiredView list; InitialPlanning: InitialPlanning list; WorkLevel: WorkLevelPlan option; Learn: LearnPlan option }
 
     type SelectOption =
         { Id: string; Name: string; Color: string; Description: string }
@@ -64,6 +69,8 @@ module V2Migration =
 
     type Change =
         | CreateWorkLevel
+        | CreateLearnField of name: string
+        | SetLearnValue of issueId: string * itemId: string * fieldId: string * value: PlanningValue * previous: ItemValue option
         | AddInReview of fieldId: string * retained: SelectOption list * color: string * description: string
         | AddMembership of issueId: string
         | InitializePlanningValue of issueId: string * itemId: string * fieldId: string * value: PlanningValue
@@ -99,6 +106,38 @@ module V2Migration =
         && bounded 100 parts.[1] && parts.[1] <> "." && parts.[1] <> ".."
         && Seq.forall (fun c -> Char.IsAsciiLetterOrDigit c || c = '.' || c = '_' || c = '-') parts.[1]
 
+    let private learnNames = [ "Hardness"; "Actual models"; "Actual effort"; "Execution provenance" ]
+    let private hardnessOptions =
+        [ ("Low", "GREEN", "learn-02-category-v1: H <= 6")
+          ("Medium", "YELLOW", "learn-02-category-v1: 7 <= H <= 12")
+          ("High", "RED", "learn-02-category-v1: H >= 13 or D3/D5 >= 2")
+          ("Unknown", "GRAY", "learn-02-category-v1: missing assessed dimension evidence") ]
+
+    // The text field carries a JSON string array, not a delimiter-split list. Provider
+    // names may contain punctuation; only the producer's final evidence suffix is removed.
+    let private executionFacts (text: string) : Set<string * string * int> option =
+        if text = "Unknown" then Some Set.empty
+        else
+            try
+                use document = JsonDocument.Parse text
+                if document.RootElement.GetArrayLength() = 0 then invalidArg "summary" "missing facts must be explicit Unknown"
+                let facts =
+                    document.RootElement.EnumerateArray() |> Seq.map (fun entry ->
+                        let entry = entry.GetString()
+                        let colon = entry.IndexOf(": ", StringComparison.Ordinal)
+                        if colon < 0 then invalidArg "summary" "missing role"
+                        let role, value = entry.Substring(0, colon), entry.Substring(colon + 2)
+                        if not (List.contains role [ "worker"; "critic"; "analyst"; "report"; "Unknown" ]) then invalidArg "summary" "unknown role"
+                        let value, confidence =
+                            [ " [provider-observed]", 2; " [launch-confirmed]", 1 ]
+                            |> List.tryFind (fun (suffix, _) -> value.EndsWith(suffix, StringComparison.Ordinal))
+                            |> Option.map (fun (suffix, confidence) -> value.Substring(0, value.Length - suffix.Length), confidence)
+                            |> Option.defaultWith (fun () -> if value = "Unknown" then value, 0 else invalidArg "summary" "missing evidence level")
+                        if not (bounded 256 value) then invalidArg "summary" "invalid fact value"
+                        role, value, confidence) |> Set.ofSeq
+                Some(facts |> Set.filter (fun (_, value, _) -> value <> "Unknown"))
+            with _ -> None
+
     let validateScope (scope: Scope) : IoResult<unit> =
         let fieldIds = [ scope.StatusFieldId; scope.TrackFieldId; scope.RoadmapFieldId; scope.ObservationFieldId ]
         let colors = Set.ofList [ "GRAY"; "BLUE"; "GREEN"; "YELLOW"; "ORANGE"; "RED"; "PINK"; "PURPLE" ]
@@ -115,7 +154,8 @@ module V2Migration =
                 || view.VisibleFieldIds.IsEmpty || view.VisibleFieldIds.Length > 50
                 || not (unique view.VisibleFieldIds) || (view.VisibleFieldIds |> List.exists (bounded 256 >> not))
                 || (view.Id |> Option.exists (bounded 256 >> not))
-                || (scope.WorkLevel.IsSome && view.Name.Equals("All items", StringComparison.OrdinalIgnoreCase) && view.Filter <> ""))
+                || (scope.WorkLevel.IsSome && view.Name.Equals("All items", StringComparison.OrdinalIgnoreCase) && view.Filter <> "")
+                || (scope.Learn.IsSome && view.Name.Equals("All items", StringComparison.OrdinalIgnoreCase) && view.Filter <> ""))
         let selectedIds = scope.SelectedIssues |> List.map (fun (issue: SelectedIssue) -> issue.Id) |> Set.ofList
         let optionValid (value: PlanningOption) = bounded 256 value.Id && bounded 100 value.Name
         let invalidPlanning =
@@ -131,6 +171,28 @@ module V2Migration =
                 || not (unique (plan.Assignments |> List.map _.IssueId))
                 || (plan.Assignments |> List.exists (fun value ->
                     not (selectedIds.Contains value.IssueId) || (value.Name <> "Outcome" && value.Name <> "Delivery"))))
+        let invalidLearn =
+            scope.Learn |> Option.exists (fun plan ->
+                (plan.Fields |> List.map _.Name |> Set.ofList) <> Set.ofList learnNames
+                || plan.Fields.Length <> learnNames.Length
+                || (plan.Fields |> List.choose _.FieldId |> fun ids ->
+                    not (unique ids) || ids |> List.exists (fun id -> not (bounded 256 id) || List.contains id fieldIds))
+                || not scope.InitialPlanning.IsEmpty || scope.WorkLevel.IsSome
+                || plan.Assignments.Length > 100
+                || not (unique (plan.Assignments |> List.map _.IssueId))
+                || plan.Assignments |> List.exists (fun assignment ->
+                    not (selectedIds.Contains assignment.IssueId)
+                    || not (bounded 4096 assignment.Evidence)
+                    || (scope.SelectedIssues |> List.tryFind (fun issue -> issue.Id = assignment.IssueId) |> Option.forall (fun issue ->
+                        not (System.Text.RegularExpressions.Regex.IsMatch(assignment.Evidence,
+                            "\\Ahttps://github.com/" + System.Text.RegularExpressions.Regex.Escape(issue.Repository) + "/issues/" + string issue.Number + "#issuecomment-[1-9][0-9]*\\z"))))
+                    || (assignment.Values |> List.map fst |> Set.ofList) <> Set.ofList learnNames
+                    || assignment.Values.Length <> learnNames.Length
+                    || (assignment.Values |> List.tryFind (fst >> (=) "Execution provenance") |> Option.map snd) <> Some assignment.Evidence
+                    || assignment.Values |> List.exists (fun (name, value) ->
+                        not (bounded 4096 value)
+                        || ((name = "Actual models" || name = "Actual effort") && (executionFacts value).IsNone)
+                        || (name = "Hardness" && not (List.contains value [ "Low"; "Medium"; "High"; "Unknown" ])))))
         if not (hex 40 scope.SourceRevision && hex 64 scope.ArtifactSha256 && hex 64 scope.CliArtifactSha256)
            || not (bounded 256 scope.PrincipalId && bounded 100 scope.PrincipalLogin) then
             invalid "reviewed source/package or expected principal identity is incomplete"
@@ -143,6 +205,8 @@ module V2Migration =
             invalid "explicit distinct native issue/slice identities are required; membership never selects enrollment"
         elif not (colors.Contains scope.InReviewColor) || isNull scope.InReviewDescription || scope.InReviewDescription.Length > 1024 then
             invalid "bounded native In review option descriptor is required"
+        elif invalidLearn then
+            invalid "LEARN requires the four distinct fixed annotation fields, exact selected issue values and durable issue-comment evidence"
         elif invalidWorkLevel then
             invalid "Work level requires exact selected issues, Outcome/Delivery values and a distinct explicit field identity"
         elif invalidPlanning then
@@ -433,6 +497,15 @@ module V2Migration =
            | Some plan ->
                [ "work-level/1"; plan.FieldId |> Option.defaultValue ""; string plan.Assignments.Length ]
                @ (plan.Assignments |> List.collect (fun value -> [ value.IssueId; value.Name ])))
+        @ (match scope.Learn with
+           | None -> []
+           | Some plan ->
+               [ "learn-annotations/1"; string plan.Fields.Length ]
+               @ (plan.Fields |> List.collect (fun field -> [ field.Name; field.FieldId |> Option.defaultValue "" ]))
+               @ [ string plan.Assignments.Length ]
+               @ (plan.Assignments |> List.collect (fun assignment ->
+                   [ assignment.IssueId; assignment.Evidence; string assignment.Values.Length ]
+                   @ (assignment.Values |> List.collect (fun (name, value) -> [ name; value ])))))
     let private snapshotTokens (snapshot: Snapshot) =
         [ snapshot.PrincipalId; snapshot.PrincipalLogin; snapshot.OrganizationId; snapshot.ProjectId;
           snapshot.ProjectTitle; string snapshot.ProjectNumber; string snapshot.Private;
@@ -454,6 +527,10 @@ module V2Migration =
     let private changeTokens (change: Change) =
         match change with
         | CreateWorkLevel -> [ "create-work-level/1" ]
+        | CreateLearnField name -> [ "create-learn-field/1"; name ]
+        | SetLearnValue(issue, item, field, value, previous) ->
+            [ "set-learn-value/1"; issue; item; field ] @ planningValueTokens value
+            @ (match previous with None -> [ "absent" ] | Some old -> [ "present"; old.Id; old.FieldId; old.Kind; old.Value ])
         | AddInReview(id, retained, color, description) ->
             [ "status"; id; color; description; string retained.Length ] @ (retained |> List.collect optionTokens)
         | AddMembership id -> [ "membership"; id ]
@@ -478,6 +555,20 @@ module V2Migration =
                     | PlanningText value -> actual.Kind = "ProjectV2ItemFieldTextValue" && text "text" = value
                     | PlanningSelect value ->
                         actual.Kind = "ProjectV2ItemFieldSingleSelectValue" && text "optionId" = value.Id && text "name" = value.Name)
+        with _ -> false
+
+    let private preservesExecutionFacts (desired: string) (actual: ItemValue) =
+        try
+            let tokens = JsonSerializer.Deserialize<string array>(actual.Value) |> Array.chunkBySize 2
+            let encoded = tokens |> Array.find (fun pair -> pair.[0] = "text") |> fun pair -> pair.[1]
+            use document = JsonDocument.Parse encoded
+            let old = document.RootElement.GetString()
+            match executionFacts old, executionFacts desired with
+            | Some before, Some after when samePlanningValue (PlanningText old) actual ->
+                before |> Set.forall (fun (role, value, confidence) ->
+                    after |> Set.exists (fun (newRole, newValue, newConfidence) ->
+                        value = newValue && (role = "Unknown" || role = newRole) && newConfidence >= confidence))
+            | _ -> false
         with _ -> false
 
     let private initialChanges (scope: Scope) (snapshot: Snapshot) (fields: Map<string, Field>) : IoResult<Change list> =
@@ -552,6 +643,54 @@ module V2Migration =
                     | _ -> invalid "Work level initialization membership is ambiguous, archived or mismatched")
                 |> sequence |> Result.map List.concat)
 
+    let private learnField (snapshot: Snapshot) (selected: LearnField) : IoResult<Field option> =
+        match selected.FieldId, snapshot.Fields |> List.filter (fun field -> field.Name = selected.Name) with
+        | None, [] -> Ok None
+        | Some id, [ field ] when field.Id = id ->
+            if selected.Name = "Hardness" then
+                if field.DataType = "SINGLE_SELECT" && field.Options.Length = 4
+                   && Set.ofList (field.Options |> List.map (fun option -> option.Name, option.Color, option.Description)) = Set.ofList hardnessOptions then Ok(Some field)
+                else invalid "Hardness field category version/type/options differ"
+            elif field.DataType = "TEXT" && field.Options.IsEmpty then Ok(Some field)
+            else invalid "LEARN annotation field type differs"
+        | _ -> invalid "LEARN field identity differs or same-name field already exists; preserve and reconcile"
+
+    let private learnChanges (scope: Scope) (snapshot: Snapshot) : IoResult<Change list> =
+        match scope.Learn with
+        | None -> Ok []
+        | Some plan ->
+            plan.Fields |> List.map (fun selected ->
+                learnField snapshot selected |> Result.bind (function
+                | None -> Ok [ CreateLearnField selected.Name ]
+                | Some field ->
+                    plan.Assignments |> List.map (fun assignment ->
+                        let issue = scope.SelectedIssues |> List.find (fun issue -> issue.Id = assignment.IssueId)
+                        let desired = assignment.Values |> List.find (fst >> (=) selected.Name) |> snd
+                        let desired = if selected.Name = "Hardness" then
+                                          let option = field.Options |> List.find (fun option -> option.Name = desired)
+                                          PlanningSelect { Id = option.Id; Name = option.Name }
+                                      else PlanningText desired
+                        match snapshot.Items |> List.filter (fun item -> item.ContentId = issue.Id) with
+                        | [ item ] when item.ContentKind = "Issue" && not item.Archived
+                                        && item.Repository = Some issue.Repository && item.Number = Some issue.Number ->
+                            match item.Values |> List.filter (fun value -> value.FieldId = field.Id) with
+                            | [ value ] when samePlanningValue desired value -> Ok []
+                            | [] -> Ok [ SetLearnValue(issue.Id, item.Id, field.Id, desired, None) ]
+                            | [ existing ] when (selected.Name = "Actual models" || selected.Name = "Actual effort") &&
+                                                  not (preservesExecutionFacts (match desired with PlanningText text -> text | _ -> "Unknown") existing) ->
+                                invalid "new execution summary omits or downgrades previously known facts; assemble cumulative owning-issue evidence"
+                            | [ _ ] when selected.Name = "Hardness" && (
+                                                        desired = PlanningSelect { Id = (field.Options |> List.find (fun option -> option.Name = "Unknown")).Id; Name = "Unknown" }) -> Ok []
+                            | [ _ ] when selected.Name = "Hardness" && (plan.Fields |> List.tryFind (fun field -> field.Name = "Execution provenance")
+                                  |> Option.bind _.FieldId |> Option.exists (fun provenance ->
+                                      item.Values |> List.exists (fun value -> value.FieldId = provenance && samePlanningValue (PlanningText assignment.Evidence) value))) ->
+                                invalid "a changed measured category requires a new durable assessment provenance record"
+                            | [ value ] -> Ok [ SetLearnValue(issue.Id, item.Id, field.Id, desired, Some value) ]
+                            | _ -> invalid "LEARN annotation value is ambiguous; preserve original preimage"
+                        | _ -> invalid "LEARN projection requires exact existing active membership; it cannot enroll or unarchive")
+                    |> sequence |> Result.map List.concat))
+            |> sequence |> Result.map List.concat
+
     let prepare (scope: Scope) (snapshot: Snapshot) : IoResult<Prepared> =
         match validateScope scope with
         | Error error -> Error error
@@ -601,10 +740,10 @@ module V2Migration =
                     invalid "existing In review descriptor differs; reconcile with its owner without rewriting existing options"
                 else
                     let statusChange =
-                        if names.Contains "In review" then []
+                        if scope.Learn.IsSome || names.Contains "In review" then []
                         else [ AddInReview(status.Id, status.Options, scope.InReviewColor, scope.InReviewDescription) ]
                     let membership =
-                        scope.SelectedIssues |> List.choose (fun (issue: SelectedIssue) ->
+                        (if scope.Learn.IsSome then [] else scope.SelectedIssues) |> List.choose (fun (issue: SelectedIssue) ->
                             if snapshot.Items |> List.exists (fun (item: Item) -> item.ContentId = issue.Id) then None
                             else Some(AddMembership issue.Id))
                     let viewChanges =
@@ -619,17 +758,22 @@ module V2Migration =
                             else
                                 match desired.Id, candidates with
                                 | Some _, [] -> invalid "explicit existing view is absent"
+                                | None, [] when scope.Learn.IsSome -> invalid "LEARN view projection requires an exact existing view identity"
                                 | None, [] -> Ok [ CreateView desired ]
                                 | _, [ current ] ->
                                     let preservedColumns =
                                         desired.VisibleFieldIds = current.VisibleFieldIds
+                                        || (scope.Learn |> Option.exists (fun plan ->
+                                            let appended = desired.VisibleFieldIds |> List.skip (min current.VisibleFieldIds.Length desired.VisibleFieldIds.Length)
+                                            List.truncate current.VisibleFieldIds.Length desired.VisibleFieldIds = current.VisibleFieldIds
+                                            && appended |> List.forall (fun id -> plan.Fields |> List.exists (fun field -> field.FieldId = Some id))))
                                         || (scope.WorkLevel |> Option.bind _.FieldId |> Option.exists (fun id ->
                                             not (List.contains id current.VisibleFieldIds)
                                             && desired.VisibleFieldIds = current.VisibleFieldIds @ [ id ]))
                                     let repurposedPopulationView =
                                         current.Name.Equals("All items", StringComparison.OrdinalIgnoreCase)
                                         && (desired.Name <> current.Name || desired.Filter <> "")
-                                    if scope.WorkLevel.IsSome && (current.Layout <> desired.Layout || not preservedColumns
+                                    if (scope.WorkLevel.IsSome || scope.Learn.IsSome) && (current.Layout <> desired.Layout || (scope.Learn.IsSome && (current.Name <> desired.Name || current.Filter <> desired.Filter)) || not preservedColumns
                                        || repurposedPopulationView
                                        || (desired.Name.Equals("All items", StringComparison.OrdinalIgnoreCase) && desired.Filter <> "")) then
                                         invalid "successor view change must preserve layout/columns and unfiltered All items; only explicit Work level append is allowed"
@@ -640,8 +784,9 @@ module V2Migration =
                                 | _ -> invalid "view identity/name discovery is ambiguous")
                     sequence viewChanges |> Result.bind (fun changes ->
                         initialChanges scope snapshot fields |> Result.bind (fun initializations ->
-                          workLevelChanges scope snapshot |> Result.map (fun classifications ->
-                            let all = classifications @ statusChange @ membership @ initializations @ List.concat changes
+                          workLevelChanges scope snapshot |> Result.bind (fun classifications ->
+                           learnChanges scope snapshot |> Result.map (fun annotations ->
+                            let all = annotations @ classifications @ statusChange @ membership @ initializations @ List.concat changes
                             let ownerActions =
                                 [ "Only explicitly declared absent Status, Track and Roadmap values may be initialized; existing values are never overwritten.";
                                   "Initialization assumes a cooperative owner-controlled no-edit window; no provider if-absent/CAS exists, and final read-to-send races cannot be prevented.";
@@ -660,7 +805,7 @@ module V2Migration =
                                         else value))
                                     @ [ "Only explicitly selected absent Work level values may be initialized; conflicts remain held and no outcome closure is inferred." ]
                             { Scope = scope; Snapshot = snapshot; Changes = all; OwnerActions = ownerActions; PreparedPath = None;
-                              Digest = hash (scopeTokens scope @ snapshotTokens snapshot @ [ string all.Length ] @ (all |> List.collect changeTokens)) })))
+                              Digest = hash (scopeTokens scope @ snapshotTokens snapshot @ [ string all.Length ] @ (all |> List.collect changeTokens)) }))))
 
     let private jsonString (value: string) : JsonNode = JsonValue.Create value
     let private objectNode (values: (string * JsonNode) list) : JsonObject =
@@ -685,6 +830,13 @@ module V2Migration =
                 $"mutation($input:{name}!){{{operation}(input:$input){{clientMutationId {identity}}}}}"
             let document, input =
                 match change with
+                | CreateLearnField name ->
+                    let descriptor = [ id "projectId" prepared.Snapshot.ProjectId; id "name" name;
+                                       id "dataType" (if name = "Hardness" then "SINGLE_SELECT" else "TEXT") ]
+                    let descriptor = if name <> "Hardness" then descriptor else
+                                         descriptor @ [ "singleSelectOptions", arrayNode (hardnessOptions |> List.map (fun (name, color, description) ->
+                                             objectNode [ id "name" name; id "color" color; id "description" description ] :> JsonNode)) ]
+                    (selection "CreateProjectV2FieldInput" "createProjectV2Field" "projectV2Field{... on ProjectV2FieldCommon{id}}", objectNode descriptor)
                 | CreateWorkLevel ->
                     let options = workLevelOptions |> List.map (fun (name, color, description) ->
                         objectNode [ id "name" name; id "color" color; id "description" description ] :> JsonNode)
@@ -701,7 +853,8 @@ module V2Migration =
                 | AddMembership issueId ->
                     (selection "AddProjectV2ItemByIdInput" "addProjectV2ItemById" "item{id}",
                      objectNode [ id "projectId" prepared.Snapshot.ProjectId; id "contentId" issueId ])
-                | InitializePlanningValue(_, itemId, fieldId, desired) ->
+                | InitializePlanningValue(_, itemId, fieldId, desired)
+                | SetLearnValue(_, itemId, fieldId, desired, _) ->
                     let selectedValue: JsonNode =
                         match desired with
                         | PlanningText text -> objectNode [ id "text" text ] :> JsonNode
@@ -730,11 +883,12 @@ module V2Migration =
         if node.ValueKind <> JsonValueKind.Array || node.GetArrayLength() > limit then invalidArg "json" "bounded array required"
         node.EnumerateArray() |> Seq.toList
     let private parseScopeNode (node: JsonElement) : Scope =
+        let hasLearn = node.TryGetProperty("learn") |> fst
         let hasWorkLevel = node.TryGetProperty("workLevel") |> fst
         [ "sourceRevision"; "artifactSha256"; "cliArtifactSha256"; "principalId"; "principalLogin";
                  "selectedIssues"; "statusFieldId"; "roadmapFieldId"; "trackFieldId"; "observationFieldId";
                  "inReviewColor"; "inReviewDescription"; "views"; "initialPlanning" ]
-                @ (if hasWorkLevel then [ "workLevel" ] else []) |> fun names -> closed names node
+                @ (if hasWorkLevel then [ "workLevel" ] else []) @ (if hasLearn then [ "learn" ] else []) |> fun names -> closed names node
         let issues: SelectedIssue list =
             array 100 (node.GetProperty "selectedIssues") |> List.map (fun (issue: JsonElement) ->
                 closed [ "id"; "repository"; "number"; "slice" ] issue
@@ -770,13 +924,27 @@ module V2Migration =
                        Assignments = array 100 (value.GetProperty "assignments") |> List.map (fun assignment ->
                            closed [ "issueId"; "name" ] assignment
                            { IssueId = nonempty "issueId" assignment; Name = nonempty "name" assignment }) }
+        let learn =
+            if not hasLearn then None else
+                let value = node.GetProperty "learn"
+                closed [ "schema"; "fields"; "assignments" ] value
+                if propertyString "schema" value <> "fs.gg.board-v2.learn-annotations/1" then invalidArg "schema" "different LEARN migration schema"
+                Some { Fields = array 4 (value.GetProperty "fields") |> List.map (fun field ->
+                           closed [ "name"; "fieldId" ] field
+                           { Name = nonempty "name" field; FieldId = if field.GetProperty("fieldId").ValueKind = JsonValueKind.Null then None else Some(nonempty "fieldId" field) })
+                       Assignments = array 100 (value.GetProperty "assignments") |> List.map (fun assignment ->
+                           closed [ "issueId"; "values"; "evidence" ] assignment
+                           let values = assignment.GetProperty "values"
+                           closed learnNames values
+                           { IssueId = nonempty "issueId" assignment; Evidence = nonempty "evidence" assignment
+                             Values = learnNames |> List.map (fun name -> name, nonempty name values) }) }
         { SourceRevision = nonempty "sourceRevision" node; ArtifactSha256 = nonempty "artifactSha256" node;
           CliArtifactSha256 = nonempty "cliArtifactSha256" node;
           PrincipalId = nonempty "principalId" node; PrincipalLogin = nonempty "principalLogin" node;
           SelectedIssues = issues; StatusFieldId = nonempty "statusFieldId" node;
           RoadmapFieldId = nonempty "roadmapFieldId" node; TrackFieldId = nonempty "trackFieldId" node;
           ObservationFieldId = nonempty "observationFieldId" node; InReviewColor = nonempty "inReviewColor" node;
-          InReviewDescription = propertyString "inReviewDescription" node; Views = views; InitialPlanning = initialPlanning; WorkLevel = workLevel }
+          InReviewDescription = propertyString "inReviewDescription" node; Views = views; InitialPlanning = initialPlanning; WorkLevel = workLevel; Learn = learn }
     let parseScope (json: string) : IoResult<Scope> =
         if Encoding.UTF8.GetByteCount json > 262144 then invalid "scope input exceeds 256 KiB"
         else
@@ -820,6 +988,15 @@ module V2Migration =
             result.Add("workLevel", objectNode [ "schema", jsonString "fs.gg.board-v2.work-level-migration/1";
                        "fieldId", (plan.FieldId |> Option.map jsonString |> Option.defaultValue null);
                        "assignments", arrayNode assignments ])
+        match scope.Learn with
+        | None -> ()
+        | Some plan ->
+            result.Add("learn", objectNode [ "schema", jsonString "fs.gg.board-v2.learn-annotations/1";
+                "fields", arrayNode (plan.Fields |> List.map (fun field ->
+                    objectNode [ "name", jsonString field.Name; "fieldId", (field.FieldId |> Option.map jsonString |> Option.defaultValue null) ] :> JsonNode));
+                "assignments", arrayNode (plan.Assignments |> List.map (fun assignment ->
+                    objectNode [ "issueId", jsonString assignment.IssueId; "evidence", jsonString assignment.Evidence;
+                                 "values", objectNode (assignment.Values |> List.map (fun (name, value) -> name, jsonString value)) ] :> JsonNode)) ])
         result :> JsonNode
     let encodePrepared (prepared: Prepared) : string =
         let preparedPath =
@@ -829,7 +1006,7 @@ module V2Migration =
         // Exact stable token arrays retain every determining native value without union/option
         // serializer defaults. This is an operation report, never a normal v4 binding.
         let root =
-            objectNode [ "schema", jsonString (if prepared.Scope.WorkLevel.IsSome then "fs.gg.board-v2.migration-prepare/2" else "fs.gg.board-v2.migration-prepare/1");
+            objectNode [ "schema", jsonString (if prepared.Scope.Learn.IsSome then "fs.gg.board-v2.migration-prepare/3" elif prepared.Scope.WorkLevel.IsSome then "fs.gg.board-v2.migration-prepare/2" else "fs.gg.board-v2.migration-prepare/1");
                          "preparedPath", jsonString preparedPath;
                          "observedAt", jsonString (prepared.Snapshot.ObservedAt.ToString "O");
                          "scope", scopeNode prepared.Scope; "snapshot", stringsNode (snapshotTokens prepared.Snapshot);
@@ -846,12 +1023,13 @@ module V2Migration =
                 let root = document.RootElement
                 closed [ "schema"; "preparedPath"; "observedAt"; "scope"; "snapshot"; "changes"; "ownerActions"; "digest" ] root
                 let schema = propertyString "schema" root
-                if schema <> "fs.gg.board-v2.migration-prepare/1" && schema <> "fs.gg.board-v2.migration-prepare/2" then invalidArg "schema" "different prepared schema"
+                if schema <> "fs.gg.board-v2.migration-prepare/1" && schema <> "fs.gg.board-v2.migration-prepare/2" && schema <> "fs.gg.board-v2.migration-prepare/3" then invalidArg "schema" "different prepared schema"
                 let preparedPath = nonempty "preparedPath" root
                 if not (Path.IsPathFullyQualified preparedPath) || Path.GetFullPath preparedPath <> preparedPath then
                     invalidArg "preparedPath" "canonical original invocation path required"
                 let scope = parseScopeNode (root.GetProperty "scope")
-                if (schema = "fs.gg.board-v2.migration-prepare/2") <> scope.WorkLevel.IsSome then
+                if (schema = "fs.gg.board-v2.migration-prepare/3") <> scope.Learn.IsSome
+                   || (schema <> "fs.gg.board-v2.migration-prepare/3" && (schema = "fs.gg.board-v2.migration-prepare/2") <> scope.WorkLevel.IsSome) then
                     invalidArg "schema" "Work level scope and prepared version differ"
                 let digest = nonempty "digest" root
                 if not (hex 64 digest) then invalidArg "digest" "malformed prepared digest"
@@ -862,6 +1040,17 @@ module V2Migration =
                 validateScope scope |> Result.map (fun () -> scope, digest, observedAt, preparedPath))
     let resolveReadback (scope: Scope) (before: Snapshot) (after: Snapshot) (change: Change) : IoResult<Scope> =
         match change with
+        | CreateLearnField name ->
+            match scope.Learn with
+            | Some plan when plan.Fields |> List.exists (fun field -> field.Name = name && field.FieldId.IsNone)
+                             && before.Fields |> List.forall (fun field -> field.Name <> name) ->
+                match after.Fields |> List.filter (fun field -> field.Name = name) with
+                | [ created ] when before.Fields |> List.forall (fun field -> field.Id <> created.Id) ->
+                    let selected = { Name = name; FieldId = Some created.Id }
+                    learnField after selected |> Result.map (fun _ ->
+                        { scope with Learn = Some { plan with Fields = plan.Fields |> List.map (fun field -> if field.Name = name then selected else field) } })
+                | _ -> invalid "created LEARN field identity is ambiguous"
+            | _ -> invalid "LEARN field creation was not selected from an absent preimage"
         | CreateWorkLevel ->
             match scope.WorkLevel with
             | Some plan when plan.FieldId.IsNone && not (before.Fields |> List.exists (fun field -> field.Name = "Work level")) ->
@@ -903,6 +1092,21 @@ module V2Migration =
         | Ok _ ->
             let reconciled =
                 match change with
+                | CreateLearnField name ->
+                    match after.Fields |> List.filter (fun field -> field.Name = name) with
+                    | [ added ] -> unchanged { after with Fields = after.Fields |> List.filter (fun field -> field.Id <> added.Id) }
+                    | _ -> false
+                | SetLearnValue(issueId, itemId, fieldId, desired, previous) ->
+                    match before.Items |> List.tryFind (fun item -> item.Id = itemId && item.ContentId = issueId),
+                          after.Items |> List.tryFind (fun item -> item.Id = itemId && item.ContentId = issueId) with
+                    | Some original, Some observed when (original.Values |> List.filter (fun value -> value.FieldId = fieldId)) = Option.toList previous ->
+                        match observed.Values |> List.filter (fun value -> value.FieldId = fieldId) with
+                        | [ value ] when samePlanningValue desired value ->
+                            let normalized = { observed with UpdatedAt = original.UpdatedAt;
+                                                             Values = (observed.Values |> List.filter (fun value -> value.FieldId <> fieldId)) @ Option.toList previous }
+                            unchanged { after with Items = after.Items |> List.map (fun item -> if item.Id = itemId then normalized else item) }
+                        | _ -> false
+                    | _ -> false
                 | CreateWorkLevel ->
                     match after.Fields |> List.filter (fun field -> field.Name = "Work level") with
                     | [ added ] -> unchanged { after with Fields = after.Fields |> List.filter (fun field -> field.Id <> added.Id) }
@@ -957,17 +1161,18 @@ module V2Migration =
         let identityPossible =
             bounded 256 returnedId
             && (match change with
-                | CreateWorkLevel -> before.Fields |> List.forall (fun field -> field.Id <> returnedId)
+                | CreateWorkLevel | CreateLearnField _ -> before.Fields |> List.forall (fun field -> field.Id <> returnedId)
                 | AddInReview(fieldId, _, _, _) -> returnedId = fieldId
-                | InitializePlanningValue(_, itemId, _, _) -> returnedId = itemId
+                | InitializePlanningValue(_, itemId, _, _) | SetLearnValue(_, itemId, _, _, _) -> returnedId = itemId
                 | UpdateView(viewId, _) -> returnedId = viewId
                 | AddMembership _ -> before.Items |> List.forall (fun (item: Item) -> item.Id <> returnedId)
                 | CreateView _ -> before.Views |> List.forall (fun (view: View) -> view.Id <> returnedId))
         let observedIdentity =
             match change with
+            | CreateLearnField name -> after.Fields |> List.filter (fun field -> field.Name = name) |> function [ field ] -> Some field.Id | _ -> None
             | CreateWorkLevel -> after.Fields |> List.filter (fun field -> field.Name = "Work level") |> function [ field ] -> Some field.Id | _ -> None
             | AddInReview(fieldId, _, _, _) -> Some fieldId
-            | InitializePlanningValue(_, itemId, _, _) -> Some itemId
+            | InitializePlanningValue(_, itemId, _, _) | SetLearnValue(_, itemId, _, _, _) -> Some itemId
             | UpdateView(viewId, _) -> Some viewId
             | AddMembership issueId ->
                 after.Items |> List.filter (fun (item: Item) -> item.ContentId = issueId)
@@ -981,7 +1186,7 @@ module V2Migration =
         let pending =
             let items: Item list =
                 match change with
-                | InitializePlanningValue(issueId, itemId, _, _) ->
+                | InitializePlanningValue(issueId, itemId, _, _) | SetLearnValue(issueId, itemId, _, _, _) ->
                     after.Items |> List.map (fun (item: Item) ->
                         match before.Items |> List.tryFind (fun (original: Item) -> original.Id = itemId && original.ContentId = issueId) with
                         | Some original when item.Id = itemId && item.ContentId = issueId -> { item with UpdatedAt = original.UpdatedAt }
@@ -1056,7 +1261,22 @@ module V2Migration =
                     Ok(ItemEffect after)
                 | [] when sortedValues after.Values = sortedValues before.Values -> Ok ItemPending
                 | _ -> invalid "item readback differs beyond the one exact effect; preserve original intent and stop writes for reconciliation"
-        | _ -> invalid "only planning-value initialization is item-scoped"
+        | SetLearnValue(issueId, itemId, fieldId, desired, previous) ->
+            let retained = before.Values |> List.filter (fun value -> value.FieldId <> fieldId)
+            let identity (item: Item) = item.Id, item.ContentId, item.ContentKind, item.Repository, item.Number, item.Archived
+            if before.Id <> itemId || before.ContentId <> issueId || identity before <> identity after
+               || (before.Values |> List.filter (fun value -> value.FieldId = fieldId)) <> Option.toList previous then
+                invalid "LEARN item identity or exact value preimage differs"
+            else
+                let others = after.Values |> List.filter (fun value -> value.FieldId <> fieldId)
+                let selected = after.Values |> List.filter (fun value -> value.FieldId = fieldId)
+                if sortedValues others <> sortedValues retained then invalid "unrelated item values changed during LEARN projection"
+                elif selected = Option.toList previous then Ok ItemPending
+                else
+                    match selected with
+                    | [ value ] when samePlanningValue desired value -> Ok(ItemEffect after)
+                    | _ -> invalid "LEARN item readback differs from the one exact effect"
+        | _ -> invalid "only selected scalar planning and LEARN annotations are item-scoped"
 
     let validateGroup (scope: Scope) (before: Snapshot) (after: Snapshot) (applied: Change list) : IoResult<unit> =
         match prepare scope before with
@@ -1066,22 +1286,23 @@ module V2Migration =
         | Ok _ ->
             let targets =
                 applied |> List.choose (function
-                    | InitializePlanningValue(issueId, itemId, fieldId, desired) -> Some(issueId, itemId, fieldId, desired)
+                    | InitializePlanningValue(issueId, itemId, fieldId, desired) -> Some(issueId, itemId, fieldId, desired, None)
+                    | SetLearnValue(issueId, itemId, fieldId, desired, previous) -> Some(issueId, itemId, fieldId, desired, previous)
                     | _ -> None)
-            if targets.Length <> applied.Length then invalid "only planning-value initialization is grouped"
-            elif (targets |> List.map (fun (_, itemId, fieldId, _) -> itemId, fieldId) |> List.distinct |> List.length) <> targets.Length then
+            if targets.Length <> applied.Length then invalid "only selected scalar planning and LEARN annotations are grouped"
+            elif (targets |> List.map (fun (_, itemId, fieldId, _, _) -> itemId, fieldId) |> List.distinct |> List.length) <> targets.Length then
                 invalid "a group initializes one value twice"
             else
                 let present =
-                    targets |> List.forall (fun (issueId, itemId, fieldId, desired) ->
+                    targets |> List.forall (fun (issueId, itemId, fieldId, desired, _) ->
                         match after.Items |> List.filter (fun (item: Item) -> item.Id = itemId && item.ContentId = issueId) with
                         | [ item ] ->
                             match item.Values |> List.filter (fun (value: ItemValue) -> value.FieldId = fieldId) with
                             | [ initialized ] -> samePlanningValue desired initialized
                             | _ -> false
                         | _ -> false)
-                let touched = targets |> List.map (fun (_, itemId, _, _) -> itemId) |> Set.ofList
-                let initialized = targets |> List.map (fun (_, itemId, fieldId, _) -> itemId, fieldId) |> Set.ofList
+                let touched = targets |> List.map (fun (_, itemId, _, _, _) -> itemId) |> Set.ofList
+                let initialized = targets |> List.map (fun (_, itemId, fieldId, _, _) -> itemId, fieldId) |> Set.ofList
                 // Only the group's own values and their items' timestamps may differ from the base.
                 let items: Item list =
                     after.Items |> List.map (fun (item: Item) ->
@@ -1089,7 +1310,8 @@ module V2Migration =
                         | Some original when touched.Contains item.Id ->
                             { item with
                                 UpdatedAt = original.UpdatedAt
-                                Values = item.Values |> List.filter (fun (value: ItemValue) -> not (initialized.Contains(item.Id, value.FieldId))) }
+                                Values = (item.Values |> List.filter (fun (value: ItemValue) -> not (initialized.Contains(item.Id, value.FieldId))))
+                                         @ (targets |> List.choose (fun (_, itemId, _, _, previous) -> if itemId = item.Id then previous else None)) }
                         | _ -> item)
                 let normalized: Snapshot = { after with ObservedAt = before.ObservedAt; UpdatedAt = before.UpdatedAt; Items = items }
                 if present && snapshotTokens normalized = snapshotTokens before then Ok()
@@ -1098,7 +1320,7 @@ module V2Migration =
     let snapshotDigest (snapshot: Snapshot) = hash (snapshotTokens snapshot)
     let encodeReadback (scope: Scope) (snapshot: Snapshot) =
         let root =
-            objectNode [ "schema", jsonString (if scope.WorkLevel.IsSome then "fs.gg.board-v2.migration-readback/2" else "fs.gg.board-v2.migration-readback/1");
+            objectNode [ "schema", jsonString (if scope.Learn.IsSome then "fs.gg.board-v2.migration-readback/3" elif scope.WorkLevel.IsSome then "fs.gg.board-v2.migration-readback/2" else "fs.gg.board-v2.migration-readback/1");
                          "observedAt", jsonString (snapshot.ObservedAt.ToString "O");
                          "scope", scopeNode scope; "snapshot", stringsNode (snapshotTokens snapshot);
                          "snapshotDigest", jsonString (snapshotDigest snapshot);
