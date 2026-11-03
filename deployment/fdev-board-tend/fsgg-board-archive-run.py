@@ -155,7 +155,7 @@ def settled(run: Path, max_archive: int) -> bool:
             or start["triggerAt"] != 200 or type(start["triggerAt"]) is not int or start["completeCycle"] is not True
             or type(start["keep"]) is not int or start["maxArchive"] != max_archive
             or not all(integer(start[k]) for k in ("board", "done", "planned", "maxArchive"))
-            or not 0 < start["planned"] <= min(start["done"] - 50, max_archive) or not 200 <= start["done"] <= start["board"] <= 500
+            or not 0 < start["planned"] <= max_archive or start["planned"] != start["done"] - 50 or not 200 <= start["done"] <= start["board"] <= 500
             or not 1 <= max_archive <= 500
             or set(end) != common | {"archived", "skipped"} or end["step"] != "finished"
             or not all(integer(end[k]) for k in ("archived", "skipped"))):

@@ -593,7 +593,7 @@ def main(argv: list[str] | None = None) -> int:
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     directory = Path(args.custody_dir) if args.custody_dir else Path.home() / ".local/share/fs-gg-private/board-done-retention" / stamp
     custody = Custody(directory)
-    custody.record(step="run", project=project.get("id"), board=project.get("totalCount"), done=len(rows),
+    custody.record(step="run", project=project.get("id"), board=project.get("totalCount"), done=active_done,
                    keep=args.keep, triggerAt=args.trigger_at, completeCycle=args.require_complete_cycle,
                    planned=len(archive), maxArchive=args.max_archive)
     counts = {"archived": 0, "skipped": 0}
