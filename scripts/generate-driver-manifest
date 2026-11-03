@@ -136,7 +136,8 @@ DESCRIPTION_CEILING = 4800
 # 5300 -> 5450 admits the same route with small remaining headroom.
 # 5450 -> 6050 admits their names, descriptions and discovery paths.
 # Atlas adds its name, description and discovery paths (203 characters over the old cap).
-ROOT_CATALOG_CEILING = 6300
+# 6300 -> 6500 admits one semantic task-assessment operator route with bounded headroom.
+ROOT_CATALOG_CEILING = 6500
 # DERIVED, not restated (ADR-0058): the effective ceiling is the per-root ceiling once per root Codex
 # actually catalogs. It was the literal 6400 while Codex had two native roots; hard-coding it would
 # now leave a ceiling that can never bind, which is a gate that always passes (#1611 category D).
@@ -286,6 +287,12 @@ DRIVERS = [
         "id": "board-analyst",
         "scope": "operator",
         "supplied-by": ".claude/skills/board-analyst",
+        "materializes-when": "false",
+    },
+    {
+        "id": "assess-task-hardness",
+        "scope": "operator",
+        "supplied-by": ".claude/skills/assess-task-hardness",
         "materializes-when": "false",
     },
     {
