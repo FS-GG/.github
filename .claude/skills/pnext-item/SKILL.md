@@ -69,9 +69,10 @@ owner work, not another critic or report; inert prose needs none of it.
 
 ## Conditional references
 
-Load [control-plane provenance](references/control-plane-provenance.md) when directives occur;
-[performance-first planning](references/performance-first.md) for interactive/game work;
-[measurement discipline](references/measurement-discipline.md) for counts, absence or unchanged assertions;
+Load [control-plane provenance](references/control-plane-provenance.md) when directives occur.
+Interactive/game implementation loads [performance-first planning](references/performance-first.md)
+before implementation begins. Use [measurement discipline](references/measurement-discipline.md)
+for counts, absence or unchanged assertions;
 and [findings and filing](references/findings-and-filing.md) for material process problems. Check for
 unreported material findings before review completion, return or handoff; do not invent or repeat them.
 Protected actions, bounded waits and private body files use the lifecycle contract's operation-specific
