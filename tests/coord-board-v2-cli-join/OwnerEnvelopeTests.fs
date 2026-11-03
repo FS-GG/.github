@@ -34,9 +34,11 @@ let private fixture () =
         {| schema = "fsgg.coord.owner-envelope/1"; policy = "adr0096-finite-sequence"; rootPolicySha256 = rootPolicy.Sha256
            subject = identity.Subject; owner = identity.Owner; sliceId = identity.Slice; attempt = identity.Attempt; revision = identity.Revision; scopeDigest = identity.ScopeDigest
            head = context.Slices.Head.Head.Value; issuedAt = now.AddMinutes(-1.0); expiresAt = now.AddMinutes 10.0
-           principalId = "viewer-id"; invocation = context.Invocation; immutableInputsSha256 = continuationEnvelopeInputDigest context context.Slices.Head
+           principalId = "viewer-id"; invocation = context.Invocation; immutableInputsSha256 = continuationEnvelopeInputDigest report context context.Slices.Head
            writeDomains = context.Slices.Head.Paths |> List.map (fun path -> context.Slices.Head.Repository + ":" + path)
            original = "original/cursor-42"; runId = 42L; runAttempt = 2; steps = ["observe-ci";"merge-pr"] |}
+    let authority = continuationEnvelopeIdentity report context.Slices.Head
+    let envelopeDocument = {| envelopeDocument with revision = authority.Revision; scopeDigest = authority.ScopeDigest |}
     let body = "<!-- fsgg:owner-continuation-envelope/v1 -->\n" + JsonSerializer.Serialize envelopeDocument
     let reference = { NodeId = "IC_native_root"; UpdatedAt = now.ToString("O"); BodySha256 = digest body }
     let request = { Envelope = Some reference; Subject = identity; Action = Next; Original = Some "original/cursor-42"; Facts = facts }
@@ -86,7 +88,7 @@ let ``native successful original advances covered sequence through registered ex
     let facts = collect report context now request body (Set.minElement policy.RootLogins) (policyBytes ()) "completed" "success" 2
     Assert.Equal(Known true, (facts |> List.find (fun f -> f.Predicate = EnvelopeCurrent)).Value)
     Assert.Equal(Known true, (facts |> List.find (fun f -> f.Predicate = OriginalSucceeded)).Value)
-    let decision = recommendOwnerContinuationsWithFacts (Map.ofList [request.Subject.Slice, facts]) (Map.ofList [request.Subject.Slice, Ok(String.replicate 64 "a")]) report context now [request] |> List.exactlyOne
+    let decision = recommendOwnerContinuationsWithFacts (Map.ofList [request.Subject.Slice, facts]) (Map.ofList [request.Subject.Slice, Ok(RoutineMerge(String.replicate 64 "a"))]) report context now [request] |> List.exactlyOne
     Assert.Equal(ContinueOwner Deliver, decision.Recommendation)
     Assert.True(decision.GrantReference.IsSome)
     Assert.Equal("native-delivery-readback", decision.NextEvent)
@@ -119,7 +121,7 @@ let ``untrusted issuer policy drift changed envelope and expiry cannot advance``
     let nativeBody = if change = "body" then body + " " else body
     let now = if change = "expired" then now.AddMinutes 11.0 else now
     let facts = collect report context now request nativeBody author rawPolicy "completed" "success" 2
-    let decision = recommendOwnerContinuationsWithFacts (Map.ofList [request.Subject.Slice, facts]) (Map.ofList [request.Subject.Slice, Ok(String.replicate 64 "a")]) report context now [request] |> List.exactlyOne
+    let decision = recommendOwnerContinuationsWithFacts (Map.ofList [request.Subject.Slice, facts]) (Map.ofList [request.Subject.Slice, Ok(RoutineMerge(String.replicate 64 "a"))]) report context now [request] |> List.exactlyOne
     Assert.NotEqual<Recommendation>(ContinueOwner Deliver, decision.Recommendation)
 
 [<Fact>]
@@ -142,13 +144,13 @@ let ``fresh positives cannot hide stale conflicting evidence`` () =
 
 [<Fact>]
 let ``metadata clocks refresh without a circular grant while body head and hierarchy revoke`` () =
-    let _, context, _, _, _, _ = fixture ()
+    let report, context, _, _, _, _ = fixture ()
     let slice = context.Slices.Head
-    let initial = continuationEnvelopeInputDigest context slice
+    let initial = continuationEnvelopeInputDigest report context slice
     let clockOnly = {slice with Join = {slice.Join with UpdatedAt = "a-new-native-comment-clock"}; PullRequestUpdatedAt = Some "new-native-check-clock"}
-    Assert.Equal(initial, continuationEnvelopeInputDigest {context with ObservedAt = context.ObservedAt.AddSeconds 1.0; InputSha256 = String.replicate 64 "b"} clockOnly)
+    Assert.Equal(initial, continuationEnvelopeInputDigest report {context with ObservedAt = context.ObservedAt.AddSeconds 1.0; InputSha256 = String.replicate 64 "b"} clockOnly)
     for drift in [ {slice with Join = {slice.Join with BodySha256 = String.replicate 64 "b"}}; {slice with Head = Some(String.replicate 40 "b")}; {slice with Join = {slice.Join with HierarchySha256 = Some(String.replicate 64 "b")}} ] do
-        Assert.NotEqual<string>(initial, continuationEnvelopeInputDigest context drift)
+        Assert.NotEqual<string>(initial, continuationEnvelopeInputDigest report context drift)
 
 [<Fact>]
 let ``reviewer self contributor and incomplete contribution claims cannot complete review`` () =
@@ -159,7 +161,7 @@ let ``reviewer self contributor and incomplete contribution claims cannot comple
                 {f with Support = AgentAttestation { Supplier = supplier; Role = "reviewer"; ActualModel = None; ActualEffort = None; Method = "review"; Contributors = contributors; ContributorsComplete = complete; Limitations = ["fixture"] }}
             else f)
         let r = {request with Envelope = None; Original = None; Action = Deliver; Facts = facts @ [{facts.Head with Id = "effect-clear"; Predicate = EffectClear}]}
-        let decision = recommendOwnerContinuationsWithPreflight (Map.ofList [r.Subject.Slice, Ok(String.replicate 64 "a")]) report context now [r] |> List.exactlyOne
+        let decision = recommendOwnerContinuationsWithPreflight (Map.ofList [r.Subject.Slice, Ok(RoutineMerge(String.replicate 64 "a"))]) report context now [r] |> List.exactlyOne
         Assert.Equal(Await "independent-source-review", decision.Recommendation)
 
 [<Fact>]
@@ -193,7 +195,7 @@ let ``explicit same issuer supersession advances while future evidence cannot le
     let r = {request with Envelope = None; Original = None; Facts = other @ [old;next;{old with Id = "effect-clear"; Predicate = EffectClear; Value = Known true}]}
     let before = recommendOwnerContinuations report context now [r] |> List.exactlyOne
     Assert.NotEqual<Recommendation>(ContinueOwner Deliver, before.Recommendation)
-    let after = recommendOwnerContinuationsWithPreflight (Map.ofList [r.Subject.Slice, Ok(String.replicate 64 "a")]) report context (now.AddSeconds 20.0) [r] |> List.exactlyOne
+    let after = recommendOwnerContinuationsWithPreflight (Map.ofList [r.Subject.Slice, Ok(RoutineMerge(String.replicate 64 "a"))]) report context (now.AddSeconds 20.0) [r] |> List.exactlyOne
     Assert.Equal(ContinueOwner Deliver, after.Recommendation)
     Assert.Contains(old.Id, after.DeterminingFacts)
     Assert.Contains(next.Id, after.DeterminingFacts)
@@ -209,3 +211,154 @@ let ``supersession cannot cross issuer scope predicate or form cycles`` () =
         Assert.Equal(RequestJudgment "invalid-fact-supersession", decision.Recommendation)
     let cycle = {request with Envelope = None; Original = None; Facts = [{old with Supersedes = [second.Id]}; second]}
     Assert.Equal(RequestJudgment "invalid-fact-supersession", (recommendOwnerContinuations report context now [cycle] |> List.exactlyOne).Recommendation)
+
+[<Fact>]
+let ``resolved original cannot hide a different overlapping uncertain original`` () =
+    let report, context, now, request, body, policy = fixture ()
+    let resolved = collect report context now request body (Set.minElement policy.RootLogins) (policyBytes ()) "completed" "success" 2
+    let slice = context.Slices.Head
+    let hold: Reservation = {SliceId = slice.Id; Attempt = "different-attempt"; Operation = slice.Operation; Owner = slice.Owner; Repository = slice.Repository; Paths = slice.Paths; PullRequest = slice.PullRequest; Head = slice.Head; CustodyReference = "original/other-unknown"}
+    let decision = recommendOwnerContinuationsWithFacts (Map.ofList [request.Subject.Slice, resolved]) (Map.ofList [request.Subject.Slice, Ok(RoutineMerge(String.replicate 64 "a"))]) report {context with Reservations = Some [hold]} now [request] |> List.exactlyOne
+    Assert.Equal(ObserveOriginal "original/other-unknown", decision.Recommendation)
+    Assert.True(decision.GrantReference.IsNone)
+    let failed = resolved |> List.map (fun f -> if f.Predicate = OriginalSucceeded then {f with Value = Known false} elif f.Predicate = OriginalFailed then {f with Value = Known true} else f)
+    let decision = recommendOwnerContinuationsWithFacts (Map.ofList [request.Subject.Slice, failed]) Map.empty report {context with Reservations = Some [hold]} now [request] |> List.exactlyOne
+    Assert.Equal(ObserveOriginal "original/other-unknown", decision.Recommendation)
+
+[<Fact>]
+let ``route support advice explicitly retains unobserved executor authority refreshes`` () =
+    let report, context, now, request, body, policy = fixture ()
+    let resolved = collect report context now request body (Set.minElement policy.RootLogins) (policyBytes ()) "completed" "success" 2
+    let decision = recommendOwnerContinuationsWithFacts (Map.ofList [request.Subject.Slice, resolved]) (Map.ofList [request.Subject.Slice, Ok(RoutineMerge(String.replicate 64 "a"))]) report context now [request] |> List.exactlyOne
+    Assert.Equal(ContinueOwner Deliver, decision.Recommendation)
+    Assert.Contains("executor-current-r1-linkage", decision.RequiredRefresh)
+    Assert.Contains("executor-delivery-marker", decision.RequiredRefresh)
+
+[<Theory>]
+[<InlineData(false)>]
+[<InlineData(true)>]
+let ``missing or owner reported absent review initiates review without reviewer approval of absence`` ownerReportsAbsence =
+    let report, context, now, request, _, _ = fixture ()
+    let ownerFact = request.Facts.Head
+    let facts = request.Facts |> List.filter (fun f -> f.Predicate <> IndependentReview)
+    let absent = if ownerReportsAbsence then [{ownerFact with Id = "review-not-obtained"; Predicate = IndependentReview; Value = Known false}] else []
+    let r = {request with Envelope = None; Original = None; Facts = facts @ absent @ [{ownerFact with Id = "effect-clear"; Predicate = EffectClear}]}
+    Assert.Equal(ContinueOwner Review, (recommendOwnerContinuations report context now [r] |> List.exactlyOne).Recommendation)
+
+[<Fact>]
+let ``native changes required returns same owner to implementation and native CI failure awaits repair`` () =
+    let report, context, now, request, _, _ = fixture ()
+    let r = {request with Envelope = None; Original = None; Facts = request.Facts @ [{request.Facts.Head with Id = "effect-clear"; Predicate = EffectClear}]}
+    let changes = {report with NativeIntegrator = {report.NativeIntegrator with PullRequests = report.NativeIntegrator.PullRequests |> List.map (fun p -> {p with ReviewDecision = Some "CHANGES_REQUESTED"})}}
+    Assert.Equal(ContinueOwner OwnerContinuation.Implement, (recommendOwnerContinuations changes context now [r] |> List.exactlyOne).Recommendation)
+    let failed = {report with NativeIntegrator = {report.NativeIntegrator with PullRequests = report.NativeIntegrator.PullRequests |> List.map (fun p -> {p with Checks = ["ci:COMPLETED:FAILURE"]})}}
+    Assert.Equal(Await "native-check-qualification", (recommendOwnerContinuations failed context now [r] |> List.exactlyOne).Recommendation)
+
+[<Fact>]
+let ``explicit reviewer repair evidence cannot be erased by absent native changes request`` () =
+    let report, context, now, request, _, _ = fixture ()
+    let review = request.Facts |> List.find (fun f -> f.Predicate = IndependentReview)
+    let repair = {review with Id = "independent-repair-finding"; Predicate = ChangesRequired}
+    let r = {request with Envelope = None; Original = None; Facts = request.Facts @ [repair;{request.Facts.Head with Id = "effect-clear"; Predicate = EffectClear}]}
+    Assert.Equal(ContinueOwner OwnerContinuation.Implement, (recommendOwnerContinuations report context now [r] |> List.exactlyOne).Recommendation)
+    Assert.Equal(Await "owner-source-repair", (recommendOwnerContinuations report context now [{r with Action = Deliver}] |> List.exactlyOne).Recommendation)
+
+[<Fact>]
+let ``owning plan and dependency comment clocks cannot create an envelope digest fixed point`` () =
+    let original, context, now, request, _, _ = fixture ()
+    let item = original.Items.Head
+    let source = item.Evidence.Native.Value
+    let plan = {source with NodeId = "I_plan"; Url = "https://github.com/FS-GG/.github/issues/3008"; UpdatedAt = "2026-11-03T13:59:00Z"; BodySha256 = String.replicate 64 "e"}
+    let dependency = {plan with NodeId = "I_dependency"; Url = "https://github.com/FS-GG/.github/issues/42"}
+    let report = {original with Items = [{item with Evidence = {item.Evidence with PlanObservation = Some plan; DependencyObservations = [dependency]; DependencyReadComplete = true}}]}
+    let slice = context.Slices.Head
+    let expected = continuationEnvelopeInputDigest report context slice
+    let afterPlan = {plan with UpdatedAt = now.ToString("O")}
+    let afterDependency = {dependency with UpdatedAt = now.ToString("O")}
+    let changed = {report with Items = [{report.Items.Head with SourceRevision = Some(slice.Join.SourceRevision + "-current-native-plan-clock"); Evidence = {report.Items.Head.Evidence with PlanObservation = Some afterPlan; DependencyObservations = [afterDependency]}}]}
+    let refreshed = {slice with Join = {slice.Join with SourceRevision = changed.Items.Head.SourceRevision.Value}}
+    Assert.Equal(expected, continuationEnvelopeInputDigest changed {context with Slices = [refreshed]} refreshed)
+    let bodyChanged = {changed with Items = [{changed.Items.Head with Evidence = {changed.Items.Head.Evidence with PlanObservation = Some {afterPlan with BodySha256 = String.replicate 64 "b"}}}]}
+    Assert.NotEqual<string>(expected, continuationEnvelopeInputDigest bodyChanged context refreshed)
+    let edgeChanged = {changed with Items = [{changed.Items.Head with Evidence = {changed.Items.Head.Evidence with DependencyObservations = []}}]}
+    Assert.NotEqual<string>(expected, continuationEnvelopeInputDigest edgeChanged context refreshed)
+
+let private mergedCollector closeIssue (request: Transport.Request) (response: Errors.IoResult<Transport.Response>) =
+    response |> Result.map (fun response ->
+        match request.Body with
+        | Query(document, _) when document.Contains("pullRequests(first:") ->
+            let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+            let connection = root.["data"].["repository"].["pullRequests"]
+            connection.["nodes"].AsArray().Clear()
+            connection.["totalCount"] <- JsonSerializer.SerializeToNode 0
+            {response with Body = root.ToJsonString()}
+        | Query _ when request.Subject.EndsWith(" Current deliverable native join", StringComparison.Ordinal) ->
+            let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+            root.["data"].["repository"].["pullRequest"].["state"] <- JsonSerializer.SerializeToNode "MERGED"
+            {response with Body = root.ToJsonString()}
+        | Query _ when closeIssue && request.Subject.EndsWith(" native observation", StringComparison.Ordinal) ->
+            let root = System.Text.Json.Nodes.JsonNode.Parse response.Body
+            root.["data"].["repository"].["issue"].["state"] <- JsonSerializer.SerializeToNode "CLOSED"
+            {response with Body = root.ToJsonString()}
+        | _ -> response)
+
+[<Theory>]
+[<InlineData(false)>]
+[<InlineData(true)>]
+let ``actual native collector merged only identity readback continues acceptance even when issue closed`` closed =
+    let transport = ProgrammeFixture.transport (mergedCollector closed)
+    let report = inspectFixed transport (ProgrammeFixture.binding ()) None
+    let context = ProgrammeFixture.context report
+    let merged = report.NativeIntegrator.PullRequests |> List.find (fun p -> p.State = "MERGED")
+    Assert.False(merged.ScopeCurrent)
+    Assert.Empty merged.Checks
+    let slice = {context.Slices.Head with PullRequest = Some merged.Url; PullRequestId = Some merged.Id; PullRequestUpdatedAt = Some merged.UpdatedAt; Head = Some merged.Head}
+    let context = {context with Slices = [slice]}
+    let _, _, _, original, _, _ = fixture ()
+    let identity = continuationIdentity slice
+    let r = {original with Envelope = None; Original = None; Subject = identity; Facts = original.Facts |> List.map (fun fact -> {fact with Subject = identity; ObservedAt = context.ObservedAt; ValidUntil = context.ValidUntil})}
+    let advice = recommendOwnerContinuations report context context.ObservedAt [r] |> List.exactlyOne
+    Assert.Equal(Await "delivery-acceptance-readback", advice.Recommendation)
+    Assert.Empty transport.Mutations
+
+[<Theory>]
+[<InlineData("SKIPPED")>]
+[<InlineData("NEUTRAL")>]
+let ``accepted native rollup conclusions do not veto the qualified delivery route`` conclusion =
+    let report, context, now, request, _, _ = fixture ()
+    let report = {report with NativeIntegrator = {report.NativeIntegrator with PullRequests = report.NativeIntegrator.PullRequests |> List.map (fun p -> {p with Checks = ["required:COMPLETED:SUCCESS"; "conditional:COMPLETED:" + conclusion]})}}
+    let r = {request with Envelope = None; Original = None; Facts = request.Facts @ [{request.Facts.Head with Id = "effect-clear"; Predicate = EffectClear}]}
+    let advice = recommendOwnerContinuationsWithPreflight (Map.ofList [r.Subject.Slice, Ok(RoutineMerge(String.replicate 64 "a"))]) report context now [r] |> List.exactlyOne
+    Assert.Equal(ContinueOwner Deliver, advice.Recommendation)
+    Assert.Contains("executor-native-required-check-population", advice.RequiredRefresh)
+
+[<Fact>]
+let ``owned no PR progresses through the actual registered draft route before CI and review`` () =
+    let transport = ProgrammeFixture.transport ProgrammeFixture.newAssignment
+    let report = inspectFixed transport (ProgrammeFixture.binding ()) None
+    let context = ProgrammeFixture.context report
+    let identity = continuationIdentity context.Slices.Head
+    let _, _, _, original, _, _ = fixture ()
+    let facts = original.Facts |> List.filter (fun fact -> fact.Predicate <> IndependentReview) |> List.map (fun fact -> {fact with Subject = identity; ObservedAt = context.ObservedAt; ValidUntil = context.ValidUntil})
+    let r = {original with Envelope = None; Original = None; Subject = identity; Facts = facts @ [{facts.Head with Id = "effect-clear"; Predicate = EffectClear}]}
+    let inputs: V2Preflight.RoutineInputs =
+        {DefaultBranch = "main"; Candidate = V2Preflight.Known {BaseRef = "main"; BaseSha = None; HeadRef = "routine/owned-source"; HeadSha = ProgrammeFixture.head; State = None}
+         LiveBaseSha = V2Preflight.Known ProgrammeFixture.head; OpenPullRequests = V2Preflight.Known 0
+         RoutineGate = V2Preflight.Known V2Preflight.Admitted; ClosingGate = V2Preflight.Known V2Preflight.NoClosing}
+    let registered = V2Preflight.runRoutine V2Preflight.OpenPullRequest inputs
+    Assert.Equal(V2Preflight.AllSupported, registered.Overall)
+    let proof = RoutineDraft(digest (V2Preflight.toJson registered), ProgrammeFixture.head)
+    let advice = recommendOwnerContinuationsWithPreflight (Map.ofList [identity.Slice, Ok proof]) report context context.ObservedAt [r] |> List.exactlyOne
+    Assert.Equal(ContinueOwner OpenDraft, advice.Recommendation)
+    Assert.Equal(Some ProgrammeFixture.head, advice.ArtifactRevision)
+    Assert.Contains("executor-draft-true-at-create", advice.RequiredRefresh)
+    Assert.Empty transport.Mutations
+
+[<Fact>]
+let ``changed owning promise needs scoped judgment while a timestamp alone needs only refresh`` () =
+    let report, context, now, request, _, _ = fixture ()
+    let r = {request with Envelope = None; Original = None; Action = VerifyIsolated; Facts = request.Facts @ [{request.Facts.Head with Id = "effect-clear"; Predicate = EffectClear}]}
+    let body = {report with Items = report.Items |> List.map (fun item -> {item with Evidence = {item.Evidence with Native = item.Evidence.Native |> Option.map (fun native -> {native with BodySha256 = String.replicate 64 "b"})}})}
+    Assert.Equal(RequestJudgment "reconcile-changed-owner-scope", (recommendOwnerContinuations body context now [r] |> List.exactlyOne).Recommendation)
+    let clock = {report with Items = report.Items |> List.map (fun item -> {item with Evidence = {item.Evidence with Native = item.Evidence.Native |> Option.map (fun native -> {native with UpdatedAt = "2026-11-03T14:01:00Z"})}})}
+    Assert.Equal(Await "native-scope-refresh", (recommendOwnerContinuations clock context now [r] |> List.exactlyOne).Recommendation)

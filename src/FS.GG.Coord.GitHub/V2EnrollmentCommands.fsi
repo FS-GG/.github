@@ -31,6 +31,9 @@ module V2EnrollmentCommands =
     val observeRoutineMerge:
         repository: string -> slug: string -> pullRequest: int -> expectedHead: string -> Result<V2Preflight.Report, string>
 
+    /// Actual registered OpenPullRequest collector; source HEAD is observed with the maintained gates.
+    val observeRoutineOpen: repository: string -> slug: string -> title: string -> bodyFile: string -> Result<V2Preflight.Report * string, string>
+
     /// The pure splice behind `rebind-reader` (#5120): each `(name, old, new)` names a top-level string field, its current
     /// value and a 40- or 64-hex replacement. Only that value's bytes change; every other byte is carried over. `Error
     /// MalformedInput` unless each old value is the top-level value, its `"name": "old"` occurrence is unique in the text,

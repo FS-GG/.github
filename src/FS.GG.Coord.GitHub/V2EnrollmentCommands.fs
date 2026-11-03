@@ -844,6 +844,14 @@ module V2EnrollmentCommands =
             if head = Some expectedHead then Ok report else Error "preflight-head-changed-or-unknown"
         with _ -> Error "registered-routine-preflight-unavailable"
 
+    let observeRoutineOpen (repository: string) (slug: string) (title: string) (bodyFile: string) =
+        try
+            let values = Collections.Generic.Dictionary<string, string>()
+            for key, value in ["--repository", repository; "--slug", slug; "--title", title; "--body-file", bodyFile] do values.[key] <- value
+            let report, head = collectRoutinePreflight V2Preflight.OpenPullRequest values true
+            match head with Some head -> Ok(report, head) | None -> Error "draft-source-head-unknown"
+        with _ -> Error "registered-draft-preflight-unavailable"
+
     let private preflightPublication (stage: V2Preflight.Stage) (values: Collections.Generic.Dictionary<string, string>) (online: bool) : int =
         requiredFor values [ "--workflow" ]
         let repository = programmePath values.["--repository"]

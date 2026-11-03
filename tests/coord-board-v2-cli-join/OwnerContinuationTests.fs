@@ -57,7 +57,7 @@ let ``reported and wrong-subject positive facts never establish an executable pr
 let ``stale future and earliest-read five minute bounds are conservative`` () =
     for time in [ now.AddSeconds 1.0; now.AddMinutes(-5.0).AddTicks(-1L); DateTimeOffset.MinValue ] do
         let r = { request with Facts = request.Facts |> List.map (fun f -> if f.Predicate = ScopeCurrent then { f with ObservedAt = time; ValidUntil = now.AddMinutes 1.0 } else f) }
-        Assert.Equal(RequestJudgment "refresh-exact-owner-scope", (decision r).Recommendation)
+        Assert.Equal(Await "native-scope-refresh", (decision r).Recommendation)
     let r = { request with Facts = request.Facts |> List.map (fun f -> { f with ObservedAt = now.AddMinutes(-5.0) }) }
     Assert.Equal(ContinueOwner VerifyIsolated, (decision r).Recommendation)
 
@@ -82,8 +82,8 @@ let ``duplicate identities refuse and preserve explicit conflicts`` () =
 
 [<Fact>]
 let ``agent attestation of native checks cannot establish protected delivery`` () =
-    let r = { request with Action = Deliver; Facts = request.Facts @ [fact NativeChecks; fact IndependentReview] }
-    Assert.Equal(Await "native-required-checks", (decision r).Recommendation)
+    let r = { request with Action = Deliver; Facts = request.Facts @ [fact NativeRollup; fact IndependentReview; {fact NativePullRequest with Support = NativeObservation("adapter", subject.ScopeDigest)}] }
+    Assert.Equal(Await "native-check-qualification", (decision r).Recommendation)
 
 let private observed () =
     let transport = ProgrammeFixture.transport ProgrammeFixture.newAssignment
@@ -96,11 +96,11 @@ let private envelope (context: SelectionContext) original =
     let slice = context.Slices.Head
     let identity = continuationIdentity slice
     let facts = [EffectClear; Isolated; ResourceShare] |> List.map (fun predicate ->
-        {| id = predicateName predicate; predicate = predicateName predicate; state = "known"; value = true; detail = ([]: string list)
+        {| id = predicateName predicate; scopeDigest = identity.ScopeDigest; predicate = predicateName predicate; state = "known"; value = true; detail = ([]: string list)
            support = {| kind = "attestation"; supplier = slice.Owner; role = "owner"; model = (None: string option); effort = (None: string option); method = "isolated fresh outputs, credential free, bounded share"; contributors = [slice.Owner]; contributorsComplete = true; limitations = ["fixture"] |}
            observedAt = context.ObservedAt; validUntil = context.ValidUntil; evidence = ["isolated-private-output-and-resource-share"]; supersedes = ([]: string list) |})
     use integrator = JsonDocument.Parse(ProgrammeFixture.integratorJson context)
-    JsonSerializer.Serialize {| schema = "fsgg.coord.owner-continuation-input/1"; repositoryCheckout = (None: string option); integrator = integrator.RootElement;
+    JsonSerializer.Serialize {| schema = "fsgg.coord.owner-continuation-input/1"; repositoryCheckout = (None: string option); draft = (None: string option); integrator = integrator.RootElement;
                                requests = [ {| sliceId = slice.Id; attempt = slice.Attempt; owner = slice.Owner; revision = identity.Revision
                                                scopeDigest = identity.ScopeDigest; action = "verify-isolated"; original = original; envelope = (None: string option); facts = facts |} ] |}
 
@@ -123,7 +123,7 @@ let ``adapter joins native owner scope and revision while unrelated gaps do not 
     let output = recommendOwnerContinuations { report with MembershipGap = Some(Errors.Malformed("unrelated", "missing")); NativeIntegrator = { report.NativeIntegrator with RepositoryGaps = Map.ofList ["FS-GG/Other", "unavailable"] } } { context with ImplementationSlots = None; CapacityObservation = None } context.ObservedAt [r]
     Assert.Equal(ContinueOwner VerifyIsolated, output.Head.Recommendation)
     let wrong = { context with Slices = [{slice with Owner = "new-owner"}] }
-    Assert.Equal(RequestJudgment "refresh-exact-owner-scope", (recommendOwnerContinuations report wrong context.ObservedAt [r]).Head.Recommendation)
+    Assert.Equal(Await "native-scope-refresh", (recommendOwnerContinuations report wrong context.ObservedAt [r]).Head.Recommendation)
 
 [<Theory>]
 [<InlineData(false)>]
@@ -148,6 +148,7 @@ let ``actual inspect CLI emits owner advice or retains original with zero native
         let advice = root.GetProperty("ownerContinuation").[0]
         Assert.Equal((if original then "observe-original" else "continue-owner"), advice.GetProperty("kind").GetString())
         Assert.False(advice.GetProperty("dispatchAuthority").GetBoolean())
+        Assert.False(root.TryGetProperty("selection") |> fst)
         Assert.Equal(context.Slices.Head.Attempt, advice.GetProperty("attempt").GetString())
         Assert.Empty transport.Mutations
     finally Directory.Delete(directory, true)
@@ -159,3 +160,79 @@ let ``owner continuation flag is read only mutually exclusive and opt in`` () =
     Assert.True(validate (["inspect"] @ files @ ["--owner-continuation-stdin"]) |> Result.isOk)
     Assert.True(validate (["refresh"] @ files @ ["--owner-continuation-stdin"]) |> Result.isError)
     Assert.True(validate (["inspect"] @ files @ ["--owner-continuation-stdin";"--integrator-stdin"]) |> Result.isError)
+
+[<Fact>]
+let ``semantic identity is quiet across explicit clock changes and changes at freshness expiry`` () =
+    let first = recommend now request
+    let same = recommend (now.AddSeconds 1.0) request
+    let expired = recommend (now.AddMinutes 2.0) request
+    Assert.Equal(first.Id, same.Id)
+    Assert.NotEqual<string>(first.InputDigest, same.InputDigest)
+    Assert.NotEqual<string>(first.Id, expired.Id)
+    Assert.Equal(Await "native-scope-refresh", expired.Recommendation)
+
+[<Fact>]
+let ``actual compact owner report resumes its own history without promoting history to facts`` () =
+    let _, context = observed ()
+    let json = envelope context (None: string option)
+    let directory = Path.Combine(Path.GetTempPath(), "owner-history-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    try
+        let binding = Path.Combine(directory, "binding.json")
+        File.WriteAllText(binding, ProgrammeFixture.bindingJson ())
+        let run name previous =
+            let output = Path.Combine(directory, name)
+            let transport = ProgrammeFixture.transport ProgrammeFixture.newAssignment
+            use input = new StringReader(json)
+            let args = ["inspect"; "--binding-file"; binding; "--report-file"; output; "--owner-continuation-stdin"] @ (previous |> Option.map (fun path -> ["--previous-report-file"; path]) |> Option.defaultValue [])
+            Assert.Equal(0, BoardV2Application.runWithTransportAndInput directory transport input args)
+            Assert.Empty transport.Mutations
+            use document = JsonDocument.Parse(File.ReadAllText output)
+            output, document.RootElement.Clone()
+        let firstPath, first = run "first.json" None
+        let _, second = run "second.json" (Some firstPath)
+        Assert.False(first.TryGetProperty("items") |> fst)
+        Assert.Equal(1, first.GetProperty("changedOwnerContinuation").GetArrayLength())
+        Assert.Equal(0, second.GetProperty("changedOwnerContinuation").GetArrayLength())
+        Assert.Equal(first.GetProperty("ownerContinuation").[0].GetProperty("id").GetString(), second.GetProperty("ownerContinuation").[0].GetProperty("id").GetString())
+        Assert.Equal("continue-owner", second.GetProperty("ownerContinuation").[0].GetProperty("kind").GetString())
+    finally Directory.Delete(directory, true)
+
+[<Fact>]
+let ``fact decoder refuses copying review evidence to a different source scope`` () =
+    let _, context = observed ()
+    let json = envelope context (None: string option)
+    let node = System.Text.Json.Nodes.JsonNode.Parse json
+    node.["requests"].[0].["facts"].[0].["scopeDigest"] <- JsonSerializer.SerializeToNode(String.replicate 64 "f")
+    Assert.True(BoardV2Application.parseOwnerContinuationObservations (ProgrammeFixture.binding ()) (node.ToJsonString()) |> Result.isError)
+
+[<Theory>]
+[<InlineData(false)>]
+[<InlineData(true)>]
+let ``actual owner invocation scopes item gaps while retaining global membership failure`` membershipGap =
+    let first = ProgrammeFixture.issue
+    let other = {first with Number = 4700}
+    let rows = ["I_outcome", first, "docs/coordination/programme.md"; "I_other", other, "docs/coordination/programme.md"]
+    let baseBinding = ProgrammeFixture.binding ()
+    let selected = {baseBinding with SelectedIssues = Map.ofList ["I_outcome", "FS-GG/.github#4634"; "I_other", "FS-GG/.github#4700"]} |> fun binding -> ProgrammeFixture.enroll binding rows
+    let healthy = ProgrammeFixture.populationTransport selected rows ProgrammeFixture.unchanged
+    let report = inspectFixed healthy selected None
+    let context = ProgrammeFixture.context report
+    let directory = Path.Combine(Path.GetTempPath(), "owner-scoped-exit-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+    try
+        let bindingPath = Path.Combine(directory, "binding.json")
+        let output = Path.Combine(directory, "report.json")
+        File.WriteAllText(bindingPath, ProgrammeFixture.bindingJsonFor selected)
+        let change (request: Transport.Request) response =
+            if (membershipGap && request.Subject = "complete V2 project memberships") || (not membershipGap && request.Subject = "FS-GG/.github#4700 native observation") then
+                Error(Errors.Malformed(request.Subject, "synthetic unavailable supplier"))
+            else response
+        let transport = ProgrammeFixture.populationTransport selected rows change
+        use input = new StringReader(envelope context (None: string option))
+        let result = BoardV2Application.runWithTransportAndInput directory transport input ["inspect"; "--binding-file"; bindingPath; "--report-file"; output; "--owner-continuation-stdin"]
+        Assert.Equal((if membershipGap then 3 else 0), result)
+        use document = JsonDocument.Parse(File.ReadAllText output)
+        Assert.Equal((if membershipGap then "await" else "continue-owner"), document.RootElement.GetProperty("ownerContinuation").[0].GetProperty("kind").GetString())
+        Assert.Empty transport.Mutations
+    finally Directory.Delete(directory, true)

@@ -41,6 +41,7 @@ module OwnerContinuationReads =
             let gap () = [fact EnvelopeCurrent (Unknown "native-envelope-policy-or-identity-gap") [reference.NodeId] reference.BodySha256]
             try
                 let slice = context.Slices |> List.find (fun s -> continuationIdentity s = request.Subject)
+                let immutableIdentity = continuationEnvelopeIdentity report slice
                 let parts = slice.Repository.Split('/')
                 // Source policy is always the canonical hub policy, including for receiver subjects.
                 let document = "query($id: ID!, $subjectId: ID!, $owner: String!, $repo: String!) { viewer { id } subject: node(id: $subjectId) { ... on Issue { id parent { id number repository { nameWithOwner } } } } node(id: $id) { ... on IssueComment { id body updatedAt lastEditedAt author { login } editor { login } issue { number repository { nameWithOwner } } } } repository(owner: $owner, name: $repo) { nameWithOwner policy: object(expression: \"main:scripts/root-identity-policy.json\") { ... on Blob { text } } } rateLimit { cost remaining } }"
@@ -82,15 +83,19 @@ module OwnerContinuationReads =
                             text "schema" envelope = "fsgg.coord.owner-envelope/1" && text "policy" envelope = "adr0096-finite-sequence"
                             && text "rootPolicySha256" envelope = policy.Sha256 && text "subject" envelope = request.Subject.Subject
                             && text "owner" envelope = request.Subject.Owner && text "sliceId" envelope = request.Subject.Slice
-                            && text "attempt" envelope = request.Subject.Attempt && text "revision" envelope = request.Subject.Revision
-                            && text "scopeDigest" envelope = request.Subject.ScopeDigest && Some(text "head" envelope) = slice.Head
+                            && text "attempt" envelope = request.Subject.Attempt && text "revision" envelope = immutableIdentity.Revision
+                            && text "scopeDigest" envelope = immutableIdentity.ScopeDigest && Some(text "head" envelope) = slice.Head
                             && text "principalId" envelope = (data.GetProperty "viewer" |> text "id")
-                            && text "invocation" envelope = context.Invocation && text "immutableInputsSha256" envelope = continuationEnvelopeInputDigest context slice
+                            && text "invocation" envelope = context.Invocation && text "immutableInputsSha256" envelope = continuationEnvelopeInputDigest report context slice
                             && List.sort (strings "writeDomains") = domains && strings "steps" = ["observe-ci"; "merge-pr"]
                             && Some original = request.Original && run > 0L && attempt > 0 && issued <= now && issued < expires
                         let valid = bound && now <= expires
-                        let envelopeFact = fact EnvelopeCurrent (Known valid) [reference.NodeId] reference.BodySha256
-                        if not bound then [envelopeFact]
+                        let envelopeFact = fact EnvelopeCurrent (Known valid) [reference.NodeId; original] reference.BodySha256
+                        let originalBound = text "subject" envelope = request.Subject.Subject && text "owner" envelope = request.Subject.Owner
+                                            && text "sliceId" envelope = request.Subject.Slice && text "attempt" envelope = request.Subject.Attempt
+                                            && Some(text "head" envelope) = slice.Head && Some original = request.Original && run > 0L && attempt > 0
+                        // Current execution authority can lapse without erasing readback of the exact original.
+                        if not originalBound then [envelopeFact]
                         else
                             let path = $"repos/{parts[0]}/{parts[1]}/actions/runs/{run}/attempts/{attempt}"
                             let read = { Method = "GET"; Path = path; Query = []; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = "owner-continuation-original-readback" }

@@ -201,21 +201,23 @@ module V2ProjectionSource =
     /// Exact owner/slice/attempt/source/path/PR/head binding for opt-in owner continuation.
     val continuationIdentity: slice: CurrentSlice -> FS.GG.Coord.OwnerContinuation.Identity
     /// Canonical finite-envelope operands; excludes mutable observation clocks and envelope self-reference.
-    val continuationEnvelopeInputDigest: context: SelectionContext -> slice: CurrentSlice -> string
+    val continuationEnvelopeIdentity: report: InspectionReport -> slice: CurrentSlice -> FS.GG.Coord.OwnerContinuation.Identity
+    val continuationEnvelopeInputDigest: report: InspectionReport -> context: SelectionContext -> slice: CurrentSlice -> string
     /// Pure read-only recommendations. Ordinary isolated verification bypasses dispatch selection.
     /// Native source joins are supplied here; supplied native support is discarded.
     val recommendOwnerContinuations:
         report: InspectionReport -> context: SelectionContext -> now: DateTimeOffset ->
         requests: FS.GG.Coord.OwnerContinuation.Request list -> FS.GG.Coord.OwnerContinuation.Decision list
 
+    type RegisteredOwnerPreflight = RoutineMerge of digest: string | RoutineDraft of digest: string * head: string
     /// Production supplies the existing registered route reader only when the inferred next step is delivery.
     val recommendOwnerContinuationsWithPreflight:
-        preflight: Map<string, Result<string, string>> ->
+        preflight: Map<string, Result<RegisteredOwnerPreflight, string>> ->
         report: InspectionReport -> context: SelectionContext -> now: DateTimeOffset ->
         requests: FS.GG.Coord.OwnerContinuation.Request list -> FS.GG.Coord.OwnerContinuation.Decision list
 
     /// Trusted adapter composition supplies live original/envelope facts; caller-reported native facts remain excluded.
     val recommendOwnerContinuationsWithFacts:
         additional: Map<string, FS.GG.Coord.OwnerContinuation.Fact list> ->
-        preflight: Map<string, Result<string, string>> -> report: InspectionReport -> context: SelectionContext ->
+        preflight: Map<string, Result<RegisteredOwnerPreflight, string>> -> report: InspectionReport -> context: SelectionContext ->
         now: DateTimeOffset -> requests: FS.GG.Coord.OwnerContinuation.Request list -> FS.GG.Coord.OwnerContinuation.Decision list
