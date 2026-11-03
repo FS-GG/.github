@@ -29,6 +29,27 @@ RULES = {
 def canonical(x):
  return (json.dumps(x, sort_keys=True, separators=(',', ':'), ensure_ascii=False)+'\n').encode()
 
+def hardness_projection(policy=None):
+    """Native display policy; provisional assessment/routing facts remain untouched."""
+    default = dict(schema='fsgg.learn-hardness-projection/1', mode='withhold-unvalidated')
+    if policy is None:
+        return default
+    if (not isinstance(policy, dict) or set(policy) - {'schema', 'mode', 'dispositionReference'}
+            or policy.get('schema') != default['schema'] or policy.get('mode') != default['mode']):
+        raise ValueError('unsupported hardness projection policy; known native labels are not enabled')
+    if 'dispositionReference' in policy and not re.fullmatch(
+            r'https://github.com/FS-GG/[\w.-]+/issues/[1-9][0-9]*#issuecomment-[1-9][0-9]*',
+            policy['dispositionReference'] if isinstance(policy['dispositionReference'], str) else ''):
+        raise ValueError('hardness disposition requires an exact owning decision comment reference')
+    return dict(policy)
+
+
+def native_hardness(record):
+    hardness_projection(record.get('hardnessProjection'))
+    # No validated construct/model/effort transfer is established by a rubric score.
+    return 'Unknown'
+
+
 def classify(snapshot):
  for key in ('itemId','body','capturedAt','sourceRevision','dispatchBoundary','producer'):
   if not isinstance(snapshot.get(key),str) or not snapshot[key].strip():
@@ -63,6 +84,7 @@ def classify(snapshot):
   raise ValueError('propensity must be in (0,1]')
  if propensity!=1: raise ValueError('v1 deterministic policy has propensity 1; exploration is not enabled')
  return dict(schema='fsgg.learn-dispatch/1',itemId=snapshot['itemId'],rubricVersion=RUBRIC,policyVersion=POLICY,
+  hardnessProjection=hardness_projection(snapshot.get('hardnessProjection')),
   capturedAt=snapshot['capturedAt'],sourceRevision=snapshot['sourceRevision'],dispatchBoundary=snapshot['dispatchBoundary'],
   producer=snapshot['producer'],inputDigest=hashlib.sha256(text.encode()).hexdigest(),provenance='rule',
   scores=scores,evidence=evidence,hardness=total,categoryVersion='learn-02-category-v1',
@@ -116,7 +138,8 @@ def prepare_completion(native, completion, out):
         raise ValueError('capturedAt must be UTC')
     snapshot = dict(schema='fsgg.learn-completion/1', itemId=native['itemId'], producer=native['producer'],
                     capturedAt=native['capturedAt'], sourceRevision=native['sourceRevision'],
-                    inputDigest=hashlib.sha256(native['body'].encode()).hexdigest(), completion=completion)
+                    inputDigest=hashlib.sha256(native['body'].encode()).hexdigest(), completion=completion,
+                    hardnessProjection=hardness_projection(completion.get('hardnessProjection')))
     out.mkdir(parents=True, exist_ok=False, mode=0o700)
     for name, payload in [('snapshot.json', canonical(snapshot)), ('observation.json', canonical(batch_for(snapshot))),
                           ('comment.md', comment_for(snapshot).encode())]:
@@ -218,10 +241,12 @@ def projection_scope(snapshot, comment_url, template):
         completion = snapshot['completion']
         if completion['nodeId'] != selected[0]['id']:
             raise ValueError('completion native issue identity mismatch')
-        category = completion['hardnessCategory']
+        category = native_hardness(completion)
+        if hardness_projection(snapshot.get('hardnessProjection')) != hardness_projection(completion.get('hardnessProjection')):
+            raise ValueError('completion hardness projection policy mismatch')
         models, effort = execution_summary(completion['executions'], 'model'), execution_summary(completion['executions'], 'effort')
     else:
-        category = snapshot['hardnessCategory']
+        category = native_hardness(snapshot)
         # A requested model/profile in the dispatch snapshot is not execution evidence.
         models, effort = 'Unknown', 'Unknown'
     plan['assignments'] = [dict(issueId=selected[0]['id'], evidence=comment_url, values={
@@ -261,6 +286,10 @@ def record(out, args):
     snapshot = json.loads(raw)
     if raw != canonical(snapshot):
         raise ValueError('noncanonical snapshot')
+    hardness_projection(snapshot.get('hardnessProjection'))
+    if snapshot.get('completion') is not None:
+        if hardness_projection(snapshot.get('hardnessProjection')) != hardness_projection(snapshot['completion'].get('hardnessProjection')):
+            raise ValueError('completion hardness projection policy mismatch')
     if args.producer != snapshot['producer']:
         raise ValueError('producer mismatch')
     batch = batch_for(snapshot)

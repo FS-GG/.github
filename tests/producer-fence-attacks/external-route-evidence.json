@@ -172,10 +172,10 @@
     },
     {
       "path": "scripts/learn-dispatch.py",
-      "sha256": "dcf00f20b5502049964f7efbb3aee4b07457887fb1a07ea49b184d55681ca24d",
+      "sha256": "60d29d06b5de4a49d0b0c61ed64bb6ea0a52810722df134ce25f510717838361",
       "status": "not-exercised",
       "gs2089": "unresolved",
-      "reason": "LEARN-02 dispatch classification and execution-provenance recorder (#5249, #5273). Predecessor 0e359e4d707bf2beb889fb8c7e1bf9da36ec63463736b9a3824a7c3822398093 recorded classification only. The #5273 successor reuses that guarded owning-issue comment and telemetry path for completion provenance; it adds no provider sink. Explicit --record mode can post a native issue comment and submit its telemetry observation; offline preparation and fixtures exercise no provider effect. Shared per-Delivery custody, a writer lock, possible-send fencing and exact native readback govern the comment path. No live execution, legacy-client refusal or GS2-08.9 protection is claimed. Source delivery does not authorize operation; Root must separately admit the real comment and telemetry effects."
+      "reason": "LEARN-02 dispatch classification and execution-provenance recorder (#5249, #5273). The hardness-policy successor withholds native category projection while retaining original assessments and actual execution facts; no provider sink or recording authority changes. Predecessor 0e359e4d707bf2beb889fb8c7e1bf9da36ec63463736b9a3824a7c3822398093 recorded classification only. The #5273 successor reuses that guarded owning-issue comment and telemetry path for completion provenance; it adds no provider sink. Explicit --record mode can post a native issue comment and submit its telemetry observation; offline preparation and fixtures exercise no provider effect. Shared per-Delivery custody, a writer lock, possible-send fencing and exact native readback govern the comment path. No live execution, legacy-client refusal or GS2-08.9 protection is claimed. Source delivery does not authorize operation; Root must separately admit the real comment and telemetry effects."
     }
   ]
 }
