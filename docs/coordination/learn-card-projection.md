@@ -37,7 +37,8 @@ never erases an existing known category. Execution summaries use a JSON array of
 separators remain unambiguous. An update must preserve every previously known role/value fact;
 incomplete cohorts or role-prefixed Unknown values refuse instead of erasing history. Unknown role
 may become a known role, and launch-confirmed evidence may become provider-observed for the same
-model/effort. Evidence URLs must match the exact selected owning repository/issue and numeric comment
+model/effort. Provider-observed confidence cannot regress to launch-confirmed confidence under a
+partial later cohort. Evidence URLs must match the exact selected owning repository/issue and numeric comment
 identity. Execution summaries and provenance can advance as cumulative observations arrive. Missing execution
 values never erase an existing known summary. Every change remains under the existing shared writer
 lock, exact prepared bytes, source/package identity, adjacent native preimage, bounded planning window,

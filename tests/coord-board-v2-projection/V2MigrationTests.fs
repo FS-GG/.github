@@ -644,6 +644,17 @@ module V2MigrationTests =
         // Same facts can advance from launch-confirmed/unknown role to observed/known role.
         let upgraded = withValues (actualProjectorValues [ worker; critic ])
         Assert.Equal(2, (prepare upgraded before |> get).Changes.Length)
+        let mutable observed = before
+        for _ in 1 .. 2 do
+            let prepared = prepare upgraded observed |> get
+            let change = prepared.Changes.Head
+            connection.Dispatch(prepared, change, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
+            let after = collect connection.Reads upgraded |> get
+            validateTransition upgraded observed after change |> get
+            observed <- after
+        // The exact same role/value cannot regress from provider-observed to launch-confirmed.
+        let downgrade = withValues (actualProjectorValues [ execution "worker" "Unknown" "Unknown" confirmed; critic ])
+        Assert.True(Result.isError (prepare downgrade observed))
         // A missing or wrong owning comment never reaches the native send boundary.
         for evidence in [ "https://github.com/FS-GG/other/issues/42#issuecomment-17";
                           "https://github.com/FS-GG/.github/issues/43#issuecomment-17";
@@ -654,4 +665,4 @@ module V2MigrationTests =
             let values = assignment.Values |> List.map (fun (name, value) -> name, if name = "Execution provenance" then evidence else value)
             let wrong = { selected with Learn = Some { plan with Assignments = [ { assignment with Evidence = evidence; Values = values } ] } }
             Assert.True(Result.isError (prepare wrong before))
-        Assert.Equal(8, native.Mutations.Length)
+        Assert.Equal(10, native.Mutations.Length)

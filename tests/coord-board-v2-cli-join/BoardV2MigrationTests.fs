@@ -1408,3 +1408,14 @@ module BoardV2MigrationTests =
         let metadataPath = Path.Combine(path + ".invocation", "001-intent-metadata.json")
         use metadata = JsonDocument.Parse(File.ReadAllText metadataPath)
         Assert.True(metadata.RootElement.GetProperty("itemScoped").GetBoolean())
+        // Native confidence is monotonic even when the same role/model text survives.
+        use successful = JsonDocument.Parse(File.ReadAllText path)
+        let scopeJson = System.Text.Json.Nodes.JsonNode.Parse(successful.RootElement.GetProperty("scope").GetRawText())
+        let values = scopeJson.["learn"].["assignments"].[0].["values"]
+        values.["Actual models"] <- System.Text.Json.Nodes.JsonValue.Create "[\"worker: observed-model [launch-confirmed]\",\"critic: observed-reviewer [provider-observed]\"]"
+        let downgradeScope = Path.Combine(fixture.Directory, "learn-confidence-downgrade-scope.json")
+        let downgradeReport = Path.Combine(fixture.Directory, "learn-confidence-downgrade-prepared.json")
+        File.WriteAllText(downgradeScope, scopeJson.ToJsonString())
+        Assert.Equal(3, fixture.Run [ "migration-prepare"; "--scope-file"; downgradeScope; "--report-file"; downgradeReport ])
+        Assert.False(File.Exists downgradeReport)
+        Assert.Equal(9, fixture.Native.Mutations.Length)

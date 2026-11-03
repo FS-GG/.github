@@ -116,7 +116,7 @@ module V2Migration =
 
     // The text field carries a JSON string array, not a delimiter-split list. Provider
     // names may contain punctuation; only the producer's final evidence suffix is removed.
-    let private executionFacts (text: string) : Set<string * string> option =
+    let private executionFacts (text: string) : Set<string * string * int> option =
         if text = "Unknown" then Some Set.empty
         else
             try
@@ -129,14 +129,14 @@ module V2Migration =
                         if colon < 0 then invalidArg "summary" "missing role"
                         let role, value = entry.Substring(0, colon), entry.Substring(colon + 2)
                         if not (List.contains role [ "worker"; "critic"; "analyst"; "report"; "Unknown" ]) then invalidArg "summary" "unknown role"
-                        let value =
-                            [ " [provider-observed]"; " [launch-confirmed]" ]
-                            |> List.tryFind (fun suffix -> value.EndsWith(suffix, StringComparison.Ordinal))
-                            |> Option.map (fun suffix -> value.Substring(0, value.Length - suffix.Length))
-                            |> Option.defaultWith (fun () -> if value = "Unknown" then value else invalidArg "summary" "missing evidence level")
+                        let value, confidence =
+                            [ " [provider-observed]", 2; " [launch-confirmed]", 1 ]
+                            |> List.tryFind (fun (suffix, _) -> value.EndsWith(suffix, StringComparison.Ordinal))
+                            |> Option.map (fun (suffix, confidence) -> value.Substring(0, value.Length - suffix.Length), confidence)
+                            |> Option.defaultWith (fun () -> if value = "Unknown" then value, 0 else invalidArg "summary" "missing evidence level")
                         if not (bounded 256 value) then invalidArg "summary" "invalid fact value"
-                        role, value) |> Set.ofSeq
-                Some(facts |> Set.filter (snd >> (<>) "Unknown"))
+                        role, value, confidence) |> Set.ofSeq
+                Some(facts |> Set.filter (fun (_, value, _) -> value <> "Unknown"))
             with _ -> None
 
     let validateScope (scope: Scope) : IoResult<unit> =
@@ -566,8 +566,9 @@ module V2Migration =
             let old = document.RootElement.GetString()
             match executionFacts old, executionFacts desired with
             | Some before, Some after when samePlanningValue (PlanningText old) actual ->
-                before |> Set.forall (fun (role, value) ->
-                    after |> Set.exists (fun (newRole, newValue) -> value = newValue && (role = "Unknown" || role = newRole)))
+                before |> Set.forall (fun (role, value, confidence) ->
+                    after |> Set.exists (fun (newRole, newValue, newConfidence) ->
+                        value = newValue && (role = "Unknown" || role = newRole) && newConfidence >= confidence))
             | _ -> false
         with _ -> false
 
@@ -678,7 +679,7 @@ module V2Migration =
                             | [] -> Ok [ SetLearnValue(issue.Id, item.Id, field.Id, desired, None) ]
                             | [ existing ] when (selected.Name = "Actual models" || selected.Name = "Actual effort") &&
                                                   not (preservesExecutionFacts (match desired with PlanningText text -> text | _ -> "Unknown") existing) ->
-                                invalid "new execution summary omits previously known role/value facts; assemble cumulative owning-issue evidence"
+                                invalid "new execution summary omits or downgrades previously known facts; assemble cumulative owning-issue evidence"
                             | [ _ ] when selected.Name = "Hardness" && (
                                                         desired = PlanningSelect { Id = (field.Options |> List.find (fun option -> option.Name = "Unknown")).Id; Name = "Unknown" }) -> Ok []
                             | [ _ ] when selected.Name = "Hardness" && (plan.Fields |> List.tryFind (fun field -> field.Name = "Execution provenance")
