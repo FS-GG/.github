@@ -90,6 +90,15 @@ and 2.69 hours respectively. These imbalanced selected groups do not validate th
 technical overrides. Ten synthetic controls test the literal thresholds, overrides and safety floor;
 three semantics controls additionally expose construct sensitivity described below.
 
+The three handcrafted semantic probes keep the same inert spelling-edit obligation. Its minimal text
+scores **H=1, Low, no safety floor**. Appending explicit out-of-scope exclusions scores **H=19, High,
+safety floor true**; appending a quoted historical example that adds no requirement scores **H=18, High,
+no safety floor**. This demonstrates sensitivity to irrelevant/negated context in these examples, not
+population prevalence or a validated human truth set. The actual lexical rubric follows its rules in
+all ten controls, but literal policy conformance does not establish construct validity. A versioned
+successor would need outcome-blinded obligation/paraphrase/negation adjudication and held-out evidence;
+the frozen rubric is preserved unchanged here.
+
 ## Model comparison and profile provenance
 
 | Observed worker profile | Issues | Parent clusters | H range | H versus worker-envelope rho | Kendall tau |
