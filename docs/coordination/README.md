@@ -55,6 +55,12 @@ notified, threaded, assignable, searchable, and scriptable via `gh`.
 > capability-based model routing, generated workflow views, and the ordered `.github` → SDD → Coordination
 > delivery sequence.
 
+> **Deterministic coordination engine.** The proposed
+> [F# decision-engine design](2026-11-03-deterministic-coordination-engine-design.md)
+> extends the canonical selector with typed facts, standing owner authority and event-driven
+> continuation. It preserves native planning and qualified execution, and defines replay,
+> migration, rollback and operational acceptance before implementation adoption.
+
 ## Requests and responses → cross-repo issues
 
 For ongoing worker-to-worker handoffs, first check the
