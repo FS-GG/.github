@@ -687,9 +687,9 @@ mutations:
     command: ["bash", "tests/coord-board-tend-mutation/leg.sh"]
     target: src/FS.GG.Coord.GitHub/V2TendWrite.fs
     find: |-
-      |> fun closed -> if closed.Length <= retention then [] else List.skip retention closed
+      |> List.choose (fun (c, _, _, _) -> if protectedRefs.Contains c.Ref then None else Some c.ItemId)
     replace: |-
-      |> fun closed -> List.truncate 0 closed
+      |> List.choose (fun (c, _, _, _) -> if true then None else Some c.ItemId)
     breaks: >-
       the reconciler writes a card the hosted archiver may archive concurrently
     anchor:

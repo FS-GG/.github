@@ -119,16 +119,65 @@ def run(args: list[str]) -> tuple[int, str, str]:
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
         try:
-            code = A.main(args)
+            code = A.main(args if "--trigger-at" in args else ["--trigger-at", "0", *args])
         except SystemExit as exc:
             code = exc.code
     return code, out.getvalue(), err.getvalue()
 
 
+def fixture_plan(*args, **kwargs):
+    # Small guard fixtures deliberately bypass the production trigger; threshold tests set it explicitly.
+    kwargs.setdefault("trigger_at", 0)
+    return A.plan(*args, **kwargs)
+
+
 class Plan(unittest.TestCase):
+    def test_inclusive_trigger_retains_newest_fifty_and_is_idempotent(self):
+        for count, expected in ((199, 0), (200, 150), (201, 151), (500, 450)):
+            with self.subTest(count=count):
+                rows = done_history(count)
+                archive, kept, excluded = fixture_plan(rows, trigger_at=200)
+                self.assertEqual(len(archive), expected)
+                self.assertEqual(excluded, [])
+                if expected:
+                    self.assertEqual([r["number"] for r in kept], list(range(count, count-50, -1)))
+                    self.assertEqual(fixture_plan(kept, trigger_at=200)[0], [])
+
+    def test_new_policy_ties_rank_repository_numeric_number_and_item_identity(self):
+        rows = [row(n+1, "2026-10-01T00:00:00Z", repo="FS-GG/a" if n < 100 else "FS-GG/b", number=n % 100 + 1) for n in range(200)]
+        expected = {f"PVTI_{n}" for n in range(51, 201)}
+        for ordered in (rows, list(reversed(rows))):
+            archive, kept, held = A.plan(ordered)
+            self.assertEqual({r["itemId"] for r in archive}, expected)
+            self.assertEqual(len(kept), 50)
+            self.assertEqual(held, [])
+        # Same repository/number/time uses item identity as the final tie.
+        rows[0]["itemId"], rows[1]["itemId"] = "A", "B"
+        rows[0]["repo"] = rows[1]["repo"] = "FS-GG/z"
+        rows[0]["number"] = rows[1]["number"] = 1
+        for r in rows[2:]: r["closedAt"] = "2026-10-02T00:00:00Z"
+        self.assertEqual([r["itemId"] for r in A.plan(rows, keep=199)[0]], ["B"])
+
+    def test_new_policy_protection_follows_cutoff_without_shifting_newest_fifty(self):
+        archive, kept, held = A.plan(done_history(200), protected={"I_1", "I_200"})
+        self.assertEqual({r["number"] for r in archive}, set(range(2, 151)))
+        self.assertEqual({r["number"] for r in kept}, set(range(151, 201)))
+        self.assertEqual([r["number"] for r, _ in held], [1])
+
+    def test_trigger_counts_active_done_and_not_archived_history(self):
+        rows = done_history(199) + [row(200, archived=True)]
+        self.assertEqual(fixture_plan(rows, trigger_at=200)[0], [])
+        rows[-1]["archived"] = False
+        rows[-1]["status"] = "Ready"
+        self.assertEqual(A.plan(rows)[0], [])
+        rows[-1]["status"] = "Done"
+        rows[-1]["state"] = "OPEN"
+        archive, kept, excluded = fixture_plan(rows, trigger_at=200)
+        self.assertEqual((len(archive), len(kept), len(excluded)), (149, 50, 1))
+
     def test_keeps_the_newest_by_close_time_and_plans_only_the_older_rest(self):
         rows = [row(n, closed=f"2026-{1 + n // 28:02d}-{1 + n % 28:02d}T00:00:00Z") for n in range(1, 206)]
-        archive, kept, unranked = A.plan(list(reversed(rows)), 200)
+        archive, kept, unranked = fixture_plan(list(reversed(rows)), 200)
         self.assertEqual((len(archive), len(kept), unranked), (5, 200, []))
         newest_archived = max(A.parse_time(r["closedAt"]) for r in archive)
         oldest_kept = min(A.parse_time(r["closedAt"]) for r in kept)
@@ -137,14 +186,14 @@ class Plan(unittest.TestCase):
 
     def test_at_or_below_the_bound_nothing_is_planned(self):
         rows = [row(n) for n in range(1, 201)]
-        self.assertEqual(A.plan(rows, 200)[0], [])
-        self.assertEqual(len(A.plan(rows + [row(201)], 200)[0]), 1)
+        self.assertEqual(fixture_plan(rows, 200)[0], [])
+        self.assertEqual(len(fixture_plan(rows + [row(201)], 200)[0]), 1)
 
     def test_ties_never_depend_on_connection_order(self):
         same = "2026-10-01T00:00:00Z"
         rows = [row(3, same, repo="FS-GG/b"), row(1, same, repo="FS-GG/a"), row(2, same, repo="FS-GG/a")]
-        first = A.plan(rows, 1)
-        second = A.plan(list(reversed(rows)), 1)
+        first = fixture_plan(rows, 1)
+        second = fixture_plan(list(reversed(rows)), 1)
         self.assertEqual([r["itemId"] for r in first[0]], [r["itemId"] for r in second[0]])
         self.assertEqual([r["itemId"] for r in first[1]], ["PVTI_1"])
 
@@ -165,15 +214,15 @@ class Plan(unittest.TestCase):
             "no number": row(12, old, number=None),
         }
         for name, case in cases.items():
-            archive, kept, unranked = A.plan([case], 0)
+            archive, kept, unranked = fixture_plan([case], 0)
             self.assertEqual(archive, [], name)
             self.assertEqual(len(unranked), 1, name)
         merged_pr = row(13, old, kind="PullRequest", state="MERGED")
-        self.assertEqual(len(A.plan([merged_pr], 0)[0]), 1)
+        self.assertEqual(len(fixture_plan([merged_pr], 0)[0]), 1)
 
     def test_negative_keep_is_refused(self):
         with self.assertRaises(ValueError):
-            A.plan([], -1)
+            fixture_plan([], -1)
 
 
 class Scan(unittest.TestCase):
@@ -212,7 +261,7 @@ class LiveBlockers(unittest.TestCase):
         for protected in (newer_protected, newer_protected | {"I_2"}):
             for ordered in (rows, list(reversed(rows))):
                 with self.subTest(protected_older="I_2" in protected, reversed=ordered[0]["number"] == 203):
-                    archive, kept, excluded = A.plan(ordered, 200, protected)
+                    archive, kept, excluded = fixture_plan(ordered, 200, protected)
                     self.assertEqual([r["number"] for r in kept], list(range(203, 3, -1)))
                     self.assertEqual([r["number"] for r in archive],
                                      [n for n in (3, 2, 1) if f"I_{n}" not in protected])
@@ -222,7 +271,7 @@ class LiveBlockers(unittest.TestCase):
     def test_a_done_card_a_live_card_is_blocked_by_stays_visible(self):
         old = "2020-01-01T00:00:00Z"
         rows = [row(1, old), row(2, old), row(3, old)]
-        archive, kept, unranked = A.plan(rows, 0, {"I_2"})
+        archive, kept, unranked = fixture_plan(rows, 0, {"I_2"})
         self.assertEqual([r["number"] for r in archive], [1, 3])
         self.assertEqual([(r["number"], why) for r, why in unranked], [(2, "a live card is still blocked by it: stays visible")])
 
@@ -254,7 +303,7 @@ class LiveBlockers(unittest.TestCase):
                     live=[live_page([protected])])
         code, out, _ = run(["--counts-only"])
         self.assertEqual(code, 0, out)
-        self.assertIn("Done: 203; ranked 203, keep newest 200, plan to archive 2", out)
+        self.assertIn("Done: 203; ranked 203, keep newest 50, plan to archive 152", out)
         self.assertIn("KEEP <card>: a live card is still blocked by it", out)
         self.assertIn("DRY RUN", out)
         self.assertNotIn("FS-GG/", out)
@@ -452,6 +501,42 @@ class Execute(unittest.TestCase):
         stub = self.one_card({"item": [item_read(r, blocking={"totalCount": 1, "nodes": [{"id": "I_done", "state": "CLOSED"}]}), item_read(r, archived=True)]})
         self.assertEqual(run(self.args(stub, "--max-archive", "1"))[0], 0)
         self.assertEqual(len(stub.calls("mutation")), 1)
+
+    def test_complete_cycle_archives_oldest_first_and_preserves_newest_fifty(self):
+        rows = done_history(200)
+        old = rows[:150]
+        replies = [reply for r in old for reply in (item_read(r), item_read(r, archived=True))]
+        mutations = [{"data": {"archiveProjectV2Item": {"item": {"id": r["itemId"], "isArchived": True}}}} for r in old]
+        stub = Stub(self, scan=[scan_page(rows[:100], total=200, has_next=True),
+                                scan_page(rows[100:], total=200)], item=replies, mutation=mutations)
+        args = self.args(stub)
+        args[args.index("--keep") + 1] = "50"
+        args[args.index("--max-archive") + 1] = "150"
+        code, _, err = run(args + ["--trigger-at", "200", "--require-complete-cycle"])
+        self.assertEqual(code, 0, err)
+        effects = [r["number"] for r in stub.records() if r["step"] == "archived"]
+        self.assertEqual(effects, list(range(1, 151)))
+        self.assertEqual(len(stub.calls("mutation")), 150)
+        self.assertEqual(stub.records()[-1]["archived"], 150)
+
+    def test_complete_cycle_reports_guarded_remainder_without_sends(self):
+        rows = [*self.rows, row(6, state="OPEN")]
+        stub = Stub(self, scan=[scan_page(rows)])
+        code, _, err = run(self.args(stub) + ["--require-complete-cycle"])
+        self.assertEqual(code, 1)
+        self.assertIn("guarded active Done", err)
+        self.assertEqual(stub.calls("mutation"), [])
+        self.assertEqual(stub.records(), [])
+
+    def test_complete_cycle_refuses_small_bound_before_any_send(self):
+        stub = Stub(self, scan=[scan_page(self.rows)])
+        args = self.args(stub)
+        args[args.index("--max-archive") + 1] = "1"
+        code, _, err = run(args + ["--require-complete-cycle"])
+        self.assertEqual(code, 1)
+        self.assertIn("complete cycle", err)
+        self.assertEqual(stub.calls("mutation"), [])
+        self.assertEqual(stub.records(), [])
 
     def test_max_archive_bounds_the_sends(self):
         r = self.order[0]

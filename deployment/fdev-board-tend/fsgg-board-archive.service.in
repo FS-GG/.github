@@ -17,7 +17,7 @@ NoNewPrivileges=yes
 CPUQuota=100%
 MemoryMax=1G
 MemorySwapMax=0
-RuntimeMaxSec=900
+RuntimeMaxSec=1860
 TimeoutStopSec=30
 KillMode=control-group
 # No Restart: an incomplete run retains the adapter's durable latch for Root readback.
