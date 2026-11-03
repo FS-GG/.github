@@ -33,7 +33,12 @@ A LEARN scope selects no `initialPlanning` or Work level changes. It adds no mem
 unarchives a card. It may update only the four annotation fields on an exact existing issue card.
 Original dispatch snapshots stay immutable. The current card category may advance on an explicit new
 revision-bound assessment, with its own durable issue record and exact old native preimage. Unknown
-never erases an existing known category. Execution summaries and provenance can advance as more observations arrive. Missing execution
+never erases an existing known category. Execution summaries use a JSON array of role/value/evidence-level strings, so model names containing
+separators remain unambiguous. An update must preserve every previously known role/value fact;
+incomplete cohorts or role-prefixed Unknown values refuse instead of erasing history. Unknown role
+may become a known role, and launch-confirmed evidence may become provider-observed for the same
+model/effort. Evidence URLs must match the exact selected owning repository/issue and numeric comment
+identity. Execution summaries and provenance can advance as cumulative observations arrive. Missing execution
 values never erase an existing known summary. Every change remains under the existing shared writer
 lock, exact prepared bytes, source/package identity, adjacent native preimage, bounded planning window,
 possible-send custody and independent native readback. LEARN scalar writes reuse the existing item-scoped groups and final
@@ -101,8 +106,8 @@ running/completed launch, never an unexecuted routing proposal. Missing role sta
 
 Provider observations retain
 original `provider-usage-observation/1` payloads: the `threadId` joins the original invocation, and only
-its observed `model` and `effort` supply actual values. Conflicting assignment/observation identities
-refuse the projection. Exact duplicates cannot multiply observations. Every observed model/effort pair,
+its observed `model` and `effort` supply actual values. Conflicting assignment/observation identities and any thread shared by distinct invocation identities
+or roles refuse the projection rather than cross-attributing provider facts. Exact duplicates cannot multiply observations. Every observed model/effort pair,
 worker/critic role and execution identity remains in the issue record, including changes within one
 invocation. Unknown effort remains distinct from a requested high effort.
 

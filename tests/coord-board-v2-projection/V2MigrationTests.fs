@@ -503,7 +503,7 @@ module V2MigrationTests =
                 plan.Assignments |> List.map (fun assignment ->
                     { assignment with Values = assignment.Values |> List.map (fun (key, old) -> key, if key = name then value else old) })
             { scope with Learn = Some { plan with Assignments = assignments } }
-        let updated = updateValue "Actual models" "worker: observed-model; critic: observed-reviewer" selected
+        let updated = updateValue "Actual models" "[\"worker: observed-model [provider-observed]\",\"critic: observed-reviewer [provider-observed]\"]" selected
         let prepared = prepare updated before |> get
         Assert.Single(prepared.Changes) |> ignore
         let change = prepared.Changes.Head
@@ -585,3 +585,73 @@ module V2MigrationTests =
                 { view with UnsupportedConfiguration = "[[\"native-view\"],[\"unselected-group\"],[],[]]" })
         let moved = { after with Views = movedViews }
         Assert.True(Result.isError (validateTransition selected before moved change))
+
+    let private actualProjectorValues (executions: obj list) =
+        let script = System.IO.Path.GetFullPath(System.IO.Path.Combine(__SOURCE_DIRECTORY__, "..", "..", "scripts", "learn-projection.py"))
+        let code = "import importlib.util,json,sys; s=importlib.util.spec_from_file_location('p',sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); print(json.dumps(m.assignment(json.load(sys.stdin),sys.argv[2])['values']))"
+        let start = System.Diagnostics.ProcessStartInfo("python3")
+        for argument in [ "-B"; "-c"; code; script; "https://github.com/FS-GG/.github/issues/42#issuecomment-17" ] do
+            start.ArgumentList.Add argument
+        start.RedirectStandardInput <- true
+        start.RedirectStandardOutput <- true
+        start.RedirectStandardError <- true
+        use child = System.Diagnostics.Process.Start start
+        child.StandardInput.Write(JsonSerializer.Serialize {| nodeId = "synthetic-issue"; hardnessCategory = "Low"; executions = executions |})
+        child.StandardInput.Close()
+        let exited = child.WaitForExit 30000
+        if not exited then
+            child.Kill(true)
+            child.WaitForExit()
+        let output = child.StandardOutput.ReadToEnd()
+        let error = child.StandardError.ReadToEnd()
+        Assert.True(exited, "bounded actual projector invocation")
+        Assert.True(child.ExitCode = 0, error)
+        use parsed = JsonDocument.Parse output
+        parsed.RootElement.EnumerateObject() |> Seq.map (fun property -> property.Name, property.Value.GetString()) |> Seq.toList
+
+    [<Fact>]
+    let ``actual projector summaries cannot erase known executions or split punctuation into invented roles`` () =
+        let execution role model effort configured : obj =
+            box {| role = role; model = model; effort = effort; launchConfiguration = configured |}
+        let workerModel = "model; critic: other"
+        let confirmed: obj = box {| model = workerModel; effort = "medium" |}
+        let original =
+            [ execution "Unknown" "Unknown" "Unknown" confirmed
+              execution "critic" "reviewer" "high" null ]
+        let values = actualProjectorValues original
+        let plan = (learnScope ()).Learn.Value
+        let mutable selected = { scope with Learn = Some { plan with Assignments = [ { plan.Assignments.Head with Values = values } ] } }
+        let native = learnNative ()
+        use connection = native.Connection()
+        for _ in 1 .. 8 do
+            let before = collect connection.Reads selected |> get
+            let prepared = prepare selected before |> get
+            let change = prepared.Changes.Head
+            connection.Dispatch(prepared, change, DateTimeOffset.UtcNow.AddMinutes 4.0) |> get |> ignore
+            let after = collect connection.Reads selected |> get
+            validateTransition selected before after change |> get
+            selected <- resolveReadback selected before after change |> get
+        let before = collect connection.Reads selected |> get
+        let withValues values =
+            let plan = selected.Learn.Value
+            { selected with Learn = Some { plan with Assignments = [ { plan.Assignments.Head with Values = values } ] } }
+        let worker = execution "worker" workerModel "medium" null
+        let critic = execution "critic" "reviewer" "high" null
+        for incoming in [ []; [ execution "worker" "Unknown" "Unknown" null ]; [ worker ];
+                          [ execution "worker" "model" "medium" null; execution "critic" "other" "high" null; critic ] ] do
+            let projected = actualProjectorValues incoming
+            Assert.True(Result.isError (prepare (withValues projected) before))
+        // Same facts can advance from launch-confirmed/unknown role to observed/known role.
+        let upgraded = withValues (actualProjectorValues [ worker; critic ])
+        Assert.Equal(2, (prepare upgraded before |> get).Changes.Length)
+        // A missing or wrong owning comment never reaches the native send boundary.
+        for evidence in [ "https://github.com/FS-GG/other/issues/42#issuecomment-17";
+                          "https://github.com/FS-GG/.github/issues/43#issuecomment-17";
+                          "https://github.com/FS-GG/.github/issues/42#issuecomment-abc";
+                          "https://github.com/FS-GG/.github/issues/42#issuecomment-0" ] do
+            let plan = selected.Learn.Value
+            let assignment = plan.Assignments.Head
+            let values = assignment.Values |> List.map (fun (name, value) -> name, if name = "Execution provenance" then evidence else value)
+            let wrong = { selected with Learn = Some { plan with Assignments = [ { assignment with Evidence = evidence; Values = values } ] } }
+            Assert.True(Result.isError (prepare wrong before))
+        Assert.Equal(8, native.Mutations.Length)

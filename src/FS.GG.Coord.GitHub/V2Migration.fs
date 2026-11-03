@@ -114,6 +114,31 @@ module V2Migration =
           ("High", "RED", "learn-02-category-v1: H >= 13 or D3/D5 >= 2")
           ("Unknown", "GRAY", "learn-02-category-v1: missing assessed dimension evidence") ]
 
+    // The text field carries a JSON string array, not a delimiter-split list. Provider
+    // names may contain punctuation; only the producer's final evidence suffix is removed.
+    let private executionFacts (text: string) : Set<string * string> option =
+        if text = "Unknown" then Some Set.empty
+        else
+            try
+                use document = JsonDocument.Parse text
+                if document.RootElement.GetArrayLength() = 0 then invalidArg "summary" "missing facts must be explicit Unknown"
+                let facts =
+                    document.RootElement.EnumerateArray() |> Seq.map (fun entry ->
+                        let entry = entry.GetString()
+                        let colon = entry.IndexOf(": ", StringComparison.Ordinal)
+                        if colon < 0 then invalidArg "summary" "missing role"
+                        let role, value = entry.Substring(0, colon), entry.Substring(colon + 2)
+                        if not (List.contains role [ "worker"; "critic"; "analyst"; "report"; "Unknown" ]) then invalidArg "summary" "unknown role"
+                        let value =
+                            [ " [provider-observed]"; " [launch-confirmed]" ]
+                            |> List.tryFind (fun suffix -> value.EndsWith(suffix, StringComparison.Ordinal))
+                            |> Option.map (fun suffix -> value.Substring(0, value.Length - suffix.Length))
+                            |> Option.defaultWith (fun () -> if value = "Unknown" then value else invalidArg "summary" "missing evidence level")
+                        if not (bounded 256 value) then invalidArg "summary" "invalid fact value"
+                        role, value) |> Set.ofSeq
+                Some(facts |> Set.filter (snd >> (<>) "Unknown"))
+            with _ -> None
+
     let validateScope (scope: Scope) : IoResult<unit> =
         let fieldIds = [ scope.StatusFieldId; scope.TrackFieldId; scope.RoadmapFieldId; scope.ObservationFieldId ]
         let colors = Set.ofList [ "GRAY"; "BLUE"; "GREEN"; "YELLOW"; "ORANGE"; "RED"; "PINK"; "PURPLE" ]
@@ -159,13 +184,16 @@ module V2Migration =
                 || plan.Assignments |> List.exists (fun assignment ->
                     not (selectedIds.Contains assignment.IssueId)
                     || not (bounded 4096 assignment.Evidence)
-                    || not (assignment.Evidence.StartsWith("https://github.com/FS-GG/", StringComparison.Ordinal))
-                    || not (assignment.Evidence.Contains("#issuecomment-"))
+                    || (scope.SelectedIssues |> List.tryFind (fun issue -> issue.Id = assignment.IssueId) |> Option.forall (fun issue ->
+                        not (System.Text.RegularExpressions.Regex.IsMatch(assignment.Evidence,
+                            "\\Ahttps://github.com/" + System.Text.RegularExpressions.Regex.Escape(issue.Repository) + "/issues/" + string issue.Number + "#issuecomment-[1-9][0-9]*\\z"))))
                     || (assignment.Values |> List.map fst |> Set.ofList) <> Set.ofList learnNames
                     || assignment.Values.Length <> learnNames.Length
                     || (assignment.Values |> List.tryFind (fst >> (=) "Execution provenance") |> Option.map snd) <> Some assignment.Evidence
                     || assignment.Values |> List.exists (fun (name, value) ->
-                        not (bounded 4096 value) || (name = "Hardness" && not (List.contains value [ "Low"; "Medium"; "High"; "Unknown" ])))))
+                        not (bounded 4096 value)
+                        || ((name = "Actual models" || name = "Actual effort") && (executionFacts value).IsNone)
+                        || (name = "Hardness" && not (List.contains value [ "Low"; "Medium"; "High"; "Unknown" ])))))
         if not (hex 40 scope.SourceRevision && hex 64 scope.ArtifactSha256 && hex 64 scope.CliArtifactSha256)
            || not (bounded 256 scope.PrincipalId && bounded 100 scope.PrincipalLogin) then
             invalid "reviewed source/package or expected principal identity is incomplete"
@@ -530,6 +558,19 @@ module V2Migration =
                         actual.Kind = "ProjectV2ItemFieldSingleSelectValue" && text "optionId" = value.Id && text "name" = value.Name)
         with _ -> false
 
+    let private preservesExecutionFacts (desired: string) (actual: ItemValue) =
+        try
+            let tokens = JsonSerializer.Deserialize<string array>(actual.Value) |> Array.chunkBySize 2
+            let encoded = tokens |> Array.find (fun pair -> pair.[0] = "text") |> fun pair -> pair.[1]
+            use document = JsonDocument.Parse encoded
+            let old = document.RootElement.GetString()
+            match executionFacts old, executionFacts desired with
+            | Some before, Some after when samePlanningValue (PlanningText old) actual ->
+                before |> Set.forall (fun (role, value) ->
+                    after |> Set.exists (fun (newRole, newValue) -> value = newValue && (role = "Unknown" || role = newRole)))
+            | _ -> false
+        with _ -> false
+
     let private initialChanges (scope: Scope) (snapshot: Snapshot) (fields: Map<string, Field>) : IoResult<Change list> =
         scope.InitialPlanning
         |> List.map (fun (initial: InitialPlanning) ->
@@ -635,7 +676,10 @@ module V2Migration =
                             match item.Values |> List.filter (fun value -> value.FieldId = field.Id) with
                             | [ value ] when samePlanningValue desired value -> Ok []
                             | [] -> Ok [ SetLearnValue(issue.Id, item.Id, field.Id, desired, None) ]
-                            | [ _ ] when desired = PlanningText "Unknown" || (selected.Name = "Hardness" &&
+                            | [ existing ] when (selected.Name = "Actual models" || selected.Name = "Actual effort") &&
+                                                  not (preservesExecutionFacts (match desired with PlanningText text -> text | _ -> "Unknown") existing) ->
+                                invalid "new execution summary omits previously known role/value facts; assemble cumulative owning-issue evidence"
+                            | [ _ ] when selected.Name = "Hardness" && (
                                                         desired = PlanningSelect { Id = (field.Options |> List.find (fun option -> option.Name = "Unknown")).Id; Name = "Unknown" }) -> Ok []
                             | [ _ ] when selected.Name = "Hardness" && (plan.Fields |> List.tryFind (fun field -> field.Name = "Execution provenance")
                                   |> Option.bind _.FieldId |> Option.exists (fun provenance ->

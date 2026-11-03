@@ -151,6 +151,9 @@ def project(cohort):
         if identity in launches and launches[identity] != value:
             raise ValueError('ambiguous execution identity attribution')
         launches[identity] = value
+    threads = [launch[4] for launch in launches.values()]
+    if len(set(threads)) != len(threads):
+        raise ValueError('ambiguous shared thread attribution across invocation identities or roles')
     for envelope in cohort['observations']:
         observation, source = evidence(envelope)
         if observation['kind'] != 'provider-usage-observation/1':
@@ -222,7 +225,7 @@ def comment_for(record):
 def assignment(record, comment_url):
     # Values are summaries; exact identities, roles, dimensions and requested profiles stay on the issue.
     def values(key):
-        return '; '.join(sorted({row['role'] + ': ' + (row[key] + ' [provider-observed]' if row[key] != 'Unknown' else row['launchConfiguration'][key] + ' [launch-confirmed]' if row.get('launchConfiguration') else 'Unknown') for row in record['executions']})) or 'Unknown'
+        return dispatch.execution_summary(record['executions'], key)
     return dict(issueId=record['nodeId'], evidence=comment_url, values={
         'Hardness': record['hardnessCategory'], 'Actual models': values('model'), 'Actual effort': values('effort'),
         'Execution provenance': comment_url})

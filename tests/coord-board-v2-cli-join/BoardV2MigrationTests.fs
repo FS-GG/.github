@@ -1384,8 +1384,8 @@ module BoardV2MigrationTests =
         let fields = names |> List.map (fun name ->
             { Name = name; FieldId = Some(fixture.Native.Snapshot.Fields |> List.find (fun field -> field.Name = name) |> _.Id) })
         let assignment = { IssueId = issue.Id; Evidence = "https://github.com/FS-GG/.github/issues/42#issuecomment-17";
-                           Values = [ "Hardness", "Medium"; "Actual models", "worker: observed-model";
-                                      "Actual effort", "worker: Unknown"; "Execution provenance", "https://github.com/FS-GG/.github/issues/42#issuecomment-17" ] }
+                           Values = [ "Hardness", "Medium"; "Actual models", "[\"worker: observed-model [provider-observed]\"]";
+                                      "Actual effort", "[\"worker: Unknown\"]"; "Execution provenance", "https://github.com/FS-GG/.github/issues/42#issuecomment-17" ] }
         fixture.Scope <- { fixture.Scope with Learn = Some { Fields = fields; Assignments = [ assignment ] } }
         let code, path = fixture.Prepare "learn-project"
         Assert.Equal(0, code)
@@ -1398,7 +1398,7 @@ module BoardV2MigrationTests =
         Assert.Equal(8, fixture.Native.Mutations.Length)
         let revisedValues =
             assignment.Values |> List.map (fun (name, value) ->
-                name, if name = "Actual models" then "worker: observed-model; critic: observed-reviewer" else value)
+                name, if name = "Actual models" then "[\"worker: observed-model [provider-observed]\",\"critic: observed-reviewer [provider-observed]\"]" else value)
         let revised = { assignment with Values = revisedValues }
         fixture.Scope <- { fixture.Scope with Learn = Some { Fields = fields; Assignments = [ revised ] } }
         let code, path = fixture.Prepare "learn-observed-update"

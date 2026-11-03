@@ -163,6 +163,26 @@ class ProjectionTests(unittest.TestCase):
         self.assertIn('configured-model [launch-confirmed]', m.assignment(result['records'][0], 'fixture:comment')['values']['Actual models'])
         self.assertEqual('Unknown', execution['role'])
 
+    def test_shared_thread_cannot_cross_attribute_deliveries_or_roles(self):
+        for same_delivery in [False, True]:
+            cohort = self.cohort()
+            first = self.launch('invocation-1')['payload']
+            second = self.launch('invocation-2', 'critic')['payload']
+            if not same_delivery:
+                second['itemId'] = 'FS-GG/test#2'
+                second['brief'] = second['brief'].replace('test#1', 'test#2')
+            first['threadId'] = second['threadId'] = 'reused-thread'
+            cohort['launches'] = [self.envelope(first), self.envelope(second)]
+            cohort['observations'] = [self.usage('reused-thread', 'model-1', 'medium'), self.usage('reused-thread', 'model-2', 'high', 'response-2')]
+            with self.assertRaisesRegex(ValueError, 'ambiguous shared thread'):
+                m.project(cohort)
+
+    def test_summary_encodes_provider_separators_and_both_execution_evidence_levels(self):
+        row = dict(role='worker', model='model; critic: other', effort='medium',
+                   launchConfiguration=dict(model='launch: model; alias', effort='medium'))
+        summary = m.dispatch.execution_summary([row], 'model')
+        self.assertEqual(['worker: launch: model; alias [launch-confirmed]', 'worker: model; critic: other [provider-observed]'], json.loads(summary))
+
     def test_recorded_projection_scope_uses_native_comment_and_never_requested_model(self):
         snapshot = self.original()
         template = dict(selectedIssues=[dict(id='native-1', repository='FS-GG/test', number=1, slice='fixture')],

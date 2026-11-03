@@ -182,6 +182,21 @@ def submit_telemetry(repo, args, packet):
         '--input', str(packet)], text=True)
 
 
+def execution_summary(executions, key):
+    # A JSON string array keeps provider names containing '; ' or ': ' unambiguous.
+    entries = set()
+    for row in executions:
+        observed = row[key]
+        configured = row.get('launchConfiguration')
+        if observed != 'Unknown':
+            entries.add(row['role'] + ': ' + observed + ' [provider-observed]')
+        if configured and configured[key] != observed:
+            entries.add(row['role'] + ': ' + configured[key] + ' [launch-confirmed]')
+        if observed == 'Unknown' and not configured:
+            entries.add(row['role'] + ': Unknown')
+    return json.dumps(sorted(entries), ensure_ascii=False, separators=(',', ':')) if entries else 'Unknown'
+
+
 def projection_scope(snapshot, comment_url, template):
     """Bind one durable issue record into the fixed annotation-only migration scope."""
     if not re.fullmatch(r'https://github.com/' + re.escape(snapshot['itemId'].split('#')[0]) +
@@ -204,9 +219,7 @@ def projection_scope(snapshot, comment_url, template):
         if completion['nodeId'] != selected[0]['id']:
             raise ValueError('completion native issue identity mismatch')
         category = completion['hardnessCategory']
-        def summary(key):
-            return '; '.join(sorted({row['role'] + ': ' + (row[key] + ' [provider-observed]' if row[key] != 'Unknown' else row['launchConfiguration'][key] + ' [launch-confirmed]' if row.get('launchConfiguration') else 'Unknown') for row in completion['executions']})) or 'Unknown'
-        models, effort = summary('model'), summary('effort')
+        models, effort = execution_summary(completion['executions'], 'model'), execution_summary(completion['executions'], 'effort')
     else:
         category = snapshot['hardnessCategory']
         # A requested model/profile in the dispatch snapshot is not execution evidence.
