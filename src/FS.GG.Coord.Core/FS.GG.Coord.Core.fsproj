@@ -50,7 +50,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="RootIdentityPolicy.fsi" />
     <Compile Include="RootIdentityPolicy.fs" />
+    <Compile Include="OwnerContinuation.fsi" />
     <Compile Include="OwnerContinuation.fs" />
     <Compile Include="ExitCode.fsi" />
     <Compile Include="ExitCode.fs" />

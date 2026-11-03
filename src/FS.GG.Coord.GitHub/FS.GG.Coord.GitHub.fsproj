@@ -121,6 +121,7 @@
     <Compile Include="V2Preflight.fs" />
     <Compile Include="V2EnrollmentCommands.fsi" />
     <Compile Include="V2EnrollmentCommands.fs" />
+    <Compile Include="OwnerContinuationReads.fsi" />
     <Compile Include="OwnerContinuationReads.fs" />
     <Compile Include="V2Migration.fsi" />
     <Compile Include="V2Migration.fs" />

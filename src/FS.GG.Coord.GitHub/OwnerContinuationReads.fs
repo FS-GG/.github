@@ -1,7 +1,5 @@
 namespace FS.GG.Coord.GitHub
 
-/// Bounded current readback of an existing finite Root envelope and the SAME original CI run.
-/// No cursor, clock, reservation, journal or native object is written or replaced.
 module OwnerContinuationReads =
     open System
     open System.Text
@@ -29,8 +27,6 @@ module OwnerContinuationReads =
         unique document.RootElement
         document.RootElement.Clone()
 
-    /// Facts are native only because this adapter reads their authenticated source itself.
-    /// Caller-supplied author names, admin membership and cursor.Terminal never authenticate an envelope.
     let collect (transport: IGitHubTransport) (report: InspectionReport) (context: SelectionContext) (now: DateTimeOffset) (request: OwnerContinuation.Request) =
         let fact predicate value evidence proof : OwnerContinuation.Fact =
             { Id = "native-envelope-" + predicateName predicate; Subject = request.Subject; Predicate = predicate; Value = value

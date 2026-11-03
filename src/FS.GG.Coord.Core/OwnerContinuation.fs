@@ -1,6 +1,5 @@
 namespace FS.GG.Coord
 
-/// Pure recommendations for an existing owner. No execution, clock, storage or authority minting.
 module OwnerContinuation =
     open System
     open System.Security.Cryptography
@@ -35,8 +34,6 @@ module OwnerContinuation =
         JsonSerializer.Serialize {| policy = policy; now = now; subject = identityWire request.Subject; action = actionName request.Action;
                                    original = request.Original; envelope = request.Envelope; facts = request.Facts |> List.sortBy _.Id |> List.map factWire |} |> digest
 
-    /// Native identity joins are mandatory; agent CI attestations never satisfy NativeRollup.
-    /// Any retained original is observed through its existing handler, regardless of expiry.
     let recommend (now: DateTimeOffset) (request: Request) =
         let allFacts = request.Facts |> List.sortBy _.Id
         let valid (f: Fact) = f.Subject = request.Subject && not f.Evidence.IsEmpty && f.ObservedAt <> DateTimeOffset.MinValue && f.ObservedAt <= now && now <= f.ValidUntil && now - f.ObservedAt <= TimeSpan.FromMinutes 5.0
@@ -202,7 +199,6 @@ module OwnerContinuation =
             | _ -> []
           ArtifactRevision = artifactRevision; OriginalReference = request.Original }
 
-    /// Stable bounded projection; the decision is advice, never an executable grant.
     let encode (decisions: Decision list) =
         decisions |> List.map (fun d ->
             let kind, action, _original, condition =

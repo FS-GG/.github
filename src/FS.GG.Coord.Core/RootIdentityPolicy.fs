@@ -6,8 +6,6 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 
-/// Shared Root principals, embedded from the same canonical policy consumed by Python.
-/// This identifies principals only; it does not grant any operation or trust caller assertions.
 module RootIdentityPolicy =
     type Policy = { RootLogins: Set<string>; Sha256: string }
 
@@ -73,6 +71,5 @@ module RootIdentityPolicy =
     let rootLogins = policy |> Result.map (fun p -> p.RootLogins)
     let digest = policy |> Result.map (fun p -> p.Sha256)
 
-    /// Apply only to a principal obtained from a protected native identity read.
     let isRoot (login: string) =
         policy |> Result.map (fun p -> p.RootLogins |> Seq.exists (fun root -> String.Equals(root, login, StringComparison.OrdinalIgnoreCase)))
