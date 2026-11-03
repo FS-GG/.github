@@ -201,5 +201,12 @@
     "incomplete": "What do we already know about this FS.GG component?",
     "negative": "Execute a package publication or a live game operation.",
     "boundary": "Retrieve cited knowledge; do not treat a historical record as live authorization."
+  },
+  "assess-task-hardness": {
+    "positive": "Use $assess-task-hardness to assess this frozen task with evidence and uncertainty.",
+    "indirect": "How demanding is this requested change, separately from its safety risk and supplier waits?",
+    "incomplete": "Assess the difficulty of this task description.",
+    "negative": "Implement the change and update its native card.",
+    "boundary": "Classify the stated obligations only; quoted exclusions are not requested work and the result grants no dispatch authority."
   }
 }

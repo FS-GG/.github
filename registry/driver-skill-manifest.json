@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "a1383a9a8029f91930798e7624f5de87db68b0b6f575ea4d899761449e9fa423",
-      "tree-sha256": "90174a1c9edbb76313914a475be45ec4515888a6b6a2ebbbe6c653949ae32cee",
+      "tree-sha256": "7a22f3b1ace7acc8b36be08a8c1e1b18504738120771e4b09a3dd03c7029eb5a",
       "files": [
         {
           "path": "SKILL.md",
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "a5fea943643010a1315f62ef28fd61d2bb787d2885d09787ea03d1987b289ca8",
+          "sha256": "d276768080a99c3410d93ac5dc4b740e802987cab52940031cd1bebcd81c1ad7",
           "executable": false
         },
         {
@@ -70,6 +70,11 @@
         {
           "path": "assets/seed/records/036c148f6d0e89858c9bf4cf380272ca6904bb4ca277a909fb71c47f5450cef7.json",
           "sha256": "036c148f6d0e89858c9bf4cf380272ca6904bb4ca277a909fb71c47f5450cef7",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/043eff38ad27212dd4d046617d0fe5e18544a03829d8b1130fbba2d052e1f072.json",
+          "sha256": "043eff38ad27212dd4d046617d0fe5e18544a03829d8b1130fbba2d052e1f072",
           "executable": false
         },
         {
@@ -3359,6 +3364,26 @@
         }
       ],
       "supplied-by": ".claude/skills/board-analyst",
+      "materializes-when": "false"
+    },
+    {
+      "id": "assess-task-hardness",
+      "scope": "operator",
+      "sha256": "395854a1a150a7e9e9b0c3a7256dcf0e635e1c9cedcefbb10351c4facdafbd09",
+      "tree-sha256": "7b22ebe22f96163d7c28ae4d2c093cf6970c1ee304752eadc1009e27e5b38a8b",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "395854a1a150a7e9e9b0c3a7256dcf0e635e1c9cedcefbb10351c4facdafbd09",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "0c8c9981931a17d2e202afce2968a3c292416805340493c50e4156af81ac6dde",
+          "executable": false
+        }
+      ],
+      "supplied-by": ".claude/skills/assess-task-hardness",
       "materializes-when": "false"
     },
     {

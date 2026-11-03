@@ -428,3 +428,7 @@ skills:
   # entry, `source` from its `supplied-by`. Re-home and annotate these into the block they
   # belong to, then set `updated:` and prepend a registry/skills.CHANGELOG.md entry.
   - { id: work-board-coord,       scope: operator,owner: .github,         source: .github/.claude/skills/work-board-coord/SKILL.md, sha256: 25bfacaace8e0970fa690884fcf6d6d28123d27f303c6d6c530761aef29a8688, materializes-when: "false" }
+  # assess-task-hardness — homed beside its owner+predicate siblings and reconciled verbatim from
+  # .github's producer manifest by `--write` (.github#299/.github#1200). The position
+  # and this annotation are generated; the row's bytes are the manifest's.
+  - { id: assess-task-hardness,   scope: operator,owner: .github,         source: .github/.claude/skills/assess-task-hardness/SKILL.md, sha256: 395854a1a150a7e9e9b0c3a7256dcf0e635e1c9cedcefbb10351c4facdafbd09, materializes-when: "false" }
