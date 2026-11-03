@@ -130,6 +130,14 @@ Two unchanged-input aggregate executions produced byte-identical JSON; the bound
 
 The real run is also an end-to-end validation of all 228 ledger joins, original seal and output hashes. All 31 synthetic controls pass. They cover unchanged content-only recovery and rejection of wrong identity/fabricated quotes/invalid time, category ordering/Unknown handling, undefined agreement, cluster withholding/reproducibility, known profile shifts, missing-cell sensitivity, controller mismatch rejection, completed-versus-not-planned outcomes and training-only preprocessing. This reruns aggregation only; it never launches paid calls. Exact private inputs are needed to reproduce historical numbers; the public fixtures validate mechanics, not the private sample.
 
+Local integration preflight found the classifier test directory was not yet wired to CI; that
+original failure is retained. The existing LEARN synthetic workflow now selects the 31 classifier
+fixtures on classifier source, schema, skill, protocol and test changes. It runs them in the same
+CPython 3.15.1 job with matching pinned NumPy/SciPy requirements as the historical fixtures,
+without private data or model calls. Local controls and maintained wiring/census checks pass;
+first hosted pilot qualification remains pending. This integration changes no pilot protocol,
+ratings, statistical source or numerical results.
+
 The present evidence supports keeping this version an **advisory semantic classifier**. It supports neither learned routing activation nor a claim that a stronger implementing profile is needed for any category. A next independently reviewed experiment should fix input binding structurally, improve bounded-output compliance in a separately versioned protocol, include more genuine minimal/research tasks without outcome-based cherry-picking, and reserve new task/parent/time groups before examining outcomes. Execution difficulty requires matched frozen implementations with a common quality contract, observed actual work intervals and effective configuration evidence; judge agreement alone cannot substitute for that response matrix. No further calls or execution matrix were launched here.
 
 ## Additional primary research for the next validation design
