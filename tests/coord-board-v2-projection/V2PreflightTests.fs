@@ -18,7 +18,7 @@ module V2PreflightTests =
     let private now = DateTimeOffset(2026, 10, 30, 12, 0, 0, TimeSpan.Zero)
 
     let private item (reference: string) (node: string) (status: bool) (track: bool) (level: bool) (updated: DateTimeOffset) : ProjectItem =
-        { ItemId = "PVTI_" + node; Content = IssueContent(reference, node); HasStatus = status; HasTrack = track; HasWorkLevel = level
+        { ItemId = "PVTI_" + node; Content = IssueContent(reference, node); HasStatus = status; HasTrack = track; HasWorkLevel = level; Archived = false
           RoadmapRaw = None; UpdatedAt = updated }
 
     let private enrolledItems (count: int) =
@@ -163,7 +163,7 @@ module V2PreflightTests =
         // A different revision with no content evidence decides nothing (#5113); with a changed closure it is unsupported.
         let built = String.replicate 40 "2"
         expectUnknown ConstructorIdentity ConstructorClosure NotEvaluated (runPlan { healthy 5 with ConstructorRevision = Known built })
-        let changed = { Built = built; Main = main; BuiltIsAncestor = true; ClosureEntries = 40; ChangedOutsideClosure = 0; ChangedInsideClosure = 1 }
+        let changed = { Built = built; Main = main; BuiltIsAncestor = true; ClosureEntries = 40; ChangedOutsideClosure = 0; ChangedInsideClosure = 1; SelfRegistration = None }
         expectUnsupported ConstructorIdentity ConstructorDiffersFromMain ConstructorBuild
             (runPlan { healthy 5 with ConstructorRevision = Known built; ConstructorContent = Known changed })
         expectUnknown ConstructorIdentity SourceRevision Unreadable (runPlan { healthy 5 with ConstructorRevision = NotObserved Unreadable })
@@ -469,3 +469,46 @@ module V2PreflightTests =
         Assert.Equal("fsgg.board-v2-preflight/1", json.["schema"].GetValue<string>())
         Assert.Equal("Unsupported", json.["overall"].GetValue<string>())
         Assert.Equal(10, json.["exitCode"].GetValue<int>())
+
+    [<Fact>]
+    let ``one authenticated registration delta is typed support but unrelated or forged closure evidence refuses`` () =
+        let built = String.replicate 40 "2"
+        let proof: V2ConstructorClosure.SelfRegistration = { Source = built; Version = "0.114.4"; PreviousVersion = "0.114.3" }
+        let content = { Built = built; Main = main; BuiltIsAncestor = true; ClosureEntries = 40
+                        ChangedOutsideClosure = 3; ChangedInsideClosure = 1; SelfRegistration = Some proof }
+        let report c = runPlan { healthy 5 with ConstructorRevision = Known built; ConstructorContent = Known c }
+        Assert.True(isSupported (verdictOf (report content) ConstructorIdentity))
+        for bad in [ { content with SelfRegistration = None }; { content with ChangedInsideClosure = 2 }
+                     { content with BuiltIsAncestor = false }; { content with SelfRegistration = Some { proof with Source = main } } ] do
+            Assert.False(isSupported (verdictOf (report bad) ConstructorIdentity))
+        expectUnknown ConstructorIdentity ConstructorClosure Incomplete (report { content with ClosureEntries = 0 })
+
+    [<Fact>]
+    let ``explicit archived enrolled membership completes inventory without scheduling values or altering the predecessor`` () =
+        let inputs = healthy 5
+        let privateJson = match inputs.PredecessorPrivate with Known json -> json | _ -> failwith "fixture"
+        let binding = match V2Projection.decodeBinding privateJson with Ok b -> b | Error e -> failwith e
+        let all = enrolledItems 5
+        let active = all |> List.tail
+        let read (_: V2Projection.IssueRef) node = Ok("archived-item", node, 2, true)
+        let reconciled = reconcileArchived read binding active |> get
+        Assert.Equal(5, reconciled.Length)
+        Assert.True(reconciled |> List.exists (fun x -> x.Archived && not x.HasStatus && not x.HasTrack && not x.HasWorkLevel))
+        Assert.True(isSupported (verdictOf (runPlan { inputs with ProjectItems = Known reconciled }) ProjectAutoAdd))
+        expectUnknown ProjectAutoAdd ProjectItems Incomplete (runPlan { inputs with ProjectItems = Known active })
+        for bad in [ (fun (_: V2Projection.IssueRef) node -> Ok("archived-item", node, 1, false))
+                     (fun _ _ -> Ok("archived-item", "foreign-content", 1, true))
+                     (fun _ node -> Ok("", node, 1, true))
+                     (fun _ node -> Ok("archived-item", node, 0, true))
+                     (fun _ _ -> Error(Errors.Transport "unreadable")) ] do
+            Assert.True(Result.isError (reconcileArchived bad binding active))
+        Assert.Equal(privateJson, (match inputs.PredecessorPrivate with Known json -> json | _ -> ""))
+
+    [<Fact>]
+    let ``archive evidence cannot hide a foreign row duplicate identity or active missing member`` () =
+        let inputs = healthy 5
+        let items = enrolledItems 5
+        let foreign = item "FS-GG/.github#99999" "I_foreign" true true true now
+        for inventory in [ items @ [ { foreign with Archived = true } ]; items @ [ { items.Head with ItemId = "different-item" } ]
+                           { items.Head with Archived = true; Content = IssueContent("FS-GG/.github#99999", (match items.Head.Content with IssueContent(_, n) -> n | _ -> "")) } :: items.Tail ] do
+            expectUnknown ProjectAutoAdd ProjectItems Incomplete (runPlan { inputs with ProjectItems = Known inventory })

@@ -3,11 +3,13 @@ namespace FS.GG.Coord.GitHub
 /// Online, read-only resolution of the native facts the batched enrollment planner consumes
 /// (`fsgg.board-v2-native-facts/1`) and of the Project item inventory the preflight inspects.
 ///
-/// The only effect is a `Get` function that takes a path and nothing else: there is no method, body or
+/// Native fact resolution uses a `Get` function that takes a path and nothing else: there is no method, body or
 /// header parameter, so this module cannot express a mutation. The production `Get` is the argument
 /// vector returned by `getArguments`, which is itself closed to a GET of an `/orgs/` or `/repos/` path.
 /// Failures are the closed code `NativeReadFailed`; no response text, token or identity is ever returned in
-/// a refusal. This module grants no authority and never reads a private binding's enrollment payload.
+/// a refusal. Archived predecessor reconciliation additionally uses the fixed exact-membership GraphQL query
+/// through membershipArguments; arbitrary documents, variable names and mutation bodies have no argument vector.
+/// This module grants no authority and never reads a private binding's enrollment payload.
 module V2NativeResolve =
 
     /// A response. `NotFound` is a clean HTTP 404 (an absent resource); every other failure is `Failed`.
@@ -34,6 +36,7 @@ module V2NativeResolve =
           HasStatus: bool
           HasTrack: bool
           HasWorkLevel: bool
+          Archived: bool
           /// The raw text of the item's Roadmap value, when it has one.
           RoadmapRaw: string option
           UpdatedAt: System.DateTimeOffset }
@@ -86,3 +89,13 @@ module V2NativeResolve =
 
     /// Every open pull request of `repository` whose head branch is `headRef`, by a read-only paginated GET.
     val openPullRequestsFor: get: Get -> repository: string -> headRef: string -> Result<PullRequest list, V2Enrollment.Refusal>
+
+    /// Reconcile only missing predecessor nodes through the maintained complete exact membership reader.
+    /// Every missing node must be explicitly archived in the exact Project; failures remain incomplete.
+    val reconcileArchived: read: (V2Projection.IssueRef -> string -> Errors.IoResult<string * string * int * bool>) -> binding: V2Projection.Binding -> items: ProjectItem list -> Result<ProjectItem list, V2Enrollment.Refusal>
+
+    /// Source of the exact stable coherent-set tag; direct commit refs only, no caller-selected repository.
+    val readReleaseSource: get: Get -> version: string -> Result<string, V2Enrollment.Refusal>
+
+    /// Argument vector solely for the fixed exact-membership document and closed typed variables.
+    val membershipArguments: request: Transport.Request -> string list option

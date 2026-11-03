@@ -3,7 +3,8 @@ namespace FS.GG.Coord.GitHub
 /// The constructor's source closure (FS-GG/.github#5113): the repository paths whose content can change what the
 /// enrollment constructor, its planner and the hosts that run it do. `route-preflight` `ConstructorIdentity` admits an
 /// installed constructor against a later protected `main` only when that `main` descends from the constructor's
-/// source revision and no path in this closure changed between them. It is the same idea as
+/// source revision and no path in this closure changed between them, or the sole change is the separately
+/// authenticated executing-release self-pin equivalence (#5263). No path is removed from the closure. It is the same idea as
 /// `scripts/release_source_closure.py` (#5111), restricted to the compiled hosts.
 ///
 /// The closure is fail-closed first and derived second:
@@ -50,3 +51,10 @@ module V2ConstructorClosure =
 
     /// The changes that are inside the closure: a covered path of any status, or an added path that shadows.
     val changesInside: closure: Closure -> changes: Change list -> Change list
+
+    /// Exact semantic self-pin update, authenticated by the host's source/version before calling.
+    type SelfRegistration = { Source: string; Version: string; PreviousVersion: string }
+    val selfRegistration: built: string -> version: string -> oldText: string -> newText: string -> SelfRegistration option
+
+    /// Host, loaded constructor and native coherent-set tag must have the same source; version is stable.
+    val authenticateRelease: hostName: string -> constructorSource: string -> hostSource: string -> publishedSource: string -> version: string -> (string * string) option

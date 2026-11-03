@@ -193,3 +193,49 @@ module V2ConstructorClosureTests =
         fixture.Write [ "docs/readme.md", "later\n" ]
         let later = fixture.Commit "later"
         Assert.Equal(NotObserved Incomplete, V2EnrollmentCommands.observeConstructorContent fixture.Path unbounded later)
+
+    [<Fact>]
+    let ``self registration permits only the executing stable version and preserves every other manifest value`` () =
+        let built = String.replicate 40 "a"
+        let before = """{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.114.3","commands":["fsgg-coord-engine"]},"other":{"version":"2.0.0","commands":["other"]}}}"""
+        let after = before.Replace("0.114.3", "0.114.4")
+        let check version text = selfRegistration built version before text
+        Assert.True((check "0.114.4" after).IsSome)
+        for version, text in
+            [ "0.114.5", after; "0.114.4-preview.1", after; "0.114.3", before
+              "0.114.4", after.Replace("2.0.0", "2.0.1")
+              "0.114.4", after.Replace("fsgg-coord-engine", "other-command")
+              "0.114.4", after.Replace("\"isRoot\":true", "\"isRoot\":false")
+              "0.114.4", after.Replace("\"commands\":[\"fsgg-coord-engine\"]", "\"commands\":[\"fsgg-coord-engine\"],\"rollForward\":true")
+              "0.114.4", after.Replace("\"version\":1", "\"version\":1,\"version\":1")
+              "0.114.4", "{}" ] do
+            Assert.True((check version text).IsNone, version + ":" + text)
+
+    [<Fact>]
+    let ``stable coherent release source is a fixed read only tag identity not a caller waiver`` () =
+        let source = String.replicate 40 "a"
+        let body = $"{{\"ref\":\"refs/tags/coherent-set/v0.114.4\",\"object\":{{\"type\":\"commit\",\"sha\":\"{source}\"}}}}"
+        let get text path paginated =
+            Assert.Equal("/repos/FS-GG/.github/git/ref/tags/coherent-set/v0.114.4", path)
+            Assert.False(paginated)
+            Assert.True((V2NativeResolve.getArguments path paginated).IsSome)
+            V2NativeResolve.Body text
+        Assert.Equal(Ok source, V2NativeResolve.readReleaseSource (get body) "0.114.4")
+        for malformed in [ body.Replace("v0.114.4", "v0.114.5"); body.Replace("commit", "tag"); body.Replace(source, "bad") ] do
+            Assert.True(Result.isError (V2NativeResolve.readReleaseSource (get malformed) "0.114.4"))
+        for bad in [ "0.114.4-preview"; "../main"; "0.114.4?x=y" ] do
+            Assert.True((V2NativeResolve.getArguments ("/repos/FS-GG/.github/git/ref/tags/coherent-set/v" + bad) false).IsNone)
+
+    [<Fact>]
+    let ``release equivalence cannot use a different host source tag or version`` () =
+        let source = String.replicate 40 "a"
+        let foreign = String.replicate 40 "b"
+        Assert.Equal(Some(source, "0.114.4"), authenticateRelease "fsgg-coord-engine" source source source "0.114.4")
+        for name, built, host, tag, version in
+            [ "BoardV2Import", source, source, source, "0.114.4"
+              "fsgg-coord-engine", foreign, source, source, "0.114.4"
+              "fsgg-coord-engine", source, foreign, source, "0.114.4"
+              "fsgg-coord-engine", source, source, foreign, "0.114.4"
+              "fsgg-coord-engine", source, source, source, "0.114.4-preview.1"
+              "fsgg-coord-engine", "bad", "bad", "bad", "0.114.4" ] do
+            Assert.True((authenticateRelease name built host tag version).IsNone)
