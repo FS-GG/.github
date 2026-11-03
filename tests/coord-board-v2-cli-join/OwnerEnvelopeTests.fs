@@ -25,7 +25,7 @@ let private fixture () =
     let now = context.ObservedAt
     let fact predicate value support =
         { Id = predicateName predicate; Subject = identity; Predicate = predicate; Value = Known value; Support = support
-          ObservedAt = now; ValidUntil = now.AddMinutes 1.0; Evidence = ["exact-source-method-and-evidence"]; Supersedes = [] }
+          ObservedAt = now; ValidUntil = now.AddMinutes 1.0; Evidence = ["exact-source-method-and-evidence"]; Supersedes = []; ArtifactRevision = None }
     let owner = AgentAttestation {Supplier = identity.Owner; Role = "owner"; ActualModel = None; ActualEffort = None; Method = "exact source verification"; Contributors = [identity.Owner]; ContributorsComplete = true; Limitations = ["fixture"]}
     let reviewer = AgentAttestation {Supplier = "independent-reviewer"; Role = "reviewer"; ActualModel = None; ActualEffort = None; Method = "independent exact source review"; Contributors = [identity.Owner]; ContributorsComplete = true; Limitations = ["fixture"]}
     let facts = [fact SourceReady true owner; fact VerificationPassed true owner; fact IndependentReview true reviewer; fact Isolated true owner; fact ResourceShare true owner]
@@ -108,6 +108,8 @@ let ``failed terminal original returns owner repair instead of repeating finishe
     let facts = collect report context now request body (Set.minElement policy.RootLogins) (policyBytes ()) "completed" "failure" 2
     let decision = recommendOwnerContinuationsWithFacts (Map.ofList [request.Subject.Slice, facts]) Map.empty report context now [request] |> List.exactlyOne
     Assert.Equal(RequestJudgment "original-failed-owner-repair", decision.Recommendation)
+    use wire = JsonDocument.Parse(encode [decision])
+    Assert.Equal("original/cursor-42", wire.RootElement.[0].GetProperty("original").GetString())
 
 [<Theory>]
 [<InlineData("admin")>]
@@ -339,7 +341,7 @@ let ``owned no PR progresses through the actual registered draft route before CI
     let context = ProgrammeFixture.context report
     let identity = continuationIdentity context.Slices.Head
     let _, _, _, original, _, _ = fixture ()
-    let facts = original.Facts |> List.filter (fun fact -> fact.Predicate <> IndependentReview) |> List.map (fun fact -> {fact with Subject = identity; ObservedAt = context.ObservedAt; ValidUntil = context.ValidUntil})
+    let facts = original.Facts |> List.filter (fun fact -> fact.Predicate <> IndependentReview) |> List.map (fun fact -> {fact with Subject = identity; ObservedAt = context.ObservedAt; ValidUntil = context.ValidUntil; ArtifactRevision = Some ProgrammeFixture.head})
     let r = {original with Envelope = None; Original = None; Subject = identity; Facts = facts @ [{facts.Head with Id = "effect-clear"; Predicate = EffectClear}]}
     let inputs: V2Preflight.RoutineInputs =
         {DefaultBranch = "main"; Candidate = V2Preflight.Known {BaseRef = "main"; BaseSha = None; HeadRef = "routine/owned-source"; HeadSha = ProgrammeFixture.head; State = None}
@@ -362,3 +364,73 @@ let ``changed owning promise needs scoped judgment while a timestamp alone needs
     Assert.Equal(RequestJudgment "reconcile-changed-owner-scope", (recommendOwnerContinuations body context now [r] |> List.exactlyOne).Recommendation)
     let clock = {report with Items = report.Items |> List.map (fun item -> {item with Evidence = {item.Evidence with Native = item.Evidence.Native |> Option.map (fun native -> {native with UpdatedAt = "2026-11-03T14:01:00Z"})}})}
     Assert.Equal(Await "native-scope-refresh", (recommendOwnerContinuations clock context now [r] |> List.exactlyOne).Recommendation)
+
+[<Theory>]
+[<InlineData(false)>]
+[<InlineData(true)>]
+let ``unrelated main movement with identical plan blob never renews finite authority`` declaredUrl =
+    let native = ProgrammeFixture.transport ProgrammeFixture.unchanged
+    let report = inspectFixed native (ProgrammeFixture.binding ()) None
+    let context = ProgrammeFixture.context report
+    let slice = context.Slices.Head
+    let path = "docs/coordination/programme.md"
+    let blob = String.replicate 40 "a"
+    let mainA, mainB = String.replicate 40 "1", String.replicate 40 "2"
+    let url = "https://github.com/FS-GG/.github/blob/main/" + path
+    let plan commit oid =
+        if declaredUrl then "FS-GG/.github/" + path + "@" + commit + ":" + oid + ":" + url
+        else path + "@" + commit + ":" + oid
+    let revised plan = {slice with Join = {slice.Join with SourceRevision = "native-current;dependencies=complete:;plan=" + plan + ";recipe=" + report.Binding.RecipeRevision}}
+    let before = revised (plan mainA blob)
+    let after = revised (plan mainB blob)
+    let digestA = continuationEnvelopeInputDigest report context before
+    Assert.Equal(digestA, continuationEnvelopeInputDigest report context after)
+    Assert.NotEqual<string>(digestA, continuationEnvelopeInputDigest report context (revised (plan mainB (String.replicate 40 "b"))))
+    let changedPath = after.Join.SourceRevision.Replace(path, "docs/coordination/other.md")
+    Assert.NotEqual<string>(digestA, continuationEnvelopeInputDigest report context {after with Join = {after.Join with SourceRevision = changedPath}})
+
+[<Fact>]
+let ``draft preflight cannot reuse verification of a different or missing local HEAD`` () =
+    let transport = ProgrammeFixture.transport ProgrammeFixture.newAssignment
+    let report = inspectFixed transport (ProgrammeFixture.binding ()) None
+    let context = ProgrammeFixture.context report
+    let identity = continuationIdentity context.Slices.Head
+    let _, _, _, source, _, _ = fixture ()
+    let make artifact =
+        let facts = source.Facts |> List.filter (fun fact -> fact.Predicate <> IndependentReview) |> List.map (fun fact ->
+            {fact with Subject = identity; ObservedAt = context.ObservedAt; ValidUntil = context.ValidUntil; ArtifactRevision = artifact})
+        {source with Envelope = None; Original = None; Subject = identity; Facts = facts @ [{facts.Head with Id = "effect-clear"; Predicate = EffectClear}]}
+    let proof = Map.ofList [identity.Slice, Ok(RoutineDraft(String.replicate 64 "a", ProgrammeFixture.head))]
+    let old = recommendOwnerContinuationsWithPreflight proof report context context.ObservedAt [make (Some(String.replicate 40 "b"))] |> List.exactlyOne
+    Assert.Equal(ContinueOwner VerifyIsolated, old.Recommendation)
+    Assert.Equal(Some ProgrammeFixture.head, old.ArtifactRevision)
+    let absent = recommendOwnerContinuationsWithPreflight proof report context context.ObservedAt [make None] |> List.exactlyOne
+    Assert.Equal(Await "source-artifact-verification", absent.Recommendation)
+    let exact = recommendOwnerContinuationsWithPreflight proof report context context.ObservedAt [make (Some ProgrammeFixture.head)] |> List.exactlyOne
+    Assert.Equal(ContinueOwner OpenDraft, exact.Recommendation)
+
+[<Fact>]
+let ``source prerequisites hold affected owner work but never require Root permission for isolated checks`` () =
+    let report, context, now, source, _, _ = fixture ()
+    let slice = context.Slices.Head
+    let prerequisite: Prerequisite = {Action = Source; Reference = "supplier/source-contract"; Satisfied = None; SupplyingOwner = "supplier"}
+    let context = {context with Slices = [{slice with Prerequisites = [prerequisite]}]}
+    let r = {source with Envelope = None; Original = None; Facts = source.Facts @ [{source.Facts.Head with Id = "effect-clear"; Predicate = EffectClear}]}
+    Assert.Equal(Await "action-specific-owner-prerequisites", (recommendOwnerContinuations report context now [{r with Action = OwnerContinuation.Implement}] |> List.exactlyOne).Recommendation)
+    Assert.Equal(ContinueOwner VerifyIsolated, (recommendOwnerContinuations report context now [{r with Action = VerifyIsolated}] |> List.exactlyOne).Recommendation)
+
+[<Fact>]
+let ``a current native PR from another issue never becomes this owner's deliverable`` () =
+    let transport = ProgrammeFixture.transport ProgrammeFixture.newAssignment
+    let report = inspectFixed transport (ProgrammeFixture.binding ()) None
+    let context = ProgrammeFixture.context report
+    let foreign = report.NativeIntegrator.PullRequests |> List.find (fun pr -> pr.ScopeCurrent)
+    Assert.DoesNotContain("FS-GG/.github#4634", foreign.Issues)
+    Assert.Empty report.Items.Head.Deliverables
+    let slice = {context.Slices.Head with PullRequest = Some foreign.Url; PullRequestId = Some foreign.Id; PullRequestUpdatedAt = Some foreign.UpdatedAt; Head = Some foreign.Head}
+    let identity = continuationIdentity slice
+    let _, _, _, source, _, _ = fixture ()
+    let request = {source with Envelope = None; Original = None; Subject = identity; Facts = source.Facts |> List.map (fun fact -> {fact with Subject = identity; ObservedAt = context.ObservedAt; ValidUntil = context.ValidUntil})}
+    let advice = recommendOwnerContinuationsWithPreflight (Map.ofList [identity.Slice, Ok(RoutineMerge(String.replicate 64 "a"))]) report {context with Slices = [slice]} context.ObservedAt [request] |> List.exactlyOne
+    Assert.Equal(Await "native-scope-refresh", advice.Recommendation)
+    Assert.Empty transport.Mutations

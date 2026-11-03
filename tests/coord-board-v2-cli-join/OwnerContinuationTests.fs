@@ -15,7 +15,7 @@ let private subject: Identity = { Subject = "FS-GG/.github#5281"; Owner = "worke
 let private fact predicate =
     { Id = predicateName predicate; Subject = subject; Predicate = predicate; Value = Known true
       Support = (if predicate = ScopeCurrent then NativeObservation("adapter", subject.ScopeDigest) else AgentAttestation {Supplier = "worker"; Role = "owner"; ActualModel = None; ActualEffort = None; Method = "isolated exact source check"; Contributors = ["worker"]; ContributorsComplete = true; Limitations = ["fixture"]})
-      ObservedAt = now; ValidUntil = now.AddMinutes 1.0; Evidence = ["bounded-evidence"]; Supersedes = [] }
+      ObservedAt = now; ValidUntil = now.AddMinutes 1.0; Evidence = ["bounded-evidence"]; Supersedes = []; ArtifactRevision = None }
 let private request: Request = { Envelope = None; Subject = subject; Action = VerifyIsolated; Original = None; Facts = [fact ScopeCurrent; fact EffectClear; fact Isolated; fact ResourceShare] }
 let private decision r = recommend now r
 
@@ -98,7 +98,7 @@ let private envelope (context: SelectionContext) original =
     let facts = [EffectClear; Isolated; ResourceShare] |> List.map (fun predicate ->
         {| id = predicateName predicate; scopeDigest = identity.ScopeDigest; predicate = predicateName predicate; state = "known"; value = true; detail = ([]: string list)
            support = {| kind = "attestation"; supplier = slice.Owner; role = "owner"; model = (None: string option); effort = (None: string option); method = "isolated fresh outputs, credential free, bounded share"; contributors = [slice.Owner]; contributorsComplete = true; limitations = ["fixture"] |}
-           observedAt = context.ObservedAt; validUntil = context.ValidUntil; evidence = ["isolated-private-output-and-resource-share"]; supersedes = ([]: string list) |})
+           observedAt = context.ObservedAt; validUntil = context.ValidUntil; evidence = ["isolated-private-output-and-resource-share"]; supersedes = ([]: string list); artifactRevision = (None: string option) |})
     use integrator = JsonDocument.Parse(ProgrammeFixture.integratorJson context)
     JsonSerializer.Serialize {| schema = "fsgg.coord.owner-continuation-input/1"; repositoryCheckout = (None: string option); draft = (None: string option); integrator = integrator.RootElement;
                                requests = [ {| sliceId = slice.Id; attempt = slice.Attempt; owner = slice.Owner; revision = identity.Revision

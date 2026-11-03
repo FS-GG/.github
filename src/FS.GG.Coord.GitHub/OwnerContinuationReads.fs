@@ -34,7 +34,7 @@ module OwnerContinuationReads =
     let collect (transport: IGitHubTransport) (report: InspectionReport) (context: SelectionContext) (now: DateTimeOffset) (request: OwnerContinuation.Request) =
         let fact predicate value evidence proof : OwnerContinuation.Fact =
             { Id = "native-envelope-" + predicateName predicate; Subject = request.Subject; Predicate = predicate; Value = value
-              Support = NativeObservation("OwnerContinuationReads/1", proof); ObservedAt = now; ValidUntil = now.AddMinutes 5.0; Evidence = evidence; Supersedes = [] }
+              Support = NativeObservation("OwnerContinuationReads/1", proof); ObservedAt = now; ValidUntil = now.AddMinutes 5.0; Evidence = evidence; Supersedes = []; ArtifactRevision = None }
         match request.Envelope with
         | None -> []
         | Some reference ->

@@ -178,7 +178,7 @@ module BoardV2Application =
                     | "deliver" -> FS.GG.Coord.OwnerContinuation.Deliver
                     | _ -> invalidArg "action" "unsupported"
                 let facts: FS.GG.Coord.OwnerContinuation.Fact list = entries 16 (value.GetProperty "facts") |> List.map (fun fact ->
-                    closed ["id";"predicate";"state";"value";"detail";"support";"observedAt";"validUntil";"evidence";"supersedes";"scopeDigest"] fact
+                    closed ["id";"predicate";"state";"value";"detail";"support";"observedAt";"validUntil";"evidence";"supersedes";"scopeDigest";"artifactRevision"] fact
                     if bounded "scopeDigest" 64 fact <> identity.ScopeDigest then invalidArg "scope" "attestation source scope changed"
                     let id = bounded "id" 128 fact
                     if id.StartsWith("native-", StringComparison.Ordinal) then invalidArg "id" "reserved"
@@ -217,8 +217,10 @@ module BoardV2Application =
                     let observed = fact.GetProperty("observedAt").GetDateTimeOffset()
                     let until = fact.GetProperty("validUntil").GetDateTimeOffset()
                     if until < observed then invalidArg "time" "invalid interval"
+                    let artifactRevision = optionalText "artifactRevision" fact
+                    if artifactRevision |> Option.exists (fun revision -> revision.Length <> 40 || revision |> Seq.exists (Char.IsAsciiHexDigitLower >> not)) then invalidArg "artifact" "exact artifact SHA required"
                     { Id = id; Subject = identity; Predicate = predicate; Value = knowledge; Support = provenance
-                      ObservedAt = observed; ValidUntil = until; Evidence = strings 16 (fact.GetProperty "evidence"); Supersedes = strings 16 (fact.GetProperty "supersedes") })
+                      ObservedAt = observed; ValidUntil = until; Evidence = strings 16 (fact.GetProperty "evidence"); Supersedes = strings 16 (fact.GetProperty "supersedes"); ArtifactRevision = artifactRevision })
                 if facts |> List.map _.Id |> Set.ofList |> Set.count <> facts.Length then invalidArg "facts" "duplicate"
                 let envelope: FS.GG.Coord.OwnerContinuation.EnvelopeReference option =
                     let reference = value.GetProperty "envelope"
@@ -1086,9 +1088,8 @@ module BoardV2Application =
             else
                 let started = deps.Clock.GetTimestamp()
                 let observed = deps.Clock.GetUtcNow()
-                // Placeholders, wired before PR 5 and PR 8: the Root login (until the board-currency
-                // rootLogins parameter is read), an empty ledger (until the state directory) and no
-                // enrollment input (RM1 inert; P-READY reports cards as unenrolled).
+                // Root identities share the canonical embedded policy with the Python rules. The ledger
+                // and enrollment placeholders remain inert until their owning stages are qualified.
                 let rootLogins = FS.GG.Coord.RootIdentityPolicy.rootLogins |> Result.defaultWith (fun _ -> invalidOp "canonical Root policy unavailable")
                 let inputs: V2TendReads.Inputs =
                     { Owner = "FS-GG"; ProjectNumber = 3; RootLogins = rootLogins; ObservedAt = observed; Ledger = []; Enrolled = Map.empty }

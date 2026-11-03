@@ -1565,6 +1565,26 @@ module V2ProjectionSource =
           Owner = slice.Owner; Slice = slice.Id; Attempt = slice.Attempt; Revision = slice.Join.SourceRevision
           ScopeDigest = FS.GG.Coord.OwnerContinuation.digest (System.Text.Json.JsonSerializer.Serialize scope) }
 
+    let private immutablePlanBlobOperand (binding: Binding) (value: string) =
+        let hex40 (value: string) = value.Length = 40 && value |> Seq.forall Char.IsAsciiHexDigitLower
+        let parseHeader (header: string) =
+            if header.Length < 83 then None
+            else
+                let at = header.Length - 82
+                let commit = header.Substring(at + 1, 40)
+                let blob = header.Substring(at + 42, 40)
+                if header[at] = '@' && header[at + 41] = ':' && hex40 commit && hex40 blob then Some(header.Substring(0, at), blob) else None
+        let urlAt = value.IndexOf(":https://github.com/", StringComparison.Ordinal)
+        if urlAt >= 0 then
+            let header, declaration = value.Substring(0, urlAt), value.Substring(urlAt + 1)
+            match parseHeader header, programmePlanBlobGrammar binding.Repositories declaration with
+            | Some(prefix, blob), Ok(repository, _, path) when prefix = repository + "/" + path -> ["declared-blob"; repository; path; blob; declaration]
+            | _ -> ["unrecognized-declared-plan"; value]
+        else
+            match parseHeader value with
+            | Some(path, blob) when path.StartsWith("docs/", StringComparison.Ordinal) && not (path.Contains("..") || path.Contains(':') || path.Contains('\\')) -> ["protected-docs-blob"; sourceRepository binding; path; blob]
+            | _ -> ["unrecognized-protected-plan"; value]
+
     /// Semantic native source identity derives from typed complete observations, never by stripping
     /// arbitrary text from the legacy freshness revision. Native issue/plan/dependency clocks still
     /// join exactly in ScopeCurrent; bodies, state, population, source blobs and hierarchy remain bound.
@@ -1579,7 +1599,7 @@ module V2ProjectionSource =
                 let marker = slice.Join.SourceRevision.LastIndexOf(";plan=", StringComparison.Ordinal)
                 let recipe = slice.Join.SourceRevision.LastIndexOf(";recipe=", StringComparison.Ordinal)
                 if marker < 0 || recipe <= marker then ["unrecognized-source"; slice.Join.SourceRevision]
-                else [slice.Join.SourceRevision.Substring(marker + 6, recipe - marker - 6)]
+                else immutablePlanBlobOperand report.Binding (slice.Join.SourceRevision.Substring(marker + 6, recipe - marker - 6))
         let source = System.Text.Json.JsonSerializer.Serialize
                         {| native = item.Evidence.Native |> Option.map native
                            dependencies = item.Evidence.DependencyObservations |> List.sortBy _.NodeId |> List.map native
@@ -1616,6 +1636,7 @@ module V2ProjectionSource =
                                 report.NativeIntegrator.PullRequests
                                 |> List.exists (fun p ->
                                     p.Url = url && p.Id = Option.defaultValue "" s.PullRequestId
+                                    && (List.contains request.Subject.Subject p.Issues || List.contains p.Url item.Deliverables)
                                     && p.Head = Option.defaultValue "" s.Head && Some p.UpdatedAt = s.PullRequestUpdatedAt
                                     && (p.ScopeCurrent || (p.State = "MERGED" && p.Gaps.IsEmpty && p.GapDetails.IsEmpty && List.contains p.Url item.Deliverables))))))
             let nativeFact predicate value suffix : FS.GG.Coord.OwnerContinuation.Fact =
@@ -1623,7 +1644,7 @@ module V2ProjectionSource =
                   Value = FS.GG.Coord.OwnerContinuation.Known value
                   Support = FS.GG.Coord.OwnerContinuation.NativeObservation("V2ProjectionSource/1", request.Subject.ScopeDigest)
                   ObservedAt = report.NativeIntegrator.ObservedAt; ValidUntil = report.NativeIntegrator.ObservedAt.AddMinutes 5.0
-                  Evidence = [request.Subject.Subject]; Supersedes = [] }
+                  Evidence = [request.Subject.Subject]; Supersedes = []; ArtifactRevision = None }
             let checksPassed = slice |> Option.exists (fun s ->
                 report.NativeIntegrator.PullRequests |> List.exists (fun p ->
                     Some p.Url = s.PullRequest && Some p.Head = s.Head && p.ScopeCurrent && p.Gaps.IsEmpty && p.GapDetails.IsEmpty
@@ -1646,7 +1667,7 @@ module V2ProjectionSource =
             let nativePrFact =
                 let fact = nativeFact FS.GG.Coord.OwnerContinuation.NativePullRequest false "native-pr"
                 match slice with
-                | Some s when s.PullRequest.IsSome && scopeCurrent -> {fact with Value = FS.GG.Coord.OwnerContinuation.Known true; Evidence = ["source-head:" + Option.defaultValue "unknown" s.Head]}
+                | Some s when s.PullRequest.IsSome && scopeCurrent -> {fact with Value = FS.GG.Coord.OwnerContinuation.Known true; Evidence = ["source-head:" + Option.defaultValue "unknown" s.Head]; ArtifactRevision = s.Head}
                 | Some s when s.PullRequest.IsNone && report.NativeIntegrator.RepositoryGaps.ContainsKey s.Repository -> {fact with Value = FS.GG.Coord.OwnerContinuation.Unknown "native-pr-inventory-unavailable"}
                 | Some s when s.PullRequest.IsNone && report.NativeIntegrator.PullRequests |> List.exists (fun p -> p.State = "OPEN" && (List.contains request.Subject.Subject p.Issues || report.Items |> List.exists (fun item -> item.Evidence.Issue = s.Issue && List.contains p.Url item.Deliverables))) -> {fact with Value = FS.GG.Coord.OwnerContinuation.Unknown "native-pr-needs-exact-slice-join"}
                 | _ -> fact
@@ -1654,7 +1675,14 @@ module V2ProjectionSource =
                 item.Evidence.Issue = current.Issue
                 && ((item.Owner |> Option.exists (fun owner -> owner <> current.AccountableOwner))
                     || (item.Evidence.Native |> Option.exists (fun native -> native.NodeId = current.Join.NativeId && native.BodySha256 <> current.Join.BodySha256)))))
-            let facts = nativeFact FS.GG.Coord.OwnerContinuation.ScopeChanged scopeChanged "scope-changed" :: nativePrFact :: semanticScope :: nativeFact FS.GG.Coord.OwnerContinuation.SubjectClosed subjectClosed "subject-closed" :: nativeFact FS.GG.Coord.OwnerContinuation.ChangesRequired changesRequired "changes-required" :: nativeFact FS.GG.Coord.OwnerContinuation.SourceDelivered delivered "source-delivered" :: nativeFact FS.GG.Coord.OwnerContinuation.ScopeCurrent scopeCurrent "scope" :: nativeFact FS.GG.Coord.OwnerContinuation.NativeRollup checksPassed "checks" :: ((Map.tryFind request.Subject.Slice additional |> Option.defaultValue []) @ supplied)
+            let prerequisiteHold = slice |> Option.exists (fun current ->
+                not current.PrerequisitesComplete || current.Prerequisites |> List.exists (fun prerequisite -> prerequisite.Action = current.Action && prerequisite.Satisfied <> Some true))
+            let prerequisites =
+                let fact = nativeFact FS.GG.Coord.OwnerContinuation.BlockingPrerequisite prerequisiteHold "owner-prerequisites"
+                {fact with Support = FS.GG.Coord.OwnerContinuation.Reported "attributed-integrator-prerequisites"}
+            let unregistered = slice |> Option.exists (fun current -> current.Action = Activation || current.Operation = ActivateWork)
+            let unsupported = nativeFact FS.GG.Coord.OwnerContinuation.UnregisteredOwnerRoute unregistered "unregistered-owner-route"
+            let facts = prerequisites :: unsupported :: nativeFact FS.GG.Coord.OwnerContinuation.ScopeChanged scopeChanged "scope-changed" :: nativePrFact :: semanticScope :: nativeFact FS.GG.Coord.OwnerContinuation.SubjectClosed subjectClosed "subject-closed" :: nativeFact FS.GG.Coord.OwnerContinuation.ChangesRequired changesRequired "changes-required" :: nativeFact FS.GG.Coord.OwnerContinuation.SourceDelivered delivered "source-delivered" :: nativeFact FS.GG.Coord.OwnerContinuation.ScopeCurrent scopeCurrent "scope" :: nativeFact FS.GG.Coord.OwnerContinuation.NativeRollup checksPassed "checks" :: ((Map.tryFind request.Subject.Slice additional |> Option.defaultValue []) @ supplied)
             let relevantOriginal =
                 slice |> Option.bind (fun current ->
                     context.Reservations |> Option.bind (fun holds ->
@@ -1683,7 +1711,8 @@ module V2ProjectionSource =
                     | _ -> (if route = "registered-open-draft-preflight-required" then FS.GG.Coord.OwnerContinuation.DraftPreflight else FS.GG.Coord.OwnerContinuation.RoutinePreflight), false, request.Subject.ScopeDigest, []
                 let joined =
                     let fact = nativeFact predicate supported "registered-owner-preflight"
-                    {fact with Support = FS.GG.Coord.OwnerContinuation.NativeObservation("V2Preflight/registered-owner-route", hash); Evidence = ("registered-preflight:" + hash) :: artifact}
+                    {fact with Support = FS.GG.Coord.OwnerContinuation.NativeObservation("V2Preflight/registered-owner-route", hash); Evidence = ("registered-preflight:" + hash) :: artifact
+                               ArtifactRevision = artifact |> List.tryHead |> Option.map (fun value -> value.Substring 12)}
                 FS.GG.Coord.OwnerContinuation.recommend now { request with Facts = joined :: facts }
             | _ -> initial)
 
