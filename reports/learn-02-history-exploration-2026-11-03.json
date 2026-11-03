@@ -1,0 +1,4988 @@
+{
+  "schema": "fsgg.learn-history-exploration/1",
+  "versions": {
+    "python": "3.15.1",
+    "numpy": "2.5.4",
+    "scipy": "1.18.1"
+  },
+  "cohort": {
+    "qualifiedHistories": 53,
+    "withDispatchH": 34,
+    "withCreationH": 53,
+    "withResponseTimelines": 34,
+    "invocations": 74,
+    "responses": 12169,
+    "states": {
+      "closed:completed": 27,
+      "closed:not_planned": 4,
+      "open:None": 22
+    },
+    "runtimeStates": {
+      "closed:completed": 18,
+      "open:None": 16
+    },
+    "unknowns": {},
+    "creationVsDispatchHChanges": 0,
+    "dispatchVsCurrentHChanges": 3,
+    "responsesAfterClose": 283
+  },
+  "creationBodyCalendarAssociations": {
+    "H": {
+      "n": 31,
+      "missing": 22,
+      "xUnique": 11,
+      "yUnique": 31,
+      "spearman": 0.3230821199713306,
+      "kendall": 0.22322279128808983
+    },
+    "D1": {
+      "n": 31,
+      "missing": 22,
+      "xUnique": 4,
+      "yUnique": 31,
+      "spearman": 0.17990518553200777,
+      "kendall": 0.12143534814378328
+    },
+    "D2": {
+      "n": 31,
+      "missing": 22,
+      "xUnique": 4,
+      "yUnique": 31,
+      "spearman": 0.023076593558745667,
+      "kendall": 0.00991515465631671
+    },
+    "D3": {
+      "n": 31,
+      "missing": 22,
+      "xUnique": 4,
+      "yUnique": 31,
+      "spearman": -0.05274952954817116,
+      "kendall": -0.03431389925653328
+    },
+    "D4": {
+      "n": 31,
+      "missing": 22,
+      "xUnique": 4,
+      "yUnique": 31,
+      "spearman": -0.18425157048551932,
+      "kendall": -0.1425915699339438
+    },
+    "D5": {
+      "n": 31,
+      "missing": 22,
+      "xUnique": 4,
+      "yUnique": 31,
+      "spearman": 0.2710977056323883,
+      "kendall": 0.20913558995811082
+    },
+    "D6": {
+      "n": 31,
+      "missing": 22,
+      "xUnique": 4,
+      "yUnique": 31,
+      "spearman": 0.23799036686166355,
+      "kendall": 0.18026927952974806
+    },
+    "D7": {
+      "n": 31,
+      "missing": 22,
+      "xUnique": 3,
+      "yUnique": 31,
+      "spearman": 0.5271783486677997,
+      "kendall": 0.4283566513342385
+    },
+    "D8": {
+      "n": 31,
+      "missing": 22,
+      "xUnique": 4,
+      "yUnique": 31,
+      "spearman": 0.5243300040017629,
+      "kendall": 0.4342368399409632
+    },
+    "log1pTextWords": {
+      "n": 31,
+      "missing": 22,
+      "xUnique": 29,
+      "yUnique": 31,
+      "spearman": 0.16838072534327214,
+      "kendall": 0.1357761773937627
+    },
+    "log1pTextCharacters": {
+      "n": 31,
+      "missing": 22,
+      "xUnique": 30,
+      "yUnique": 31,
+      "spearman": 0.10222804770169802,
+      "kendall": 0.08611415107403707
+    },
+    "safetyFloor": {
+      "n": 31,
+      "missing": 22,
+      "xUnique": 2,
+      "yUnique": 31,
+      "spearman": -0.12814232144554952,
+      "kendall": -0.1063019179117228
+    }
+  },
+  "featureSupport": {
+    "H": {
+      "known": 34,
+      "values": {
+        "10": 1,
+        "11": 3,
+        "12": 1,
+        "13": 5,
+        "14": 4,
+        "15": 2,
+        "16": 5,
+        "17": 1,
+        "18": 2,
+        "19": 1,
+        "20": 1,
+        "6": 1,
+        "7": 1,
+        "8": 5,
+        "9": 1
+      }
+    },
+    "D1": {
+      "known": 34,
+      "values": {
+        "0": 12,
+        "1": 8,
+        "2": 12,
+        "3": 2
+      }
+    },
+    "D2": {
+      "known": 34,
+      "values": {
+        "0": 11,
+        "1": 6,
+        "2": 5,
+        "3": 12
+      }
+    },
+    "D3": {
+      "known": 34,
+      "values": {
+        "0": 21,
+        "1": 2,
+        "2": 6,
+        "3": 5
+      }
+    },
+    "D4": {
+      "known": 34,
+      "values": {
+        "0": 20,
+        "1": 2,
+        "2": 5,
+        "3": 7
+      }
+    },
+    "D5": {
+      "known": 34,
+      "values": {
+        "0": 8,
+        "1": 7,
+        "2": 3,
+        "3": 16
+      }
+    },
+    "D6": {
+      "known": 34,
+      "values": {
+        "0": 13,
+        "1": 2,
+        "2": 4,
+        "3": 15
+      }
+    },
+    "D7": {
+      "known": 34,
+      "values": {
+        "1": 1,
+        "2": 30,
+        "3": 3
+      }
+    },
+    "D8": {
+      "known": 34,
+      "values": {
+        "3": 34
+      }
+    },
+    "safetyFloor": {
+      "known": 34,
+      "values": {
+        "0": 22,
+        "1": 12
+      }
+    }
+  },
+  "dimensionEndpointAssociations": {
+    "H": {
+      "responseEnvelopeThroughNativeCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 8,
+        "yUnique": 18,
+        "spearman": 0.08982371117901394,
+        "kendall": 0.03453536141981867
+      },
+      "responseEnvelopeUnionSeconds": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 34,
+        "spearman": 0.0966667782370946,
+        "kendall": 0.048138244178456184
+      },
+      "gapCappedUnionSeconds3600": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 34,
+        "spearman": 0.18441992668444124,
+        "kendall": 0.1073853139365561
+      },
+      "gapCappedUnionSeconds28800": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 34,
+        "spearman": 0.0966667782370946,
+        "kendall": 0.048138244178456184
+      },
+      "dispatchToCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 8,
+        "yUnique": 18,
+        "spearman": 0.2172480456422663,
+        "kendall": 0.1174202288273835
+      }
+    },
+    "D1": {
+      "responseEnvelopeThroughNativeCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 4,
+        "yUnique": 18,
+        "spearman": 0.11702197659663294,
+        "kendall": 0.08365805205931716
+      },
+      "responseEnvelopeUnionSeconds": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.05831359878252593,
+        "kendall": 0.04222003309207491
+      },
+      "gapCappedUnionSeconds3600": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.1024515160930566,
+        "kendall": 0.08021806287494232
+      },
+      "gapCappedUnionSeconds28800": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.05831359878252593,
+        "kendall": 0.04222003309207491
+      },
+      "dispatchToCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 4,
+        "yUnique": 18,
+        "spearman": 0.047675620094924535,
+        "kendall": 0.038026387299689615
+      }
+    },
+    "D2": {
+      "responseEnvelopeThroughNativeCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 4,
+        "yUnique": 18,
+        "spearman": 0.13521156262626624,
+        "kendall": 0.11308281825797518
+      },
+      "responseEnvelopeUnionSeconds": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": -0.02061289981338727,
+        "kendall": -0.04766749800168915
+      },
+      "gapCappedUnionSeconds3600": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.08468865814802522,
+        "kendall": 0.043522498175455324
+      },
+      "gapCappedUnionSeconds28800": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": -0.02061289981338727,
+        "kendall": -0.04766749800168915
+      },
+      "dispatchToCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 4,
+        "yUnique": 18,
+        "spearman": 0.2628512777454616,
+        "kendall": 0.21862678196541868
+      }
+    },
+    "D3": {
+      "responseEnvelopeThroughNativeCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 4,
+        "yUnique": 18,
+        "spearman": -0.04132946002599543,
+        "kendall": -0.008208587226297536
+      },
+      "responseEnvelopeUnionSeconds": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": -0.1660421148056878,
+        "kendall": -0.13349092565261483
+      },
+      "gapCappedUnionSeconds3600": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": -0.15198563947822222,
+        "kendall": -0.12412314139629099
+      },
+      "gapCappedUnionSeconds28800": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": -0.1660421148056878,
+        "kendall": -0.13349092565261483
+      },
+      "dispatchToCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 4,
+        "yUnique": 18,
+        "spearman": 0.09643540672732268,
+        "kendall": 0.0902944594892729
+      }
+    },
+    "D4": {
+      "responseEnvelopeThroughNativeCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 3,
+        "yUnique": 18,
+        "spearman": -0.07465089026901593,
+        "kendall": -0.05998702461839043
+      },
+      "responseEnvelopeUnionSeconds": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.21658968216609578,
+        "kendall": 0.16739465259679748
+      },
+      "gapCappedUnionSeconds3600": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.26383934212908167,
+        "kendall": 0.1994977366564573
+      },
+      "gapCappedUnionSeconds28800": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.21658968216609578,
+        "kendall": 0.16739465259679748
+      },
+      "dispatchToCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 3,
+        "yUnique": 18,
+        "spearman": 0.05806180354256794,
+        "kendall": 0.04284787472742174
+      }
+    },
+    "D5": {
+      "responseEnvelopeThroughNativeCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 4,
+        "yUnique": 18,
+        "spearman": 0.2957330713269953,
+        "kendall": 0.23576360125807563
+      },
+      "responseEnvelopeUnionSeconds": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.011112662210479253,
+        "kendall": 0.014984484565298148
+      },
+      "gapCappedUnionSeconds3600": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.07697152795787836,
+        "kendall": 0.07064114152211984
+      },
+      "gapCappedUnionSeconds28800": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.011112662210479253,
+        "kendall": 0.014984484565298148
+      },
+      "dispatchToCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 4,
+        "yUnique": 18,
+        "spearman": 0.29790757920439964,
+        "kendall": 0.22055304633819978
+      }
+    },
+    "D6": {
+      "responseEnvelopeThroughNativeCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 4,
+        "yUnique": 18,
+        "spearman": -0.14459817678981346,
+        "kendall": -0.11510231387903272
+      },
+      "responseEnvelopeUnionSeconds": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.1897848689373323,
+        "kendall": 0.15562879803391624
+      },
+      "gapCappedUnionSeconds3600": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.1859891715585857,
+        "kendall": 0.14686097842637166
+      },
+      "gapCappedUnionSeconds28800": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 34,
+        "spearman": 0.1897848689373323,
+        "kendall": 0.15562879803391624
+      },
+      "dispatchToCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 4,
+        "yUnique": 18,
+        "spearman": -0.2234699095842572,
+        "kendall": -0.17649021461451686
+      }
+    },
+    "D7": {
+      "responseEnvelopeThroughNativeCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 2,
+        "yUnique": 18,
+        "spearman": -0.023374100418794893,
+        "kendall": -0.0196078431372549
+      },
+      "responseEnvelopeUnionSeconds": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 34,
+        "spearman": -0.13444896478359397,
+        "kendall": -0.11039871325995644
+      },
+      "gapCappedUnionSeconds3600": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 34,
+        "spearman": -0.1248845059067123,
+        "kendall": -0.10278500889720082
+      },
+      "gapCappedUnionSeconds28800": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 34,
+        "spearman": -0.13444896478359397,
+        "kendall": -0.11039871325995644
+      },
+      "dispatchToCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 2,
+        "yUnique": 18,
+        "spearman": -0.023374100418794893,
+        "kendall": -0.0196078431372549
+      }
+    },
+    "D8": {
+      "responseEnvelopeThroughNativeCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 1,
+        "yUnique": 18,
+        "spearman": null,
+        "kendall": null
+      },
+      "responseEnvelopeUnionSeconds": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 34,
+        "spearman": null,
+        "kendall": null
+      },
+      "gapCappedUnionSeconds3600": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 34,
+        "spearman": null,
+        "kendall": null
+      },
+      "gapCappedUnionSeconds28800": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 34,
+        "spearman": null,
+        "kendall": null
+      },
+      "dispatchToCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 1,
+        "yUnique": 18,
+        "spearman": null,
+        "kendall": null
+      }
+    },
+    "log1pTextWords": {
+      "responseEnvelopeThroughNativeCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 17,
+        "yUnique": 18,
+        "spearman": -0.11151266328595341,
+        "kendall": -0.06557412294705281
+      },
+      "responseEnvelopeUnionSeconds": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 34,
+        "spearman": -0.4185193686291883,
+        "kendall": -0.29259601294087617
+      },
+      "gapCappedUnionSeconds3600": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 34,
+        "spearman": -0.37420735077505746,
+        "kendall": -0.2604818163985849
+      },
+      "gapCappedUnionSeconds28800": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 34,
+        "spearman": -0.4185193686291883,
+        "kendall": -0.29259601294087617
+      },
+      "dispatchToCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 17,
+        "yUnique": 18,
+        "spearman": -0.02168301786115761,
+        "kendall": -0.013114824589410563
+      }
+    },
+    "log1pTextCharacters": {
+      "responseEnvelopeThroughNativeCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 18,
+        "yUnique": 18,
+        "spearman": -0.10835913312693499,
+        "kendall": -0.05882352941176472
+      },
+      "responseEnvelopeUnionSeconds": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 34,
+        "spearman": -0.40079456148753595,
+        "kendall": -0.2890277688806216
+      },
+      "gapCappedUnionSeconds3600": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 34,
+        "spearman": -0.3577049441259328,
+        "kendall": -0.25691357233833034
+      },
+      "gapCappedUnionSeconds28800": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 34,
+        "spearman": -0.40079456148753595,
+        "kendall": -0.2890277688806216
+      },
+      "dispatchToCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 18,
+        "yUnique": 18,
+        "spearman": -0.0196078431372549,
+        "kendall": -0.006535947712418302
+      }
+    },
+    "safetyFloor": {
+      "responseEnvelopeThroughNativeCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 2,
+        "yUnique": 18,
+        "spearman": -0.1867079991996597,
+        "kendall": -0.15662383129978827
+      },
+      "responseEnvelopeUnionSeconds": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 34,
+        "spearman": 0.050186586133989394,
+        "kendall": 0.04157541458000214
+      },
+      "gapCappedUnionSeconds3600": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 34,
+        "spearman": 0.08782652573448144,
+        "kendall": 0.07275697551500375
+      },
+      "gapCappedUnionSeconds28800": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 34,
+        "spearman": 0.050186586133989394,
+        "kendall": 0.04157541458000214
+      },
+      "dispatchToCloseSeconds": {
+        "n": 18,
+        "missing": 16,
+        "xUnique": 2,
+        "yUnique": 18,
+        "spearman": -0.05491411741166461,
+        "kendall": -0.04606583273523184
+      }
+    }
+  },
+  "featureCooccurrence": {
+    "H": {
+      "H": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 15,
+        "spearman": 1.0,
+        "kendall": 1.0
+      },
+      "D1": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 4,
+        "spearman": 0.5183364665434452,
+        "kendall": 0.4253731393639092
+      },
+      "D2": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 4,
+        "spearman": 0.6706284559299972,
+        "kendall": 0.5575374493379549
+      },
+      "D3": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 4,
+        "spearman": 0.29444060036980346,
+        "kendall": 0.23838708515115478
+      },
+      "D4": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 4,
+        "spearman": 0.5950340223054412,
+        "kendall": 0.47635252842460085
+      },
+      "D5": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 4,
+        "spearman": 0.453602927676251,
+        "kendall": 0.3757597274198536
+      },
+      "D6": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 4,
+        "spearman": 0.36179025700879147,
+        "kendall": 0.29597479312792146
+      },
+      "D7": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 3,
+        "spearman": 0.2969979016574466,
+        "kendall": 0.2530613068322275
+      },
+      "D8": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 1,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 33,
+        "spearman": 0.1260299115556745,
+        "kendall": 0.08894991799933215
+      },
+      "log1pTextCharacters": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 33,
+        "spearman": 0.15991966216302358,
+        "kendall": 0.11674676737412344
+      },
+      "safetyFloor": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 15,
+        "yUnique": 2,
+        "spearman": 0.5458207285887761,
+        "kendall": 0.4669199903508923
+      }
+    },
+    "D1": {
+      "H": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 15,
+        "spearman": 0.5183364665434452,
+        "kendall": 0.42537313936390914
+      },
+      "D1": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 1.0,
+        "kendall": 1.0
+      },
+      "D2": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.22456933674221644,
+        "kendall": 0.19880668093789547
+      },
+      "D3": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": -0.04668290925336764,
+        "kendall": -0.030508510792387606
+      },
+      "D4": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.08436008913132619,
+        "kendall": 0.07603756252309958
+      },
+      "D5": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.34666348753846765,
+        "kendall": 0.2940716734067684
+      },
+      "D6": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.09935066467136738,
+        "kendall": 0.08825960238069805
+      },
+      "D7": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 3,
+        "spearman": 0.16480079918741208,
+        "kendall": 0.1487754897201263
+      },
+      "D8": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 1,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 33,
+        "spearman": 0.2184510535299592,
+        "kendall": 0.16480507967206073
+      },
+      "log1pTextCharacters": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 33,
+        "spearman": 0.2611424467345604,
+        "kendall": 0.1922725929507375
+      },
+      "safetyFloor": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 2,
+        "spearman": 0.05291253627817012,
+        "kendall": 0.04923659639173309
+      }
+    },
+    "D2": {
+      "H": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 15,
+        "spearman": 0.6706284559299972,
+        "kendall": 0.5575374493379549
+      },
+      "D1": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.2245693367422164,
+        "kendall": 0.1988066809378955
+      },
+      "D2": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 1.0,
+        "kendall": 1.0
+      },
+      "D3": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.2714100818313914,
+        "kendall": 0.2341707907094764
+      },
+      "D4": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.26123156796068103,
+        "kendall": 0.22928442453914671
+      },
+      "D5": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.21748335534378907,
+        "kendall": 0.1891536574898588
+      },
+      "D6": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": -0.04030042831280891,
+        "kendall": -0.030582306945890994
+      },
+      "D7": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 3,
+        "spearman": 0.20091238905908151,
+        "kendall": 0.1814710084493678
+      },
+      "D8": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 1,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 33,
+        "spearman": 0.26127648165931694,
+        "kendall": 0.20536060387714306
+      },
+      "log1pTextCharacters": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 33,
+        "spearman": 0.2809321435823114,
+        "kendall": 0.22195540015004347
+      },
+      "safetyFloor": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 2,
+        "spearman": 0.21978675020286892,
+        "kendall": 0.20241784219888503
+      }
+    },
+    "D3": {
+      "H": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 15,
+        "spearman": 0.29444060036980346,
+        "kendall": 0.23838708515115475
+      },
+      "D1": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": -0.04668290925336764,
+        "kendall": -0.0305085107923876
+      },
+      "D2": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.27141008183139137,
+        "kendall": 0.23417079070947638
+      },
+      "D3": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 1.0,
+        "kendall": 1.0
+      },
+      "D4": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.14774081684936774,
+        "kendall": 0.13858502422816912
+      },
+      "D5": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": -0.33480437613327674,
+        "kendall": -0.29811881351654634
+      },
+      "D6": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": -0.17773281692908774,
+        "kendall": -0.16703187576713924
+      },
+      "D7": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 3,
+        "spearman": 0.5144428526927677,
+        "kendall": 0.4851516335819447
+      },
+      "D8": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 1,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 33,
+        "spearman": 0.1975085674350989,
+        "kendall": 0.14767427774562605
+      },
+      "log1pTextCharacters": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 33,
+        "spearman": 0.20286800809948544,
+        "kendall": 0.1547063862097035
+      },
+      "safetyFloor": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 2,
+        "spearman": 0.26692883443211146,
+        "kendall": 0.2526318345396
+      }
+    },
+    "D4": {
+      "H": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 15,
+        "spearman": 0.5950340223054412,
+        "kendall": 0.47635252842460085
+      },
+      "D1": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.0843600891313262,
+        "kendall": 0.0760375625230996
+      },
+      "D2": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.261231567960681,
+        "kendall": 0.22928442453914674
+      },
+      "D3": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.14774081684936774,
+        "kendall": 0.1385850242281691
+      },
+      "D4": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 1.0,
+        "kendall": 1.0
+      },
+      "D5": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.06427909573744721,
+        "kendall": 0.05507510653433417
+      },
+      "D6": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.04237433741185067,
+        "kendall": 0.036656968674672726
+      },
+      "D7": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 3,
+        "spearman": 0.2094208459728176,
+        "kendall": 0.19588788920344352
+      },
+      "D8": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 1,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 33,
+        "spearman": -0.18220102091249304,
+        "kendall": -0.14229768243236282
+      },
+      "log1pTextCharacters": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 33,
+        "spearman": -0.16849067433176118,
+        "kendall": -0.13082206288136583
+      },
+      "safetyFloor": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 2,
+        "spearman": 0.9346077417744939,
+        "kendall": 0.8824743973322414
+      }
+    },
+    "D5": {
+      "H": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 15,
+        "spearman": 0.45360292767625093,
+        "kendall": 0.3757597274198536
+      },
+      "D1": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.34666348753846765,
+        "kendall": 0.29407167340676843
+      },
+      "D2": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.21748335534378907,
+        "kendall": 0.1891536574898588
+      },
+      "D3": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": -0.3348043761332768,
+        "kendall": -0.2981188135165464
+      },
+      "D4": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.06427909573744722,
+        "kendall": 0.05507510653433417
+      },
+      "D5": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.9999999999999998,
+        "kendall": 1.0
+      },
+      "D6": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.13018010579202222,
+        "kendall": 0.11582196293281406
+      },
+      "D7": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 3,
+        "spearman": -0.04179720573502994,
+        "kendall": -0.03657317218299604
+      },
+      "D8": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 1,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 33,
+        "spearman": 0.17724416104891086,
+        "kendall": 0.12855306515941298
+      },
+      "log1pTextCharacters": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 33,
+        "spearman": 0.19497674885325098,
+        "kendall": 0.14355092276134448
+      },
+      "safetyFloor": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 2,
+        "spearman": -0.057034211888924,
+        "kendall": -0.0530483838349354
+      }
+    },
+    "D6": {
+      "H": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 15,
+        "spearman": 0.36179025700879147,
+        "kendall": 0.29597479312792146
+      },
+      "D1": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.09935066467136738,
+        "kendall": 0.08825960238069805
+      },
+      "D2": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": -0.04030042831280891,
+        "kendall": -0.030582306945890994
+      },
+      "D3": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": -0.1777328169290877,
+        "kendall": -0.1670318757671392
+      },
+      "D4": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.04237433741185067,
+        "kendall": 0.036656968674672726
+      },
+      "D5": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 0.13018010579202222,
+        "kendall": 0.11582196293281406
+      },
+      "D6": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 4,
+        "spearman": 1.0,
+        "kendall": 0.9999999999999998
+      },
+      "D7": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 3,
+        "spearman": -0.2914760389423085,
+        "kendall": -0.27151165877651867
+      },
+      "D8": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 1,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 33,
+        "spearman": -0.14111170482364654,
+        "kendall": -0.10969555657749128
+      },
+      "log1pTextCharacters": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 33,
+        "spearman": -0.14078161896440994,
+        "kendall": -0.11408337884059093
+      },
+      "safetyFloor": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 2,
+        "spearman": 0.037267799624996496,
+        "kendall": 0.03514825486856325
+      }
+    },
+    "D7": {
+      "H": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 15,
+        "spearman": 0.29699790165744666,
+        "kendall": 0.2530613068322275
+      },
+      "D1": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 4,
+        "spearman": 0.16480079918741208,
+        "kendall": 0.14877548972012633
+      },
+      "D2": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 4,
+        "spearman": 0.2009123890590815,
+        "kendall": 0.1814710084493678
+      },
+      "D3": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 4,
+        "spearman": 0.5144428526927677,
+        "kendall": 0.48515163358194463
+      },
+      "D4": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 4,
+        "spearman": 0.2094208459728176,
+        "kendall": 0.19588788920344352
+      },
+      "D5": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 4,
+        "spearman": -0.041797205735029944,
+        "kendall": -0.03657317218299605
+      },
+      "D6": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 4,
+        "spearman": -0.2914760389423085,
+        "kendall": -0.27151165877651867
+      },
+      "D7": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 3,
+        "spearman": 1.0,
+        "kendall": 0.9999999999999999
+      },
+      "D8": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 1,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 33,
+        "spearman": -0.14593746463672674,
+        "kendall": -0.11811773885529657
+      },
+      "log1pTextCharacters": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 33,
+        "spearman": -0.11095619970507686,
+        "kendall": -0.08763574173134907
+      },
+      "safetyFloor": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 2,
+        "spearman": 0.2356237008291583,
+        "kendall": 0.23307450537420937
+      }
+    },
+    "D8": {
+      "H": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 15,
+        "spearman": null,
+        "kendall": null
+      },
+      "D1": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 4,
+        "spearman": null,
+        "kendall": null
+      },
+      "D2": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 4,
+        "spearman": null,
+        "kendall": null
+      },
+      "D3": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 4,
+        "spearman": null,
+        "kendall": null
+      },
+      "D4": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 4,
+        "spearman": null,
+        "kendall": null
+      },
+      "D5": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 4,
+        "spearman": null,
+        "kendall": null
+      },
+      "D6": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 4,
+        "spearman": null,
+        "kendall": null
+      },
+      "D7": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 3,
+        "spearman": null,
+        "kendall": null
+      },
+      "D8": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 1,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 33,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextCharacters": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 33,
+        "spearman": null,
+        "kendall": null
+      },
+      "safetyFloor": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 2,
+        "spearman": null,
+        "kendall": null
+      }
+    },
+    "log1pTextWords": {
+      "H": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 15,
+        "spearman": 0.12602991155567453,
+        "kendall": 0.08894991799933215
+      },
+      "D1": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 4,
+        "spearman": 0.21845105352995922,
+        "kendall": 0.16480507967206073
+      },
+      "D2": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 4,
+        "spearman": 0.26127648165931694,
+        "kendall": 0.20536060387714303
+      },
+      "D3": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 4,
+        "spearman": 0.19750856743509887,
+        "kendall": 0.14767427774562605
+      },
+      "D4": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 4,
+        "spearman": -0.18220102091249304,
+        "kendall": -0.14229768243236285
+      },
+      "D5": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 4,
+        "spearman": 0.17724416104891086,
+        "kendall": 0.12855306515941298
+      },
+      "D6": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 4,
+        "spearman": -0.14111170482364654,
+        "kendall": -0.10969555657749129
+      },
+      "D7": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 3,
+        "spearman": -0.14593746463672672,
+        "kendall": -0.11811773885529657
+      },
+      "D8": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 1,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 33,
+        "spearman": 1.0,
+        "kendall": 1.0
+      },
+      "log1pTextCharacters": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 33,
+        "spearman": 0.9957212713936431,
+        "kendall": 0.9625
+      },
+      "safetyFloor": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 2,
+        "spearman": -0.17880337316371653,
+        "kendall": -0.1482445986839353
+      }
+    },
+    "log1pTextCharacters": {
+      "H": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 15,
+        "spearman": 0.15991966216302358,
+        "kendall": 0.11674676737412344
+      },
+      "D1": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 4,
+        "spearman": 0.2611424467345604,
+        "kendall": 0.1922725929507375
+      },
+      "D2": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 4,
+        "spearman": 0.2809321435823114,
+        "kendall": 0.2219554001500435
+      },
+      "D3": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 4,
+        "spearman": 0.20286800809948546,
+        "kendall": 0.15470638620970348
+      },
+      "D4": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 4,
+        "spearman": -0.16849067433176118,
+        "kendall": -0.1308220628813658
+      },
+      "D5": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 4,
+        "spearman": 0.19497674885325095,
+        "kendall": 0.14355092276134448
+      },
+      "D6": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 4,
+        "spearman": -0.14078161896440994,
+        "kendall": -0.11408337884059092
+      },
+      "D7": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 3,
+        "spearman": -0.11095619970507686,
+        "kendall": -0.08763574173134907
+      },
+      "D8": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 1,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 33,
+        "spearman": 0.9957212713936431,
+        "kendall": 0.9625
+      },
+      "log1pTextCharacters": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 33,
+        "spearman": 1.0,
+        "kendall": 1.0
+      },
+      "safetyFloor": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 33,
+        "yUnique": 2,
+        "spearman": -0.16939266931299463,
+        "kendall": -0.1404422513847808
+      }
+    },
+    "safetyFloor": {
+      "H": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 15,
+        "spearman": 0.5458207285887761,
+        "kendall": 0.4669199903508923
+      },
+      "D1": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 4,
+        "spearman": 0.05291253627817012,
+        "kendall": 0.04923659639173309
+      },
+      "D2": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 4,
+        "spearman": 0.2197867502028689,
+        "kendall": 0.20241784219888503
+      },
+      "D3": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 4,
+        "spearman": 0.2669288344321114,
+        "kendall": 0.2526318345396
+      },
+      "D4": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 4,
+        "spearman": 0.9346077417744939,
+        "kendall": 0.8824743973322413
+      },
+      "D5": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 4,
+        "spearman": -0.057034211888924005,
+        "kendall": -0.05304838383493541
+      },
+      "D6": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 4,
+        "spearman": 0.037267799624996496,
+        "kendall": 0.03514825486856325
+      },
+      "D7": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 3,
+        "spearman": 0.2356237008291583,
+        "kendall": 0.23307450537420937
+      },
+      "D8": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 1,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 33,
+        "spearman": -0.17880337316371653,
+        "kendall": -0.1482445986839353
+      },
+      "log1pTextCharacters": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 33,
+        "spearman": -0.16939266931299463,
+        "kendall": -0.14044225138478084
+      },
+      "safetyFloor": {
+        "n": 34,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 2,
+        "spearman": 1.0,
+        "kendall": 0.9999999999999998
+      }
+    }
+  },
+  "withinWorkerProfileAssociations": {
+    "claude-opus-5-5/high": {
+      "H": {
+        "n": 13,
+        "missing": 0,
+        "xUnique": 8,
+        "yUnique": 13,
+        "spearman": -0.06398275963424248,
+        "kendall": -0.013437656161169414
+      },
+      "D1": {
+        "n": 13,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 13,
+        "spearman": -0.16753694960731447,
+        "kendall": -0.1513068831672006
+      },
+      "D2": {
+        "n": 13,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 13,
+        "spearman": -0.24359938288234503,
+        "kendall": -0.19944037418082108
+      },
+      "D3": {
+        "n": 13,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 13,
+        "spearman": -0.26186222851721214,
+        "kendall": -0.21470745394639154
+      },
+      "D4": {
+        "n": 13,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 13,
+        "spearman": 0.408296900131293,
+        "kendall": 0.3270855683975289
+      },
+      "D5": {
+        "n": 13,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 13,
+        "spearman": -0.1351746848728297,
+        "kendall": -0.09805806756909201
+      },
+      "D6": {
+        "n": 13,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 13,
+        "spearman": -0.10036563193274915,
+        "kendall": -0.09607689228305227
+      },
+      "D7": {
+        "n": 13,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 13,
+        "spearman": null,
+        "kendall": null
+      },
+      "D8": {
+        "n": 13,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 13,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 13,
+        "missing": 0,
+        "xUnique": 13,
+        "yUnique": 13,
+        "spearman": -0.6923076923076923,
+        "kendall": -0.5128205128205127
+      },
+      "log1pTextCharacters": {
+        "n": 13,
+        "missing": 0,
+        "xUnique": 12,
+        "yUnique": 13,
+        "spearman": -0.6905095940903155,
+        "kendall": -0.5290432684448219
+      },
+      "safetyFloor": {
+        "n": 13,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 13,
+        "spearman": 0.1690308509457033,
+        "kendall": 0.14322297480788657
+      }
+    },
+    "claude-sonnet-5-5/high": {
+      "H": {
+        "n": 16,
+        "missing": 0,
+        "xUnique": 9,
+        "yUnique": 16,
+        "spearman": 0.15626107331421255,
+        "kendall": 0.11366833022718371
+      },
+      "D1": {
+        "n": 16,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 16,
+        "spearman": 0.12795018752213594,
+        "kendall": 0.06850902561004873
+      },
+      "D2": {
+        "n": 16,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 16,
+        "spearman": -0.40266000081051423,
+        "kendall": -0.31835726998350666
+      },
+      "D3": {
+        "n": 16,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 16,
+        "spearman": -0.13618409745521595,
+        "kendall": -0.08050764858994132
+      },
+      "D4": {
+        "n": 16,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 16,
+        "spearman": 0.13398689744815648,
+        "kendall": 0.11504474832710555
+      },
+      "D5": {
+        "n": 16,
+        "missing": 0,
+        "xUnique": 4,
+        "yUnique": 16,
+        "spearman": 0.056080481313834855,
+        "kendall": 0.04893501829289195
+      },
+      "D6": {
+        "n": 16,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 16,
+        "spearman": 0.39134544906540264,
+        "kendall": 0.34330328116279757
+      },
+      "D7": {
+        "n": 16,
+        "missing": 0,
+        "xUnique": 3,
+        "yUnique": 16,
+        "spearman": -0.1917412472118426,
+        "kendall": -0.15256428831468236
+      },
+      "D8": {
+        "n": 16,
+        "missing": 0,
+        "xUnique": 1,
+        "yUnique": 16,
+        "spearman": null,
+        "kendall": null
+      },
+      "log1pTextWords": {
+        "n": 16,
+        "missing": 0,
+        "xUnique": 16,
+        "yUnique": 16,
+        "spearman": -0.44705882352941173,
+        "kendall": -0.31666666666666665
+      },
+      "log1pTextCharacters": {
+        "n": 16,
+        "missing": 0,
+        "xUnique": 16,
+        "yUnique": 16,
+        "spearman": -0.42352941176470593,
+        "kendall": -0.3
+      },
+      "safetyFloor": {
+        "n": 16,
+        "missing": 0,
+        "xUnique": 2,
+        "yUnique": 16,
+        "spearman": 0.09393364366277243,
+        "kendall": 0.07905694150420949
+      }
+    }
+  },
+  "postdispatchDiagnostics": {
+    "nativeCommentCount": {
+      "n": 34,
+      "missing": 0,
+      "xUnique": 12,
+      "yUnique": 34,
+      "spearman": 0.6332928843097989,
+      "kendall": 0.4763799076167948
+    },
+    "reviewDeclarations": {
+      "n": 34,
+      "missing": 0,
+      "xUnique": 1,
+      "yUnique": 34,
+      "spearman": null,
+      "kendall": null
+    },
+    "changesRequiredDeclarations": {
+      "n": 34,
+      "missing": 0,
+      "xUnique": 1,
+      "yUnique": 34,
+      "spearman": null,
+      "kendall": null
+    },
+    "reopenEvents": {
+      "n": 34,
+      "missing": 0,
+      "xUnique": 1,
+      "yUnique": 34,
+      "spearman": null,
+      "kendall": null
+    },
+    "crossReferencedPRs": {
+      "n": 34,
+      "missing": 0,
+      "xUnique": 14,
+      "yUnique": 34,
+      "spearman": 0.6636378782129516,
+      "kendall": 0.49248711650978266
+    },
+    "invocationCount": {
+      "n": 34,
+      "missing": 0,
+      "xUnique": 6,
+      "yUnique": 34,
+      "spearman": 0.4116809613926694,
+      "kendall": 0.3195411370162452
+    },
+    "workerInvocations": {
+      "n": 34,
+      "missing": 0,
+      "xUnique": 4,
+      "yUnique": 34,
+      "spearman": 0.4174467197147756,
+      "kendall": 0.3403364173951233
+    },
+    "criticInvocations": {
+      "n": 34,
+      "missing": 0,
+      "xUnique": 3,
+      "yUnique": 34,
+      "spearman": 0.3008682891358618,
+      "kendall": 0.23902415810532904
+    },
+    "responseCount": {
+      "n": 34,
+      "missing": 0,
+      "xUnique": 33,
+      "yUnique": 34,
+      "spearman": 0.7933379196505096,
+      "kendall": 0.631579198665062
+    }
+  },
+  "partialRankAssociations": {
+    "H": {
+      "n": 34,
+      "designRank": 9,
+      "residualDegreesOfFreedom": 24,
+      "clusters": 7,
+      "partialRankCorrelation": 0.06939026496728722,
+      "controls": [
+        "rank baseline text words",
+        "repository indicators"
+      ],
+      "interpretation": "descriptive rank residual association; no causal adjustment, no small-cluster CI"
+    },
+    "D1": {
+      "n": 34,
+      "designRank": 9,
+      "residualDegreesOfFreedom": 24,
+      "clusters": 7,
+      "partialRankCorrelation": 0.007271308150543251,
+      "controls": [
+        "rank baseline text words",
+        "repository indicators"
+      ],
+      "interpretation": "descriptive rank residual association; no causal adjustment, no small-cluster CI"
+    },
+    "D2": {
+      "n": 34,
+      "designRank": 9,
+      "residualDegreesOfFreedom": 24,
+      "clusters": 7,
+      "partialRankCorrelation": 0.008003756227608884,
+      "controls": [
+        "rank baseline text words",
+        "repository indicators"
+      ],
+      "interpretation": "descriptive rank residual association; no causal adjustment, no small-cluster CI"
+    },
+    "D3": {
+      "n": 34,
+      "designRank": 9,
+      "residualDegreesOfFreedom": 24,
+      "clusters": 7,
+      "partialRankCorrelation": -0.133577080893838,
+      "controls": [
+        "rank baseline text words",
+        "repository indicators"
+      ],
+      "interpretation": "descriptive rank residual association; no causal adjustment, no small-cluster CI"
+    },
+    "D4": {
+      "n": 34,
+      "designRank": 9,
+      "residualDegreesOfFreedom": 24,
+      "clusters": 7,
+      "partialRankCorrelation": 0.13805907823536337,
+      "controls": [
+        "rank baseline text words",
+        "repository indicators"
+      ],
+      "interpretation": "descriptive rank residual association; no causal adjustment, no small-cluster CI"
+    },
+    "D5": {
+      "n": 34,
+      "designRank": 9,
+      "residualDegreesOfFreedom": 24,
+      "clusters": 7,
+      "partialRankCorrelation": 0.18607203607756886,
+      "controls": [
+        "rank baseline text words",
+        "repository indicators"
+      ],
+      "interpretation": "descriptive rank residual association; no causal adjustment, no small-cluster CI"
+    },
+    "D6": {
+      "n": 34,
+      "designRank": 9,
+      "residualDegreesOfFreedom": 24,
+      "clusters": 7,
+      "partialRankCorrelation": 0.018927711008723848,
+      "controls": [
+        "rank baseline text words",
+        "repository indicators"
+      ],
+      "interpretation": "descriptive rank residual association; no causal adjustment, no small-cluster CI"
+    },
+    "D7": {
+      "n": 34,
+      "designRank": 9,
+      "residualDegreesOfFreedom": 24,
+      "clusters": 7,
+      "partialRankCorrelation": -0.22480730584188136,
+      "controls": [
+        "rank baseline text words",
+        "repository indicators"
+      ],
+      "interpretation": "descriptive rank residual association; no causal adjustment, no small-cluster CI"
+    },
+    "D8": {
+      "n": 34,
+      "designRank": 9,
+      "residualDegreesOfFreedom": 24,
+      "clusters": 7,
+      "partialRankCorrelation": null,
+      "controls": [
+        "rank baseline text words",
+        "repository indicators"
+      ],
+      "interpretation": "descriptive rank residual association; no causal adjustment, no small-cluster CI"
+    }
+  },
+  "hardnessLevelSummaries": [
+    {
+      "H": 6,
+      "n": 1,
+      "duration": {
+        "n": 1,
+        "secondsQuantiles": {
+          "p50": 8392.824999809265,
+          "p90": 8392.824999809265,
+          "p99": 8392.824999809265,
+          "max": 8392.824999809265
+        },
+        "log1pMedian": 9.035251595428564,
+        "log1pUnscaledMAD": 0.0,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 7,
+      "n": 1,
+      "duration": {
+        "n": 1,
+        "secondsQuantiles": {
+          "p50": 2740.723000049591,
+          "p90": 2740.723000049591,
+          "p99": 2740.723000049591,
+          "max": 2740.723000049591
+        },
+        "log1pMedian": 7.916341833884924,
+        "log1pUnscaledMAD": 0.0,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 8,
+      "n": 5,
+      "duration": {
+        "n": 5,
+        "secondsQuantiles": {
+          "p50": 17150.78500008583,
+          "p90": 33176.501999998094,
+          "p99": 42247.839600028994,
+          "max": 43255.766000032425
+        },
+        "log1pMedian": 9.749857528815626,
+        "log1pUnscaledMAD": 0.5455213459604291,
+        "threeMADFlags": 1,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 9,
+      "n": 1,
+      "duration": {
+        "n": 1,
+        "secondsQuantiles": {
+          "p50": 1902.744999885559,
+          "p90": 1902.744999885559,
+          "p99": 1902.744999885559,
+          "max": 1902.744999885559
+        },
+        "log1pMedian": 7.5515782777505365,
+        "log1pUnscaledMAD": 0.0,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 10,
+      "n": 1,
+      "duration": {
+        "n": 1,
+        "secondsQuantiles": {
+          "p50": 37080.74000000954,
+          "p90": 37080.74000000954,
+          "p99": 37080.74000000954,
+          "max": 37080.74000000954
+        },
+        "log1pMedian": 10.520879944145422,
+        "log1pUnscaledMAD": 0.0,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 11,
+      "n": 3,
+      "duration": {
+        "n": 3,
+        "secondsQuantiles": {
+          "p50": 11885.654000043869,
+          "p90": 16742.133200025557,
+          "p99": 17834.84102002144,
+          "max": 17956.25300002098
+        },
+        "log1pMedian": 9.383171537132403,
+        "log1pUnscaledMAD": 0.27557277978980466,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 12,
+      "n": 1,
+      "duration": {
+        "n": 1,
+        "secondsQuantiles": {
+          "p50": 9693.099999904633,
+          "p90": 9693.099999904633,
+          "p99": 9693.099999904633,
+          "max": 9693.099999904633
+        },
+        "log1pMedian": 9.179272732001449,
+        "log1pUnscaledMAD": 0.0,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 13,
+      "n": 5,
+      "duration": {
+        "n": 5,
+        "secondsQuantiles": {
+          "p50": 5491.690999984741,
+          "p90": 20532.745399951935,
+          "p99": 28306.619239902495,
+          "max": 29170.382999897003
+        },
+        "log1pMedian": 8.611173578344124,
+        "log1pUnscaledMAD": 1.0470388430189903,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 14,
+      "n": 4,
+      "duration": {
+        "n": 4,
+        "secondsQuantiles": {
+          "p50": 8653.18700003624,
+          "p90": 16462.814100050928,
+          "p99": 19223.81331007719,
+          "max": 19530.59100008011
+        },
+        "log1pMedian": 9.062956984668936,
+        "log1pUnscaledMAD": 0.4461267357454819,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 15,
+      "n": 2,
+      "duration": {
+        "n": 2,
+        "secondsQuantiles": {
+          "p50": 350.18650007247925,
+          "p90": 527.0365000724793,
+          "p99": 566.8277500724793,
+          "max": 571.2490000724792
+        },
+        "log1pMedian": 5.609031027007038,
+        "log1pUnscaledMAD": 0.7405431844627812,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 16,
+      "n": 5,
+      "duration": {
+        "n": 5,
+        "secondsQuantiles": {
+          "p50": 26595.361999988556,
+          "p90": 47445.53580002785,
+          "p99": 56839.55867999077,
+          "max": 57883.33899998665
+        },
+        "log1pMedian": 10.18852971849862,
+        "log1pUnscaledMAD": 0.3968353826946984,
+        "threeMADFlags": 1,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 17,
+      "n": 1,
+      "duration": {
+        "n": 1,
+        "secondsQuantiles": {
+          "p50": 27603.03100013733,
+          "p90": 27603.03100013733,
+          "p99": 27603.03100013733,
+          "max": 27603.03100013733
+        },
+        "log1pMedian": 10.225717091770486,
+        "log1pUnscaledMAD": 0.0,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 18,
+      "n": 2,
+      "duration": {
+        "n": 2,
+        "secondsQuantiles": {
+          "p50": 20108.046499967575,
+          "p90": 32396.276499891283,
+          "p99": 35161.12824987411,
+          "max": 35468.33399987221
+        },
+        "log1pMedian": 9.47103118545294,
+        "log1pUnscaledMAD": 1.0053925857040582,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 19,
+      "n": 1,
+      "duration": {
+        "n": 1,
+        "secondsQuantiles": {
+          "p50": 2970.064999818802,
+          "p90": 2970.064999818802,
+          "p99": 2970.064999818802,
+          "max": 2970.064999818802
+        },
+        "log1pMedian": 7.9966757533178,
+        "log1pUnscaledMAD": 0.0,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    },
+    {
+      "H": 20,
+      "n": 1,
+      "duration": {
+        "n": 1,
+        "secondsQuantiles": {
+          "p50": 17982.427000045776,
+          "p90": 17982.427000045776,
+          "p99": 17982.427000045776,
+          "max": 17982.427000045776
+        },
+        "log1pMedian": 9.797205890533565,
+        "log1pUnscaledMAD": 0.0,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      }
+    }
+  ],
+  "groupedPrediction": {
+    "n": 34,
+    "groups": 7,
+    "split": "leave one observed native parent component out",
+    "ridgeAlpha": 10,
+    "selection": "all declared models reported; no tuned alpha or selected winner; exploratory reuse of this cohort",
+    "models": {
+      "intercept_mean": {
+        "pooledLogMAE": 1.2772585775119851,
+        "pooledLogRMSE": 1.6351124021476295,
+        "equalClusterMeanLogMAE": 1.570042009063922,
+        "foldLogMAERange": [
+          0.15529268239671032,
+          4.095613446877564
+        ],
+        "folds": [
+          {
+            "fold": 1,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 1.7280632638630316,
+            "logRMSE": 1.7280632638630316
+          },
+          {
+            "fold": 2,
+            "trainN": 31,
+            "testN": 3,
+            "logMAE": 0.15529268239671032,
+            "logRMSE": 0.1608231194628563
+          },
+          {
+            "fold": 3,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 1.23011430633704,
+            "logRMSE": 1.3583141160586945
+          },
+          {
+            "fold": 4,
+            "trainN": 27,
+            "testN": 7,
+            "logMAE": 1.0440485218662043,
+            "logRMSE": 1.297821431585569
+          },
+          {
+            "fold": 5,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 1.7825058605377975,
+            "logRMSE": 2.1838751621782304
+          },
+          {
+            "fold": 6,
+            "trainN": 28,
+            "testN": 6,
+            "logMAE": 0.954655981569107,
+            "logRMSE": 1.0295060263732472
+          },
+          {
+            "fold": 7,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 4.095613446877564,
+            "logRMSE": 4.095613446877564
+          }
+        ]
+      },
+      "intercept_median": {
+        "pooledLogMAE": 1.20376648922388,
+        "pooledLogRMSE": 1.6218344669872442,
+        "equalClusterMeanLogMAE": 1.514068432516366,
+        "foldLogMAERange": [
+          0.21910372556806892,
+          4.310784889457191
+        ],
+        "folds": [
+          {
+            "fold": 1,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 1.3825009882870898,
+            "logRMSE": 1.3825009882870898
+          },
+          {
+            "fold": 2,
+            "trainN": 31,
+            "testN": 3,
+            "logMAE": 0.21910372556806892,
+            "logRMSE": 0.22305761835365825
+          },
+          {
+            "fold": 3,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 0.9336313546867601,
+            "logRMSE": 1.1120505149562883
+          },
+          {
+            "fold": 4,
+            "trainN": 27,
+            "testN": 7,
+            "logMAE": 1.0019398521160505,
+            "logRMSE": 1.3308479157907758
+          },
+          {
+            "fold": 5,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 1.795862235930295,
+            "logRMSE": 2.245879706270168
+          },
+          {
+            "fold": 6,
+            "trainN": 28,
+            "testN": 6,
+            "logMAE": 0.954655981569107,
+            "logRMSE": 1.0120285409185823
+          },
+          {
+            "fold": 7,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 4.310784889457191,
+            "logRMSE": 4.310784889457191
+          }
+        ]
+      },
+      "H": {
+        "pooledLogMAE": 1.3036071109185328,
+        "pooledLogRMSE": 1.6585164675486868,
+        "equalClusterMeanLogMAE": 1.6138294421753565,
+        "foldLogMAERange": [
+          0.2157369478209675,
+          4.17639443472033
+        ],
+        "folds": [
+          {
+            "fold": 1,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 1.8272102615782924,
+            "logRMSE": 1.8272102615782924
+          },
+          {
+            "fold": 2,
+            "trainN": 31,
+            "testN": 3,
+            "logMAE": 0.2157369478209675,
+            "logRMSE": 0.25511502517220924
+          },
+          {
+            "fold": 3,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 1.2829939935824506,
+            "logRMSE": 1.3767545040731617
+          },
+          {
+            "fold": 4,
+            "trainN": 27,
+            "testN": 7,
+            "logMAE": 1.0514398347515743,
+            "logRMSE": 1.3373799810679665
+          },
+          {
+            "fold": 5,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 1.7948058514523428,
+            "logRMSE": 2.1978830468338124
+          },
+          {
+            "fold": 6,
+            "trainN": 28,
+            "testN": 6,
+            "logMAE": 0.948224771321537,
+            "logRMSE": 1.0179681994991185
+          },
+          {
+            "fold": 7,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 4.17639443472033,
+            "logRMSE": 4.17639443472033
+          }
+        ]
+      },
+      "text_length": {
+        "pooledLogMAE": 1.136498287887786,
+        "pooledLogRMSE": 1.5460690585266195,
+        "equalClusterMeanLogMAE": 1.5266824211121528,
+        "foldLogMAERange": [
+          0.18373165318063775,
+          4.007075380559676
+        ],
+        "folds": [
+          {
+            "fold": 1,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 2.1820283188085163,
+            "logRMSE": 2.1820283188085163
+          },
+          {
+            "fold": 2,
+            "trainN": 31,
+            "testN": 3,
+            "logMAE": 0.18373165318063775,
+            "logRMSE": 0.2201356012287188
+          },
+          {
+            "fold": 3,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 0.9621698636245986,
+            "logRMSE": 1.086791874242518
+          },
+          {
+            "fold": 4,
+            "trainN": 27,
+            "testN": 7,
+            "logMAE": 1.0670315126070766,
+            "logRMSE": 1.2603587711628457
+          },
+          {
+            "fold": 5,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 1.5128111590004538,
+            "logRMSE": 2.0916455282612825
+          },
+          {
+            "fold": 6,
+            "trainN": 28,
+            "testN": 6,
+            "logMAE": 0.7719290600041123,
+            "logRMSE": 0.8887832538298899
+          },
+          {
+            "fold": 7,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 4.007075380559676,
+            "logRMSE": 4.007075380559676
+          }
+        ]
+      },
+      "D1_to_D8": {
+        "pooledLogMAE": 1.4977018200404277,
+        "pooledLogRMSE": 1.8197463332542394,
+        "equalClusterMeanLogMAE": 1.807877404539084,
+        "foldLogMAERange": [
+          0.7321040163254248,
+          3.9089789087235145
+        ],
+        "folds": [
+          {
+            "fold": 1,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 2.2369774810932217,
+            "logRMSE": 2.2369774810932217
+          },
+          {
+            "fold": 2,
+            "trainN": 31,
+            "testN": 3,
+            "logMAE": 0.7321040163254248,
+            "logRMSE": 0.7718348920942019
+          },
+          {
+            "fold": 3,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 1.3250195841992887,
+            "logRMSE": 1.4364010614235687
+          },
+          {
+            "fold": 4,
+            "trainN": 27,
+            "testN": 7,
+            "logMAE": 1.4652729191073397,
+            "logRMSE": 1.7502399952921615
+          },
+          {
+            "fold": 5,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 1.900896400643525,
+            "logRMSE": 2.336371897085991
+          },
+          {
+            "fold": 6,
+            "trainN": 28,
+            "testN": 6,
+            "logMAE": 1.0858925216812738,
+            "logRMSE": 1.2179493172099483
+          },
+          {
+            "fold": 7,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 3.9089789087235145,
+            "logRMSE": 3.9089789087235145
+          }
+        ]
+      },
+      "risk_evidence_D4_D8": {
+        "pooledLogMAE": 1.27352090325744,
+        "pooledLogRMSE": 1.6309407480872564,
+        "equalClusterMeanLogMAE": 1.5576533655549107,
+        "foldLogMAERange": [
+          0.20585287358638324,
+          4.001202111581539
+        ],
+        "folds": [
+          {
+            "fold": 1,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 1.7235317514718957,
+            "logRMSE": 1.7235317514718957
+          },
+          {
+            "fold": 2,
+            "trainN": 31,
+            "testN": 3,
+            "logMAE": 0.20585287358638324,
+            "logRMSE": 0.2351582905650957
+          },
+          {
+            "fold": 3,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 1.232921730475406,
+            "logRMSE": 1.3228548370205384
+          },
+          {
+            "fold": 4,
+            "trainN": 27,
+            "testN": 7,
+            "logMAE": 1.0451733915122037,
+            "logRMSE": 1.3712054245055452
+          },
+          {
+            "fold": 5,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 1.8042402205050094,
+            "logRMSE": 2.194913770059845
+          },
+          {
+            "fold": 6,
+            "trainN": 28,
+            "testN": 6,
+            "logMAE": 0.890651479751936,
+            "logRMSE": 0.9652860604796356
+          },
+          {
+            "fold": 7,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 4.001202111581539,
+            "logRMSE": 4.001202111581539
+          }
+        ]
+      },
+      "demand_D1_D2_D3_D5_D6": {
+        "pooledLogMAE": 1.4769116179658066,
+        "pooledLogRMSE": 1.789741187765801,
+        "equalClusterMeanLogMAE": 1.8107561629188373,
+        "foldLogMAERange": [
+          0.7818146719279282,
+          3.980531716941633
+        ],
+        "folds": [
+          {
+            "fold": 1,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 2.271035418613854,
+            "logRMSE": 2.271035418613854
+          },
+          {
+            "fold": 2,
+            "trainN": 31,
+            "testN": 3,
+            "logMAE": 0.7818146719279282,
+            "logRMSE": 0.8312934472959136
+          },
+          {
+            "fold": 3,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 1.3577649724768126,
+            "logRMSE": 1.461803760138276
+          },
+          {
+            "fold": 4,
+            "trainN": 27,
+            "testN": 7,
+            "logMAE": 1.4221900504741174,
+            "logRMSE": 1.6412674553232391
+          },
+          {
+            "fold": 5,
+            "trainN": 26,
+            "testN": 8,
+            "logMAE": 1.8143979331898652,
+            "logRMSE": 2.2597501868106957
+          },
+          {
+            "fold": 6,
+            "trainN": 28,
+            "testN": 6,
+            "logMAE": 1.047558376807652,
+            "logRMSE": 1.2267489219265488
+          },
+          {
+            "fold": 7,
+            "trainN": 33,
+            "testN": 1,
+            "logMAE": 3.980531716941633,
+            "logRMSE": 3.980531716941633
+          }
+        ]
+      }
+    },
+    "temporalHoldout": {
+      "cutoffEpochSeconds": 1793567171.2535,
+      "trainGroups": 2,
+      "testGroups": 2,
+      "purgedCrossingGroups": 3,
+      "trainRows": 9,
+      "testRows": 7,
+      "models": {},
+      "status": "unsupported after enforcing chronology and parent separation; no temporal score reported"
+    },
+    "leaveLargestParentSensitivity": {
+      "removedGroups": 2,
+      "removedRows": 16,
+      "tieRule": "remove all tied largest groups",
+      "evaluation": {
+        "n": 18,
+        "groups": 5,
+        "split": "leave one observed native parent component out",
+        "ridgeAlpha": 10,
+        "selection": "all declared models reported; no tuned alpha or selected winner; exploratory reuse of this cohort",
+        "models": {
+          "intercept_mean": {
+            "pooledLogMAE": 1.0971144588695045,
+            "pooledLogRMSE": 1.479280853357111,
+            "equalClusterMeanLogMAE": 1.6425916760376036,
+            "foldLogMAERange": [
+              0.21966947306919535,
+              4.165080057019634
+            ],
+            "folds": [
+              {
+                "fold": 1,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 1.8198056976168928,
+                "logRMSE": 1.8198056976168928
+              },
+              {
+                "fold": 2,
+                "trainN": 15,
+                "testN": 3,
+                "logMAE": 0.21966947306919535,
+                "logRMSE": 0.22361336262910708
+              },
+              {
+                "fold": 3,
+                "trainN": 11,
+                "testN": 7,
+                "logMAE": 1.0537471709131894,
+                "logRMSE": 1.2996019745634169
+              },
+              {
+                "fold": 4,
+                "trainN": 12,
+                "testN": 6,
+                "logMAE": 0.954655981569107,
+                "logRMSE": 1.0611740874801967
+              },
+              {
+                "fold": 5,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 4.165080057019634,
+                "logRMSE": 4.165080057019634
+              }
+            ]
+          },
+          "intercept_median": {
+            "pooledLogMAE": 1.0652549057943854,
+            "pooledLogRMSE": 1.4494530289703849,
+            "equalClusterMeanLogMAE": 1.5744587853150418,
+            "foldLogMAERange": [
+              0.19404027471432053,
+              4.1667637528843064
+            ],
+            "folds": [
+              {
+                "fold": 1,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 1.5333449306658817,
+                "logRMSE": 1.5333449306658817
+              },
+              {
+                "fold": 2,
+                "trainN": 15,
+                "testN": 3,
+                "logMAE": 0.19404027471432053,
+                "logRMSE": 0.19849404716264812
+              },
+              {
+                "fold": 3,
+                "trainN": 11,
+                "testN": 7,
+                "logMAE": 1.0234889867415924,
+                "logRMSE": 1.3057638456378033
+              },
+              {
+                "fold": 4,
+                "trainN": 12,
+                "testN": 6,
+                "logMAE": 0.954655981569107,
+                "logRMSE": 1.0041623743528358
+              },
+              {
+                "fold": 5,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 4.1667637528843064,
+                "logRMSE": 4.1667637528843064
+              }
+            ]
+          },
+          "H": {
+            "pooledLogMAE": 1.1692791442776598,
+            "pooledLogRMSE": 1.5553766704394725,
+            "equalClusterMeanLogMAE": 1.6694626401104729,
+            "foldLogMAERange": [
+              0.15592110653505684,
+              4.154749752910225
+            ],
+            "folds": [
+              {
+                "fold": 1,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 1.7693710724123903,
+                "logRMSE": 1.7693710724123903
+              },
+              {
+                "fold": 2,
+                "trainN": 15,
+                "testN": 3,
+                "logMAE": 0.15592110653505684,
+                "logRMSE": 0.1775874254228552
+              },
+              {
+                "fold": 3,
+                "trainN": 11,
+                "testN": 7,
+                "logMAE": 1.0515128399019429,
+                "logRMSE": 1.2896031542586726
+              },
+              {
+                "fold": 4,
+                "trainN": 12,
+                "testN": 6,
+                "logMAE": 1.2157584287927488,
+                "logRMSE": 1.379418543839704
+              },
+              {
+                "fold": 5,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 4.154749752910225,
+                "logRMSE": 4.154749752910225
+              }
+            ]
+          },
+          "text_length": {
+            "pooledLogMAE": 1.1011110264970922,
+            "pooledLogRMSE": 1.4909552993294422,
+            "equalClusterMeanLogMAE": 1.7028669431496408,
+            "foldLogMAERange": [
+              0.1534275050094364,
+              4.163485070792945
+            ],
+            "folds": [
+              {
+                "fold": 1,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 2.2099816147915643,
+                "logRMSE": 2.2099816147915643
+              },
+              {
+                "fold": 2,
+                "trainN": 15,
+                "testN": 3,
+                "logMAE": 0.1534275050094364,
+                "logRMSE": 0.18831444637488218
+              },
+              {
+                "fold": 3,
+                "trainN": 11,
+                "testN": 7,
+                "logMAE": 1.0616061254092928,
+                "logRMSE": 1.2713812609084203
+              },
+              {
+                "fold": 4,
+                "trainN": 12,
+                "testN": 6,
+                "logMAE": 0.9258343997449652,
+                "logRMSE": 1.0306286790172727
+              },
+              {
+                "fold": 5,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 4.163485070792945,
+                "logRMSE": 4.163485070792945
+              }
+            ]
+          },
+          "D1_to_D8": {
+            "pooledLogMAE": 1.5282920275842764,
+            "pooledLogRMSE": 1.9385666691114314,
+            "equalClusterMeanLogMAE": 1.962102312893395,
+            "foldLogMAERange": [
+              0.2690776855773951,
+              4.608892893829149
+            ],
+            "folds": [
+              {
+                "fold": 1,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 1.810909408624319,
+                "logRMSE": 1.810909408624319
+              },
+              {
+                "fold": 2,
+                "trainN": 15,
+                "testN": 3,
+                "logMAE": 0.2690776855773951,
+                "logRMSE": 0.4320585303854441
+              },
+              {
+                "fold": 3,
+                "trainN": 11,
+                "testN": 7,
+                "logMAE": 1.5524316787146575,
+                "logRMSE": 1.7729373461611508
+              },
+              {
+                "fold": 4,
+                "trainN": 12,
+                "testN": 6,
+                "logMAE": 1.5691998977214532,
+                "logRMSE": 1.851138163520676
+              },
+              {
+                "fold": 5,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 4.608892893829149,
+                "logRMSE": 4.608892893829149
+              }
+            ]
+          },
+          "risk_evidence_D4_D8": {
+            "pooledLogMAE": 1.0932030199776308,
+            "pooledLogRMSE": 1.496270101823872,
+            "equalClusterMeanLogMAE": 1.6300358361313922,
+            "foldLogMAERange": [
+              0.15691220541253395,
+              4.136392310872785
+            ],
+            "folds": [
+              {
+                "fold": 1,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 1.8338211278024925,
+                "logRMSE": 1.8338211278024925
+              },
+              {
+                "fold": 2,
+                "trainN": 15,
+                "testN": 3,
+                "logMAE": 0.15691220541253395,
+                "logRMSE": 0.23146115147073024
+              },
+              {
+                "fold": 3,
+                "trainN": 11,
+                "testN": 7,
+                "logMAE": 1.0983830852695766,
+                "logRMSE": 1.3822685202461762
+              },
+              {
+                "fold": 4,
+                "trainN": 12,
+                "testN": 6,
+                "logMAE": 0.924670451299573,
+                "logRMSE": 1.0239472651157966
+              },
+              {
+                "fold": 5,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 4.136392310872785,
+                "logRMSE": 4.136392310872785
+              }
+            ]
+          },
+          "demand_D1_D2_D3_D5_D6": {
+            "pooledLogMAE": 1.6107389476434537,
+            "pooledLogRMSE": 1.9293224655999173,
+            "equalClusterMeanLogMAE": 1.9944044088566177,
+            "foldLogMAERange": [
+              0.4695193489101192,
+              4.4100900355233845
+            ],
+            "folds": [
+              {
+                "fold": 1,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 1.8033827245024927,
+                "logRMSE": 1.8033827245024927
+              },
+              {
+                "fold": 2,
+                "trainN": 15,
+                "testN": 3,
+                "logMAE": 0.4695193489101192,
+                "logRMSE": 0.5250942369764994
+              },
+              {
+                "fold": 3,
+                "trainN": 11,
+                "testN": 7,
+                "logMAE": 1.6370906387433766,
+                "logRMSE": 1.8367350465748558
+              },
+              {
+                "fold": 4,
+                "trainN": 12,
+                "testN": 6,
+                "logMAE": 1.6519392966037156,
+                "logRMSE": 1.8192355770141915
+              },
+              {
+                "fold": 5,
+                "trainN": 17,
+                "testN": 1,
+                "logMAE": 4.4100900355233845,
+                "logRMSE": 4.4100900355233845
+              }
+            ]
+          }
+        },
+        "temporalHoldout": {
+          "cutoffEpochSeconds": 1793570737.806,
+          "trainGroups": 1,
+          "testGroups": 1,
+          "purgedCrossingGroups": 3,
+          "trainRows": 1,
+          "testRows": 1,
+          "models": {},
+          "status": "unsupported after enforcing chronology and parent separation; no temporal score reported"
+        }
+      }
+    }
+  },
+  "broadStrata": {
+    "issue": {
+      "repository": [
+        {
+          "stratum": "FS-GG/.github",
+          "n": 1648,
+          "open": 165,
+          "closed": 1483,
+          "closedCalendar": {
+            "n": 1483,
+            "secondsQuantiles": {
+              "p50": 14870.0,
+              "p90": 257259.59999999998,
+              "p99": 1377838.0200000452,
+              "max": 6756371.0
+            },
+            "log1pMedian": 9.607168286688683,
+            "log1pUnscaledMAD": 1.6510419354751829,
+            "threeMADFlags": 47,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 165,
+            "secondsQuantiles": {
+              "p50": 950403.761953,
+              "p90": 6230756.361953,
+              "p99": 9875185.441952996,
+              "max": 10985110.761953
+            },
+            "log1pMedian": 13.764643238050398,
+            "log1pUnscaledMAD": 1.7779726397920665,
+            "threeMADFlags": 1,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Algorithms",
+          "n": 51,
+          "open": 49,
+          "closed": 2,
+          "closedCalendar": {
+            "n": 2,
+            "secondsQuantiles": {
+              "p50": 11199.5,
+              "p90": 17587.1,
+              "p99": 19024.31,
+              "max": 19184.0
+            },
+            "log1pMedian": 8.968888816489955,
+            "log1pUnscaledMAD": 0.8929951861910981,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 49,
+            "secondsQuantiles": {
+              "p50": 70831.761953,
+              "p90": 106121.561953,
+              "p99": 110362.24195299996,
+              "max": 114261.761953
+            },
+            "log1pMedian": 11.168076912100082,
+            "log1pUnscaledMAD": 0.001172461222166632,
+            "threeMADFlags": 23,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Audio",
+          "n": 50,
+          "open": 1,
+          "closed": 49,
+          "closedCalendar": {
+            "n": 49,
+            "secondsQuantiles": {
+              "p50": 2333.0,
+              "p90": 65435.20000000001,
+              "p99": 643628.9199999984,
+              "max": 838483.0
+            },
+            "log1pMedian": 7.755338812846501,
+            "log1pUnscaledMAD": 1.492875211557763,
+            "threeMADFlags": 6,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 1,
+            "secondsQuantiles": {
+              "p50": 9483143.761953,
+              "p90": 9483143.761953,
+              "p99": 9483143.761953,
+              "max": 9483143.761953
+            },
+            "log1pMedian": 16.065026545166727,
+            "log1pUnscaledMAD": 0.0,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Coordination",
+          "n": 188,
+          "open": 23,
+          "closed": 165,
+          "closedCalendar": {
+            "n": 165,
+            "secondsQuantiles": {
+              "p50": 2609.0,
+              "p90": 19742.79999999999,
+              "p99": 66907.03999999995,
+              "max": 75372.0
+            },
+            "log1pMedian": 7.867105500316739,
+            "log1pUnscaledMAD": 0.8397909862769621,
+            "threeMADFlags": 13,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 23,
+            "secondsQuantiles": {
+              "p50": 821245.761953,
+              "p90": 4410822.361953001,
+              "p99": 5816662.541953,
+              "max": 5872091.761953
+            },
+            "log1pMedian": 13.618578905945787,
+            "log1pUnscaledMAD": 1.1524147229713613,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Game",
+          "n": 228,
+          "open": 41,
+          "closed": 187,
+          "closedCalendar": {
+            "n": 187,
+            "secondsQuantiles": {
+              "p50": 4472.0,
+              "p90": 48923.4,
+              "p99": 179780.1799999997,
+              "max": 1707337.0
+            },
+            "log1pMedian": 8.405814603432848,
+            "log1pUnscaledMAD": 0.937872271146996,
+            "threeMADFlags": 20,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 41,
+            "secondsQuantiles": {
+              "p50": 136324.761953,
+              "p90": 259276.761953,
+              "p99": 6776339.361953013,
+              "max": 10331927.761953
+            },
+            "log1pMedian": 11.822802609017593,
+            "log1pUnscaledMAD": 0.13823716472190561,
+            "threeMADFlags": 13,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Governance",
+          "n": 105,
+          "open": 6,
+          "closed": 99,
+          "closedCalendar": {
+            "n": 99,
+            "secondsQuantiles": {
+              "p50": 11065.0,
+              "p90": 232491.4,
+              "p99": 1405237.839999999,
+              "max": 1667919.0
+            },
+            "log1pMedian": 9.311632623458054,
+            "log1pUnscaledMAD": 1.2291986597725817,
+            "threeMADFlags": 16,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 6,
+            "secondsQuantiles": {
+              "p50": 5560571.761953,
+              "p90": 8515971.261953,
+              "p99": 10785922.011953,
+              "max": 11038138.761953
+            },
+            "log1pMedian": 15.528741059372237,
+            "log1pUnscaledMAD": 0.38281096006473714,
+            "threeMADFlags": 2,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Net",
+          "n": 22,
+          "open": 2,
+          "closed": 20,
+          "closedCalendar": {
+            "n": 20,
+            "secondsQuantiles": {
+              "p50": 10363.5,
+              "p90": 67358.00000000007,
+              "p99": 371501.65999999957,
+              "max": 431064.0
+            },
+            "log1pMedian": 9.240305682502985,
+            "log1pUnscaledMAD": 1.0339918278680464,
+            "threeMADFlags": 3,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 2,
+            "secondsQuantiles": {
+              "p50": 4689971.761953,
+              "p90": 7793121.361953001,
+              "p99": 8491330.021953,
+              "max": 8568908.761953
+            },
+            "log1pMedian": 14.784859247542446,
+            "log1pUnscaledMAD": 1.178791819297496,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Rendering",
+          "n": 526,
+          "open": 9,
+          "closed": 517,
+          "closedCalendar": {
+            "n": 517,
+            "secondsQuantiles": {
+              "p50": 8580.0,
+              "p90": 62227.20000000003,
+              "p99": 418938.6399999985,
+              "max": 4416893.0
+            },
+            "log1pMedian": 9.057305735807121,
+            "log1pUnscaledMAD": 0.9917263085250294,
+            "threeMADFlags": 35,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 9,
+            "secondsQuantiles": {
+              "p50": 259332.761953,
+              "p90": 8904653.561953,
+              "p99": 10824835.241953,
+              "max": 11038188.761953
+            },
+            "log1pMedian": 12.465871167266117,
+            "log1pUnscaledMAD": 0.49103244986242167,
+            "threeMADFlags": 3,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.SDD",
+          "n": 386,
+          "open": 15,
+          "closed": 371,
+          "closedCalendar": {
+            "n": 371,
+            "secondsQuantiles": {
+              "p50": 9233.0,
+              "p90": 94585.0,
+              "p99": 1697554.500000001,
+              "max": 5886887.0
+            },
+            "log1pMedian": 9.130647603066935,
+            "log1pUnscaledMAD": 1.230929132749898,
+            "threeMADFlags": 21,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 15,
+            "secondsQuantiles": {
+              "p50": 5178294.761953,
+              "p90": 7129729.161952999,
+              "p99": 10608714.701952998,
+              "max": 11038147.761953
+            },
+            "log1pMedian": 15.45998655661817,
+            "log1pUnscaledMAD": 0.7568813435287112,
+            "threeMADFlags": 4,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Templates",
+          "n": 150,
+          "open": 21,
+          "closed": 129,
+          "closedCalendar": {
+            "n": 129,
+            "secondsQuantiles": {
+              "p50": 8218.0,
+              "p90": 138945.20000000013,
+              "p99": 2859050.799999998,
+              "max": 5168303.0
+            },
+            "log1pMedian": 9.0142038261485,
+            "log1pUnscaledMAD": 1.3980271839492957,
+            "threeMADFlags": 13,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 21,
+            "secondsQuantiles": {
+              "p50": 981397.761953,
+              "p90": 7775143.761953,
+              "p99": 10448604.961953003,
+              "max": 11038152.761953
+            },
+            "log1pMedian": 13.796734141126038,
+            "log1pUnscaledMAD": 1.8094988088130304,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "private repositories pooled",
+          "n": 38,
+          "open": 20,
+          "closed": 18,
+          "closedCalendar": {
+            "n": 18,
+            "secondsQuantiles": {
+              "p50": 14017.5,
+              "p90": 85711.60000000006,
+              "p99": 160673.59999999998,
+              "max": 163261.0
+            },
+            "log1pMedian": 9.541514963843106,
+            "log1pUnscaledMAD": 1.1136766496584274,
+            "threeMADFlags": 3,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 20,
+            "secondsQuantiles": {
+              "p50": 125361.261953,
+              "p90": 1844584.5619530056,
+              "p99": 5459298.571953,
+              "max": 5459298.761953
+            },
+            "log1pMedian": 11.738930689218048,
+            "log1pUnscaledMAD": 0.281187625800313,
+            "threeMADFlags": 5,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        }
+      ],
+      "era": [
+        {
+          "stratum": "2026-06",
+          "n": 114,
+          "open": 5,
+          "closed": 109,
+          "closedCalendar": {
+            "n": 109,
+            "secondsQuantiles": {
+              "p50": 5108.0,
+              "p90": 43725.600000000006,
+              "p99": 1399822.68,
+              "max": 1667919.0
+            },
+            "log1pMedian": 8.538758969330798,
+            "log1pUnscaledMAD": 1.4455248530334188,
+            "threeMADFlags": 28,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 5,
+            "secondsQuantiles": {
+              "p50": 11038147.761953,
+              "p90": 11038174.361953,
+              "p99": 11038187.321953,
+              "max": 11038188.761953
+            },
+            "log1pMedian": 16.21686790014688,
+            "log1pUnscaledMAD": 8.153544435174354e-07,
+            "threeMADFlags": 2,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "2026-07",
+          "n": 1938,
+          "open": 6,
+          "closed": 1932,
+          "closedCalendar": {
+            "n": 1932,
+            "secondsQuantiles": {
+              "p50": 7853.5,
+              "p90": 112617.80000000003,
+              "p99": 443587.4600000005,
+              "max": 4416893.0
+            },
+            "log1pMedian": 8.968841001404307,
+            "log1pUnscaledMAD": 1.2937591436879732,
+            "threeMADFlags": 67,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 6,
+            "secondsQuantiles": {
+              "p50": 9624014.761953,
+              "p90": 10201600.761953,
+              "p99": 10318895.061953,
+              "max": 10331927.761953
+            },
+            "log1pMedian": 16.079665035537115,
+            "log1pUnscaledMAD": 0.058308656976700846,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "2026-08",
+          "n": 675,
+          "open": 72,
+          "closed": 603,
+          "closedCalendar": {
+            "n": 603,
+            "secondsQuantiles": {
+              "p50": 21708.0,
+              "p90": 349220.4000000002,
+              "p99": 5047340.180000002,
+              "max": 6756371.0
+            },
+            "log1pMedian": 9.985482200088756,
+            "log1pUnscaledMAD": 1.533147581021014,
+            "threeMADFlags": 30,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 72,
+            "secondsQuantiles": {
+              "p50": 6097924.261953,
+              "p90": 6864304.461953,
+              "p99": 8045651.101953001,
+              "max": 8090413.761953
+            },
+            "log1pMedian": 15.623407475530579,
+            "log1pUnscaledMAD": 0.021559068237253953,
+            "threeMADFlags": 20,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "2026-09",
+          "n": 196,
+          "open": 22,
+          "closed": 174,
+          "closedCalendar": {
+            "n": 174,
+            "secondsQuantiles": {
+              "p50": 2478.5,
+              "p90": 29660.400000000063,
+              "p99": 241136.95000000263,
+              "max": 3844836.0
+            },
+            "log1pMedian": 7.81580632992384,
+            "log1pUnscaledMAD": 0.8422742694375165,
+            "threeMADFlags": 25,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 22,
+            "secondsQuantiles": {
+              "p50": 4844800.761953,
+              "p90": 5282016.661953,
+              "p99": 5459298.551953,
+              "max": 5459298.761953
+            },
+            "log1pMedian": 15.393208927222709,
+            "log1pUnscaledMAD": 0.1035080143937801,
+            "threeMADFlags": 1,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "2026-10",
+          "n": 263,
+          "open": 99,
+          "closed": 164,
+          "closedCalendar": {
+            "n": 164,
+            "secondsQuantiles": {
+              "p50": 33208.5,
+              "p90": 241065.30000000002,
+              "p99": 890712.8500000003,
+              "max": 1250148.0
+            },
+            "log1pMedian": 10.41051670652972,
+            "log1pUnscaledMAD": 1.1875643427620775,
+            "threeMADFlags": 27,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 99,
+            "secondsQuantiles": {
+              "p50": 259667.761953,
+              "p90": 1442955.161953,
+              "p99": 1698831.8019529965,
+              "max": 2545994.761953
+            },
+            "log1pMedian": 12.467162105290859,
+            "log1pUnscaledMAD": 0.13346555564531926,
+            "threeMADFlags": 41,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "2026-11",
+          "n": 211,
+          "open": 150,
+          "closed": 61,
+          "closedCalendar": {
+            "n": 61,
+            "secondsQuantiles": {
+              "p50": 13801.0,
+              "p90": 45790.0,
+              "p99": 106935.59999999999,
+              "max": 111723.0
+            },
+            "log1pMedian": 9.532568788180548,
+            "log1pUnscaledMAD": 0.7511002519292447,
+            "threeMADFlags": 5,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 150,
+            "secondsQuantiles": {
+              "p50": 106118.261953,
+              "p90": 160672.161953,
+              "p99": 164975.291953,
+              "max": 196139.761953
+            },
+            "log1pMedian": 11.572318853115842,
+            "log1pUnscaledMAD": 0.24485877978018866,
+            "threeMADFlags": 9,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        }
+      ],
+      "authorType": [
+        {
+          "stratum": "Bot",
+          "n": 16,
+          "open": 14,
+          "closed": 2,
+          "closedCalendar": {
+            "n": 2,
+            "secondsQuantiles": {
+              "p50": 3062115.0,
+              "p90": 4145937.4,
+              "p99": 4389797.44,
+              "max": 4416893.0
+            },
+            "log1pMedian": 14.825696641239475,
+            "log1pUnscaledMAD": 0.47525065086241103,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 14,
+            "secondsQuantiles": {
+              "p50": 9026026.261953,
+              "p90": 11038151.261953,
+              "p99": 11038184.081953,
+              "max": 11038188.761953
+            },
+            "log1pMedian": 16.014338806003334,
+            "log1pUnscaledMAD": 0.2025293206307488,
+            "threeMADFlags": 5,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "User",
+          "n": 3381,
+          "open": 340,
+          "closed": 3041,
+          "closedCalendar": {
+            "n": 3041,
+            "secondsQuantiles": {
+              "p50": 9012.0,
+              "p90": 154536.0,
+              "p99": 1270085.999999997,
+              "max": 6756371.0
+            },
+            "log1pMedian": 9.10642325855641,
+            "log1pUnscaledMAD": 1.3939794242814196,
+            "threeMADFlags": 154,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 340,
+            "secondsQuantiles": {
+              "p50": 259303.761953,
+              "p90": 6189768.761953,
+              "p99": 8005294.151953001,
+              "max": 10071273.761953
+            },
+            "log1pMedian": 12.465759335975509,
+            "log1pUnscaledMAD": 1.1382992626398556,
+            "threeMADFlags": 7,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        }
+      ],
+      "currentHeader": [
+        {
+          "stratum": "Delivery header",
+          "n": 273,
+          "open": 154,
+          "closed": 119,
+          "closedCalendar": {
+            "n": 119,
+            "secondsQuantiles": {
+              "p50": 16116.0,
+              "p90": 68375.8,
+              "p99": 110309.81999999995,
+              "max": 120443.0
+            },
+            "log1pMedian": 9.687629894522718,
+            "log1pUnscaledMAD": 1.2889811839143537,
+            "threeMADFlags": 27,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 154,
+            "secondsQuantiles": {
+              "p50": 136347.761953,
+              "p90": 259412.96195300002,
+              "p99": 259665.111953,
+              "max": 259672.761953
+            },
+            "log1pMedian": 11.82297129408586,
+            "log1pUnscaledMAD": 0.6423251588549226,
+            "threeMADFlags": 3,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "Outcome header",
+          "n": 7,
+          "open": 7,
+          "closed": 0,
+          "closedCalendar": {
+            "n": 0
+          },
+          "openAge": {
+            "n": 7,
+            "secondsQuantiles": {
+              "p50": 121039.761953,
+              "p90": 145580.56195300003,
+              "p99": 161865.341953,
+              "max": 163674.761953
+            },
+            "log1pMedian": 11.703882643493646,
+            "log1pUnscaledMAD": 0.301760045085091,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "no exact header",
+          "n": 3117,
+          "open": 193,
+          "closed": 2924,
+          "closedCalendar": {
+            "n": 2924,
+            "secondsQuantiles": {
+              "p50": 8909.0,
+              "p90": 166453.10000000018,
+              "p99": 1399197.0,
+              "max": 6756371.0
+            },
+            "log1pMedian": 9.09492911738161,
+            "log1pUnscaledMAD": 1.379354296275606,
+            "threeMADFlags": 135,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 193,
+            "secondsQuantiles": {
+              "p50": 4215076.761953,
+              "p90": 6852223.961953,
+              "p99": 11038148.161953,
+              "max": 11038188.761953
+            },
+            "log1pMedian": 15.254178598109837,
+            "log1pUnscaledMAD": 0.7094724687301053,
+            "threeMADFlags": 47,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        }
+      ],
+      "stateReason": [
+        {
+          "stratum": "None",
+          "n": 347,
+          "open": 347,
+          "closed": 0,
+          "closedCalendar": {
+            "n": 0
+          },
+          "openAge": {
+            "n": 347,
+            "secondsQuantiles": {
+              "p50": 259327.761953,
+              "p90": 6217538.961953,
+              "p99": 11013745.881953001,
+              "max": 11038188.761953
+            },
+            "log1pMedian": 12.465851886906464,
+            "log1pUnscaledMAD": 1.1386807204159712,
+            "threeMADFlags": 13,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "completed",
+          "n": 2918,
+          "open": 0,
+          "closed": 2918,
+          "closedCalendar": {
+            "n": 2918,
+            "secondsQuantiles": {
+              "p50": 9246.0,
+              "p90": 154790.80000000013,
+              "p99": 870255.9899999996,
+              "max": 5886887.0
+            },
+            "log1pMedian": 9.132054447730166,
+            "log1pUnscaledMAD": 1.3579035764285554,
+            "threeMADFlags": 135,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "duplicate",
+          "n": 13,
+          "open": 0,
+          "closed": 13,
+          "closedCalendar": {
+            "n": 13,
+            "secondsQuantiles": {
+              "p50": 5696.0,
+              "p90": 94217.8,
+              "p99": 102003.31999999999,
+              "max": 103046.0
+            },
+            "log1pMedian": 8.647694999480395,
+            "log1pUnscaledMAD": 1.3245242815369256,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "not_planned",
+          "n": 112,
+          "open": 0,
+          "closed": 112,
+          "closedCalendar": {
+            "n": 112,
+            "secondsQuantiles": {
+              "p50": 3196.0,
+              "p90": 179492.40000000005,
+              "p99": 5585087.45,
+              "max": 6756371.0
+            },
+            "log1pMedian": 8.069049129128583,
+            "log1pUnscaledMAD": 2.8408337177049496,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "reopened",
+          "n": 7,
+          "open": 7,
+          "closed": 0,
+          "closedCalendar": {
+            "n": 0
+          },
+          "openAge": {
+            "n": 7,
+            "secondsQuantiles": {
+              "p50": 6779149.761953,
+              "p90": 9051271.361953001,
+              "p99": 9969273.521953,
+              "max": 10071273.761953
+            },
+            "log1pMedian": 15.729362395722232,
+            "log1pUnscaledMAD": 0.16900496053222724,
+            "threeMADFlags": 1,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        }
+      ]
+    },
+    "pull_request": {
+      "repository": [
+        {
+          "stratum": "FS-GG/.github",
+          "n": 3628,
+          "open": 2,
+          "closed": 3626,
+          "closedCalendar": {
+            "n": 3626,
+            "secondsQuantiles": {
+              "p50": 534.5,
+              "p90": 11746.5,
+              "p99": 499483.25,
+              "max": 5420165.0
+            },
+            "log1pMedian": 6.2832004539834045,
+            "log1pUnscaledMAD": 1.0637939990351812,
+            "threeMADFlags": 375,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 2,
+            "secondsQuantiles": {
+              "p50": 9492.261953000001,
+              "p90": 15090.261953000001,
+              "p99": 16349.811953,
+              "max": 16489.761953
+            },
+            "log1pMedian": 8.766452487503503,
+            "log1pUnscaledMAD": 0.9441031339565562,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Algorithms",
+          "n": 14,
+          "open": 0,
+          "closed": 14,
+          "closedCalendar": {
+            "n": 14,
+            "secondsQuantiles": {
+              "p50": 1210.0,
+              "p90": 3352.4,
+              "p99": 3464.5699999999997,
+              "max": 3479.0
+            },
+            "log1pMedian": 7.095711631905207,
+            "log1pUnscaledMAD": 0.9320656149751243,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Audio",
+          "n": 297,
+          "open": 0,
+          "closed": 297,
+          "closedCalendar": {
+            "n": 297,
+            "secondsQuantiles": {
+              "p50": 183.0,
+              "p90": 109586.4000000012,
+              "p99": 3702287.04,
+              "max": 6299050.0
+            },
+            "log1pMedian": 5.214935757608986,
+            "log1pUnscaledMAD": 1.0560526742493144,
+            "threeMADFlags": 104,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Coordination",
+          "n": 935,
+          "open": 3,
+          "closed": 932,
+          "closedCalendar": {
+            "n": 932,
+            "secondsQuantiles": {
+              "p50": 4429.5,
+              "p90": 97917.59999999999,
+              "p99": 144889.36999999985,
+              "max": 556106.0
+            },
+            "log1pMedian": 8.396267717119336,
+            "log1pUnscaledMAD": 1.5563077652903736,
+            "threeMADFlags": 1,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 3,
+            "secondsQuantiles": {
+              "p50": 160477.761953,
+              "p90": 161268.96195300002,
+              "p99": 161446.981953,
+              "max": 161466.761953
+            },
+            "log1pMedian": 11.985916888516204,
+            "log1pUnscaledMAD": 0.006143896812547567,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Game",
+          "n": 591,
+          "open": 6,
+          "closed": 585,
+          "closedCalendar": {
+            "n": 585,
+            "secondsQuantiles": {
+              "p50": 300.0,
+              "p90": 22214.200000000004,
+              "p99": 4098749.999999981,
+              "max": 6287757.0
+            },
+            "log1pMedian": 5.707110264748875,
+            "log1pUnscaledMAD": 1.062719365607503,
+            "threeMADFlags": 137,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 6,
+            "secondsQuantiles": {
+              "p50": 96089.761953,
+              "p90": 111216.261953,
+              "p99": 111856.611953,
+              "max": 111927.761953
+            },
+            "log1pMedian": 11.462702742847465,
+            "log1pUnscaledMAD": 0.14460963559984563,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Governance",
+          "n": 381,
+          "open": 0,
+          "closed": 381,
+          "closedCalendar": {
+            "n": 381,
+            "secondsQuantiles": {
+              "p50": 679.0,
+              "p90": 144149.0,
+              "p99": 4852660.999999994,
+              "max": 5478932.0
+            },
+            "log1pMedian": 6.522092798170152,
+            "log1pUnscaledMAD": 0.4307829160924541,
+            "threeMADFlags": 113,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Net",
+          "n": 99,
+          "open": 0,
+          "closed": 99,
+          "closedCalendar": {
+            "n": 99,
+            "secondsQuantiles": {
+              "p50": 771.0,
+              "p90": 1919373.000000006,
+              "p99": 5294866.04,
+              "max": 5382970.0
+            },
+            "log1pMedian": 6.648984550024776,
+            "log1pUnscaledMAD": 2.0868621274328056,
+            "threeMADFlags": 16,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Rendering",
+          "n": 982,
+          "open": 0,
+          "closed": 982,
+          "closedCalendar": {
+            "n": 982,
+            "secondsQuantiles": {
+              "p50": 1026.5,
+              "p90": 30868.299999999977,
+              "p99": 2179688.2499999534,
+              "max": 6473299.0
+            },
+            "log1pMedian": 6.934882880782382,
+            "log1pUnscaledMAD": 0.7621395301259564,
+            "threeMADFlags": 152,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.SDD",
+          "n": 782,
+          "open": 0,
+          "closed": 782,
+          "closedCalendar": {
+            "n": 782,
+            "secondsQuantiles": {
+              "p50": 782.5,
+              "p90": 140568.19999999998,
+              "p99": 2774476.5799999954,
+              "max": 6305492.0
+            },
+            "log1pMedian": 6.66376108405052,
+            "log1pUnscaledMAD": 1.0616422631708193,
+            "threeMADFlags": 157,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "FS-GG/FS.GG.Templates",
+          "n": 705,
+          "open": 1,
+          "closed": 704,
+          "closedCalendar": {
+            "n": 704,
+            "secondsQuantiles": {
+              "p50": 1621.5,
+              "p90": 151823.80000000002,
+              "p99": 4851065.2500000205,
+              "max": 4922977.0
+            },
+            "log1pMedian": 7.391719602418737,
+            "log1pUnscaledMAD": 2.536883894240813,
+            "threeMADFlags": 11,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 1,
+            "secondsQuantiles": {
+              "p50": 16473.761953,
+              "p90": 16473.761953,
+              "p99": 16473.761953,
+              "max": 16473.761953
+            },
+            "log1pMedian": 9.709584910283013,
+            "log1pUnscaledMAD": 0.0,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "FS-GG/FSBarV2",
+          "n": 60,
+          "open": 0,
+          "closed": 60,
+          "closedCalendar": {
+            "n": 60,
+            "secondsQuantiles": {
+              "p50": 262.0,
+              "p90": 2589.2000000000007,
+              "p99": 58406.529999999904,
+              "max": 75064.0
+            },
+            "log1pMedian": 5.572088969898614,
+            "log1pUnscaledMAD": 1.1094282614266713,
+            "threeMADFlags": 3,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "FS-GG/FsQuint",
+          "n": 52,
+          "open": 0,
+          "closed": 52,
+          "closedCalendar": {
+            "n": 52,
+            "secondsQuantiles": {
+              "p50": 519.0,
+              "p90": 162807.9,
+              "p99": 781804.27,
+              "max": 781969.0
+            },
+            "log1pMedian": 6.247784660297167,
+            "log1pUnscaledMAD": 1.7249102237469134,
+            "threeMADFlags": 15,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "FS-GG/HighBarV3",
+          "n": 21,
+          "open": 0,
+          "closed": 21,
+          "closedCalendar": {
+            "n": 21,
+            "secondsQuantiles": {
+              "p50": 220.0,
+              "p90": 4030.0,
+              "p99": 21698.60000000001,
+              "max": 24408.0
+            },
+            "log1pMedian": 5.3981627015177525,
+            "log1pUnscaledMAD": 1.2085079594913273,
+            "threeMADFlags": 2,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "FS-GG/RecoilEngine",
+          "n": 6,
+          "open": 0,
+          "closed": 6,
+          "closedCalendar": {
+            "n": 6,
+            "secondsQuantiles": {
+              "p50": 78.5,
+              "p90": 226.0,
+              "p99": 239.5,
+              "max": 241.0
+            },
+            "log1pMedian": 4.347920671421942,
+            "log1pUnscaledMAD": 1.0748413289924073,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "private repositories pooled",
+          "n": 218,
+          "open": 4,
+          "closed": 214,
+          "closedCalendar": {
+            "n": 214,
+            "secondsQuantiles": {
+              "p50": 617.0,
+              "p90": 7903.000000000024,
+              "p99": 1045300.5900000011,
+              "max": 2268256.0
+            },
+            "log1pMedian": 6.426455727361832,
+            "log1pUnscaledMAD": 1.444995583988602,
+            "threeMADFlags": 17,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 4,
+            "secondsQuantiles": {
+              "p50": 82353.261953,
+              "p90": 116059.76195300001,
+              "p99": 129060.26195299998,
+              "max": 130504.761953
+            },
+            "log1pMedian": 11.318785488235504,
+            "log1pUnscaledMAD": 0.23020269171241114,
+            "threeMADFlags": 1,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        }
+      ],
+      "era": [
+        {
+          "stratum": "2026-06",
+          "n": 138,
+          "open": 0,
+          "closed": 138,
+          "closedCalendar": {
+            "n": 138,
+            "secondsQuantiles": {
+              "p50": 319.0,
+              "p90": 414035.89999999997,
+              "p99": 436023.45,
+              "max": 436288.0
+            },
+            "log1pMedian": 5.767925331472303,
+            "log1pUnscaledMAD": 3.1288680018570445,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "2026-07",
+          "n": 3398,
+          "open": 0,
+          "closed": 3398,
+          "closedCalendar": {
+            "n": 3398,
+            "secondsQuantiles": {
+              "p50": 372.5,
+              "p90": 3106.7000000000035,
+              "p99": 2077130.1099995966,
+              "max": 6473299.0
+            },
+            "log1pMedian": 5.922917108529174,
+            "log1pUnscaledMAD": 0.8089181410664659,
+            "threeMADFlags": 412,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "2026-08",
+          "n": 1073,
+          "open": 0,
+          "closed": 1073,
+          "closedCalendar": {
+            "n": 1073,
+            "secondsQuantiles": {
+              "p50": 2495.0,
+              "p90": 84223.00000000013,
+              "p99": 4234531.039999988,
+              "max": 4922977.0
+            },
+            "log1pMedian": 7.822444729489319,
+            "log1pUnscaledMAD": 1.1193623888738449,
+            "threeMADFlags": 114,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "2026-09",
+          "n": 2183,
+          "open": 0,
+          "closed": 2183,
+          "closedCalendar": {
+            "n": 2183,
+            "secondsQuantiles": {
+              "p50": 2650.0,
+              "p90": 140569.0,
+              "p99": 973978.2799999984,
+              "max": 2268256.0
+            },
+            "log1pMedian": 7.8826922062890254,
+            "log1pUnscaledMAD": 2.3029623803028034,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "2026-10",
+          "n": 1772,
+          "open": 0,
+          "closed": 1772,
+          "closedCalendar": {
+            "n": 1772,
+            "secondsQuantiles": {
+              "p50": 1100.0,
+              "p90": 7364.300000000001,
+              "p99": 571642.8099999999,
+              "max": 1850334.0
+            },
+            "log1pMedian": 7.0039737242496605,
+            "log1pUnscaledMAD": 1.011260737042385,
+            "threeMADFlags": 115,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 0
+          }
+        },
+        {
+          "stratum": "2026-11",
+          "n": 214,
+          "open": 16,
+          "closed": 198,
+          "closedCalendar": {
+            "n": 198,
+            "secondsQuantiles": {
+              "p50": 2838.5,
+              "p90": 19833.2,
+              "p99": 79008.19000000003,
+              "max": 107918.0
+            },
+            "log1pMedian": 7.951379771045824,
+            "log1pUnscaledMAD": 1.035170368795645,
+            "threeMADFlags": 19,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 16,
+            "secondsQuantiles": {
+              "p50": 82353.261953,
+              "p90": 159022.761953,
+              "p99": 161318.411953,
+              "max": 161466.761953
+            },
+            "log1pMedian": 11.318785488235504,
+            "log1pUnscaledMAD": 0.38360978755686137,
+            "threeMADFlags": 3,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        }
+      ],
+      "authorType": [
+        {
+          "stratum": "Bot",
+          "n": 1568,
+          "open": 1,
+          "closed": 1567,
+          "closedCalendar": {
+            "n": 1567,
+            "secondsQuantiles": {
+              "p50": 816.0,
+              "p90": 631577.8000000013,
+              "p99": 5420163.68,
+              "max": 6473299.0
+            },
+            "log1pMedian": 6.705639094860003,
+            "log1pUnscaledMAD": 2.361833673006319,
+            "threeMADFlags": 110,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 1,
+            "secondsQuantiles": {
+              "p50": 130504.761953,
+              "p90": 130504.761953,
+              "p99": 130504.761953,
+              "max": 130504.761953
+            },
+            "log1pMedian": 11.779172657666725,
+            "log1pUnscaledMAD": 0.0,
+            "threeMADFlags": 0,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        },
+        {
+          "stratum": "User",
+          "n": 7210,
+          "open": 15,
+          "closed": 7195,
+          "closedCalendar": {
+            "n": 7195,
+            "secondsQuantiles": {
+              "p50": 815.0,
+              "p90": 71347.4000000001,
+              "p99": 159077.9799999997,
+              "max": 4016342.0
+            },
+            "log1pMedian": 6.704414354964107,
+            "log1pUnscaledMAD": 1.1216296585548582,
+            "threeMADFlags": 918,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 15,
+            "secondsQuantiles": {
+              "p50": 82351.761953,
+              "p90": 159313.761953,
+              "p99": 161328.30195300002,
+              "max": 161466.761953
+            },
+            "log1pMedian": 11.318767274241903,
+            "log1pUnscaledMAD": 0.3068506196761014,
+            "threeMADFlags": 3,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        }
+      ],
+      "currentHeader": [
+        {
+          "stratum": "no exact header",
+          "n": 8778,
+          "open": 16,
+          "closed": 8762,
+          "closedCalendar": {
+            "n": 8762,
+            "secondsQuantiles": {
+              "p50": 815.0,
+              "p90": 88646.80000000006,
+              "p99": 1565261.1499999398,
+              "max": 6473299.0
+            },
+            "log1pMedian": 6.704414354964107,
+            "log1pUnscaledMAD": 1.2469687648229812,
+            "threeMADFlags": 1319,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 16,
+            "secondsQuantiles": {
+              "p50": 82353.261953,
+              "p90": 159022.761953,
+              "p99": 161318.411953,
+              "max": 161466.761953
+            },
+            "log1pMedian": 11.318785488235504,
+            "log1pUnscaledMAD": 0.38360978755686137,
+            "threeMADFlags": 3,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        }
+      ],
+      "stateReason": [
+        {
+          "stratum": "None",
+          "n": 8778,
+          "open": 16,
+          "closed": 8762,
+          "closedCalendar": {
+            "n": 8762,
+            "secondsQuantiles": {
+              "p50": 815.0,
+              "p90": 88646.80000000006,
+              "p99": 1565261.1499999398,
+              "max": 6473299.0
+            },
+            "log1pMedian": 6.704414354964107,
+            "log1pUnscaledMAD": 1.2469687648229812,
+            "threeMADFlags": 1319,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          },
+          "openAge": {
+            "n": 16,
+            "secondsQuantiles": {
+              "p50": 82353.261953,
+              "p90": 159022.761953,
+              "p99": 161318.411953,
+              "max": 161466.761953
+            },
+            "log1pMedian": 11.318785488235504,
+            "log1pUnscaledMAD": 0.38360978755686137,
+            "threeMADFlags": 3,
+            "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+          }
+        }
+      ]
+    }
+  },
+  "runtimeSelection": {
+    "era": [
+      {
+        "stratum": "2026-06",
+        "population": 114,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "2026-07",
+        "population": 1938,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "2026-08",
+        "population": 675,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "2026-09",
+        "population": 196,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "2026-10",
+        "population": 263,
+        "runtime": 1,
+        "fraction": 0.0038022813688212928
+      },
+      {
+        "stratum": "2026-11",
+        "population": 211,
+        "runtime": 33,
+        "fraction": 0.15639810426540285
+      }
+    ],
+    "repository": [
+      {
+        "stratum": "FS-GG/.github",
+        "population": 1648,
+        "runtime": 9,
+        "fraction": 0.0054611650485436895
+      },
+      {
+        "stratum": "FS-GG/FS.GG.Algorithms",
+        "population": 51,
+        "runtime": 1,
+        "fraction": 0.0196078431372549
+      },
+      {
+        "stratum": "FS-GG/FS.GG.Audio",
+        "population": 50,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "FS-GG/FS.GG.Coordination",
+        "population": 188,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "FS-GG/FS.GG.Coordination.Authority",
+        "population": 1,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "FS-GG/FS.GG.Game",
+        "population": 228,
+        "runtime": 10,
+        "fraction": 0.043859649122807015
+      },
+      {
+        "stratum": "FS-GG/FS.GG.Governance",
+        "population": 105,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "FS-GG/FS.GG.Net",
+        "population": 22,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "FS-GG/FS.GG.Rendering",
+        "population": 526,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "FS-GG/FS.GG.SDD",
+        "population": 386,
+        "runtime": 2,
+        "fraction": 0.0051813471502590676
+      },
+      {
+        "stratum": "FS-GG/FS.GG.Templates",
+        "population": 150,
+        "runtime": 2,
+        "fraction": 0.013333333333333334
+      },
+      {
+        "stratum": "FS-GG/FsQuint",
+        "population": 4,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "private repositories pooled",
+        "population": 38,
+        "runtime": 10,
+        "fraction": 0.2631578947368421
+      }
+    ],
+    "state": [
+      {
+        "stratum": "closed",
+        "population": 3043,
+        "runtime": 18,
+        "fraction": 0.005915215248110417
+      },
+      {
+        "stratum": "open",
+        "population": 354,
+        "runtime": 16,
+        "fraction": 0.04519774011299435
+      }
+    ],
+    "currentHeader": [
+      {
+        "stratum": "Delivery header",
+        "population": 273,
+        "runtime": 32,
+        "fraction": 0.11721611721611722
+      },
+      {
+        "stratum": "Outcome header",
+        "population": 7,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "no exact header",
+        "population": 3117,
+        "runtime": 2,
+        "fraction": 0.0006416426050689766
+      }
+    ],
+    "authorType": [
+      {
+        "stratum": "Bot",
+        "population": 16,
+        "runtime": 0,
+        "fraction": 0.0
+      },
+      {
+        "stratum": "User",
+        "population": 3381,
+        "runtime": 34,
+        "fraction": 0.010056196391600119
+      }
+    ]
+  },
+  "limitations": [
+    "Exploratory 12 baseline features by 5 endpoints, profile and partial checks: multiplicity and selection preclude confirmatory claims; no p-values or selected winner.",
+    "All clocks retain original proxy/censoring qualifications. Postdispatch comments/reviews/PR references/response counts are mediators or mechanically coupled diagnostics, not prework predictors.",
+    "Current exact-header/type signals in broad census are retrospective and incomplete; no historical task class inferred.",
+    "Group CV uses fixed alpha10 and fold-local standardization; seven clusters give unstable generalization evidence. This is not an untouched final test.",
+    "Sparse H-level summaries are not calibrated thresholds; zero-variance dimensions are not evidence of no effect."
+  ],
+  "sourceManifestDigest": "c3e4674dfd34716a5494bb4ab7ccbd637e3b445807f59f2f5f14f494f5087c9e"
+}

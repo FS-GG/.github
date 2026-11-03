@@ -1,0 +1,310 @@
+{
+  "schema": "fsgg.learn-history-evaluation/1",
+  "primaryConclusion": "inconclusive: cross-profile hardness validity not established",
+  "census": {
+    "repositories": 27,
+    "issues": 3397,
+    "pullRequests": 8778,
+    "uniqueNativeRecords": 12175,
+    "privateIssues": 38,
+    "privatePRs": 218,
+    "issueStates": {
+      "closed:completed": 2918,
+      "open:None": 347,
+      "closed:not_planned": 112,
+      "closed:duplicate": 13,
+      "open:reopened": 7
+    },
+    "prStates": {
+      "merged": 7545,
+      "closed": 1217,
+      "open": 16
+    },
+    "creationMonths": {
+      "2026-06": 114,
+      "2026-07": 1938,
+      "2026-08": 675,
+      "2026-09": 196,
+      "2026-10": 263,
+      "2026-11": 211
+    },
+    "closedOnlyCalendarDays": {
+      "n": 3043,
+      "p50": 0.10434027777777778,
+      "p90": 1.7976041666666667,
+      "p99": 16.194409722222222,
+      "max": 78.19873842592592
+    },
+    "calendarInterpretation": "creation-to-native-final-close; unsuccessful closures included; open cases excluded from quantiles; not active work",
+    "openIssuesRetained": 354,
+    "rowsUpdatedAfterPopulationCutoff": 0,
+    "cutoff": "2026-11-03T07:11:12.761953+00:00",
+    "collectionEndedAt": "2026-11-03T07:14:15.150636+00:00",
+    "collectionInvocations": 144,
+    "collectionFailedInvocations": 3,
+    "identityAndDigestChecks": "passed",
+    "allRepositoryIssueAndPrCountsReconcile": true
+  },
+  "sourceAudit": {
+    "counts": {
+      "records": 27,
+      "issues": 20,
+      "commentsReturned": 65,
+      "commentsReportedTotal": 65,
+      "userContentEditsReturned": 30,
+      "userContentEditsReportedTotal": 30,
+      "timelineItemsReturned": 187,
+      "timelineItemsReportedTotal": 239,
+      "closeEvents": 22,
+      "reopenEvents": 1,
+      "recordsWithReopen": 1,
+      "reviewDeclarations": 4,
+      "changesRequiredDeclarations": 4,
+      "roundZeroDeclarations": 1,
+      "qualifiedCreationBodies": 27,
+      "verified_unedited": 19,
+      "qualified_native_snapshot_format": 8,
+      "editedBodiesCompared": 8,
+      "changedHardnessTotals": 3,
+      "changedRoutes": 1,
+      "prs": 7,
+      "nativeReviewObjects": 0,
+      "prsWithDeclarationsButNoReviewObjects": 1
+    },
+    "featureQualificationUnknowns": {},
+    "commitInactivitySensitivity": {
+      "prs": 7,
+      "commits": 25,
+      "authorCommitTimeDifferences": 12,
+      "calendarSecondsTotal": 953836.0,
+      "activeSeconds": null,
+      "inference": "selected PR metadata only; hypothetical capped-gap sensitivity is NOT active work",
+      "authoredDate": {
+        "outsidePrWindow": 8,
+        "maxObservableGapSeconds": 909821.0,
+        "thresholds": {
+          "3600": {
+            "gapsOverThreshold": 4,
+            "hypotheticalCappedGapSeconds": 25979.0
+          },
+          "28800": {
+            "gapsOverThreshold": 1,
+            "hypotheticalCappedGapSeconds": 72815.0
+          },
+          "86400": {
+            "gapsOverThreshold": 1,
+            "hypotheticalCappedGapSeconds": 130415.0
+          }
+        }
+      },
+      "committedDate": {
+        "outsidePrWindow": 4,
+        "maxObservableGapSeconds": 909821.0,
+        "thresholds": {
+          "3600": {
+            "gapsOverThreshold": 3,
+            "hypotheticalCappedGapSeconds": 21033.0
+          },
+          "28800": {
+            "gapsOverThreshold": 1,
+            "hypotheticalCappedGapSeconds": 72815.0
+          },
+          "86400": {
+            "gapsOverThreshold": 1,
+            "hypotheticalCappedGapSeconds": 130415.0
+          }
+        }
+      }
+    },
+    "validityInference": "audit controls and source feasibility; not predictive validity"
+  },
+  "retainedDispatchProfiles": {
+    "retainedLaunchObservations": 3,
+    "distinctRequestedProfiles": 1,
+    "distinctBodySnapshots": 3,
+    "effectiveProfileCoverage": "Unknown; not inferred from requested configuration"
+  },
+  "legacyTelemetrySourceSupport": [
+    {
+      "sourceKind": "checked-join.json",
+      "rows": 34,
+      "fields": [
+        "invocations",
+        "item_id",
+        "responses",
+        "total"
+      ],
+      "explicitProfileFieldsPresent": false
+    },
+    {
+      "sourceKind": "telemetry-all.json",
+      "rows": 34,
+      "fields": [
+        "invocations",
+        "item_id",
+        "responses",
+        "total"
+      ],
+      "explicitProfileFieldsPresent": false
+    },
+    {
+      "sourceKind": "telemetry-dispatches.json",
+      "rows": 34,
+      "fields": [
+        "dispatches",
+        "first_dispatch",
+        "item_id",
+        "responses",
+        "total"
+      ],
+      "explicitProfileFieldsPresent": false
+    },
+    {
+      "sourceKind": "telemetry-anchors.json",
+      "rows": 0,
+      "fields": [],
+      "explicitProfileFieldsPresent": false
+    }
+  ],
+  "requestedAssignmentSupport": {
+    "estimand": "requested_assignment",
+    "candidateRows": 3,
+    "uniqueInvocations": 3,
+    "qualifiedResponses": 0,
+    "qualifiedUniqueEdges": 0,
+    "qualifiedAnchors": 0,
+    "qualifiedProfiles": 0,
+    "components": [],
+    "profilePairAnchorCounts": [],
+    "missingFrozenTaskFields": {
+      "startCommit": 3,
+      "environmentHash": 3,
+      "contextHash": 3,
+      "qualityContractHash": 3,
+      "protocolHash": 3,
+      "role": 3,
+      "stage": 3
+    },
+    "rejectedReasonsNonexclusive": {
+      "unqualified_quality_outcome": 3,
+      "not_independent_or_unknown": 3,
+      "incomplete_frozen_task": 3
+    },
+    "crossProfileConnected": false,
+    "designMatrixRank": null,
+    "invarianceEstablished": false,
+    "decision": "inconclusive: structural support audit only; no quality/IRT/invariance fit performed"
+  },
+  "providerEffectiveSupport": {
+    "estimand": "provider_effective",
+    "candidateRows": 3,
+    "uniqueInvocations": 3,
+    "qualifiedResponses": 0,
+    "qualifiedUniqueEdges": 0,
+    "qualifiedAnchors": 0,
+    "qualifiedProfiles": 0,
+    "components": [],
+    "profilePairAnchorCounts": [],
+    "missingFrozenTaskFields": {
+      "startCommit": 3,
+      "environmentHash": 3,
+      "contextHash": 3,
+      "qualityContractHash": 3,
+      "protocolHash": 3,
+      "role": 3,
+      "stage": 3
+    },
+    "rejectedReasonsNonexclusive": {
+      "unqualified_quality_outcome": 3,
+      "not_independent_or_unknown": 3,
+      "incomplete_frozen_task": 3,
+      "unverified_effective_configuration": 3
+    },
+    "crossProfileConnected": false,
+    "designMatrixRank": null,
+    "invarianceEstablished": false,
+    "decision": "inconclusive: structural support audit only; no quality/IRT/invariance fit performed"
+  },
+  "modelFit": "not performed: support/quality qualification precedes fitting",
+  "contentAndCategoryProbes": {
+    "kind": "synthetic illustrative probes; not population prevalence or independent human ground truth",
+    "scorerSha256": "dcf00f20b5502049964f7efbb3aee4b07457887fb1a07ea49b184d55681ca24d",
+    "rubricVersion": "learn-02-rubric-v1",
+    "cases": [
+      {
+        "name": "minimal",
+        "hardness": 1,
+        "category": "Low",
+        "safetyFloor": false,
+        "literalPolicyConformance": true
+      },
+      {
+        "name": "same scope with explicit exclusions",
+        "hardness": 19,
+        "category": "High",
+        "safetyFloor": true,
+        "literalPolicyConformance": true
+      },
+      {
+        "name": "same scope with quoted context",
+        "hardness": 18,
+        "category": "High",
+        "safetyFloor": false,
+        "literalPolicyConformance": true
+      },
+      {
+        "name": "H6 boundary",
+        "hardness": 6,
+        "category": "Low",
+        "safetyFloor": false,
+        "literalPolicyConformance": true
+      },
+      {
+        "name": "H7 boundary",
+        "hardness": 7,
+        "category": "Medium",
+        "safetyFloor": false,
+        "literalPolicyConformance": true
+      },
+      {
+        "name": "H12 boundary",
+        "hardness": 12,
+        "category": "Medium",
+        "safetyFloor": false,
+        "literalPolicyConformance": true
+      },
+      {
+        "name": "H13 boundary",
+        "hardness": 13,
+        "category": "High",
+        "safetyFloor": false,
+        "literalPolicyConformance": true
+      },
+      {
+        "name": "D3 override below H13",
+        "hardness": 2,
+        "category": "High",
+        "safetyFloor": false,
+        "literalPolicyConformance": true
+      },
+      {
+        "name": "D5 override below H13",
+        "hardness": 2,
+        "category": "High",
+        "safetyFloor": false,
+        "literalPolicyConformance": true
+      },
+      {
+        "name": "safety floor distinct from category",
+        "hardness": 3,
+        "category": "Low",
+        "safetyFloor": true,
+        "literalPolicyConformance": true
+      }
+    ],
+    "categoryAvailable": true,
+    "interpretation": "literal implementation conformance and construct validity are distinct; excluded/quoted words alter scores"
+  },
+  "routingActivation": false,
+  "sourceManifestDigest": "56f8bd48320d5cee6e233746d96a84587b2509f54f32b5e38769b12e2d8e49e5"
+}
