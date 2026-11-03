@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fsgg:learn-context-snapshot:1",
+  "title": "Private historical rater context, not execution or isolation authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "caseId", "boundaryKind", "checkpointKind", "checkpointLagSeconds", "exactHistoricalHead", "taskSha256", "taskRedactionVersion", "files", "contextGaps", "identityBlinding", "ratingLaunchAllowed", "isolation"],
+  "properties": {
+    "schema": {"const": "fsgg.learn-context-snapshot/1"},
+    "caseId": {"type": "string", "pattern": "^context-(00[1-9]|01[0-6])$"},
+    "boundaryKind": {"const": "item-creation"},
+    "checkpointKind": {"const": "proven-before-cutoff"},
+    "checkpointLagSeconds": {"type": "number", "minimum": 0},
+    "exactHistoricalHead": {"const": false},
+    "taskSha256": {"$ref": "#/$defs/sha256"},
+    "taskRedactionVersion": {"const": "github-identity-links/1"},
+    "files": {"type": "array", "minItems": 1, "maxItems": 20000, "items": {"$ref": "#/$defs/file"}},
+    "contextGaps": {"type": "array", "maxItems": 20106, "items": {"$ref": "#/$defs/gap"}},
+    "identityBlinding": {"const": "partial-source-identifiability"},
+    "ratingLaunchAllowed": {"const": false},
+    "isolation": {"type": "string", "minLength": 1, "maxLength": 500}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitObject": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "file": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "mode", "blob", "bytes", "sha256", "contentKind"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "mode": {"enum": ["100644", "100755"]},
+        "blob": {"$ref": "#/$defs/gitObject"},
+        "bytes": {"type": "integer", "minimum": 0, "maximum": 4194304},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "contentKind": {"enum": ["utf8", "binary"]}
+      }
+    },
+    "gap": {
+      "type": "object", "additionalProperties": false, "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["unresolved-gitlink", "unmaterialized-lfs-object", "dependency-environment-not-reconstructed", "creator-private-context-unavailable", "related-discussion-and-external-research-not-reconstructed", "creation-before-first-work-not-established", "exact-branch-state-not-established"]},
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "object": {"$ref": "#/$defs/gitObject"}
+      }
+    }
+  },
+  "$comment": "Runtime validation additionally enforces canonical selection digests, native revision completeness, server visibility, Git hashes, path/link safety, aggregate bounds and original metadata. This schema grants no rating launch, network isolation, reproducible environment or statistical validity."
+}
