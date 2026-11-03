@@ -455,7 +455,7 @@ module V2TendWrite =
           ArchiveRetention: int }
 
     let defaultSettings projectId rootLogins =
-        { ProjectId = projectId; RootLogins = rootLogins; MaxItemsPerRun = 100; MinimumMutationInterval = TimeSpan.FromSeconds 1.0; ArchiveRetention = 200 }
+        { ProjectId = projectId; RootLogins = rootLogins; MaxItemsPerRun = 100; MinimumMutationInterval = TimeSpan.FromSeconds 1.0; ArchiveRetention = 50 }
 
     // Mutations at most one per `interval` (design §6 write budget).
     type Pacer(clock: TimeProvider, wait: TimeSpan -> unit, interval: TimeSpan) =
@@ -565,15 +565,35 @@ module V2TendWrite =
         let ids state = records |> List.filter (fun r -> r.State = state) |> List.choose (fun r -> r.ItemId) |> Set.ofList
         ids "possible-send", ids "deferred"
 
-    // Cards the Done-retention archiver may archive (Done and closed beyond the newest `retention`): the
-    // reconciler writes nothing to them while the archiver runs outside the writer lock (design §8).
+    // Mirrors the Python archiver's pure candidate planner. The snapshot contains active board cards;
+    // threshold and retention are separate. Native blockers are protected AFTER the newest-card cutoff.
+    // The Python scheduled writer additionally refuses a complete cycle with any guarded remainder.
     let archiveEligible (snapshot: V2Tend.Snapshot) (retention: int) =
-        snapshot.Cards
-        |> List.filter (fun c -> c.Status = Some V2Tend.Done && not c.Open)
-        |> List.sortByDescending (fun c -> c.ClosedAt |> Option.defaultValue DateTimeOffset.MinValue, c.ItemId)
-        |> fun closed -> if closed.Length <= retention then [] else List.skip retention closed
-        |> List.map (fun c -> c.ItemId)
-        |> Set.ofList
+        let activeDone = snapshot.Cards |> List.filter (fun c -> c.Status = Some V2Tend.Done)
+        let liveIssues = snapshot.Cards |> List.filter (fun c -> c.Status <> Some V2Tend.Done && c.Kind = V2Tend.Issue)
+        if retention < 0 || activeDone.Length < 200 || (liveIssues |> List.exists (fun c -> not c.BlockersComplete)) then Set.empty
+        else
+            let protectedRefs = liveIssues |> List.collect (fun c -> c.Blockers |> List.map (fun b -> b.Ref)) |> Set.ofList
+            let reference = Regex(@"\A([^/\s]+/[^/#\s]+)#([1-9][0-9]*)\z", RegexOptions.CultureInvariant)
+            activeDone
+            |> List.choose (fun c ->
+                let matched = if isNull c.Ref then Match.Empty else reference.Match c.Ref
+                let number = if matched.Success then Int32.TryParse matched.Groups.[2].Value else false, 0
+                match c.Kind, c.Open, c.ClosedAt, number with
+                | (V2Tend.Issue | V2Tend.PullRequestCard), false, Some closed, (true, number)
+                    when matched.Success && not (String.IsNullOrWhiteSpace c.ItemId) ->
+                    Some(c, closed, matched.Groups.[1].Value, number)
+                | _ -> None)
+            |> List.sortWith (fun (a, at, ar, an) (b, bt, br, bn) ->
+                let time = compare bt at
+                let repo = StringComparer.Ordinal.Compare(ar, br)
+                let number = compare an bn
+                if time <> 0 then time elif repo <> 0 then repo elif number <> 0 then number
+                else StringComparer.Ordinal.Compare(a.ItemId, b.ItemId))
+            |> List.mapi (fun i entry -> i, entry)
+            |> List.choose (fun (i, entry) -> if i < retention then None else Some entry)
+            |> List.choose (fun (c, _, _, _) -> if protectedRefs.Contains c.Ref then None else Some c.ItemId)
+            |> Set.ofList
 
     let private fieldRecord (effects: (V2Tend.Effect * string * FieldValue) list) (item: ItemState) (state: string) (now: DateTimeOffset) =
         let record = JsonObject()

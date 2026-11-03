@@ -137,17 +137,10 @@ once more than 250 rows are enrolled: the 0.114.0 reader refuses a population ab
 associations retired by 0.113.0 must not be rolled back to 0.112.0: the older reader would re-read
 closed sources.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.114.5 — Patch release of the coherent set: Kit, Drivers and CLI advance together.
-Protected enrollment preflight recognizes only authenticated executing-release self-registration of the CLI tool pin, while retaining ancestry and all other constructor-closure refusals. Explicit archived predecessor memberships are reconciled with complete native identity and pagination checks; their enrollment and original custody stay unchanged (#5263). Publication, actual installed-caller qualification, successor enrollment and archive activation requalification remain separate.
-Carried forward from 0.114.4: the CLI rebuilds against listed FSharp.Core 10.1.403; other command and exit-code contracts are unchanged.
-Packaged `pnext-item` gains an owner self-check before review (range, partial failure, planted bugs, all reviewer probes re-run on the new head, invariant first for cross-cutting defects) with no new gate, critic or report, keeps the PR draft until its required gates pass, and `intra-repo-parallel-work` has dispatch briefs name the one owner of a surface shared by parallel Deliveries (#5239, #5185).
-The canonical shared build configuration and the producer use listed stable FSharp.Core 10.1.403, restored from NuGet.org with the SDK library-packs source excluded (#5253). Managed receivers adopt these bytes through the actually published Kit; source preparation does not establish receiver or installed adoption. The packaged Atlas also carries the reviewed LEARN routing/classification records (#5249) and the source-exclusion qualification boundary.
-The shared source baseline advances Microsoft.NET.Test.Sdk 18.11.0, xunit.runner.visualstudio 4.0.1, FsCheck.Xunit 3.6.0, Microsoft.Data.Sqlite 10.0.14, Akka/Akka.FSharp 1.5.73, fake-cli 6.2.0 and Fantomas 8.1.0 (#5254). The CLI carries the updated SQLite closure; test dependencies, the independently released Host's Akka closure and receiver-owned tool manifests retain their own delivery boundaries.
-Board tend uses the provider's String scalar for single-select option IDs and retains field-response rejection evidence. The fdev wrapper hardens activation and marker recovery, and the checked incident controller admits only proven no-effect settlements without retrying a provider mutation (#5206). Publication, qualified deployment, fresh settlement admission and scheduled native readback remain separate; these source changes do not establish any of them.
-Carried forward from 0.114.3: the first-line `fsgg-dispatch:` marker and telemetry attribution of Claude Code subagent dispatches, the guarded `board-v2 tend --apply` writer, item-scoped `board-v2 migration-apply`, content-based ConstructorIdentity, `enrollment rebind-reader` and the routine-PR delivery-continues/completes declaration.
-VALIDATOR: qualify 0.114.5 inspections with `scripts/board_v2_native_results.py` from main at or after #5132.
-Source, installed adoption and native acceptance remain distinct. See STANDING ADVISORIES for the rollback limits.
-
+    <PackageReleaseNotes>0.115.0 — Minor release of the coherent set: Kit, Drivers and CLI advance together.
+The maintained migration CLI adds guarded LEARN annotation creation and evidence-bound replacement, optional Learn scopes, and version3 scope/prepared/readback output. Legacy scope codecs remain accepted; typed callers constructing Scope must supply the new optional Learn field. This is a receiver-visible protocol addition (#5273).
+The F# board-tend archive projection and maintained Python archive host align on retaining the newest50 closed Done cards once the native Done population reaches200. Archive batches retain native blocker, parent/child, pair/reader and receipt checks (#5170). Source and package publication do not activate or qualify installed timers.
+Protected enrollment still accepts only authenticated executing-release tool-pin registration and exact archived predecessor membership; all original pair and effect custody remains separate (#5263).
 $(FsggStandingAdvisories)
 
 FULL PER-VERSION HISTORY IS SERVED BY THE REGISTRY, NOT REPEATED HERE (`.github#2579`). Every
