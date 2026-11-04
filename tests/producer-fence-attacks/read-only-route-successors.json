@@ -4,7 +4,7 @@
     {
       "path": ".github/workflows/kit-materialize.yml",
       "predecessorSha256": "c665d20100ec37068c2eae8fbadb22ab22cd9f571a539174c1a85dc917b59575",
-      "sha256": "57a126319b824d27e9b34146b594ecbf2ff3aa5215cfa9f91c81009cc6edb1fe",
+      "sha256": "2954b3ea0cc033de0335ca8714e1b3cdc046a6eb1a79a1a74637b78d170fda28",
       "disposition": "current-revision-read-only",
       "proof": "contents-read-only; no job permission override, App token, secret read, provider write command, or materialize job"
     }
