@@ -734,12 +734,12 @@ Any one of these, and the decision is re-opened rather than eroded:
 
 * `pinDigests` scoped to `FS-GG/.github` is enabled in `default.json` **and** demonstrated to open and
   land digest bumps in a receiver — which repairs measurement 2 and part of 3.
-* The `github-ref` half is closed, so that pinning a `uses:` pins the rule with it. GitHub documents
-  `github.job_workflow_sha` as the commit SHA of the reusable workflow file for the job running it,
-  which would let a callee source its own scripts from its own commit with **no receiver-side edit at
-  all** — and would make a later pin mean what a reader assumes it means.
-  [#1786](https://github.com/FS-GG/.github/issues/1786), and it is **unmeasured**: that item may not
-  change three required gates on the strength of a documentation sentence either.
+* The `github-ref` half is closed with a measured binding between the workflow and its script source
+  ([#1786](https://github.com/FS-GG/.github/issues/1786)). `github.job_workflow_sha` is not an available
+  expression property: the actual #5195 caller resolved it empty and checkout selected hub main.
+  A pinned workflow and a successful job therefore do not establish a pinned script source. The
+  closing-keyword job below uses a separate immutable source pin; this does not qualify the other
+  reusable gates or change their binding.
 * A required verdict is measurably moved by a hub commit again, as in #1584. One instance is a
   measurement; a second is this decision being wrong.
 
@@ -759,7 +759,7 @@ arms any context (dry run, watch it report, then `repos.sh require-context`), ne
 
 | | |
 | --- | --- |
-| Rule | [`scripts/check-closing-keywords.py`](../../scripts/check-closing-keywords.py), the hub's own, fetched at the reusable workflow's own commit (`github.job_workflow_sha`) |
+| Rule | [`scripts/check-closing-keywords.py`](../../scripts/check-closing-keywords.py), the hub's own, fetched at the separate immutable `CLOSING_RULE_SOURCE` commit and verified before execution |
 | Subject | the PR body as raw text, and the PR **title** (plain text, no opt-in: under `COMMIT_OR_PR_TITLE` it becomes the squash commit subject, as .github#4963 showed). Live read first, event payload as fallback, so a re-run after an edit or retitle judges the edit. Commit subjects are read through the API and only **warn** |
 | Fails | any of the nine GitHub keywords next to `#N`, `GH-N`, `owner/repo#N` or an issue URL, negated or not, in prose, a code span, a fence or an indented block |
 | Passes | `Refs #N`; a keyword with no reference after it; `resolving`/`closing`/`fixing` (not GitHub keywords); the **opt-in** declaration line, `Closes #N.` alone on a line |
@@ -804,8 +804,31 @@ the two differ). A caller is one thin file that names it at `@main`, as every ot
 | Context | `closing-keywords / title-and-body` (caller job id `closing-keywords`, job name `title-and-body`; the bare name `closing-keywords` is the kit job's, and `check-job-uniqueness.py` refuses two jobs with one name) |
 | Permissions | the caller grants `contents: read` and `pull-requests: read`. The second is what lets a private repository read its live title and body; without it the job falls back to the event payload and a re-run after an edit replays the stale text |
 | Reach | one caller per repository; `edited` in its `pull_request` types re-checks a retitle or body edit |
-| Pin | `@main`, except where the repository's Actions policy requires full-SHA pins (`sha_pinning_required`), where the caller pins a commit of the receiver workflow and rebinds it when the rule changes |
+| Pin | The workflow reference and rule source are separate: callers use `@main` or an immutable workflow commit allowed by their Actions policy; both maintained lint jobs pin `CLOSING_RULE_SOURCE` independently |
 | Arming | not armed anywhere by the change that adds a caller. A private repository on a plan without branch protection (GitHub answers 403 "Upgrade to GitHub Pro or make this repository public") cannot arm it; there the check is advisory |
+
+### Closing-keyword source binding
+
+Both lint doors pin the rule source to protected commit
+`61be6a913fe9f6b4b7410ba8dbf1020b61971a2a`, independently of the caller and workflow revision.
+The job verifies checkout's commit output and actual Git HEAD, rejects a branch/default-ref output,
+and checks the script's SHA256 before running the lint. The pinned checkout action normalizes a SHA
+input to an empty ref output and a commit operand; the guard uses that actual
+[action contract](https://github.com/actions/checkout/blob/3d3c42e5aac5ba805825da76410c181273ba90b1/src/input-helper.ts).
+The rule uses only Python's standard library and runs with isolated Python (`-I`).
+
+Moving hub main cannot advance this rule. A rule update requires review of the new protected source
+and closure, then an update to the source pin and digest in both identical job bodies. An immutable
+workflow caller must also rebind its workflow pin. No receiver receives a script copy or additional
+permission. A successful workflow reference alone is insufficient: native qualification must read the
+resolved checkout input, output commit, actual checkout SHA and source-verification log.
+
+`tests/closing-keywords/source-binding.py` executes the real verification shell over real local Git
+checkouts, with a narrow checkout input/output seam following the pinned action. It exercises missing
+refs, unavailable contexts, default main even when its commit matches the pin, changed main, wrong
+checkout identity and mutated script bytes. These are offline component controls; they do not replace
+actual caller/current-base CI and native checkout readback. The older caller run checked out another
+commit whose rule bytes happened to match; no incorrect historical lint verdict is claimed.
 
 ### Per-repo inventory of the gate and its required-context state (.github#5195)
 
