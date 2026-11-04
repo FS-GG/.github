@@ -261,7 +261,13 @@ covered by (b), which every Root merge passes through.
 ### (b) Merge-time gate in `tools/routine-delivery.py`
 
 `summarize()` already re-reads the live PR before it merges. The gate runs the order above before the
-merge effect, only when `--apply` is given and the PR carries the routine marker.
+readiness result and before the merge effect, when the open PR carries the routine marker.
+Read-only inspection evaluates linkage and the required delivery declaration without writer replay,
+Status/custody intents or timer effects. Apply independently refreshes the native PR envelope and
+reevaluates the gate; inspection cannot authorize a later merge.
+Earlier eligibility, routine or coherent-validation refusal (including draft or pending-CI state) may
+leave linkage unobserved. `boardGate=not-applicable` on such a refusal is not a linkage pass; inspect
+again after the prerequisite settles. Only an otherwise eligible routine PR reaches the gate.
 
 After the existing merged-PR and merge-commit readback, make exactly one deterministic Delivery
 Status transition through the guarded-write semantics of the

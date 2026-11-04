@@ -69,6 +69,14 @@ A simulation pass is sampled evidence, not exhaustive verification or proof that
 Bind the model to real workflow inputs: derive or compare the relevant plan and maintain separate
 requirements. A hand-maintained toy model without a drift check cannot gate a production workflow.
 
+Check the actual command and environment of every selected consumer branch, including installed
+public-package qualification rather than only its source-build sibling. Reuse existing tool/environment
+checks to catch missing setup before publication or expensive fan-out. Keep active tool identities,
+frozen-fixture toolchains and published predecessor profiles explicit and separate; validate each
+against its own determining inputs instead of rewriting historical fixtures to follow the active tools.
+Unknown hosted tool/image identity remains Unknown even when a local comparison passes. A setup-only
+probe does not replace the required complete journey or justify retrying an unchanged failed effect.
+
 Put the selected check before the expensive work. Prove a known-bad input prevents workload
 launch, good input permits it, and missing tools, timeout, malformed input and unknown outcomes
 cannot look like a pass. Preserve existing enforcement and ADR-0084 coherent-run obligations;

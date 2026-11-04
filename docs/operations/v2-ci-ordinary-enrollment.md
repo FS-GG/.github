@@ -205,3 +205,18 @@ has no role in the App ID or installation binding.
 Using the production App in this sandbox would let rehearsal code holding its private key mint a
 production Authority token, even if one token request was scoped to the sandbox. The two App
 installations and private keys therefore stay disjoint.
+
+
+### Required-check policy updates
+
+The active production settlement policy requires all ten protected contexts, including
+`no-silent-revert` and `board-linkage`, from Actions App15368 and their pinned native
+workflow producers. The observer compares the complete live protection population before
+credential access; stronger live protection than the stored policy refuses rather than
+reducing protection. Update the active policy and qualify fresh evidence against its exact
+SHA256 for future admissions. Missing, failed or differently produced checks still refuse.
+
+This source repair does not settle a prior failed run. Preserve its original request,
+policy hash, journal and anchors; never relabel or replay it with newer policy evidence.
+The retired rehearsal policy and historical fixtures remain unchanged and refused.
+No branch-protection, credential or native journal change follows from a policy edit.

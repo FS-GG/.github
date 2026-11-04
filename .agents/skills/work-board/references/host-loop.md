@@ -38,6 +38,34 @@ than requiring success-by-success coordinator approvals. Standing authorization 
 verification and bounded read-only Home diagnostics remains in force. A changed envelope needs its
 concrete admission reconciled under existing authority, not an automatic new user-permission round trip.
 
+Ordinary isolated source diagnosis, preparation and verification follow the lifecycle contract's
+[Normal execution](lifecycle-contract.md#normal-execution): within the selected resource share they
+need no Root runtime envelope or approval-by-command. A failed prerequisite blocks its dependent
+effects; it does not by itself block independent diagnosis within those bounds. Protected runtime
+and effect sequences retain their envelopes. Changed authority, effect scope, source identity or
+resource demand still requires the determining facts and applicable admission to be reconciled.
+
+A short observation checkpoint is not acceptance or owner retirement. Keep the same owner and original
+job through terminal result, first new failure/Unknown, determining drift or its selected deadline.
+Use the existing mechanical bounded observer across shorter checkpoints without model wakeups for
+unchanged polling or repeated requests to read the same original job. Observation never relaunches the
+workload or extends its execution deadline. If observation actually stops, preserve the last fact,
+original deadline and custody pointer, say whether the workload/controller remains running and name
+who takes the next observation; do not imply an armed monitor after its process has ended.
+
+Before final readiness or avoidable PR-body churn, use the applicable read-only linkage and delivery
+marker inspection, and resolve known pending-enrollment/override needs in the same prepared update.
+Inspection reports refusal or Unknown and grants no write. Apply still revalidates fresh native facts;
+a ready inspection never replaces that guard or authorizes a merge.
+Earlier eligibility or CI refusal may leave linkage unobserved. Do not treat `not-applicable` on that
+result as a linkage pass; inspect again after its prerequisite settles.
+
+Check the producer's maintained release-source closure before treating a main advance as a global
+hold. A supported outside-closure ancestor advance may preserve the exact original candidate; a changed
+Atlas, manifest or other release input may not. Keep original source/archive identities and fresh
+producer guards. Compose shared closure changes before costly qualification and hold the actual
+conflicting write domain, while independent repository/source work continues.
+
 Use typed running, paused, stopped and reported-but-unverifiable observations with actual
 boot/namespace/source/clock and authentic birth scope. Unknown birth cannot authenticate a witness.
 Cleared current manager metadata does not clear an original failed or uncertain outcome. Preserve

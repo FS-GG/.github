@@ -1998,7 +1998,7 @@ def routine_contract(api: NativeApi, repo: str, pr: dict[str, Any], head: str) -
 # ---------------------------------------------------------------------------------------------------
 # Board-currency merge gate (docs/coordination/2026-10-31-board-currency-gate.md §2b; Refs #5094).
 #
-# Before the merge effect, a routine PR applied with --apply is checked for R1 linkage: exactly one
+# Read-only inspection and apply both check an open routine PR for R1 linkage: exactly one
 # Project 3 Delivery with a parent Outcome, judged by scripts/board-currency-rules.py (linkage_of), with a
 # valid Root override evaluated first. After a confirmed merge, the linked open Delivery's Status moves
 # once to In review (or In progress with the delivery-continues marker) under a guarded write. Advisory
@@ -2952,18 +2952,7 @@ def summarize(
             "disputed" if coherent_disputed else coherent,
         )
         return 4 if merged_result.outcome == "delivered-disputed" else 0, merged_result
-    if observed == expected_head and candidate_observer is not None:
-        candidate_observer(bound(
-            "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
-            "ready", "not-delivered", publication, None, 0, None, disposition, coherent,
-        ))
-    if not apply:
-        return 0, bound(
-            "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
-            "ready", "not-delivered", publication, None, 0, None, disposition, coherent,
-        )
-
-    if routine_state in ("passed", "unavailable-first-install"):
+    if apply and routine_state in ("passed", "unavailable-first-install"):
         current = None
         try:
             current = api.get_pr(repo, pr_number)
@@ -2992,7 +2981,8 @@ def summarize(
     gate: BoardVerdict | None = None
     board_rules = None
     if board_routine_body(before.get("body")):
-        # Design §2 evaluation order, before the merge effect and only under --apply (this point).
+        # Evaluate before reporting readiness as well as before the merge effect.
+        # Apply still refreshes the native PR envelope above; inspection never enters the writer paths.
         board_rules = (board_rules_loader or load_board_rules)()
         gate = evaluate_board_gate(api, board_rules, repo, pr_number, before.get("body"))
         board.update(boardGate=gate.verdict, boardGateReason=gate.reason)
@@ -3018,6 +3008,18 @@ def summarize(
                 "indeterminate", "not-delivered", publication, None, 0, "board-linkage unknown",
                 disposition, coherent,
             )
+
+    if observed == expected_head and candidate_observer is not None:
+        candidate_observer(bound(
+            "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+            "ready", "not-delivered", publication, None, 0, None, disposition, coherent,
+        ))
+    if not apply:
+        return 0, bound(
+            "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+            "ready", "not-delivered", publication, None, 0, None, disposition, coherent,
+        )
+
 
     def board_after_merge(merged_pr: dict) -> None:
         # After the merged-PR and merge-commit readback, and only for a linked Delivery.
@@ -3384,7 +3386,7 @@ def parser() -> argparse.ArgumentParser:
                         help="routine PR delivery declaration (exactly one of fsgg:delivery-continues/v1 and "
                              "fsgg:delivery-completes/v1): advisory records it with a warning; required refuses before merge")
     result.add_argument("--board-gate", choices=BOARD_GATE_MODES, default="advisory",
-                        help="board-currency merge gate under --apply for routine PRs; advisory records only. "
+                        help="board-currency preflight and merge gate for routine PRs; advisory records only. "
                              "enforce runs only from the FS-GG/.github checkout")
     result.add_argument("--board-gate-custody",
                         help="private directory for durable possible-send records (enforce); "

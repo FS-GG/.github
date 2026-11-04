@@ -664,7 +664,13 @@
          The same cut aligns the F# and host archive policy with the selected newest-50 retention.
          Source preparation only: published 0.114.5, canonical installed pins, original release
          journals and scheduled adoption remain unchanged until separately qualified publication. -->
-    <FsggCoherentSetVersion>0.117.0</FsggCoherentSetVersion>
+    <!-- 0.117.0 -> 0.118.0 (#5272): coherent MINOR source successor. Read-only
+         routine-delivery inspection reports the board-currency linkage gate before readiness;
+         packaged guidance distinguishes source preparation, owned observation and protected
+         effects. Curated Atlas records retain archive and enrollment acceptance boundaries and
+         distinguish native Status projection from runtime activity. Publication and installed
+         adoption remain separate; existing published identities and journals are unchanged. -->
+    <FsggCoherentSetVersion>0.118.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
