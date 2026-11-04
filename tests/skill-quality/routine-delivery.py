@@ -3856,7 +3856,7 @@ class BoardGateTests(unittest.TestCase):
 
     # ---- applicability ----
 
-    def test_gate_runs_only_under_apply_for_routine_marker_on_open_pr(self):
+    def test_gate_applies_only_to_open_routine_prs_in_inspection_and_apply(self):
         plain = opened()
         api = BoardApi([plain, merged()], [{"merged": True, "sha": MERGE}], body="Fixture prose")
         code, result = self.gate(api, "enforce")
@@ -3864,11 +3864,65 @@ class BoardGateTests(unittest.TestCase):
         api = self.holding(board_body("Refs #800"))
         api.reads = iter([board_routine_pr(board_body("Refs #800"))])
         code, result = self.gate(api, "enforce", apply=False)
-        self.assertEqual((code, result.outcome, result.boardGate, api.calls), (0, "ready", "not-applicable", []))
+        self.assertEqual((code, result.outcome, result.boardGate, api.calls),
+                         (2, "refused", "refused", ["board_pr", "board_cards"]))
         done = merged(); done["head"]["ref"] = "routine/fixture"; done["body"] = board_body("Refs #800")
         api = BoardApi([done], body=done["body"])
         code, result = self.gate(api, "enforce")
         self.assertEqual((code, result.outcome, result.boardGate, api.calls), (0, "delivered", "not-applicable", []))
+
+    def test_inspection_preflights_linkage_and_markers_without_effects(self):
+        cases = (
+            ("linked", board_body("Refs #900", MODULE.BOARD_CONTINUES), {}, "enforce", "required", 0, "ready", "linked"),
+            ("refused", board_body("Refs #800", MODULE.BOARD_CONTINUES), {}, "enforce", "required", 2, "refused", "refused"),
+            ("unknown", board_body("Refs #900", MODULE.BOARD_CONTINUES), {"cards": RuntimeError("unavailable")}, "enforce", "required", 3, "indeterminate", "unknown"),
+            ("missing-marker", board_body("Refs #900"), {}, "enforce", "required", 2, "refused", "linked"),
+            ("double-marker", board_body("Refs #900", MODULE.BOARD_CONTINUES, MODULE.BOARD_COMPLETES), {}, "enforce", "required", 2, "refused", "linked"),
+            ("advisory", board_body("Refs #800"), {}, "advisory", "advisory", 0, "ready", "refused"),
+            ("override", board_body("Refs #800", BOARD_OVERRIDE, MODULE.BOARD_CONTINUES), {"author": "EHotwagner", "cards": AssertionError("must not read cards")}, "enforce", "required", 0, "ready", "overridden"),
+        )
+        for label, body, kwargs, mode, marker, expected_code, outcome, verdict in cases:
+            with self.subTest(label):
+                api = BoardApi([board_routine_pr(body)], body=body, **kwargs)
+                custody, lock, trigger, observer = (mock.Mock() for _ in range(4))
+                with mock.patch.object(MODULE, "board_enforce_allowed", return_value=True):
+                    code, result = MODULE.summarize(
+                        api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD, merge_method="squash",
+                        publication_required=False, apply=False, board_gate=mode,
+                        board_rules_loader=lambda: BOARD_RULES, delivery_marker=marker,
+                        board_custody=custody, board_lock=lock, board_tend_trigger=trigger,
+                        candidate_observer=observer)
+                self.assertEqual((code, result.outcome, result.boardGate), (expected_code, outcome, verdict))
+                self.assertEqual((result.attempts, api.attempts, api.sends, api.item_reads), (0, 0, [], 0))
+                self.assertEqual(result.boardTransition, "not-applicable")
+                self.assertEqual(custody.mock_calls, [])
+                self.assertEqual(lock.mock_calls, [])
+                trigger.assert_not_called()
+                if code:
+                    observer.assert_not_called()  # no misleading ready sample before a refusal
+                else:
+                    observer.assert_called_once()
+
+    def test_apply_rechecks_native_envelope_after_a_ready_inspection(self):
+        body = board_body("Refs #900", MODULE.BOARD_CONTINUES)
+        inspected = self.holding(body)
+        code, result = self.gate(inspected, "enforce", apply=False)
+        self.assertEqual((code, result.outcome, result.boardGate), (0, "ready", "linked"))
+        original = board_routine_pr(body)
+        changed = copy.deepcopy(original)
+        changed["body"] += " edited after inspection"
+        applying = BoardApi([original, changed], body=body)
+        code, result = self.gate(applying, "enforce")
+        self.assertEqual((code, result.outcome, result.attempts, applying.attempts, applying.sends),
+                         (2, "refused", 0, 0, []))
+        self.assertIn("envelope changed", result.reason)
+        self.assertEqual(applying.calls, [])
+
+    def test_inspection_unavailable_rules_is_unknown_not_ready(self):
+        api = self.holding(board_body("Refs #900"))
+        code, result = self.gate(api, "enforce", loader=lambda: None, apply=False)
+        self.assertEqual((code, result.outcome, result.boardGate, api.attempts, api.sends),
+                         (3, "indeterminate", "unavailable", 0, []))
 
     def test_invalid_mode_refuses_before_any_read(self):
         api = self.holding(board_body("Refs #900"))
