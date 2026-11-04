@@ -37,6 +37,29 @@ Refs/closing-reference parser. The issue must remain open, declare `Work level: 
 its native ID and body hash. Other WIP PRs may lack routine markers; their actual reservations,
 identities and text are preserved, without treating them as admitted or qualified.
 
+### Explicit cross-repository ownership (v2)
+
+The [later #5269 source selection](https://github.com/FS-GG/.github/issues/5269#issuecomment-6627039545)
+adds the closed `fsgg.legacy-pr-update/2` plan for an existing PR whose owning Delivery is in
+another repository of the same organization. Every v2 roster row adds exactly `deliveryRepo`
+(the canonical native `OWNER/REPO`) and `deliveryRepositoryId` (a positive native repository ID),
+including rows whose owner remains local. The existing `delivery`, `issueId` and `issueBodySha256`
+continue to bind that repository's issue. Local rows may share one Delivery; conflicting issue
+facts, repository aliases or one native issue ID assigned to different references refuse.
+There is no local alias for a foreign owning issue, and no inference from a bare issue number.
+
+At every population barrier, the helper reads each actual owning repository and issue. The
+repository must match its canonical name and ID, remain active, and share the PR repository's
+native organization principal (ID, login and type). The issue's API and browser paths must name
+that owning repository and issue, alongside the existing ID/body/open/Delivery guards. Native
+and proposed PR text must explicitly reference the planned owner through the maintained parser.
+Unavailable, foreign or changed ownership refuses; the other roster rows retain the same guards.
+
+V1 retains its exact closed grammar and same-repository semantics. Passing v2 fields to v1 or
+omitting them from v2 refuses. Use the concrete selected version, not a caller-selected fallback.
+This source extension still requires ordinary CI, coherent publication and installed qualification
+before a consumer may select it. The previously qualified 0.117 package does not contain v2.
+
 The top-level default SHA and each observed PR base pointer are independent. A historical or
 stacked PR base is guarded as observed, not replaced with current default. Full native PR detail
 responses must agree with the complete paginated list; the list omits `merged` and
@@ -76,6 +99,13 @@ GraphQL must establish a trusted Root editor; missing edit evidence refuses. The
 neither Root login lists nor ambient authority or expiry exceptions. A policy comment or local
 record cannot substitute for this operation declaration.
 
+For a v2 plan the marker is `<!-- fsgg:legacy-pr-update/v2 JSON -->`. Its closed JSON adds exactly
+`deliveryRepo`, `deliveryRepositoryId`, `issueId` and `issueBodySha256` to the v1 declaration
+fields. The comment must live on that actual owning Delivery; both REST and GraphQL must join
+its owning repository, issue, comment identity, complete body, trusted author and editor. A v1
+marker cannot authorize v2, even if its comment hash is supplied. The v1 declaration bytes are
+unchanged.
+
 ## Custody, uncertainty and later operations
 
 Private custody lives under the existing `pr-lane-known-roster` state directory, in a separate
@@ -100,6 +130,12 @@ For `not-sent`, native body/title and previous head must match the prior preimag
 journal cannot be declared not sent. This is explicit Root reconciliation, not an inferred retry
 based on elapsed time or a failed acknowledgement. The prior journal remains byte-for-byte intact;
 a successor gets the next numbered journal under the same stable PR identity.
+
+Both plan versions use that same custody address and ordered history. New v2 journals identify
+their schema and record each owner repository/ID and organization principal ID; v1 journal bytes
+are unchanged. Changing plan schema cannot create a fresh operation or avoid an uncertain prior
+send. A transition between versions requires the same explicit successor reconciliation and a
+new native Root declaration; original journals remain intact. Unknown journal versions refuse.
 
 ## Acceptance evidence
 

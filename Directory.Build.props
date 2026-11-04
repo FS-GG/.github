@@ -670,7 +670,9 @@
          effects. Curated Atlas records retain archive and enrollment acceptance boundaries and
          distinguish native Status projection from runtime activity. Publication and installed
          adoption remain separate; existing published identities and journals are unchanged. -->
-    <FsggCoherentSetVersion>0.118.0</FsggCoherentSetVersion>
+    <!-- 0.119.0 (#5269): additive canonical cross-repository legacy ownership;
+         original custody, source/Root trust and ordinary reservation limits remain. -->
+    <FsggCoherentSetVersion>0.119.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
