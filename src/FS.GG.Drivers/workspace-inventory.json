@@ -38,6 +38,18 @@
       "path": "tools/pr-lane-admission.py"
     },
     {
+      "source": "tools/legacy-pr-update.py",
+      "path": "tools/legacy-pr-update.py"
+    },
+    {
+      "source": "scripts/board-currency-rules.py",
+      "path": ".fsgg/legacy-pr-root-rules.py"
+    },
+    {
+      "source": "scripts/root-identity-policy.json",
+      "path": ".fsgg/root-identity-policy.json"
+    },
+    {
       "source": "tools/routine-delivery.py",
       "path": "tools/routine-delivery.py"
     },

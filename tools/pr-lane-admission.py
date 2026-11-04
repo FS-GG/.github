@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.parse
+from types import SimpleNamespace
 from typing import Any, Iterator
 
 
@@ -142,12 +143,14 @@ def machine_markers(body: str) -> dict[str, str]:
 
 def update_body(fresh: str, proposed: str, branch: str, head: str,
                 previous_head: str, campaign: str, chain: str, *, adopt_legacy: bool = False,
-                declare_continues: bool = False) -> str:
+                declare_continues: bool = False, retain_legacy: bool = False) -> str:
     """Preserve native metadata, optionally adding a genuinely absent admission identity."""
+    if retain_legacy and (adopt_legacy or declare_continues or "fsgg-pr-lane-admission" in fresh or "fsgg-pr-lane-admission" in proposed):
+        raise ToolError("legacy continuation cannot assign or change admission metadata")
     adopting = adopt_legacy and "fsgg-pr-lane-admission" not in fresh
     if adopting and not branch.startswith("routine/"):
         raise ToolError("legacy adoption requires an existing routine PR")
-    if not adopting and (marker_from_body(fresh) != (campaign, chain)
+    if not adopting and not retain_legacy and (marker_from_body(fresh) != (campaign, chain)
                          or fresh.count("fsgg-pr-lane-admission") != 1):
         raise ToolError("existing PR admission identity is missing, malformed or conflicts")
     original = machine_markers(fresh)
@@ -854,6 +857,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--adopt-legacy-pr", action="store_true",
                         help="Explicitly assign the supplied campaign/chain to an existing routine PR with absent admission metadata")
     result.add_argument("--sc2-producer-predecessor-source", help="Protected canonical producer pin for the selected SC2 first-install predecessor")
+    result.add_argument("--recover-legacy-update", type=pathlib.Path, help="Explicit already-owned legacy PR metadata continuation plan")
     result.add_argument("--adopt-known-roster", type=pathlib.Path, help="Explicit exact two-legacy-PR roster; separate guarded metadata operation")
     result.add_argument("--declare-delivery-continues", action="store_true", help="Explicitly initialize a missing continues declaration during an existing PR update")
     result.add_argument("--inspect", action="store_true", help="Check admission without creating a PR")
@@ -864,8 +868,16 @@ def parser() -> argparse.ArgumentParser:
 def validate(arguments: argparse.Namespace) -> None:
     if not REPO_RE.fullmatch(arguments.repo):
         raise ToolError("repo must have owner/repository form")
-    if arguments.draft and (arguments.update_pr is not None or arguments.adopt_known_roster):
+    if arguments.draft and (arguments.update_pr is not None or arguments.adopt_known_roster
+                            or arguments.recover_legacy_update):
         raise ToolError("--draft only supports new PR creation")
+    if arguments.recover_legacy_update:
+        if (any(getattr(arguments, key) is not None for key in ("campaign_id", "dependency_chain_id", "head", "head_sha", "base", "update_pr", "previous_head_sha", "sc2_producer_predecessor_source", "adopt_known_roster"))
+                or arguments.adopt_legacy_pr or arguments.declare_delivery_continues
+                or arguments.body_file is None or not isinstance(arguments.title, str)
+                or not arguments.title.strip() or "\n" in arguments.title or "\r" in arguments.title):
+            raise ToolError("legacy continuation requires only a plan, title and body")
+        return
     if arguments.adopt_known_roster:
         if any(getattr(arguments, key) is not None for key in ("campaign_id", "dependency_chain_id", "head", "head_sha", "base", "title", "body_file", "update_pr", "previous_head_sha", "sc2_producer_predecessor_source")) or arguments.adopt_legacy_pr or arguments.declare_delivery_continues:
             raise ToolError("known-roster mode cannot mix ordinary PR arguments")
@@ -935,6 +947,16 @@ def verify_created_draft(arguments: argparse.Namespace, created: dict[str, Any],
 
 def execute(arguments: argparse.Namespace) -> dict[str, Any]:
     validate(arguments)
+    if arguments.recover_legacy_update:
+        path = pathlib.Path(__file__).with_name("legacy-pr-update.py")
+        spec = importlib.util.spec_from_file_location("legacy_pr_update", path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+        try:
+            return module.execute(SimpleNamespace(**globals()), arguments)
+        except OSError as error:
+            raise ToolError("legacy continuation I/O failed; retain custody and do not resend") from error
     if arguments.adopt_known_roster:
         try:
             return adopt_known_roster(arguments)

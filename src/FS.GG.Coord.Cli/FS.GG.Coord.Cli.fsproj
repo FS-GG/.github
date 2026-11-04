@@ -137,9 +137,10 @@ once more than 250 rows are enrolled: the 0.114.0 reader refuses a population ab
 associations retired by 0.113.0 must not be rolled back to 0.112.0: the older reader would re-read
 closed sources.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.116.1 — Patch release of the coherent set: Kit, Drivers and CLI advance together.
-Align board inspection guidance with the accepted inclusive trigger of 200 active Done cards and retention of the newest 50. Preserve deterministic ranking, guarded complete-cycle execution, the finite 450-archive cap, enrolled memberships and original uncertain-effect custody.
-This guidance correction changes no archive runtime or timer. Publication, installed instructions and the first natural scheduled invocation remain separate acceptance obligations.
+    <PackageReleaseNotes>0.117.0 — Minor release of the coherent set: Kit, Drivers and CLI advance together.
+Add a guarded continuation for one already-owned legacy PR without creating another reservation. Preserve the complete native roster, owning Delivery, source ancestry, original operation, Root declaration, possible-send custody and independent readback; uncertainty cannot authorize another send.
+Close the packaged legacy helper's trust dependencies with the unchanged canonical Root rules and shared identity policy. Selected source and policy fingerprints survive inspection and custody, receiver-local shadows cannot override them, and determining drift refuses before mutation. Draft creation remains separate and keeps its native flag/readback guarantees.
+Align board inspection guidance with the accepted inclusive trigger of 200 active Done cards and retention of the newest 50. Preserve deterministic ranking, guarded complete-cycle execution, the finite 450-archive cap, enrolled memberships and original uncertain-effect custody. Guidance changes no archive runtime or timer; publication, installed instructions and natural scheduled acceptance remain separate.
 $(FsggStandingAdvisories)
 
 FULL PER-VERSION HISTORY IS SERVED BY THE REGISTRY, NOT REPEATED HERE (`.github#2579`). Every

@@ -190,6 +190,15 @@ or preserve an already identical one; conflicting, unknown or duplicate declarat
 refuse. Without that flag, caller injection of a new machine marker still refuses.
 Every unrelated machine marker, routine operation and existing lane identity is retained.
 
+## Continue an already-owned legacy PR
+
+The separate [legacy PR continuation route](legacy-pr-update.md) updates one existing owner's
+body/title while keeping lane metadata absent and preserving every other reservation. It requires
+the complete exact native roster, source ancestry, owning Deliveries and a concrete authenticated
+Root operation declaration. Fixed native-PR custody prevents uncertain resend; a later operation
+requires explicit resolved successor recovery and retains the prior journal. This route grants no
+new admission, cap exception, source push or integration authority.
+
 ## SC2 private-receiver first installation
 
 The [canonical first-install source predicate](../../tools/routine-delivery.py) can inspect a candidate
