@@ -5,6 +5,9 @@ import importlib.util
 import io
 import json
 import pathlib
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -103,6 +106,57 @@ class LegacyUpdateTests(unittest.TestCase):
             code=lane.main(['--repo','FS-GG/example','--recover-legacy-update',str(self.path),
                             '--body-file',str(self.body),'--title','Qualified continuation',*extra])
         return code,json.loads(out.getvalue())
+
+    def test_fifo_plan_and_body_refuse_without_waiting_or_native_calls(self):
+        fake = self.root/'gh-must-not-run'
+        called = self.root/'native-called'
+        fake.write_text('#!/bin/sh\ntouch "' + str(called) + '"\nexit 91\n')
+        fake.chmod(0o700)
+        for selected in ('plan', 'body'):
+            with self.subTest(selected=selected):
+                plan = self.root/'fifo-plan.json'; plan.write_text(json.dumps(self.plan))
+                body = self.root/'fifo-body.md'; body.write_text('Refs #142\n')
+                target = plan if selected == 'plan' else body
+                target.unlink(); os.mkfifo(target)
+                try:
+                    result = subprocess.run([sys.executable, str(ROOT/'tools/pr-lane-admission.py'),
+                        '--repo', 'FS-GG/example', '--recover-legacy-update', str(plan),
+                        '--body-file', str(body), '--title', 'Bounded input', '--gh', str(fake), '--inspect'],
+                        capture_output=True, text=True, timeout=2,
+                        env={'PATH': os.environ['PATH'], 'PYTHONDONTWRITEBYTECODE': '1'})
+                    self.assertEqual(2, result.returncode, result.stderr)
+                    self.assertIn('unreadable continuation ' + selected, json.loads(result.stdout)['reason'])
+                    self.assertFalse(called.exists())
+                    self.assertFalse(list(self.root.glob('legacy-update-*/*.json')))
+                finally:
+                    plan.unlink(); body.unlink()
+
+    def test_opened_regular_text_inputs_preserve_empty_and_enforce_byte_bounds(self):
+        self.body.write_bytes(b'')
+        self.assertEqual('', recovery.read_text_input(lane, self.body, 'body refused'))
+        self.body.write_bytes(b'first\r\nsecond\rthird\n')
+        self.assertEqual('first\nsecond\nthird\n', recovery.read_text_input(lane, self.body, 'body refused'))
+        self.body.write_bytes(b'a'*65536)
+        self.assertEqual('a'*65536, recovery.read_text_input(lane, self.body, 'body refused'))
+        self.body.write_bytes(b'a'*65537)
+        with self.assertRaises(lane.ToolError): recovery.read_text_input(lane, self.body, 'body refused')
+        self.body.write_bytes(b'\xff')
+        with self.assertRaises(lane.ToolError): recovery.read_text_input(lane, self.body, 'body refused')
+        linked = self.root/'body-link'; linked.symlink_to(self.body)
+        with self.assertRaises(lane.ToolError): recovery.read_text_input(lane, linked, 'body refused')
+        with self.assertRaises(lane.ToolError): recovery.read_text_input(lane, self.root, 'body refused')
+        self.body.write_bytes(b'initial')
+        native_fstat = os.fstat
+        calls = []
+        def changing_input(descriptor):
+            calls.append(descriptor)
+            if len(calls) == 2:
+                self.body.write_bytes(b'changed after bounded read')
+            return native_fstat(descriptor)
+        with patch.object(recovery.os, 'fstat', side_effect=changing_input):
+            with self.assertRaises(lane.ToolError): recovery.read_text_input(lane, self.body, 'body refused')
+        self.assertEqual(2, len(calls))
+        self.assertFalse(self.calls); self.assertFalse(self.patches)
 
     def test_six_pr_continuation_preserves_reservations_and_ordinary_cap(self):
         code,result=self.invoke();self.assertEqual(0,code,result);self.assertEqual([42],self.patches)

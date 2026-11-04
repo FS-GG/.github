@@ -130,3 +130,9 @@ affected operation. Join that fingerprint to the selected
 caller/package BOM. An alias left by an older installation is identified as that frozen source, not
 silently reported as the current checkout policy. The fingerprint records provenance; it grants no
 Root identity or operation authority by itself.
+
+Local plan and proposed-body input leaves are opened with no-follow and nonblocking flags, then
+checked through the opened descriptor before bounded UTF-8 reads. A FIFO without a writer, directory,
+symlink, oversize input or changing regular file refuses before native calls; an empty regular body
+still reaches the existing owning-reference checks. These controls bind the file actually read and
+do not claim protection against replacement of writable parent directories or hostile filesystems.

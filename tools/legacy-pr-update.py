@@ -23,6 +23,32 @@ def encoded(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
+
+def read_text_input(lane, path, message):
+    """Bound an opened regular leaf before reading; a FIFO must never wait for a writer."""
+    descriptor = None
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_size > 65536:
+            raise ValueError("not a bounded regular file")
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = None
+            raw = source.read(65537)
+            after = os.fstat(source.fileno())
+        identity = lambda info: (info.st_dev, info.st_ino, info.st_mode, info.st_size,
+                                 info.st_mtime_ns, info.st_ctime_ns)
+        if len(raw) > 65536 or identity(before) != identity(after):
+            raise ValueError("bounded input changed while reading")
+        # Preserve Path.read_text() universal-newline semantics for existing body files.
+        return raw.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    except (OSError, ValueError, UnicodeError) as error:
+        raise lane.ToolError(message) from error
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
 def read_plan(lane, path, repo):
     def unique(pairs):
         result = {}
@@ -32,9 +58,8 @@ def read_plan(lane, path, repo):
             result[key] = value
         return result
     try:
-        if path.is_symlink() or not path.is_file() or path.stat().st_size > 65536:
-            raise ValueError("not a bounded regular file")
-        value = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique)
+        value = json.loads(read_text_input(lane, path, "unreadable continuation plan"),
+                           object_pairs_hook=unique)
     except (OSError, ValueError, UnicodeError) as error:
         raise lane.ToolError("unreadable continuation plan") from error
     def require(condition):
@@ -120,12 +145,7 @@ def guard_sha(lane, guard):
 def execute(lane, args):
     spec = read_plan(lane, args.recover_legacy_update, args.repo)
     selected = next(row for row in spec["pulls"] if row["number"] == spec["number"])
-    try:
-        if args.body_file.is_symlink() or args.body_file.stat().st_size > 65536:
-            raise ValueError("body must be bounded")
-        proposed = args.body_file.read_text(encoding="utf-8")
-    except (OSError, ValueError, UnicodeError) as error:
-        raise lane.ToolError("unreadable continuation body") from error
+    proposed = read_text_input(lane, args.body_file, "unreadable continuation body")
     roots, rules = root_rules(lane)
     intent = {"plan": spec, "proposedBodySha256": lane.text_sha(proposed), "titleSha256": lane.text_sha(args.title),
               "rootRulesSource": rules.selected_source}
