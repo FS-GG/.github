@@ -133,10 +133,18 @@ The read-only report itself acquires no reservation or authority and never dispa
 
 ## Board size budget
 
-Coordination Project 3 and its readers hold at most 500 items. When Done exceeds 200, Done cards older than the
-newest 200 by close time are archived, never deleted. [#5119](https://github.com/FS-GG/.github/issues/5119) owns
-the rule. `scripts/coord-board-archive.py` applies it with a dry run first. Readers refuse a larger board. An
-archived enrolled card is an explicit archived membership, not a missing row.
+Coordination Project 3 and its readers hold at most 500 items. At **200 or more active Done cards**,
+retention keeps the newest **50** by close time, with ties ordered by repository, number and item identity.
+Eligible older cards are archived, never deleted. [#5170](https://github.com/FS-GG/.github/issues/5170) owns
+rollout and scheduled acceptance under the [archive runbook](https://github.com/FS-GG/.github/blob/main/docs/coordination/board-tend-fdev-units.md).
+
+The scheduled complete-cycle route uses a finite 450-card cap, covering the maximum plan within the
+500-item board bound. Open or unrankable Done cards, older live blockers, incomplete reads or a plan
+exceeding the admitted cap refuse the cycle before writes. Protected cards already in the newest 50
+count toward retention. `scripts/coord-board-archive.py` defaults to a dry run; scheduled writes require the
+qualified receipt/configuration, enrollment binding and guarded original custody. Uncertain effects
+retain their original identity and latch; they are never automatically resent or cleared. An archived
+enrolled card remains an explicit archived membership, not a missing row. Readers refuse a larger board.
 
 ## Planning and observation stay separate
 
