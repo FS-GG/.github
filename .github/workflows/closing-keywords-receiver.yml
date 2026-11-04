@@ -9,12 +9,13 @@
 #
 # THIS FILE IS THE SAME JOB, CALLABLE ON ITS OWN. kit-materialize.yml cannot be called for it: it is the
 # receiver materializer and demands the dispatch App secrets, a kit pin and a receiver project that a
-# non-kit repository does not have. The two steps below are byte-identical to the kit job's steps, and
+# non-kit repository does not have. Its source verification and lint steps match the kit job.
 # tests/closing-keywords/product-lint.sh fails if they ever differ, so there is one tested lint and two
-# doors to it. The rule is still the hub's, not a copy: it is fetched from the commit of THIS workflow
-# (`github.job_workflow_sha`), so a caller that names `@main` reads the rule that the hub's own required
-# checks have passed (docs/coordination/reusable-workflow-contract.md, "Reusable-workflow calls are NOT
-# pinned"), and no receiver carries a copy that can go stale (ADR-0067 section 5).
+# doors to it. The rule remains hub-owned: CLOSING_RULE_SOURCE pins a separately reviewed immutable
+# rule commit. It is not derived from the caller or an unavailable reusable-workflow expression.
+# Checkout outputs, actual HEAD and the rule digest are verified before execution. Advancing hub main
+# does not advance this rule; changing it requires a reviewed source-pin/digest update and caller rebind
+# for callers that pin this workflow (docs/coordination/reusable-workflow-contract.md).
 #
 # CALLER (one file, no secret, nothing else to maintain):
 #
@@ -66,17 +67,41 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      # Rule source is pinned independently of the reusable workflow/caller revision.
+      CLOSING_RULE_SOURCE: 61be6a913fe9f6b4b7410ba8dbf1020b61971a2a
     steps:
-      - name: Fetch the hub's closing-keyword rule at this workflow's own commit
+      - name: Fetch the immutable hub closing-keyword rule
+        id: hub-rule-source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: FS-GG/.github
-          ref: ${{ github.job_workflow_sha }}
+          ref: ${{ env.CLOSING_RULE_SOURCE }}
           path: fsgg-hub
           persist-credentials: false
           sparse-checkout: |
             /scripts/
           sparse-checkout-cone-mode: false
+
+      - name: Verify the immutable closing-keyword rule source
+        id: verify-rule-source
+        env:
+          RULE_SOURCE_COMMIT: ${{ env.CLOSING_RULE_SOURCE }}
+          RULE_CHECKOUT_REF: ${{ steps.hub-rule-source.outputs.ref }}
+          RULE_CHECKOUT_COMMIT: ${{ steps.hub-rule-source.outputs.commit }}
+          RULE_SHA256: 0c71b522472eefd1724d12699cda7e8fce6048732992332601c51a556de96ed4
+        run: |
+          set -euo pipefail
+          # checkout normalizes a literal SHA to commit, leaving its ref output empty.
+          if [[ ! "$RULE_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] \
+             || [ -n "$RULE_CHECKOUT_REF" ] \
+             || [ "$RULE_CHECKOUT_COMMIT" != "$RULE_SOURCE_COMMIT" ] \
+             || [ "$(git -C fsgg-hub rev-parse --verify HEAD)" != "$RULE_SOURCE_COMMIT" ]; then
+            echo "::error title=closing-keywords: unverified rule source::immutable checkout input/output/HEAD mismatch"
+            exit 1
+          fi
+          printf '%s  %s\n' "$RULE_SHA256" fsgg-hub/scripts/check-closing-keywords.py | sha256sum --check --strict
+          printf 'closing-keywords: verified rule source %s (sha256 %s)\n' "$RULE_SOURCE_COMMIT" "$RULE_SHA256"
 
       - name: Lint the pull request title and body for closing keywords next to issue references
         env:

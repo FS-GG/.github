@@ -672,7 +672,9 @@
          adoption remain separate; existing published identities and journals are unchanged. -->
     <!-- 0.119.0 (#5269): additive canonical cross-repository legacy ownership;
          original custody, source/Root trust and ordinary reservation limits remain. -->
-    <FsggCoherentSetVersion>0.119.0</FsggCoherentSetVersion>
+    <!-- 0.120.0 (#5195): bind and verify both reusable lint rule checkouts;
+         immutable rule source, permissions and unchanged lint command remain explicit. -->
+    <FsggCoherentSetVersion>0.120.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
