@@ -22,6 +22,12 @@ SOURCE = ROOT / "tools/routine-delivery.py"
 
 # (name, exact original text, replacement). Every original must occur exactly once.
 MUTANTS = [
+    ("inspection skips linkage and falsely reports ready",
+     '    if board_routine_body(before.get("body")):\n',
+     '    if apply and board_routine_body(before.get("body")):\n'),
+    ("apply trusts prior readiness without native revalidation",
+     '    if apply and routine_state in ("passed", "unavailable-first-install"):\n',
+     '    if False:\n'),
     ("delivery marker: required mode never refuses",
      'if delivery_marker == "required" and board["deliveryMarker"]["declared"] in ("none", "both"):',
      'if False:'),
