@@ -94,6 +94,32 @@ SNAPSHOT_SCHEMA = "fsgg:board-currency-snapshot/v1"
 FINDINGS_SCHEMA = "fsgg:board-currency-findings/v1"
 NO_VERDICT = 2
 
+def _load_root_logins():
+    """Read the shared, closed canonical policy; missing or invalid policy refuses import."""
+    path = Path(__file__).resolve().with_name("root-identity-policy.json")
+    raw = path.read_bytes()
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate Root identity policy property")
+            result[key] = value
+        return result
+    policy = json.loads(raw.decode("utf-8"), object_pairs_hook=unique_object)
+    if not isinstance(policy, dict) or set(policy) != {"schema", "rootLogins"} or policy["schema"] != "fsgg.root-identity-policy/v1":
+        raise ValueError("unknown Root identity policy")
+    logins = policy["rootLogins"]
+    if (not isinstance(logins, list) or not logins
+            or any(not isinstance(login, str) or not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?", login) for login in logins)
+            or len({login.lower() for login in logins}) != len(logins)
+            or logins != sorted(logins)):
+        raise ValueError("invalid Root identity policy principals")
+    canonical = (json.dumps(policy, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    if raw != canonical:
+        raise ValueError("noncanonical Root identity policy")
+    return logins
+
+
 # Rule-set parameters. Changing any of these changes verdicts, so it is a new rule-set version.
 PARAMS = {
     "activityHours": 48,
@@ -103,7 +129,7 @@ PARAMS = {
     "carryDays": 7,
     "carryFrom": "2026-11-01T00:00:00Z",
     "effectiveFrom": "2026-10-31T00:00:00Z",
-    "rootLogins": ["EHotwagner"],
+    "rootLogins": _load_root_logins(),
 }
 
 RULES = ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "U")

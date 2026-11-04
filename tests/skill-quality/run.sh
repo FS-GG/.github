@@ -347,6 +347,41 @@ printf '\n```sh\nscripts/fsgg-coord board-v2 refresh --binding-file /private/bin
 python3 "$ROOT/scripts/check-skill-quality.py" --root "$WORK/tree" --contract "$WORK/contract.json"
 echo "PASS  genuine Board V2 refresh options are audited"
 
+
+# Inspect's two stdin modes are zero-arity and mutually exclusive. Refresh
+# retains its value-only surface; these controls mirror parseArguments.
+for mode in integrator owner-continuation; do
+  seed
+  printf '\n```sh\nscripts/fsgg-coord board-v2 inspect --%s-stdin --binding-file /private/binding.json --report-file /private/new.json\n```\n' "$mode" \
+    >>"$WORK/tree/docs/coordination/semantic-regression.md"
+  python3 "$ROOT/scripts/check-skill-quality.py" --root "$WORK/tree" --contract "$WORK/contract.json"
+  echo "PASS  genuine zero-arity Board V2 $mode stdin recipe is audited"
+
+  for arguments in \
+    "refresh --binding-file /private/binding.json --report-file /private/new.json --$mode-stdin" \
+    "inspect --binding-file /private/binding.json --report-file /private/new.json --$mode-stdin --$mode-stdin" \
+    "inspect --binding-file /private/binding.json --report-file /private/new.json --$mode-stdin true" \
+    "inspect --binding-file --$mode-stdin --report-file /private/new.json"; do
+    seed
+    printf '\n```sh\nscripts/fsgg-coord board-v2 %s\n```\n' "$arguments" \
+      >>"$WORK/tree/docs/coordination/semantic-regression.md"
+    expect_rejection "Board V2 rejects invalid $mode stdin arguments: $arguments" \
+      "unknown, duplicate or incomplete Board V2 argument"
+  done
+done
+for modes in '--integrator-stdin --owner-continuation-stdin' '--owner-continuation-stdin --integrator-stdin'; do
+  seed
+  printf '\n```sh\nscripts/fsgg-coord board-v2 inspect --binding-file /private/binding.json --report-file /private/new.json %s\n```\n' "$modes" \
+    >>"$WORK/tree/docs/coordination/semantic-regression.md"
+  expect_rejection "Board V2 stdin modes are mutually exclusive in either order" \
+    "unknown, duplicate or incomplete Board V2 argument"
+done
+seed
+printf '\n```sh\nscripts/fsgg-coord board-v2 inspect --binding-file /private/binding.json --previous-report-file /private/new.json --report-file /private/new.json --owner-continuation-stdin\n```\n' \
+  >>"$WORK/tree/docs/coordination/semantic-regression.md"
+expect_rejection "Board V2 owner stdin cannot overwrite its previous report" \
+  "Board V2 requires distinct --binding-file and --report-file paths"
+
 seed
 printf '\n```sh\nscripts/fsgg-coord board-v2 apply --binding-file /private/binding.json --report-file /private/new.json\n```\n' \
   >>"$WORK/tree/docs/coordination/semantic-regression.md"

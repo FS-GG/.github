@@ -1,0 +1,878 @@
+{
+  "schema": "fsgg.learn-history-statistics/1",
+  "versions": {
+    "python": "3.15.1",
+    "numpy": "2.5.4",
+    "scipy": "1.18.1"
+  },
+  "seed": 5276,
+  "population": {
+    "issue:open": {
+      "n": 354,
+      "secondsQuantiles": {
+        "p50": 259362.26195311546,
+        "p90": 6228815.461953116,
+        "p99": 11010033.921953114,
+        "max": 11038188.761953115
+      },
+      "log1pMedian": 12.465984913776083,
+      "log1pUnscaledMAD": 1.1416625994017346,
+      "threeMADFlags": 16,
+      "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+    },
+    "issue:closed": {
+      "n": 3043,
+      "secondsQuantiles": {
+        "p50": 9015.0,
+        "p90": 155163.80000000013,
+        "p99": 1399196.58,
+        "max": 6756371.0
+      },
+      "log1pMedian": 9.106756055719613,
+      "log1pUnscaledMAD": 1.3955954700553281,
+      "threeMADFlags": 156,
+      "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+    },
+    "pull_request:open": {
+      "n": 16,
+      "secondsQuantiles": {
+        "p50": 82353.26195311546,
+        "p90": 159022.76195311546,
+        "p99": 161318.41195311546,
+        "max": 161466.76195311546
+      },
+      "log1pMedian": 11.318785488236905,
+      "log1pUnscaledMAD": 0.38360978755641906,
+      "threeMADFlags": 3,
+      "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+    },
+    "pull_request:closed": {
+      "n": 8762,
+      "secondsQuantiles": {
+        "p50": 815.0,
+        "p90": 88646.80000000006,
+        "p99": 1565261.1499999398,
+        "max": 6473299.0
+      },
+      "log1pMedian": 6.704414354964107,
+      "log1pUnscaledMAD": 1.2469687648229812,
+      "threeMADFlags": 1319,
+      "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+    }
+  },
+  "populationOutcomeStrata": {
+    "completed": {
+      "n": 2918,
+      "secondsQuantiles": {
+        "p50": 9246.0,
+        "p90": 154790.80000000013,
+        "p99": 870255.9899999996,
+        "max": 5886887.0
+      },
+      "log1pMedian": 9.132054447730166,
+      "log1pUnscaledMAD": 1.3579035764285554,
+      "threeMADFlags": 135,
+      "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+    },
+    "not_planned": {
+      "n": 112,
+      "secondsQuantiles": {
+        "p50": 3196.0,
+        "p90": 179492.40000000005,
+        "p99": 5585087.45,
+        "max": 6756371.0
+      },
+      "log1pMedian": 8.069049129128583,
+      "log1pUnscaledMAD": 2.8408337177049496,
+      "threeMADFlags": 0,
+      "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+    },
+    "duplicate": {
+      "n": 13,
+      "secondsQuantiles": {
+        "p50": 5696.0,
+        "p90": 94217.8,
+        "p99": 102003.31999999999,
+        "max": 103046.0
+      },
+      "log1pMedian": 8.647694999480395,
+      "log1pUnscaledMAD": 1.3245242815369256,
+      "threeMADFlags": 0,
+      "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+    },
+    "merged_pr": {
+      "n": 7545,
+      "secondsQuantiles": {
+        "p50": 608.0,
+        "p90": 7674.600000000008,
+        "p99": 430125.8,
+        "max": 6473299.0
+      },
+      "log1pMedian": 6.411818267709897,
+      "log1pUnscaledMAD": 1.0411802395822347,
+      "threeMADFlags": 647,
+      "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+    },
+    "unmerged_closed_pr": {
+      "n": 1217,
+      "secondsQuantiles": {
+        "p50": 93522.0,
+        "p90": 582907.2000000001,
+        "p99": 5279084.32,
+        "max": 6281441.0
+      },
+      "log1pMedian": 11.445962674331183,
+      "log1pUnscaledMAD": 0.476240621075128,
+      "threeMADFlags": 473,
+      "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+    }
+  },
+  "stratifiedRuntimeTailAudit": {
+    "repository": {
+      "eligibleRows": 26,
+      "eligibleStrata": 3,
+      "minimumRowsPerStratum": 5,
+      "residualMAD": 0.8335017014608921,
+      "threeMADFlags": 4,
+      "interpretation": "descriptive log-duration minus within-stratum median; not causal adjustment or exclusion"
+    },
+    "era": {
+      "eligibleRows": 33,
+      "eligibleStrata": 1,
+      "minimumRowsPerStratum": 5,
+      "residualMAD": 0.9255938738096123,
+      "threeMADFlags": 3,
+      "interpretation": "descriptive log-duration minus within-stratum median; not causal adjustment or exclusion"
+    },
+    "workerProfile": {
+      "eligibleRows": 29,
+      "eligibleStrata": 2,
+      "minimumRowsPerStratum": 5,
+      "residualMAD": 0.8053581813662163,
+      "threeMADFlags": 2,
+      "interpretation": "descriptive log-duration minus within-stratum median; not causal adjustment or exclusion"
+    }
+  },
+  "cohort": {
+    "qualifiedHistories": 53,
+    "withDispatchH": 34,
+    "withCreationH": 53,
+    "withResponseTimelines": 34,
+    "invocations": 74,
+    "responses": 12169,
+    "states": {
+      "closed:completed": 27,
+      "closed:not_planned": 4,
+      "open:None": 22
+    },
+    "runtimeStates": {
+      "closed:completed": 18,
+      "open:None": 16
+    },
+    "unknowns": {},
+    "creationVsDispatchHChanges": 0,
+    "dispatchVsCurrentHChanges": 3,
+    "responsesAfterClose": 283
+  },
+  "documentaryWaitScenario": {
+    "kind": "declared supplier park to readiness, not execution stop/resume",
+    "seconds": 10460.0,
+    "rawCaseCalendarSeconds": 16571.0,
+    "adjustedCaseCalendarSeconds": 6111.0,
+    "association": {
+      "n": 31,
+      "clusters": 18,
+      "hardnessValues": [
+        1,
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14,
+        15,
+        18
+      ],
+      "duration": {
+        "n": 31,
+        "secondsQuantiles": {
+          "p50": 15625.0,
+          "p90": 58999.0,
+          "p99": 164576.89999999997,
+          "max": 180629.0
+        },
+        "log1pMedian": 9.65669147255669,
+        "log1pUnscaledMAD": 0.9778169129674659,
+        "threeMADFlags": 6,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.3251140829900182,
+      "kendall": 0.22322279128808983,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.212095319220168,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "spearman": {
+          "validResamples": 500,
+          "percentile95": [
+            -0.0464252009628957,
+            0.6706966927468176
+          ]
+        },
+        "kendall": {
+          "validResamples": 500,
+          "percentile95": [
+            -0.02170731160457376,
+            0.5200911033499551
+          ]
+        }
+      }
+    }
+  },
+  "categoryEnvelopeSummaries": {
+    "Low": {
+      "n": 1,
+      "secondsQuantiles": {
+        "p50": 8392.824999809265,
+        "p90": 8392.824999809265,
+        "p99": 8392.824999809265,
+        "max": 8392.824999809265
+      },
+      "log1pMedian": 9.035251595428564,
+      "log1pUnscaledMAD": 0.0,
+      "threeMADFlags": 0,
+      "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+    },
+    "Medium": {
+      "n": 6,
+      "secondsQuantiles": {
+        "p50": 9480.869500041008,
+        "p90": 17604.195500016212,
+        "p99": 18012.264949953555,
+        "max": 18057.605999946594
+      },
+      "log1pMedian": 9.155967470098897,
+      "log1pUnscaledMAD": 0.6196501127264193,
+      "threeMADFlags": 1,
+      "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+    },
+    "High": {
+      "n": 27,
+      "secondsQuantiles": {
+        "p50": 9693.099999904633,
+        "p90": 36113.296399927145,
+        "p99": 54080.17001999853,
+        "max": 57883.33899998665
+      },
+      "log1pMedian": 9.179272732001449,
+      "log1pUnscaledMAD": 1.046444359769037,
+      "threeMADFlags": 1,
+      "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+    },
+    "Unknown": {
+      "n": 0
+    }
+  },
+  "associations": {
+    "responseEnvelopeThroughNativeCloseSeconds": {
+      "n": 18,
+      "clusters": 5,
+      "hardnessValues": [
+        7,
+        8,
+        11,
+        12,
+        13,
+        14,
+        15,
+        18
+      ],
+      "duration": {
+        "n": 18,
+        "secondsQuantiles": {
+          "p50": 7788.997500061989,
+          "p90": 22422.528600025184,
+          "p99": 40861.25089000938,
+          "max": 43255.766000032425
+        },
+        "log1pMedian": 8.96022288821641,
+        "log1pUnscaledMAD": 0.6629287204863035,
+        "threeMADFlags": 2,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.08982371117901394,
+      "kendall": 0.03453536141981867,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.03366888640375496,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "status": "not estimated: fewer than 8 observed clusters (audit guard, not universal sufficiency rule)"
+      }
+    },
+    "responseEnvelopeUnionSeconds": {
+      "n": 34,
+      "clusters": 7,
+      "hardnessValues": [
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "duration": {
+        "n": 34,
+        "secondsQuantiles": {
+          "p50": 9498.883999943733,
+          "p90": 34364.48309993744,
+          "p99": 53056.23991000178,
+          "max": 57883.33899998665
+        },
+        "log1pMedian": 9.15882584392989,
+        "log1pUnscaledMAD": 0.9878723182249498,
+        "threeMADFlags": 2,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.0966667782370946,
+      "kendall": 0.048138244178456184,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.026008279016668766,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "status": "not estimated: fewer than 8 observed clusters (audit guard, not universal sufficiency rule)"
+      }
+    },
+    "summedInvocationEnvelopeSeconds": {
+      "n": 34,
+      "clusters": 7,
+      "hardnessValues": [
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "duration": {
+        "n": 34,
+        "secondsQuantiles": {
+          "p50": 15214.909500002861,
+          "p90": 41473.07130005359,
+          "p99": 59017.59127007247,
+          "max": 61691.47600007057
+        },
+        "log1pMedian": 9.625127812789119,
+        "log1pUnscaledMAD": 0.6769270363318514,
+        "threeMADFlags": 7,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.071616404862458,
+      "kendall": 0.040732360458693696,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.027068359307233315,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "status": "not estimated: fewer than 8 observed clusters (audit guard, not universal sufficiency rule)"
+      }
+    },
+    "dispatchToCloseSeconds": {
+      "n": 18,
+      "clusters": 5,
+      "hardnessValues": [
+        7,
+        8,
+        11,
+        12,
+        13,
+        14,
+        15,
+        18
+      ],
+      "duration": {
+        "n": 18,
+        "secondsQuantiles": {
+          "p50": 8348.783,
+          "p90": 35884.75560000002,
+          "p99": 101398.0902099999,
+          "max": 111696.093
+        },
+        "log1pMedian": 9.026410615219266,
+        "log1pUnscaledMAD": 0.7419622176387524,
+        "threeMADFlags": 2,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.2172480456422663,
+      "kendall": 0.1174202288273835,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.06299534072422322,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "status": "not estimated: fewer than 8 observed clusters (audit guard, not universal sufficiency rule)"
+      }
+    },
+    "gapCappedUnionSeconds3600": {
+      "n": 34,
+      "clusters": 7,
+      "hardnessValues": [
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "duration": {
+        "n": 34,
+        "secondsQuantiles": {
+          "p50": 9152.983000040054,
+          "p90": 27016.751099944115,
+          "p99": 30407.51700010539,
+          "max": 31788.831000089645
+        },
+        "log1pMedian": 9.121807056464409,
+        "log1pUnscaledMAD": 0.8335017014608921,
+        "threeMADFlags": 5,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.18441992668444124,
+      "kendall": 0.1073853139365561,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.04518913528230403,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "status": "not estimated: fewer than 8 observed clusters (audit guard, not universal sufficiency rule)"
+      }
+    },
+    "gapCappedUnionSeconds28800": {
+      "n": 34,
+      "clusters": 7,
+      "hardnessValues": [
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "duration": {
+        "n": 34,
+        "secondsQuantiles": {
+          "p50": 9498.883999943733,
+          "p90": 34364.48309993744,
+          "p99": 49343.89319001199,
+          "max": 52342.52300000191
+        },
+        "log1pMedian": 9.15882584392989,
+        "log1pUnscaledMAD": 0.9878723182249498,
+        "threeMADFlags": 2,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.0966667782370946,
+      "kendall": 0.048138244178456184,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.02391892039882445,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "status": "not estimated: fewer than 8 observed clusters (audit guard, not universal sufficiency rule)"
+      }
+    },
+    "gapCappedUnionSeconds86400": {
+      "n": 34,
+      "clusters": 7,
+      "hardnessValues": [
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "duration": {
+        "n": 34,
+        "secondsQuantiles": {
+          "p50": 9498.883999943733,
+          "p90": 34364.48309993744,
+          "p99": 53056.23991000178,
+          "max": 57883.33899998665
+        },
+        "log1pMedian": 9.15882584392989,
+        "log1pUnscaledMAD": 0.9878723182249498,
+        "threeMADFlags": 2,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.0966667782370946,
+      "kendall": 0.048138244178456184,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.026008279016668766,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "status": "not estimated: fewer than 8 observed clusters (audit guard, not universal sufficiency rule)"
+      }
+    },
+    "creationH_calendarClosedSeconds": {
+      "n": 31,
+      "clusters": 18,
+      "hardnessValues": [
+        1,
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14,
+        15,
+        18
+      ],
+      "duration": {
+        "n": 31,
+        "secondsQuantiles": {
+          "p50": 16571.0,
+          "p90": 58999.0,
+          "p99": 164576.89999999997,
+          "max": 180629.0
+        },
+        "log1pMedian": 9.715469803197292,
+        "log1pUnscaledMAD": 0.9190385823268628,
+        "threeMADFlags": 7,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.3230821199713306,
+      "kendall": 0.22322279128808983,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.212095319220168,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "spearman": {
+          "validResamples": 500,
+          "percentile95": [
+            -0.04712911722955693,
+            0.6659390760286072
+          ]
+        },
+        "kendall": {
+          "validResamples": 500,
+          "percentile95": [
+            -0.02170731160457376,
+            0.5164207544905773
+          ]
+        }
+      }
+    },
+    "creationH_nativeCompletedCalendarSeconds": {
+      "n": 27,
+      "clusters": 14,
+      "hardnessValues": [
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14,
+        15,
+        18
+      ],
+      "duration": {
+        "n": 27,
+        "secondsQuantiles": {
+          "p50": 17937.0,
+          "p90": 53134.60000000002,
+          "p99": 123118.25999999998,
+          "max": 127122.0
+        },
+        "log1pMedian": 9.794676646677948,
+        "log1pUnscaledMAD": 0.8398317388462075,
+        "threeMADFlags": 4,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.27710389291707416,
+      "kendall": 0.16163173753210963,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.12852992854955597,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "spearman": {
+          "validResamples": 500,
+          "percentile95": [
+            -0.062023077963813414,
+            0.6145201789980402
+          ]
+        },
+        "kendall": {
+          "validResamples": 500,
+          "percentile95": [
+            -0.0700678097986732,
+            0.4933028854992633
+          ]
+        }
+      }
+    },
+    "currentH_responseEnvelopeUnionSeconds": {
+      "n": 34,
+      "clusters": 7,
+      "hardnessValues": [
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "duration": {
+        "n": 34,
+        "secondsQuantiles": {
+          "p50": 9498.883999943733,
+          "p90": 34364.48309993744,
+          "p99": 53056.23991000178,
+          "max": 57883.33899998665
+        },
+        "log1pMedian": 9.15882584392989,
+        "log1pUnscaledMAD": 0.9878723182249498,
+        "threeMADFlags": 2,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.1752037171696651,
+      "kendall": 0.10523072938008637,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.0547610167003052,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "status": "not estimated: fewer than 8 observed clusters (audit guard, not universal sufficiency rule)"
+      }
+    }
+  },
+  "workerProfiles": {
+    "claude-opus-5-5/high": {
+      "n": 13,
+      "clusters": 5,
+      "hardnessValues": [
+        10,
+        11,
+        13,
+        14,
+        16,
+        17,
+        18,
+        19
+      ],
+      "duration": {
+        "n": 13,
+        "secondsQuantiles": {
+          "p50": 10711.638000011444,
+          "p90": 34729.86979990006,
+          "p99": 36887.251279993056,
+          "max": 37080.74000000954
+        },
+        "log1pMedian": 9.279179444971154,
+        "log1pUnscaledMAD": 1.0663943629224342,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": -0.06398275963424248,
+      "kendall": -0.013437656161169414,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": -0.005557021623552982,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "status": "not estimated: fewer than 8 observed clusters (audit guard, not universal sufficiency rule)"
+      }
+    },
+    "claude-sonnet-5-5/high": {
+      "n": 16,
+      "clusters": 4,
+      "hardnessValues": [
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14,
+        16
+      ],
+      "duration": {
+        "n": 16,
+        "secondsQuantiles": {
+          "p50": 9816.118999958038,
+          "p90": 36213.074499964714,
+          "p99": 55689.203049993506,
+          "max": 57883.33899998665
+        },
+        "log1pMedian": 9.191804457428322,
+        "log1pUnscaledMAD": 0.6019174000521055,
+        "threeMADFlags": 0,
+        "flagRule": "absolute log1p deviation > 3 unscaled MAD; diagnostic, no exclusion; MAD=0 gives no flags"
+      },
+      "spearman": 0.15626107331421255,
+      "kendall": 0.11366833022718371,
+      "asymptoticPValue": null,
+      "interpretation": "selected observational cohort; no causal or invariant-hardness conclusion",
+      "theilSenLog1pSlope": 0.0734197691185905,
+      "clusterBootstrap": {
+        "seed": 5276,
+        "resamples": 500,
+        "unit": "connected native parent component; other dependency links incompletely observed",
+        "status": "not estimated: fewer than 8 observed clusters (audit guard, not universal sufficiency rule)"
+      }
+    }
+  },
+  "profileInteraction": {
+    "profiles": [
+      "claude-opus-5-5/high",
+      "claude-sonnet-5-5/high"
+    ],
+    "hardnessSupport": {
+      "claude-opus-5-5/high": [
+        10,
+        11,
+        13,
+        14,
+        16,
+        17,
+        18,
+        19
+      ],
+      "claude-sonnet-5-5/high": [
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14,
+        16
+      ]
+    },
+    "commonHardnessValues": [
+      11,
+      13,
+      14,
+      16
+    ],
+    "n": 29,
+    "causal": false,
+    "interpretation": "observational H-by-profile log-envelope association; role held to worker, task mix uncontrolled; effort contrast unavailable",
+    "nCommonSupport": 16,
+    "hardnessCenter": 13.8125,
+    "coefficients": [
+      9.110146590980586,
+      0.18193702262226513,
+      0.5040871629960882,
+      0.018669873926216978
+    ],
+    "coefficientOrder": [
+      "intercept",
+      "H",
+      "secondProfile",
+      "H:secondProfile"
+    ],
+    "loss": "Huber on log1p seconds, f_scale=1; does not identify why tails occur",
+    "clusters": 5
+  },
+  "limitations": [
+    "No verified active execution intervals: response envelopes and gap caps are proxies, not active time.",
+    "Native closed cohort includes unsuccessful closure; native completion is not harmonized quality acceptance.",
+    "Timestamp data are partial telemetry, with unknown terminal coverage; no assertion full worked-time-to-done.",
+    "No automatic outlier exclusion, no measured pause adjustment without supported intervals.",
+    "Bootstrap conditions on selected cohort and observed parent components; missing dependencies can understate uncertainty.",
+    "First observed dispatch may follow actual work; creation, boundary and current bodies are separate.",
+    "No causal effects or cross-profile latent invariance established."
+  ],
+  "sourceManifestDigest": "0b2c88828b89e7554fe61fd77669e5c8ee75bf40d913659ba6646f67c40b6b05"
+}

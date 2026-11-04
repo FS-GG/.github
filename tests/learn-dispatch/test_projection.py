@@ -72,7 +72,7 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual({'worker-1', 'critic-1'}, {row['invocationId'] for row in record['executions']})
         self.assertEqual({'worker', 'critic'}, {row['role'] for row in record['executions']})
         self.assertEqual('requested-model', record['classification']['model'])
-        self.assertNotIn('requested-model', m.assignment(record, 'fixture:comment')['values']['Actual models'])
+        self.assertNotIn('requested-model', m.assignment(record, 'https://github.com/FS-GG/test/issues/1#issuecomment-17')['values']['Actual models'])
         self.assertEqual('Low', record['hardnessCategory'])
         self.assertIn('fsgg:learn-completion/v1', m.comment_for(record))
 
@@ -162,7 +162,7 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual('root-recorded-launch-configuration', execution['launchConfiguration']['provenance'])
         self.assertIn('raw-launch-response-unavailable', result['records'][0]['gaps'])
         self.assertEqual(1, result['coverage']['launchConfirmedIdentities'])
-        self.assertIn('configured-model [launch-confirmed]', m.assignment(result['records'][0], 'fixture:comment')['values']['Actual models'])
+        self.assertIn('configured-model [launch-confirmed]', m.assignment(result['records'][0], 'https://github.com/FS-GG/test/issues/1#issuecomment-17')['values']['Actual models'])
         self.assertEqual('Unknown', execution['role'])
 
     def test_shared_thread_cannot_cross_attribute_deliveries_or_roles(self):
@@ -191,12 +191,84 @@ class ProjectionTests(unittest.TestCase):
             views=[], initialPlanning=[], learn=dict(schema='fs.gg.board-v2.learn-annotations/1', fields=[dict(name=name, fieldId='field-' + str(index)) for index, name in enumerate(m.NAMES)], assignments=[]))
         scope = m.dispatch.projection_scope(snapshot, 'https://github.com/FS-GG/test/issues/1#issuecomment-17', template)
         self.assertEqual('Unknown', scope['learn']['assignments'][0]['values']['Actual models'])
-        self.assertEqual('Low', scope['learn']['assignments'][0]['values']['Hardness'])
+        self.assertEqual('Unknown', scope['learn']['assignments'][0]['values']['Hardness'])
         self.assertEqual([], template['learn']['assignments'])
         with self.assertRaisesRegex(ValueError, 'owning-issue'):
             m.dispatch.projection_scope(snapshot, 'https://github.com/FS-GG/test/issues/2#issuecomment-17', template)
         with self.assertRaisesRegex(ValueError, 'cannot select'):
             m.dispatch.projection_scope(snapshot, 'https://github.com/FS-GG/test/issues/1#issuecomment-17', dict(template, views=[{}]))
+
+    def template(self):
+        return dict(selectedIssues=[dict(id='native-1', repository='FS-GG/test', number=1, slice='fixture')],
+            views=[], initialPlanning=[], learn=dict(schema='fs.gg.board-v2.learn-annotations/1',
+                fields=[dict(name=name, fieldId='field-' + str(index)) for index, name in enumerate(m.NAMES)], assignments=[]))
+
+    def test_unvalidated_native_policy_retains_original_bytes_and_known_execution(self):
+        for body in ['spelling', 'files implement migration render tests', 'atomic concurrency installed']:
+            with self.subTest(body=body):
+                cohort = self.cohort()
+                original = self.original(body)
+                # Legacy classifications without the new policy are retained byte for byte.
+                original.pop('hardnessProjection', None)
+                envelope = self.envelope(original)
+                original_bytes = m.dispatch.canonical(original)
+                cohort['classifications'] = [envelope]
+                cohort['launches'] = [self.launch(role='analyst'), self.launch('report-1', 'report')]
+                cohort['observations'] = [self.usage(effort='high'), self.usage('report-1', 'report-model', 'medium', 'r2')]
+                result = m.project(cohort)
+                record = result['records'][0]
+                self.assertEqual(original_bytes, m.dispatch.canonical(record['originalClassification']))
+                self.assertEqual(envelope['sha256'], record['classificationSource']['sha256'])
+                self.assertEqual(original['hardnessCategory'], record['hardnessCategory'])
+                self.assertEqual(0, result['coverage']['projectedNativeHardnessKnown'])
+                values = m.assignment(record, 'https://github.com/FS-GG/test/issues/1#issuecomment-17')['values']
+                self.assertEqual('Unknown', values['Hardness'])
+                self.assertIn('analyst: observed-worker [provider-observed]', values['Actual models'])
+                self.assertIn('report: report-model [provider-observed]', values['Actual models'])
+                self.assertIn('analyst: high [provider-observed]', values['Actual effort'])
+                native = dict(itemId=record['itemId'], body='recording preimage', capturedAt='2026-01-01T00:00:00Z',
+                    sourceRevision='fixture', producer='fixture')
+                with tempfile.TemporaryDirectory() as directory:
+                    out = Path(directory) / 'intent'
+                    m.dispatch.prepare_completion(native, record, out)
+                    snapshot = json.loads((out / 'snapshot.json').read_bytes())
+                    scope = m.dispatch.projection_scope(snapshot, values['Execution provenance'], self.template())
+                    self.assertEqual(values, scope['learn']['assignments'][0]['values'])
+                    self.assertEqual(m.dispatch.canonical(record), m.dispatch.canonical(snapshot['completion']))
+
+    def test_policy_disposition_is_digest_bound_and_cannot_enable_known_labels(self):
+        policy = dict(schema='fsgg.learn-hardness-projection/1', mode='withhold-unvalidated',
+            dispositionReference='https://github.com/FS-GG/.github/issues/5273#issuecomment-17')
+        cohort = dict(self.cohort(), hardnessProjection=policy)
+        record = m.project(cohort)['records'][0]
+        self.assertEqual(policy, record['hardnessProjection'])
+        self.assertIn(policy['dispositionReference'], m.comment_for(record))
+        for bad in [dict(policy, mode='validated'), dict(policy, mode='provisional'),
+                    dict(policy, nativeCategory='High'), dict(policy, dispositionReference='fixture:Root'), {}]:
+            with self.subTest(policy=bad), self.assertRaisesRegex(ValueError, 'hardness'):
+                m.project(dict(cohort, hardnessProjection=bad))
+        snapshot = self.original()
+        snapshot['hardnessProjection'] = dict(policy, mode='validated')
+        with self.assertRaisesRegex(ValueError, 'known native labels'):
+            m.dispatch.projection_scope(snapshot, 'https://github.com/FS-GG/test/issues/1#issuecomment-17', self.template())
+        for url in ['https://github.com/FS-GG/test/issues/2#issuecomment-17',
+                    'https://github.com/FS-GG/other/issues/1#issuecomment-17',
+                    'https://github.com/FS-GG/test/issues/1#issuecomment-0']:
+            with self.assertRaisesRegex(ValueError, 'owning-issue'):
+                m.dispatch.projection_scope(self.original(), url, self.template())
+
+    def test_completion_policy_mismatch_and_snapshot_tampering_refuse(self):
+        record = m.project(self.cohort())['records'][0]
+        record['hardnessProjection']['dispositionReference'] = 'https://github.com/FS-GG/.github/issues/5273#issuecomment-17'
+        snapshot = dict(schema='fsgg.learn-completion/1', itemId=record['itemId'], completion=record)
+        with self.assertRaisesRegex(ValueError, 'policy mismatch'):
+            m.dispatch.projection_scope(snapshot, 'https://github.com/FS-GG/test/issues/1#issuecomment-17', self.template())
+        cohort = self.cohort()
+        envelope = self.envelope(self.original())
+        envelope['payload']['scores']['D1'] = 3
+        cohort['classifications'] = [envelope]
+        with self.assertRaisesRegex(ValueError, 'digest'):
+            m.project(cohort)
 
     def test_completion_record_reuses_durable_comment_custody_without_rescoring(self):
         record = m.project(self.cohort())['records'][0]

@@ -197,3 +197,35 @@ module V2ProjectionSource =
     /// Expiry never releases original holds; self exemption requires exact slice/attempt/operation/PR/head.
     /// Read-only existing-PR observation consumes no new slot. Never allocates, dispatches or accepts effects.
     val selectActions: report: InspectionReport -> context: SelectionContext option -> now: System.DateTimeOffset -> Selection list
+
+    /// Exact owner/slice/attempt/source/path/PR/head binding for opt-in owner continuation.
+    /// Exact continuation scope, including PR/head and path population; no execution authority.
+    val continuationIdentity: slice: CurrentSlice -> FS.GG.Coord.OwnerContinuation.Identity
+    /// Canonical finite-envelope operands; excludes mutable observation clocks and envelope self-reference.
+    /// Semantic native source identity derives from typed complete observations, never by stripping
+    /// arbitrary text from the legacy freshness revision. Native issue/plan/dependency clocks still
+    /// join exactly in ScopeCurrent. Own issue/plan bodies, dependency IDs/states/edges, population,
+    /// source blobs and hierarchy remain bound; the blocker reader does not supply dependency bodies.
+    val continuationEnvelopeIdentity: report: InspectionReport -> slice: CurrentSlice -> FS.GG.Coord.OwnerContinuation.Identity
+    /// The envelope itself and mutable clocks are excluded; exact current native joins remain mandatory.
+    val continuationEnvelopeInputDigest: report: InspectionReport -> context: SelectionContext -> slice: CurrentSlice -> string
+    /// Pure read-only recommendations. Ordinary isolated verification bypasses dispatch selection.
+    /// Native source joins are supplied here; supplied native support is discarded.
+    val recommendOwnerContinuations:
+        report: InspectionReport -> context: SelectionContext -> now: DateTimeOffset ->
+        requests: FS.GG.Coord.OwnerContinuation.Request list -> FS.GG.Coord.OwnerContinuation.Decision list
+
+    type RegisteredOwnerPreflight = RoutineMerge of digest: string | RoutineDraft of digest: string * head: string
+    /// Production supplies the existing registered route reader only when the inferred next step is delivery.
+    val recommendOwnerContinuationsWithPreflight:
+        preflight: Map<string, Result<RegisteredOwnerPreflight, string>> ->
+        report: InspectionReport -> context: SelectionContext -> now: DateTimeOffset ->
+        requests: FS.GG.Coord.OwnerContinuation.Request list -> FS.GG.Coord.OwnerContinuation.Decision list
+
+    /// Trusted adapter composition supplies live original/envelope facts; caller-reported native facts remain excluded.
+    /// Extend canonical selection for owned work. Isolated checks do not acquire a dispatch slot.
+    /// Supplied facts are never native observations; originals remain with their original observer.
+    val recommendOwnerContinuationsWithFacts:
+        additional: Map<string, FS.GG.Coord.OwnerContinuation.Fact list> ->
+        preflight: Map<string, Result<RegisteredOwnerPreflight, string>> -> report: InspectionReport -> context: SelectionContext ->
+        now: DateTimeOffset -> requests: FS.GG.Coord.OwnerContinuation.Request list -> FS.GG.Coord.OwnerContinuation.Decision list

@@ -20,11 +20,44 @@ It creates only these additive fields:
 | Actual effort | Text | Provider observed or launch confirmed effort by role; missing facts remain Unknown |
 | Execution provenance | Text | Durable owning-issue evidence comment |
 
-Hardness uses the [LEARN-02 rubric](../roadmaps/learn-02-delivery-classification-and-routing.md): High
+Provisional assessment hardness uses the [LEARN-02 rubric](../roadmaps/learn-02-delivery-classification-and-routing.md): High
 when H≥13 or D3/D5≥2; Medium when H≥7; otherwise Low. Any missing dimension yields Unknown. Safety
 floors influence routing independently: a low hardness Delivery may still require best/high routing.
 Original scores, evidence, rubric, source revision, requested profiles and overrides remain in the
 issue's immutable classification record. A requested model or effort never supplies an actual value.
+
+### Native hardness policy while validation is outstanding
+
+The maintained Python helpers emit `Hardness: Unknown` for every native assignment while the
+hardness construct and its transfer across models and effort remain unvalidated. This applies even
+when all eight rubric scores produce a provisional Low, Medium or High assessment. Pilot judgments
+and routing choices do not establish construct validity. `hardnessCategory`, scores, evidence,
+classification basis, original payloads and their digests stay unchanged; `knownHardness` coverage
+counts provisional assessments, while `projectedNativeHardnessKnown` counts emitted native labels.
+Neither count reads existing card values.
+
+New dispatch snapshots and completion records retain a separate `hardnessProjection` object:
+`{"schema":"fsgg.learn-hardness-projection/1","mode":"withhold-unvalidated"}`. Root can supply that
+same object with an optional `dispositionReference` containing the exact Root decision issue-comment
+URL: use it in the frozen dispatch input or at the top level of the selected projection cohort before
+preparation/recording. The disposition is included in the immutable comment and full telemetry digest.
+The operating owner verifies its authority; a supplied URL proves neither authority nor validity.
+Only `withhold-unvalidated` is supported. Unknown modes/properties refuse; there is no flag to activate
+known labels. A future validity disposition enabling labels requires a reviewed policy change and
+supporting evidence. Legacy records lacking this object also project Unknown without rewriting their
+original bytes or digests. Existing intents and unresolved effects retain their original custody;
+changing policy never authorizes rewriting a retained intent or resending a possible effect.
+
+Model, effort, roles and evidence levels continue to project independently, including analyst/report
+activity under its actual role. The four-field wire shape and receiver remain unchanged. On an empty
+hardness field the receiver sets Unknown; on an existing known category it keeps the native value,
+so a proposed Unknown must not be reported as proof that the native card now says Unknown. Reconcile
+such legacy labels under Root's explicit disposition; this route does not silently downgrade them.
+Conflicting known-category changes under the same provenance refuse in the receiver. Cumulative
+execution facts and their confidence must still be preserved. Root separately admits recording and
+native operations using exact scope/preimage/readback controls; opting into metadata rollout confers
+no learned-routing authority. Field/view preparation and minimum archive activation do not depend
+on hardness validation or metadata rollout.
 
 The existing binding5/schema3 reader verifies its selected required fields and tolerates these
 additional fields. No schema successor, re-enrollment or binding rewrite is needed merely to add
@@ -35,8 +68,9 @@ planning values and automation remain unchanged.
 
 A LEARN scope selects no `initialPlanning` or Work level changes. It adds no membership and never
 unarchives a card. It may update only the four annotation fields on an exact existing issue card.
-Original dispatch snapshots stay immutable. The current card category may advance on an explicit new
-revision-bound assessment, with its own durable issue record and exact old native preimage. Unknown
+Original dispatch snapshots stay immutable. The compiled receiver retains revision-bound category
+replacement support, requiring a new durable assessment record and exact old native preimage. The
+maintained helper policy above does not emit known-category replacements. Unknown
 never erases an existing known category. Execution summaries use a JSON array of role/value/evidence-level strings, so model names containing
 separators remain unambiguous. An update must preserve every previously known role/value fact;
 incomplete cohorts or role-prefixed Unknown values refuse instead of erasing history. Unknown role
@@ -98,7 +132,8 @@ fresh owning-issue body/revision. They score normative Done when (or the explici
 body when no section exists), retain capturedAt/input digest/rubric/basis, and never enter pre-dispatch
 calibration. Original retained dispatch snapshots take precedence unless an explicit reviewed new assessment
 sets `supersedesClassificationDigest` to that exact retained classification digest. That advance
-changes the card current category while retaining `originalClassification` for historical calibration.
+changes the provisional current assessment while retaining `originalClassification` for historical calibration.
+Native hardness remains subject to the withholding policy above.
 A replacement with a mismatched digest refuses; original absence is still reported.
 
 Classification payloads are original `fsgg.learn-dispatch/1` snapshots; retrospective current bodies,

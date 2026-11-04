@@ -47,6 +47,42 @@ must_fail "a second archive is not mistaken for the prepared archive" "${TOOL[@]
 must_pass "a clean second pack may compare producer payload without a feed journal" "${TOOL[@]}" verify --manifest "$WORK/manifest.json" --package "$WORK/signed.nupkg" --payload-only
 must_pass "registry signature may alter archive while preserving producer payload" "${TOOL[@]}" verify --manifest "$WORK/manifest.json" --package "$WORK/signed.nupkg" --feed nuget --journal "$WORK/journal.json"
 must_fail "changed producer payload is refused" "${TOOL[@]}" verify --manifest "$WORK/manifest.json" --package "$WORK/changed.nupkg" --feed github --journal "$WORK/journal.json"
+python3 - "$ROOT" "$WORK" <<'PY' && ok "workflow diagnostics retain exact mismatch while strict payload verification still refuses" || bad "workflow diagnostics retain exact mismatch while strict payload verification still refuses"
+import hashlib,json,pathlib,shlex,subprocess,sys,textwrap
+root,work=map(pathlib.Path,sys.argv[1:])
+workflow=(root/'.github/workflows/telemetry-host-package.yml').read_text()
+begin='          # BEGIN normalized producer payload diagnostic\n'
+end='          # END normalized producer payload diagnostic\n'
+assert workflow.count(begin)==workflow.count(end)==1
+code=textwrap.dedent(workflow.split(begin,1)[1].split(end,1)[0])
+diagnostic=work/'workflow-diagnostic.py'
+diagnostic.write_text(code)
+verify=['python3',str(root/'scripts/telemetry-host-release.py'),'verify','--manifest',str(work/'manifest.json'),'--payload-only']
+for candidate,expected_count in [('signed.nupkg',0),('changed.nupkg',1)]:
+    delta=work/(candidate+'.delta.json')
+    observed=subprocess.run(['python3',str(diagnostic),str(work/'host.nupkg'),str(work/candidate),str(delta)],cwd=root,capture_output=True,text=True)
+    assert observed.returncode==0,observed.stderr
+    evidence=json.loads(delta.read_text())
+    assert evidence['equal']==(expected_count==0)
+    assert len(evidence['changedEntries'])==expected_count
+    if expected_count:
+        member=evidence['changedEntries'][0]
+        assert member=={'path':'tools/net10.0/linux-x64/FS.GG.Telemetry.Host.dll','aSha256':hashlib.sha256(b'host').hexdigest(),'bSha256':hashlib.sha256(b'changed').hexdigest()}
+    refused=subprocess.run(verify+['--package',str(work/candidate)],cwd=root,capture_output=True,text=True)
+    assert refused.returncode==(0 if expected_count==0 else 2)
+    if expected_count:
+        assert 'observed package producer payload differs' in refused.stderr
+        sentinel=work/'unreachable-after-mismatch'
+        command=shlex.join(verify+['--package',str(work/candidate)])+'\ntouch '+shlex.quote(str(sentinel))
+        stopped=subprocess.run(['bash','-e','-c',command],cwd=root,capture_output=True,text=True)
+        assert stopped.returncode==2 and not sentinel.exists()
+retention=workflow.split('      - name: Retain original producer payload comparison failure\n',1)[1].split('      - uses:',1)[0]
+assert "if: ${{ failure() && steps.host_payload_comparison.outcome == 'failure' }}" in retention
+for artifact in ['artifacts/telemetry-host-pack-a/FS.GG.Telemetry.Host.*.nupkg','artifacts/telemetry-host-pack-b/FS.GG.Telemetry.Host.*.nupkg','artifacts/telemetry-host-manifest.json','artifacts/telemetry-host-payload-delta.json']:
+    assert artifact in retention
+assert 'continue-on-error' not in retention
+assert workflow.index('# END normalized producer payload diagnostic')<workflow.index('python3 scripts/telemetry-host-release.py verify --manifest artifacts/telemetry-host-manifest.json --package "$package_b" --payload-only')
+PY
 must_fail "wrong independent tag is refused" "${TOOL[@]}" prepare --package "$WORK/host.nupkg" --lock "$WORK/packages.lock.json" --assets "$WORK/assets" --source-sha 0123456789abcdef0123456789abcdef01234567 --version 0.1.0 --tag coord-engine/v0.1.0 --output "$WORK/wrong.json"
 # Seed an incompatible journal and prove the helper refuses it before replacement.
 printf '%s\n' '{"schema":"fsgg.telemetry-host-release-journal/v1","manifestSha256":"sha256:foreign","observations":{}}' >"$WORK/foreign.json"

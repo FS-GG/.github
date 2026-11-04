@@ -1,0 +1,69 @@
+{
+  "activity": {
+    "automaticRetries": 0,
+    "caseReplacements": 0,
+    "nativeMutations": 0,
+    "ratingCalls": 0,
+    "snapshotCodeExecutions": 0
+  },
+  "limits": [
+    "This is a fixed feasibility sample, not a population coverage estimate or predictor-validity test.",
+    "Checkpoint visibility does not establish the exact historical branch head.",
+    "Creation is not verified true work start; supplied prior work changes the relevant remaining-work estimand.",
+    "Private creator context, related research, dependencies and executable runtime remain incomplete.",
+    "Artifact separation is not qualified model/filesystem/network isolation."
+  ],
+  "population": {
+    "candidateUpperBound": 1079,
+    "censusIssues": 3397,
+    "censusPullRequests": 8778,
+    "developmentParentComponentExclusions": 331,
+    "developmentUtcWeekExclusions": 1971,
+    "fixedAuditCases": 16,
+    "privateExclusions": 16,
+    "repositories": 27
+  },
+  "resources": {
+    "collectionCgroupCpuSeconds": 158.573104,
+    "collectionWallSeconds": 240.620435,
+    "memoryMaxEvents": 25,
+    "nativeCaseCliInvocations": 30,
+    "oomEvents": 0,
+    "oomKills": 0,
+    "originalAggregateDeadlineRespected": true,
+    "physicalMemoryLimitBytes": 536870912,
+    "physicalMemoryPeakBytes": 536870912,
+    "priorPreflightCliInvocations": 1,
+    "privateAllocatedBytesAfterReadback": 267612160,
+    "privateBytesAtCollectionTerminal": 267575296,
+    "privateDiskLimitBytes": 2147483648,
+    "swapLimitBytes": 0,
+    "taskLimit": 128,
+    "wireHttpAttempts": "not independently measured"
+  },
+  "results": {
+    "checkpointLagSeconds": {
+      "maximum": 729052.0,
+      "median": 89662.0,
+      "minimum": 57.0
+    },
+    "contextBundles": 13,
+    "exportedFiles": 18718,
+    "sourceBytes": 199649050,
+    "unavailableCases": 3,
+    "unavailableReasons": {
+      "no-strictly-earlier-merge-checkpoint-candidate": 2,
+      "unsupported-link-or-tree-mode": 1
+    }
+  },
+  "schema": "fsgg.learn-context-audit-public/1",
+  "selectionDigest": "e7f43519568ca3f5ec14dde0ea9a68925a713efc05840bbc0bc1c1950ed8527d",
+  "sourceCandidate": "219a29add6688f3287636842ffb03bb3479cf459",
+  "sourceTree": "3208269aa846bfe2767850f2fd328d23645067bb",
+  "verification": {
+    "allBuiltTaskAndBlobHashesReadBack": true,
+    "allFrozenInputHashesUnchanged": true,
+    "controllerAndReadbackScopesRetired": true,
+    "originalCaseGroupsRetired": 16
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "schema": "fsgg.owner-history-safe-aggregate/1",
+  "sourceCommit": "bd01be7c77c169b468b0db8eedbc03c6ffecf6a2",
+  "sourceGitBlob": "602ab1b92d6622bda3d737a1347bc1b83b4bd4d9",
+  "sourceSha256": "8a3bea4fd4d7c67bfc60e05d1bbdc707706b7b34166ab3d6a98d53835b526ab8",
+  "frozenInputSealSha256": "231020064077df96988968d8f6e4a6244b01adc1c612ffd6ac875c6a8a442193",
+  "selectedRealCases": 5,
+  "evaluatedRealCases": 4,
+  "unavailableRealCases": 1,
+  "syntheticIdentityControls": 1,
+  "expectedDecisionMatches": 5,
+  "deterministicRepeatedEncodingMatches": 5,
+  "realDecisions": {
+    "observe-original": 1,
+    "request-judgment/original-failed-owner-repair": 3
+  },
+  "identityControl": "changed attempt observed; retained failure not borrowed",
+  "exactOriginalPreservedInAllOutputs": true,
+  "positiveAdvancementCoverage": 0,
+  "scopedAwaitRealCoverage": 0,
+  "grantsOrDispatchAuthorityProduced": 0,
+  "nativeEffects": 0,
+  "engineProcessRuns": 1,
+  "pureRecommendCalls": 10,
+  "returncode": 0,
+  "wallSeconds": 2.7054115640057717,
+  "cgroupMemoryPeakBytes": 190779392,
+  "peakChildRssKiB": 279508,
+  "enforcedCgroupLimits": {
+    "memory.max": "805306368",
+    "memory.swap.max": "0",
+    "pids.max": "128",
+    "cpu.max": "100000 100000"
+  },
+  "limitations": [
+    "Purposive selected incidents; not representative and not a benefit/cost evaluation.",
+    "One preselected case unavailable because original observation time cannot be proven.",
+    "Historical identity uses explicit replay namespace; owner/scope/authority facts remain Unknown.",
+    "No actual executor, native adapter, recovery effect or positive advancement is qualified by this pure replay.",
+    "No scoped-Await real branch coverage.",
+    "SDK later diagnosis excluded; this case establishes observed terminal failure only."
+  ],
+  "warningsRetained": [
+    "FSI workload verification notice; no workload update or rerun.",
+    "FS0524 module use-binding treated as let; parsing and output checks succeeded."
+  ],
+  "transientUnitRetirement": "systemd-run wait returned success; no observer or recurring measurement launched.",
+  "previousSourceCommit": "3c125a099bf5be372c287c8dce6c3db267862003",
+  "priorFullEncodedOutputByteIdentical": true,
+  "sameFrozenAdapterBytes": true,
+  "encodedOutputSha256": "209f543e08f6264f48e0742e10d2f82f7c0f694a9c3cba85f241695a8dbb326a",
+  "sourceCommitAvailability": "The tested contribution commit identifies local source; the integrated commit below carries byte-identical Core source in delivery history.",
+  "integratedSource": {
+    "repository": "FS-GG/.github",
+    "revision": "d96fd5360fe2602062139f5bca69828e7fcb91ea",
+    "path": "src/FS.GG.Coord.Core/OwnerContinuation.fs",
+    "sha256": "8a3bea4fd4d7c67bfc60e05d1bbdc707706b7b34166ab3d6a98d53835b526ab8"
+  },
+  "qualificationScope": "Bounded pure historical replay, not a rollout pilot or throughput/cost evaluation."
+}

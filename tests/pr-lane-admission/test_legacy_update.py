@@ -151,7 +151,7 @@ class LegacyUpdateTests(unittest.TestCase):
             with self.subTest(body=body):
                 self.body.write_text(body);code,result=self.invoke();self.assertNotEqual(0,code,result);self.assertFalse(self.patches)
         self.body.write_text('Refs #142')
-        for extra in [('--campaign-id','x'),('--adopt-legacy-pr',),('--declare-delivery-continues',),('--update-pr','42')]:
+        for extra in [('--campaign-id','x'),('--adopt-legacy-pr',),('--declare-delivery-continues',),('--update-pr','42'),('--draft',)]:
             self.assertNotEqual(0,self.invoke(extra)[0]);self.assertFalse(self.patches)
 
     def test_native_selected_bad_marker_refused_even_with_updated_preimage(self):
@@ -338,15 +338,26 @@ class PackagedLegacyUpdateTests(unittest.TestCase):
                 roots, rules = helper.root_rules(staged)
                 self.assertEqual(roots, {r.lower() for r in canonical.PARAMS['rootLogins']})
                 self.assertEqual(rules.PARAMS, canonical.PARAMS)
-                expected_source = {'path': '.fsgg/legacy-pr-root-rules.py', 'sha256': hashlib.sha256(raw).hexdigest()}
+                policy = files/'.fsgg/root-identity-policy.json'
+                policy_raw = (ROOT/'scripts/root-identity-policy.json').read_bytes()
+                self.assertEqual(policy.read_bytes(), policy_raw)
+                policy_row = next(r for r in manifest['files'] if r['path'] == '.fsgg/root-identity-policy.json')
+                self.assertEqual(policy_row['sha256'], hashlib.sha256(policy_raw).hexdigest())
+                expected_source = {'path': '.fsgg/legacy-pr-root-rules.py', 'sha256': hashlib.sha256(raw).hexdigest(),
+                                   'policy': {'path': '.fsgg/root-identity-policy.json',
+                                              'sha256': hashlib.sha256(policy_raw).hexdigest()}}
                 self.assertEqual(rules.selected_source, expected_source)
                 source_roots, source_rules = recovery.root_rules(lane)
                 self.assertEqual(source_rules.selected_source,
-                                 {'path': 'scripts/board-currency-rules.py', 'sha256': hashlib.sha256(raw).hexdigest()})
+                                 {'path': 'scripts/board-currency-rules.py', 'sha256': hashlib.sha256(raw).hexdigest(),
+                                  'policy': {'path': 'scripts/root-identity-policy.json',
+                                             'sha256': hashlib.sha256(policy_raw).hexdigest()}})
                 self.assertEqual(source_roots, roots)
                 # A receiver-local same-named policy must not replace the selected packaged source.
                 shadow = files/'scripts/board-currency-rules.py'
                 shadow.write_text('PARAMS = {"rootLogins": ["attacker"]}\n')
+                shadow.with_name('root-identity-policy.json').write_text(
+                    '{"rootLogins":["attacker"],"schema":"fsgg.root-identity-policy/v1"}\n')
                 shadow_roots, shadow_rules = helper.root_rules(staged)
                 self.assertEqual(shadow_roots, roots)
                 self.assertEqual(shadow_rules.selected_source, expected_source)
@@ -354,12 +365,17 @@ class PackagedLegacyUpdateTests(unittest.TestCase):
                 self.assertEqual(rules.pr_refs('FS-GG/example', body), canonical.pr_refs('FS-GG/example', body))
                 self.assertIn('FS-GG/example#142', rules.pr_refs('FS-GG/example', body))
                 self.assertNotIn('FS-GG/example#999', rules.pr_refs('FS-GG/example', body))
-                for case in ('valid', 'forged-root', 'wrong-owning-reference'):
+                for case in ('valid', 'forged-root', 'wrong-owning-reference', 'policy-drift'):
                     with self.subTest(case):
                         fixture = LegacyUpdateTests(); fixture.setUp()
                         try:
                             if case == 'forged-root': fixture.node['author']['login'] = 'attacker'
                             if case == 'wrong-owning-reference': fixture.body.write_text('Refs #143\n')
+                            if case == 'policy-drift':
+                                def change_policy(method, endpoint):
+                                    if endpoint == '/repos/FS-GG/example':
+                                        policy.write_text('{"rootLogins":["attacker"],"schema":"fsgg.root-identity-policy/v1"}\n')
+                                fixture.hook = change_policy
                             lock = fixture.root/'locks'; lock.mkdir(mode=0o700)
                             with patch.dict(globals(), {'lane': staged}), patch.object(staged, 'lock_root', return_value=lock):
                                 code, result = fixture.invoke(('--inspect',))
@@ -369,6 +385,7 @@ class PackagedLegacyUpdateTests(unittest.TestCase):
                             self.assertFalse(any(method == 'PATCH' for method, _ in fixture.calls))
                             self.assertFalse(list(fixture.root.glob('legacy-update-*/*.json')))
                         finally:
+                            policy.write_bytes(policy_raw)
                             fixture.doCleanups()
                 # A frozen installed alias may coexist with a newer checkout policy. Its
                 # exact selected bytes remain visible rather than claiming canonical freshness.
@@ -377,8 +394,15 @@ class PackagedLegacyUpdateTests(unittest.TestCase):
                 frozen_roots, frozen_rules = helper.root_rules(staged)
                 self.assertEqual(frozen_roots, roots)
                 self.assertEqual(frozen_rules.selected_source,
-                                 {'path': expected_source['path'], 'sha256': hashlib.sha256(frozen).hexdigest()})
+                                 {**expected_source, 'sha256': hashlib.sha256(frozen).hexdigest()})
                 self.assertNotEqual(frozen_rules.selected_source['sha256'], source_rules.selected_source['sha256'])
+                policy.unlink()
+                with self.assertRaises(FileNotFoundError):
+                    helper.root_rules(staged)
+                policy.write_bytes(b'{malformed')
+                with self.assertRaises(staged.ToolError):
+                    helper.root_rules(staged)
+                policy.write_bytes(policy_raw)
                 shadow.unlink()
                 alias.unlink()
                 with self.assertRaises(FileNotFoundError):

@@ -338,7 +338,7 @@ class NativeObservationTests(unittest.TestCase):
         self.assertTrue(receipt["activation"])
         self.assertEqual(self.tree, receipt["qualifiedTreeSha"])
         self.assertEqual(2, len(receipt["requiredChecks"]))
-        self.assertEqual(8, len(receipt["requiredGateChecks"]))
+        self.assertEqual(10, len(receipt["requiredGateChecks"]))
 
     def test_audio_profile_binds_fixed_repository_and_exact_native_check_policy(self):
         self.select_audio()
@@ -469,6 +469,31 @@ class NativeObservationTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "duplicate native check identity"):
             self.run_observation()
 
+    def test_added_protected_checks_require_policy_and_both_native_successes(self):
+        policy = MODULE.QUALIFICATION.read_json(str(MODULE.POLICY_PATH))
+        selected = MODULE.QUALIFICATION.source_profile(policy, "dotgithub-v1")
+        historical = copy.deepcopy(selected)
+        historical["requiredGateChecks"] = [name for name in historical["requiredGateChecks"]
+                                            if name not in ("board-linkage", "no-silent-revert")]
+        with patch.object(MODULE, "api", return_value={"protected": True, "protection": {
+                "required_status_checks": {"checks": self.live_checks}}}):
+            with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "population differs"):
+                MODULE.required_checks("FS-GG/.github", historical)
+            self.assertEqual(10, len(MODULE.required_checks("FS-GG/.github", selected)))
+        for name in ("board-linkage", "no-silent-revert"):
+            for failure in ("missing", "failed", "wrong-app"):
+                with self.subTest(name=name, failure=failure):
+                    original = copy.deepcopy(self.checks)
+                    if failure == "missing":
+                        self.checks["check_runs"] = [c for c in self.checks["check_runs"] if c["name"] != name]
+                    else:
+                        check = next(c for c in self.checks["check_runs"] if c["name"] == name)
+                        if failure == "failed": check["conclusion"] = "failure"
+                        else: check["app"]["id"] = 1
+                    with self.assertRaises(MODULE.QUALIFICATION.Refusal):
+                        self.run_observation()
+                    self.checks = original
+
     def test_live_gate_drift_and_merged_tree_difference_refuse(self):
         self.live_checks.append({"context": "new-required-gate", "app_id": 15368})
         with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "population differs"):
@@ -506,6 +531,10 @@ class NativeObservationTests(unittest.TestCase):
         self.env["GITHUB_EVENT_NAME"] = "workflow_dispatch"
         self.env["GITHUB_WORKFLOW_REF"] = (
             "FS-GG/.github/.github/workflows/v2-ci-ordinary-rehearsal.yml@refs/heads/main")
+        historical = MODULE.QUALIFICATION.read_json(
+            str(RETIRED_FIXTURE / "v2-ci-ordinary-settlement-rehearsal.json"))
+        self.live_checks = [{"context": name, "app_id": 15368}
+                            for name in historical["qualification"]["requiredGateChecks"]]
         original_read = MODULE.QUALIFICATION.read_json
         def historical_policy(path):
             if pathlib.Path(path) == MODULE.REHEARSAL_POLICY_PATH:

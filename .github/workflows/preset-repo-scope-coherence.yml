@@ -63,6 +63,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Renovate 43.281.1 requires Node ^24.11.0; retain the measured validator pin.
+      - name: Use a supported Node runtime for pinned Renovate
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          check-latest: true
+          package-manager-cache: false
+
       - uses: ./.github/actions/setup-policy-python
 
       # `renovate-config-validator` ships only inside the `renovate` package; there is no standalone

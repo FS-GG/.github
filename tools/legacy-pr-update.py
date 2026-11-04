@@ -91,13 +91,22 @@ def root_rules(lane):
     # The selected packaged source wins over an unrelated receiver-local policy.
     path = alias if alias.is_file() else root / "scripts/board-currency-rules.py"
     raw = path.read_bytes()
+    policy_path = path.with_name("root-identity-policy.json")
+    policy_raw = policy_path.read_bytes()
     spec = importlib.util.spec_from_file_location("legacy_update_root_rules", path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
     # Execute the exact bytes whose hash is exposed in this operation's existing proof/custody.
-    exec(compile(raw, str(path), "exec"), module.__dict__)
+    try:
+        exec(compile(raw, str(path), "exec"), module.__dict__)
+    except (ValueError, UnicodeError, RecursionError) as error:
+        raise lane.ToolError("maintained Root trust is unreadable") from error
+    if policy_path.read_bytes() != policy_raw:
+        raise lane.ToolError("maintained Root trust changed while loading")
     module.selected_source = {"path": path.relative_to(root).as_posix(),
-                              "sha256": hashlib.sha256(raw).hexdigest()}
+                              "sha256": hashlib.sha256(raw).hexdigest(),
+                              "policy": {"path": policy_path.relative_to(root).as_posix(),
+                                         "sha256": hashlib.sha256(policy_raw).hexdigest()}}
     roots = module.PARAMS.get("rootLogins")
     if not isinstance(roots, list) or not roots or any(not isinstance(x, str) or not x.strip() for x in roots):
         raise lane.ToolError("maintained Root trust is unreadable")
@@ -189,6 +198,12 @@ def execute(lane, args):
 
     def population(initial=False):
         nonlocal desired, authorization_before, source_before
+        try:
+            current_roots, current_rules = root_rules(lane)
+        except (OSError, lane.ToolError):
+            refuse("root-trust-unreadable")
+        if current_roots != roots or current_rules.selected_source != rules.selected_source:
+            refuse("root-trust-drift")
         repo = get(f"/repos/{args.repo}")
         if (not isinstance(repo, dict) or repo.get("id") != spec["repositoryId"] or repo.get("full_name") != args.repo
                 or repo.get("default_branch") != spec["defaultBranch"] or repo.get("archived") is not False

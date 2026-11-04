@@ -367,7 +367,7 @@ skills:
   # work-board — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: cef2662f1c1ec38321a0067e8cafd695f3fd0e6196f0463c0ae0eec62468b167, materializes-when: always }
+  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: 123da572e331b0e398f2c396ddbfe320b9798a9d640f76cdcec347f0fd5cd676, materializes-when: always }
   # padd-item — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
@@ -409,7 +409,7 @@ skills:
   # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: a5327f93836a0b651faa33dd6c00da44d748d041cac3839ce8309249ec8ffbde, materializes-when: "false" }
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 14e2376d90b5a489974075d8aefbdcb0386238cbd0fff9cef35f840c8597143f, materializes-when: "false" }
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
@@ -427,4 +427,8 @@ skills:
   # Reconciled, not hand-authored: scope/sha256/materializes-when verbatim from the manifest
   # entry, `source` from its `supplied-by`. Re-home and annotate these into the block they
   # belong to, then set `updated:` and prepend a registry/skills.CHANGELOG.md entry.
-  - { id: work-board-coord,       scope: operator,owner: .github,         source: .github/.claude/skills/work-board-coord/SKILL.md, sha256: 25bfacaace8e0970fa690884fcf6d6d28123d27f303c6d6c530761aef29a8688, materializes-when: "false" }
+  - { id: work-board-coord,       scope: operator,owner: .github,         source: .github/.claude/skills/work-board-coord/SKILL.md, sha256: 0e89586313ec3ca06235c61ed927cc3477b975a5d0a1afe98a1fb43499cd5f6e, materializes-when: "false" }
+  # assess-task-hardness — homed beside its owner+predicate siblings and reconciled verbatim from
+  # .github's producer manifest by `--write` (.github#299/.github#1200). The position
+  # and this annotation are generated; the row's bytes are the manifest's.
+  - { id: assess-task-hardness,   scope: operator,owner: .github,         source: .github/.claude/skills/assess-task-hardness/SKILL.md, sha256: 395854a1a150a7e9e9b0c3a7256dcf0e635e1c9cedcefbb10351c4facdafbd09, materializes-when: "false" }

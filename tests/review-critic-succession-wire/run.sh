@@ -640,6 +640,9 @@ else
   for d in src .agents Directory.Build.props Directory.Packages.props global.json; do
     cp -r "$REPO_ROOT/$d" "$MUT/" 2>/dev/null || true
   done
+  # Core embeds this shared policy from outside src; keep the actual relative source path.
+  mkdir -p "$MUT/scripts"
+  cp "$REPO_ROOT/scripts/root-identity-policy.json" "$MUT/scripts/root-identity-policy.json"
   rm -rf "$MUT"/src/*/bin "$MUT"/src/*/obj
   [ -d "$REPO_ROOT/dist/dotnet" ] && { mkdir -p "$MUT/dist"; cp -r "$REPO_ROOT/dist/dotnet" "$MUT/dist/"; }
   cp "$MUT/src/FS.GG.Coord.Core/Review.fs" "$WORK/Review.fs.pristine"
