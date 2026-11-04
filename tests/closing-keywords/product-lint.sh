@@ -53,6 +53,7 @@ expect() { # expect <rc> <label> <body>
 }
 
 echo "closing-keywords product-lint fixture"
+python3 -I "$HERE/source-binding.py"
 
 # =============================================================================================
 # A. THE RULE
@@ -182,7 +183,7 @@ import json, sys, yaml
 wf = yaml.safe_load(open(sys.argv[1]))
 job = wf["jobs"]["closing-keywords"]
 steps = job["steps"]
-lint = [s for s in steps if "check-closing-keywords.py" in s.get("run", "")]
+lint = [s for s in steps if "EVENT_BODY" in s.get("env", {}) and "check-closing-keywords.py" in s.get("run", "")]
 assert len(lint) == 1, "exactly one step runs the rule"
 open(sys.argv[2], "w").write(lint[0]["run"])
 fetch = steps[0]
@@ -192,6 +193,7 @@ json.dump({
     "timeout": job.get("timeout-minutes"),
     "has_needs": "needs" in job,
     "has_paths": "paths" in job,
+    "rule_source": job.get("env", {}).get("CLOSING_RULE_SOURCE"),
     "fetch_with": fetch.get("with", {}),
     "fetch_uses": fetch.get("uses"),
     "lint_env_keys": sorted(lint[0].get("env", {})),
@@ -224,13 +226,14 @@ for forbidden in ("head", "base", "author", "label", "paths", "actor", "draft"):
     assert forbidden not in expr, forbidden
 PY
 
-python3 - "$META" <<'PY' && ok "B3  the rule is fetched at this workflow's own commit, as a DIRECTORY, with no credential persisted" || bad "B3  the rule fetch is not pinned to job_workflow_sha / not a directory fetch"
+python3 - "$META" <<'PY' && ok "B3  the rule is fetched at a separately pinned immutable source, as a DIRECTORY, with no credential persisted" || bad "B3  the rule source is not immutable / not a directory fetch"
 import json, sys
 d = json.load(open(sys.argv[1]))
 w = d["fetch_with"]
 assert d["fetch_uses"].startswith("actions/checkout@")
 assert w["repository"] == "FS-GG/.github"
-assert w["ref"] == "${{ github.job_workflow_sha }}", w["ref"]
+assert w["ref"] == "${{ env.CLOSING_RULE_SOURCE }}", w["ref"]
+assert __import__("re").fullmatch(r"[0-9a-f]{40}", d["rule_source"]), d["rule_source"]
 assert w["sparse-checkout"].strip() == "/scripts/", w["sparse-checkout"]
 assert w["sparse-checkout-cone-mode"] is False
 assert w["persist-credentials"] is False
@@ -243,7 +246,7 @@ assert d["lint_env_keys"] == ["EVENT_BODY", "EVENT_TITLE", "GH_TOKEN", "PR_NUMBE
 assert d["lint_env"]["GH_TOKEN"] == "${{ github.token }}"
 assert d["run_has_expr"] is False
 assert d["any_secret_ref"] is False
-assert d["step_count"] == 2          # fetch the rule, run the rule: nothing else, in particular no receiver checkout
+assert d["step_count"] == 3          # fetch, verify immutable source, lint; no receiver checkout
 assert d["timeout"] and int(d["timeout"]) <= 10
 PY
 

@@ -137,9 +137,9 @@ once more than 250 rows are enrolled: the 0.114.0 reader refuses a population ab
 associations retired by 0.113.0 must not be rolled back to 0.112.0: the older reader would re-read
 closed sources.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.118.0 — Minor source successor of the coherent set: Kit, Drivers and CLI advance together.
-Read-only routine-delivery inspection evaluates board-currency linkage before reporting readiness. Advisory inspection records the finding; enforce mode refuses an invalid linkage without entering merge or Status writer paths. Preserve the existing guarded apply, custody and readback boundaries.
-Clarify scoped source preparation and owned observation in the packaged host and pipeline guidance. Curated Atlas findings retain accepted newest-50 archive and enrollment boundaries and distinguish native PR-based Status projection from worker or reviewer activity. Source qualification, publication, installed adoption and actual read-only use remain separate outcomes.
+    <PackageReleaseNotes>0.120.0 — Minor source successor of the coherent set: Kit, Drivers and CLI advance together.
+Bind both reusable closing-keywords lint doors to an explicit immutable rule source and digest. Verify checkout outputs, actual HEAD and rule bytes before the unchanged lint command; keep contents-read-only permissions and test the source boundary on shallow checkouts.
+Include prepared read-only delivery readiness, scoped observation guidance and canonical cross-repository legacy PR ownership from0.118/0.119 source. Preserve v1 behavior, original custody, Root trust and ordinary reservation limits. Curated Atlas findings distinguish source qualification, publication, installed adoption, actual caller validation and wholeDelivery acceptance.
 $(FsggStandingAdvisories)
 
 FULL PER-VERSION HISTORY IS SERVED BY THE REGISTRY, NOT REPEATED HERE (`.github#2579`). Every

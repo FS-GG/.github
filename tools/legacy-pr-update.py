@@ -15,6 +15,9 @@ import stat
 
 SCHEMA = "fsgg.legacy-pr-update/1"
 AUTH_PREFIX = "<!-- fsgg:legacy-pr-update/v1 "
+SCHEMA_V2 = "fsgg.legacy-pr-update/2"
+AUTH_PREFIX_V2 = "<!-- fsgg:legacy-pr-update/v2 "
+REPOSITORY = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+")
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
 
@@ -74,7 +77,7 @@ def read_plan(lane, path, repo):
     require(isinstance(value, dict) and set(value) == {
         "schema", "repo", "repositoryId", "defaultBranch", "defaultSha", "number",
         "previousHead", "authorization", "successor", "pulls"})
-    require(value["schema"] == SCHEMA and value["repo"] == repo and positive(value["repositoryId"])
+    require(value["schema"] in (SCHEMA, SCHEMA_V2) and value["repo"] == repo and positive(value["repositoryId"])
             and text(value["defaultBranch"]) and sha(value["defaultSha"], HEX40) and positive(value["number"]))
     require(sha(value["previousHead"], HEX40))
     auth = value["authorization"]
@@ -88,12 +91,34 @@ def read_plan(lane, path, repo):
     require(isinstance(rows, list) and 1 <= len(rows) <= 20)
     fields = {"number", "id", "nodeId", "authorId", "author", "branch", "headSha", "base", "baseSha",
               "bodySha256", "titleSha256", "delivery", "issueId", "issueBodySha256"}
+    cross_repo = value["schema"] == SCHEMA_V2
+    if cross_repo:
+        require(REPOSITORY.fullmatch(repo) is not None)
+        fields |= {"deliveryRepo", "deliveryRepositoryId"}
+    repositories = {repo: value["repositoryId"]} if cross_repo else {}
+    repository_ids = {value["repositoryId"]: repo} if cross_repo else {}
+    ownership, issue_ids = {}, {}
     for row in rows:
         require(isinstance(row, dict) and set(row) == fields)
         require(all(positive(row[k]) for k in ("number", "id", "authorId", "delivery", "issueId")))
         require(all(text(row[k]) for k in ("nodeId", "author", "branch", "base")))
         require(all(sha(row[k], HEX40) for k in ("headSha", "baseSha")))
         require(all(sha(row[k], HEX64) for k in ("bodySha256", "titleSha256", "issueBodySha256")))
+        if cross_repo:
+            owner = row["deliveryRepo"]
+            require(isinstance(owner, str) and REPOSITORY.fullmatch(owner) is not None
+                    and owner.split("/")[0] == repo.split("/")[0]
+                    and owner.split("/")[1] not in (".", "..")
+                    and positive(row["deliveryRepositoryId"]))
+            # Aliases and conflicting duplicate ownership cannot split one native identity.
+            repository_id = row["deliveryRepositoryId"]
+            key = (owner, row["delivery"])
+            fact = (repository_id, row["issueId"], row["issueBodySha256"])
+            require(repositories.setdefault(owner, repository_id) == repository_id
+                    and repository_ids.setdefault(repository_id, owner) == owner
+                    and ownership.setdefault(key, fact) == fact
+                    and issue_ids.setdefault(row["issueId"], key) == key
+                    and (owner != repo or repository_id == value["repositoryId"]))
     for key in ("number", "id", "nodeId", "branch"):
         require(len({row[key] for row in rows}) == len(rows))
     require([row["number"] for row in rows] == sorted(row["number"] for row in rows))
@@ -107,7 +132,14 @@ def declaration(spec, row):
              "delivery": row["delivery"], "branch": row["branch"],
              "previousHead": spec["previousHead"], "currentHead": row["headSha"],
              "operation": "update-body-title", "successor": spec["successor"]}
+    if spec["schema"] == SCHEMA_V2:
+        value.update({key: row[key] for key in ("deliveryRepo", "deliveryRepositoryId", "issueId", "issueBodySha256")})
+        return AUTH_PREFIX_V2 + encoded(value) + " -->"
     return AUTH_PREFIX + encoded(value) + " -->"
+
+
+def delivery_repo(spec, row):
+    return row["deliveryRepo"] if spec["schema"] == SCHEMA_V2 else spec["repo"]
 
 
 def root_rules(lane):
@@ -169,8 +201,9 @@ def execute(lane, args):
 
     def authorization():
         auth = spec["authorization"]
-        comment = get(f"/repos/{args.repo}/issues/comments/{auth['commentId']}")
-        expected_url = f"https://api.github.com/repos/{args.repo}/issues/{selected['delivery']}"
+        owner = delivery_repo(spec, selected)
+        comment = get(f"/repos/{owner}/issues/comments/{auth['commentId']}")
+        expected_url = f"https://api.github.com/repos/{owner}/issues/{selected['delivery']}"
         if (not isinstance(comment, dict) or comment.get("id") != auth["commentId"]
                 or comment.get("node_id") != auth["nodeId"] or comment.get("issue_url") != expected_url
                 or not isinstance(comment.get("body"), str)
@@ -183,7 +216,7 @@ def execute(lane, args):
         node = data.get("node") if isinstance(data, dict) else None
         if (not isinstance(node, dict) or response.get("errors") or node.get("id") != auth["nodeId"]
                 or node.get("databaseId") != auth["commentId"] or node.get("body") != comment["body"]
-                or node.get("issue") != {"number": selected["delivery"], "repository": {"nameWithOwner": args.repo}}
+                or node.get("issue") != {"number": selected["delivery"], "repository": {"nameWithOwner": owner}}
                 or "lastEditedAt" not in node or "editor" not in node
                 or not isinstance(node.get("author"), dict) or not isinstance(node["author"].get("login"), str)
                 or node["author"]["login"].lower() not in roots
@@ -229,6 +262,12 @@ def execute(lane, args):
                 or repo.get("default_branch") != spec["defaultBranch"] or repo.get("archived") is not False
                 or repo.get("disabled") is not False):
             refuse("repository-mismatch")
+        if spec["schema"] == SCHEMA_V2:
+            native_principal = repo.get("owner")
+            if (not isinstance(native_principal, dict) or type(native_principal.get("id")) is not int or native_principal["id"] <= 0
+                    or native_principal.get("login") != args.repo.split("/")[0] or native_principal.get("type") != "Organization"):
+                refuse("ownership-principal-mismatch")
+            principal = {key: native_principal[key] for key in ("id", "login", "type")}
         if lane.current_head_sha(args.gh, args.repo, spec["defaultBranch"]) != spec["defaultSha"]:
             refuse("default-moved")
         pulls = lane.open_pulls(args.gh, args.repo)
@@ -260,16 +299,31 @@ def execute(lane, args):
                 guards[number] = guard
             elif guard != guards[number]:
                 refuse("preimage-drift")
-            issue = get(f"/repos/{args.repo}/issues/{row['delivery']}")
+            owner = delivery_repo(spec, row)
+            if spec["schema"] == SCHEMA_V2:
+                owner_repo = get(f"/repos/{owner}")
+                if (not isinstance(owner_repo, dict) or owner_repo.get("id") != row["deliveryRepositoryId"]
+                        or type(owner_repo.get("id")) is not int
+                        or owner_repo.get("full_name") != owner or owner_repo.get("archived") is not False
+                        or owner_repo.get("disabled") is not False or not isinstance(owner_repo.get("owner"), dict)
+                        or any(owner_repo["owner"].get(key) != value for key, value in principal.items())):
+                    refuse("ownership-repository-mismatch")
+            issue = get(f"/repos/{owner}/issues/{row['delivery']}")
             if (not isinstance(issue, dict) or issue.get("id") != row["issueId"] or issue.get("number") != row["delivery"]
                     or issue.get("state") != "open" or "pull_request" in issue or not isinstance(issue.get("body"), str)
-                    or issue.get("repository_url") != f"https://api.github.com/repos/{args.repo}"
+                    or issue.get("repository_url") != f"https://api.github.com/repos/{owner}"
                     or lane.text_sha(issue["body"]) != row["issueBodySha256"]
                     or not re.search(r"^Work level: Delivery\b", rules.visible_text(issue["body"]), re.MULTILINE)):
                 refuse("ownership-issue-mismatch")
-            if f"{args.repo}#{row['delivery']}" not in rules.pr_refs(args.repo, native["body"]):
+            if spec["schema"] == SCHEMA_V2 and (type(issue.get("id")) is not int or type(issue.get("number")) is not int
+                    or issue.get("url") != f"https://api.github.com/repos/{owner}/issues/{row['delivery']}"
+                    or issue.get("html_url") != f"https://github.com/{owner}/issues/{row['delivery']}"):
+                refuse("ownership-issue-mismatch")
+            if f"{owner}#{row['delivery']}" not in rules.pr_refs(args.repo, native["body"]):
                 refuse("ownership-reference-missing")
             issue_fact = {"id": issue["id"], "number": issue["number"], "bodySha256": row["issueBodySha256"], "state": "open"}
+            if spec["schema"] == SCHEMA_V2:
+                issue_fact.update(repo=owner, repositoryId=row["deliveryRepositoryId"], principalId=principal["id"])
             if initial:
                 issues[number] = issue_fact
             elif issues[number] != issue_fact:
@@ -282,7 +336,7 @@ def execute(lane, args):
             fields = lane.routine_validator().marker_fields(lane.routine_validator().ROUTINE_MARKER_RE, desired)[0]
             if fields.get("operation") != "source-change":
                 refuse("selected-operation-mismatch")
-            if f"{args.repo}#{selected['delivery']}" not in rules.pr_refs(args.repo, desired):
+            if f"{delivery_repo(spec, selected)}#{selected['delivery']}" not in rules.pr_refs(args.repo, desired):
                 refuse("proposed-owner-reference-missing")
         auth, comparison = authorization(), source()
         if initial:
@@ -315,7 +369,7 @@ def execute(lane, args):
             try:
                 raw = path.read_text(encoding="utf-8")
                 old = json.loads(raw)
-                if old.get("schema") != SCHEMA or old.get("nativeId") != selected["id"] or old.get("repo") != args.repo:
+                if old.get("schema") not in (SCHEMA, SCHEMA_V2) or old.get("nativeId") != selected["id"] or old.get("repo") != args.repo:
                     raise ValueError("identity")
                 history.append((old, lane.text_sha(raw)))
             except (ValueError, AttributeError, UnicodeError) as error:
@@ -349,7 +403,7 @@ def execute(lane, args):
         def texts(guard):
             return {"bodySha256": lane.text_sha(guard["body"]), "titleSha256": lane.text_sha(guard["title"]),
                     "metadataSha256": guard_sha(lane, guard)}
-        custody = {"schema": SCHEMA, **identity, "intent": intent, "authorization": authorization_before,
+        custody = {"schema": spec["schema"], **identity, "intent": intent, "authorization": authorization_before,
                    "source": source_before, "previousHead": spec["previousHead"], "currentHead": selected["headSha"],
                    "before": texts(before), "after": texts(after), "phase": "validated",
                    "population": {str(n): guard_sha(lane, g) for n, g in guards.items()},
