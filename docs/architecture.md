@@ -656,7 +656,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 
 | Contract | Owner | `version` | `package-version` |
 |---|---|---|---|
-| `algorithms` | FS.GG.Algorithms | `0.1.0` | `0.1.0` |
+| `algorithms` | FS.GG.Algorithms | `0.2.0` | `0.2.0` |
 | `fsquint-replay` | FsQuint | `0.1.0` | `0.1.0` |
 | `fsgg-contracts` | FS.GG.SDD | `7.6.0` | `7.6.0` |
 | `governance-config` | FS.GG.Governance | `0.3.0` | `0.3.0` |

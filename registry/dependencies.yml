@@ -81,8 +81,11 @@ repos:
 #                   date-stamp or past-tense historical claims (report §6.6) so present-tense text does not rot.
 contracts:
   - id: algorithms
-    version: "0.1.0"
-    package-version: "0.1.0" # Published by release 41399115875 (tag v0.1.0 at 1d37bf8378e47a3b7f576cb52549ee971099d808; FS-GG/.github#5224): org feed then nuget.org via Trusted Publishing, archive sha256 eea4b9468d81e0b92eb1c242ed7cbaeb03b9437b094b7038d87e696b0c615720, hosted both-feed readback and a nuget.org-only consumer on .NET and Fable.
+    version: "0.2.0"
+    package-version: "0.2.0"
+    # v0.2.0 at 2c562525e4d8bdabecfa0ed56b34c8f2acc78e4b; original publish 41806231193 packed once and pushed org then nuget.org.
+    # Proof 41823593662/a1 and independent raw custody qualification bind the org-held file to the original 195245-byte archive, SHA256 38d5e517f2db5708a7d75517c23d4e5f91c245972ccf7eb4e11ea41bab3f0369.
+    # Public payload and fresh exact-version .NET/Fable consumers passed in 41810425667/a1; Root acceptance: FS-GG/FS.GG.Algorithms#35 (issuecomment-6629811543). Public signature differences and original failures remain retained.
     owner: algorithms
     surface: "FS.GG.Algorithms package — FSharp.Core-only Collections (BinaryHeap, IndexedHeap), Numerics (Q16.16 Fixed, Percentile), Random (Xoshiro128), Graph (BestFirst, Scc, UnionFind, TopoSort/CPM), Decision (Arbitration, BehaviourTree), Search.Grid (DoorGrid), Spatial (KdTree); each surface graded LockstepExact, Portable or DotNetOnly in its packaged Fable compatibility profile (ADR-0098)"
     consumers: []   # ADR-0098: Game.Core's exact pin and the call-site migrations are later Deliveries; nothing restores it yet.
