@@ -824,7 +824,10 @@ permission. A successful workflow reference alone is insufficient: native qualif
 resolved checkout input, output commit, actual checkout SHA and source-verification log.
 
 `tests/closing-keywords/source-binding.py` executes the real verification shell over real local Git
-checkouts, with a narrow checkout input/output seam following the pinned action. It exercises missing
+checkouts, with a narrow checkout input/output seam following the pinned action. Its private commits
+are built from digest-checked rule bytes, so a depth-1 CI checkout needs no historical fetch. Only the
+fixture's copied job pin is rebound; the production pin and unchanged lint-step digest are asserted
+separately. It exercises missing
 refs, unavailable contexts, default main even when its commit matches the pin, changed main, wrong
 checkout identity and mutated script bytes. These are offline component controls; they do not replace
 actual caller/current-base CI and native checkout readback. The older caller run checked out another

@@ -4,11 +4,14 @@
 The narrow checkout seam uses real local Git objects. Its SHA/ref normalization follows the
 pinned actions/checkout input-helper.ts and main.ts: SHA -> empty ref output + commit;
 empty input -> default branch. Unknown GitHub properties resolve empty (GitHub context contract).
-This is component evidence; native checkout inputs/outputs still require caller qualification.
+The fixture creates its own commits from digest-checked current rule bytes, with no source-history
+or network dependency. Only its copied job's pin is rebound to those commits; production pins are
+asserted independently. This is component evidence; native checkout still requires qualification.
 """
 from __future__ import annotations
 import copy
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -21,6 +24,8 @@ ROOT = Path(__file__).resolve().parents[2]
 PIN = "61be6a913fe9f6b4b7410ba8dbf1020b61971a2a"
 RULE = "scripts/check-closing-keywords.py"
 DIGEST = "0c71b522472eefd1724d12699cda7e8fce6048732992332601c51a556de96ed4"
+# Digest of the unchanged historical lint step (canonical JSON), without requiring its Git object.
+LINT_STEP_DIGEST = "6f2b96f46254b13d6ec434c04b82a3b77eab1ff9112743ce57ae21428502d58a"
 FILES = ("kit-materialize.yml", "closing-keywords-receiver.yml")
 
 
@@ -46,12 +51,17 @@ class SourceBinding(unittest.TestCase):
         cls.hub = cls.work / "fsgg-hub"
         cls.env = {"PATH": os.defpath, "HOME": str(cls.work), "GIT_CONFIG_NOSYSTEM": "1",
                    "GIT_CONFIG_GLOBAL": os.devnull, "PYTHONDONTWRITEBYTECODE": "1"}
-        cls.git("clone", "--quiet", "--shared", "--no-checkout", str(ROOT), str(cls.hub), cwd=cls.work)
-        cls.git("sparse-checkout", "init", "--no-cone")
-        cls.git("sparse-checkout", "set", "--no-cone", "/scripts/")
-        cls.git("checkout", "--quiet", "--force", "--detach", PIN)
-        cls.original = (cls.hub / RULE).read_bytes()
+        # A closed fixture: CI has only a depth-1 checkout and must not fetch historical objects.
+        cls.hub.mkdir()
+        cls.git("init", "--quiet", "--object-format=sha1")
+        cls.original = (ROOT / RULE).read_bytes()
         assert hashlib.sha256(cls.original).hexdigest() == DIGEST
+        (cls.hub / RULE).parent.mkdir(parents=True)
+        (cls.hub / RULE).write_bytes(cls.original)
+        cls.git("add", "--", RULE)
+        cls.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                "commit", "--quiet", "-m", "Fixture immutable rule")
+        cls.fixture_pin = cls.git("rev-parse", "HEAD").strip()
         # A future default branch with different rule bytes; it is private fixture source only.
         (cls.hub / RULE).write_bytes(cls.original + b"\n# fixture moving-main mutation\n")
         cls.git("add", "--", RULE)
@@ -76,7 +86,7 @@ class SourceBinding(unittest.TestCase):
         if re.fullmatch(r"[0-9a-f]{40}", value):
             target, ref_output = value, ""
         else:
-            target, ref_output = default or PIN, value or "refs/heads/main"
+            target, ref_output = default or self.fixture_pin, value or "refs/heads/main"
         self.git("checkout", "--quiet", "--force", "--detach", actual or target)
         if mutate:
             (self.hub / RULE).write_bytes(self.original + b"\n# uncommitted rule mutation\n")
@@ -93,11 +103,22 @@ class SourceBinding(unittest.TestCase):
         for filename, original in zip(FILES, self.jobs):
             with self.subTest(workflow=filename):
                 job = copy.deepcopy(original)
+                # Execute the unchanged guard against the self-contained fixture commit. The real
+                # production pin is checked separately below and is never changed in the workflow.
+                job["env"]["CLOSING_RULE_SOURCE"] = self.fixture_pin
                 change(job)
                 result = self.guard(job, **kwargs)
                 self.assertEqual(result.returncode == 0, passed, result.stdout + result.stderr)
 
     def test_pinned_operand_executes_verified_source(self):
+        # Causal closure regression: no remote, alternates or protected-history object can supply
+        # the fixture. Reintroducing a shared/history clone fails even in a full developer checkout.
+        self.assertEqual(self.git("remote").strip(), "")
+        self.assertEqual(self.git("rev-list", "--count", "--all").strip(), "2")
+        self.assertFalse((self.hub / ".git/objects/info/alternates").exists())
+        missing = subprocess.run(["git", "cat-file", "-e", PIN], cwd=self.hub, env=self.env,
+                                 capture_output=True, timeout=10)
+        self.assertNotEqual(missing.returncode, 0)
         self.both(passed=True)
 
     def test_missing_ref_refuses_even_when_default_main_is_exact_pin(self):
@@ -151,8 +172,8 @@ class SourceBinding(unittest.TestCase):
                     "RULE_CHECKOUT_REF": "${{ steps.hub-rule-source.outputs.ref }}",
                     "RULE_CHECKOUT_COMMIT": "${{ steps.hub-rule-source.outputs.commit }}",
                     "RULE_SHA256": DIGEST})
-                old = yaml.safe_load(self.git("show", PIN + ":.github/workflows/" + filename, cwd=ROOT))
-                self.assertEqual(lint, old["jobs"]["closing-keywords"]["steps"][-1])
+                actual_lint = json.dumps(lint, sort_keys=True, separators=(",", ":")).encode()
+                self.assertEqual(hashlib.sha256(actual_lint).hexdigest(), LINT_STEP_DIGEST)
                 self.assertEqual(fetch["with"]["repository"], "FS-GG/.github")
                 self.assertFalse(fetch["with"]["persist-credentials"])
 
