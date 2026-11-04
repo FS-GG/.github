@@ -734,12 +734,12 @@ Any one of these, and the decision is re-opened rather than eroded:
 
 * `pinDigests` scoped to `FS-GG/.github` is enabled in `default.json` **and** demonstrated to open and
   land digest bumps in a receiver — which repairs measurement 2 and part of 3.
-* The `github-ref` half is closed, so that pinning a `uses:` pins the rule with it. GitHub documents
-  `github.job_workflow_sha` as the commit SHA of the reusable workflow file for the job running it,
-  which would let a callee source its own scripts from its own commit with **no receiver-side edit at
-  all** — and would make a later pin mean what a reader assumes it means.
-  [#1786](https://github.com/FS-GG/.github/issues/1786), and it is **unmeasured**: that item may not
-  change three required gates on the strength of a documentation sentence either.
+* The `github-ref` half is closed with a measured binding between the workflow and its script source
+  ([#1786](https://github.com/FS-GG/.github/issues/1786)). `github.job_workflow_sha` is not an available
+  expression property: the actual #5195 caller resolved it empty and checkout selected hub main.
+  A pinned workflow and a successful job therefore do not establish a pinned script source. The
+  closing-keyword job below uses a separate immutable source pin; this does not qualify the other
+  reusable gates or change their binding.
 * A required verdict is measurably moved by a hub commit again, as in #1584. One instance is a
   measurement; a second is this decision being wrong.
 
@@ -759,7 +759,7 @@ arms any context (dry run, watch it report, then `repos.sh require-context`), ne
 
 | | |
 | --- | --- |
-| Rule | [`scripts/check-closing-keywords.py`](../../scripts/check-closing-keywords.py), the hub's own, fetched at the reusable workflow's own commit (`github.job_workflow_sha`) |
+| Rule | [`scripts/check-closing-keywords.py`](../../scripts/check-closing-keywords.py), the hub's own, fetched at the separate immutable `CLOSING_RULE_SOURCE` commit and verified before execution |
 | Subject | the PR body as raw text, and the PR **title** (plain text, no opt-in: under `COMMIT_OR_PR_TITLE` it becomes the squash commit subject, as .github#4963 showed). Live read first, event payload as fallback, so a re-run after an edit or retitle judges the edit. Commit subjects are read through the API and only **warn** |
 | Fails | any of the nine GitHub keywords next to `#N`, `GH-N`, `owner/repo#N` or an issue URL, negated or not, in prose, a code span, a fence or an indented block |
 | Passes | `Refs #N`; a keyword with no reference after it; `resolving`/`closing`/`fixing` (not GitHub keywords); the **opt-in** declaration line, `Closes #N.` alone on a line |
@@ -804,45 +804,107 @@ the two differ). A caller is one thin file that names it at `@main`, as every ot
 | Context | `closing-keywords / title-and-body` (caller job id `closing-keywords`, job name `title-and-body`; the bare name `closing-keywords` is the kit job's, and `check-job-uniqueness.py` refuses two jobs with one name) |
 | Permissions | the caller grants `contents: read` and `pull-requests: read`. The second is what lets a private repository read its live title and body; without it the job falls back to the event payload and a re-run after an edit replays the stale text |
 | Reach | one caller per repository; `edited` in its `pull_request` types re-checks a retitle or body edit |
-| Pin | `@main`, except where the repository's Actions policy requires full-SHA pins (`sha_pinning_required`), where the caller pins a commit of the receiver workflow and rebinds it when the rule changes |
+| Pin | The workflow reference and rule source are separate: callers use `@main` or an immutable workflow commit allowed by their Actions policy; both maintained lint jobs pin `CLOSING_RULE_SOURCE` independently |
 | Arming | not armed anywhere by the change that adds a caller. A private repository on a plan without branch protection (GitHub answers 403 "Upgrade to GitHub Pro or make this repository public") cannot arm it; there the check is advisory |
+
+### Closing-keyword source binding
+
+Both lint doors pin the rule source to protected commit
+`61be6a913fe9f6b4b7410ba8dbf1020b61971a2a`, independently of the caller and workflow revision.
+The job verifies checkout's commit output and actual Git HEAD, rejects a branch/default-ref output,
+and checks the script's SHA256 before running the lint. The pinned checkout action normalizes a SHA
+input to an empty ref output and a commit operand; the guard uses that actual
+[action contract](https://github.com/actions/checkout/blob/3d3c42e5aac5ba805825da76410c181273ba90b1/src/input-helper.ts).
+The rule uses only Python's standard library and runs with isolated Python (`-I`).
+
+Moving hub main cannot advance this rule. A rule update requires review of the new protected source
+and closure, then an update to the source pin and digest in both identical job bodies. An immutable
+workflow caller must also rebind its workflow pin. No receiver receives a script copy or additional
+permission. A successful workflow reference alone is insufficient: native qualification must read the
+resolved checkout input, output commit, actual checkout SHA and source-verification log.
+
+`tests/closing-keywords/source-binding.py` executes the real verification shell over real local Git
+checkouts, with a narrow checkout input/output seam following the pinned action. Its private commits
+are built from digest-checked rule bytes, so a depth-1 CI checkout needs no historical fetch. Only the
+fixture's copied job pin is rebound; the production pin and unchanged lint-step digest are asserted
+separately. It exercises missing
+refs, unavailable contexts, default main even when its commit matches the pin, changed main, wrong
+checkout identity and mutated script bytes. These are offline component controls; they do not replace
+actual caller/current-base CI and native checkout readback. The older caller run checked out another
+commit whose rule bytes happened to match; no incorrect historical lint verdict is claimed.
 
 ### Per-repo inventory of the gate and its required-context state (.github#5195)
 
-Measured 2026-11-02 UTC; refreshed after the receiver caller merges by reading each default branch's branch protection and rulesets
-(`gh api repos/FS-GG/<repo>/branches/<default>/protection/required_status_checks` and `.../rules/branches/<default>`; HighBarV3 and RecoilEngine use `master`)
-and its workflows. The route is how the repository gets the lint: **kit** (`materialize / closing-keywords`,
-through `kit-materialize.yml`), **receiver** (a thin caller of `closing-keywords-receiver.yml`, context
-`closing-keywords / title-and-body`) or **standalone** (a copy of the job that fetches the rule at a pinned hub
-commit, context `closing-keywords`). A private repository on this plan cannot be protected at all (GitHub answers
-403 "Upgrade to GitHub Pro or make this repository public"); the plan is fixed, so there the check can report but
-can never be required.
+Measured **2026-11-04 UTC** from all 27 visible organization repositories.
+Source/policy snapshots completed at 10:30 UTC; scope and reporting reads completed at 10:33 UTC. Each nonempty default branch was read at a stable
+commit before/after its complete workflow tree. Both classic required-status checks and effective branch rules were read.
+Current PR references were joined to live Project 3 Delivery cards: 19 repositories have a positive witness. The other eight
+have complete PR histories with no title/body reference under the maintained reference parser; they are excluded at this
+observation, not permanently exempt. Two of those repositories are empty. No caller, setting or required context was changed.
 
-| Repository | Visibility | Route | Required today | Arming possible |
+**Pre-fix source state:** protected Hub main is `61be6a91`. The reviewed receiver repair is still local, not deployed.
+The deployed kit/receiver workflows still use the unavailable `github.job_workflow_sha` expression, including the fixed
+Templates and Native.Qualification pins below. A successful job or pinned workflow does not prove an immutable transitive
+rule checkout. The original Coordination run fetched a different Hub commit with identical rule bytes; no incorrect
+historical lint verdict is claimed. Every affected route needs the accepted successor and actual source-bound native proof.
+
+“Success observed” records a genuine completed Actions job, not whole caller/current-base or repaired-source acceptance.
+Private job identities, complete source snapshots and API failures stay in private evidence. A private-plan 403 makes the
+policy stores unavailable and says the feature cannot be enabled on the current plan; it is not a successful “no required
+contexts” read. Algorithms is the only **positively observed** armed closing-keyword context.
+
+| Repository | Scope | Default-branch route | Required at observation | Native reporting |
 | --- | --- | --- | --- | --- |
-| .github | public | its own `closing-keywords` workflow (the hub's check, with the commit messages) | no | yes, by protection |
-| FS.GG.Game, SDD, Governance, Audio, Rendering, Net | public | kit, at `@main` | no | yes, by protection (Governance also has a ruleset) |
-| FS.GG.Templates | public | kit, pinned to `f1ac83ac…` | no | yes, by protection |
-| FS.GG.Algorithms | public | standalone | **yes**, `closing-keywords` in its `main-protection` ruleset | already armed |
-| FS.GG.Coordination | public | receiver pending: caller FS.GG.Coordination#1118 remains open (pinned to the receiver's merge commit: its execution-pin validator refuses `@main`); no caller on the default branch | no | yes, by its ruleset |
-| FsQuint, FSBarV2 | public | receiver on the default branch, callers FsQuint#51 and FSBarV2#54 merged; both caller heads reported the check successfully | no | only after the repository gets a protection or a ruleset: it has neither |
-| FS.GG.RuneScape | private | standalone | no | no, advisory only |
-| FS.GG.FourD, SC2.Client, Unity.Client, Native.Qualification | private | receiver on the default branch; the four caller PRs are merged and successful native Actions jobs now observed (Native.Qualification pins the merge commit: it enforces full-SHA pins) | no | no, advisory only |
-| HighBarV3, RecoilEngine | public | absent on the default branch; minimal read-only receiver callers prepared locally under #5195, not yet pushed or installed at measurement | no | only after a protection or ruleset is added; neither currently has one |
+| .github | in scope | own `declared-closes` | no closing context in either store | success observed ([run](https://github.com/FS-GG/.github/actions/runs/41795084468)) |
+| FS.GG.Algorithms | in scope | standalone Hub-rule pin `8ca8f936` | **yes**, `closing-keywords` | success observed ([run](https://github.com/FS-GG/FS.GG.Algorithms/actions/runs/41814991805)) |
+| FS.GG.Audio | in scope | kit `@main` | no closing context in either store | success observed ([run](https://github.com/FS-GG/FS.GG.Audio/actions/runs/41680898064)) |
+| FS.GG.Coordination | in scope | none; #1118 draft at `55a84e7b` | no closing context in either store | no default-branch producer |
+| FS.GG.Coordination.Authority | excluded; complete PR history | none on default branch | no closing context in either store | no default-branch producer |
+| FS.GG.Coordination.Authority.Sandbox | excluded; complete PR history | none on default branch | no closing context in either store | no default-branch producer |
+| FS.GG.FourD | in scope | receiver `@main` | unavailable; plan 403 | success observed |
+| FS.GG.Game | in scope | kit `@main` | no closing context in either store | success observed ([run](https://github.com/FS-GG/FS.GG.Game/actions/runs/41455730402)) |
+| FS.GG.GitHub.Substrate.Sandbox | excluded; complete PR history | none on default branch | unavailable; plan 403 | no default-branch producer |
+| FS.GG.Governance | in scope | kit `@main` | no closing context in either store | success observed ([run](https://github.com/FS-GG/FS.GG.Governance/actions/runs/41574691072)) |
+| FS.GG.Native.Qualification | in scope | receiver `@31632a60` | unavailable; plan 403 | success observed |
+| FS.GG.Net | in scope | kit `@main` | no closing context in either store | success observed ([run](https://github.com/FS-GG/FS.GG.Net/actions/runs/41656173760)) |
+| FS.GG.Rendering | in scope | kit `@main` | no closing context in either store | success observed ([run](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/41545079939)) |
+| FS.GG.RuneScape | in scope | standalone Hub-rule pin `936283c0` | unavailable; plan 403 | success observed |
+| FS.GG.SC2.Client | in scope | receiver `@main` | unavailable; plan 403 | success observed |
+| FS.GG.SDD | in scope | kit `@main` | no closing context in either store | success observed ([run](https://github.com/FS-GG/FS.GG.SDD/actions/runs/41571264893)) |
+| FS.GG.Templates | in scope | kit `@f1ac83ac` | no closing context in either store | success observed ([run](https://github.com/FS-GG/FS.GG.Templates/actions/runs/41583695480)) |
+| FS.GG.Unity.Client | in scope | receiver `@main` | unavailable; plan 403 | success observed |
+| FSBarV2 | in scope | receiver `@main` | no closing context in either store | success observed ([run](https://github.com/FS-GG/FSBarV2/actions/runs/41599875283)) |
+| FsQuint | in scope | receiver `@main` | no closing context in either store | success observed ([run](https://github.com/FS-GG/FsQuint/actions/runs/41438076398)) |
+| HighBarV3 (`master`) | in scope | receiver `@main` | no closing context in either store | success observed ([run](https://github.com/FS-GG/HighBarV3/actions/runs/41574684174)) |
+| RecoilEngine (`master`) | in scope | receiver `@main` | no closing context in either store | success observed ([run](https://github.com/FS-GG/RecoilEngine/actions/runs/41748506938)) |
+| specairn | excluded; complete PR history | none; empty repository | n/a; no default branch | no default-branch producer |
+| svg-workspace-public-clean-20260914 | excluded; complete PR history | none on default branch | no closing context in either store | no default-branch producer |
+| svg-workspace-public-retained-20260914 | excluded; complete PR history | none on default branch | no closing context in either store | no default-branch producer |
+| svg-workspace-qualification-clean-20260914 | excluded; complete PR history | none on default branch | unavailable; plan 403 | no default-branch producer |
+| svg-workspace-qualification-retained-20260914 | excluded; complete PR history | none; empty repository | unavailable; plan 403 | no default-branch producer |
 
-The public receiver caller heads reported `closing-keywords / title-and-body` successfully, including the
-still-open Coordination caller. The earlier four-private-repository reporting Unknown is resolved by
-fresh authenticated Actions run/job metadata: each has a completed successful `title-and-body` job,
-matching run/head/attempt and its native `check_run_url`. This is execution/reporting evidence, not a
-claim that the previously denied check-runs-list endpoint became readable. Private raw evidence is
-retained by the delivery owner, not copied into this document.
+**HighBarV3 and RecoilEngine are installed**, correcting the earlier prepared-only rows: their default branches now contain
+receiver callers and matching successful native jobs were read. Their `@main` references will see the repaired workflow only
+after protected Hub integration; this inventory does not claim that new source-binding qualification.
 
-HighBarV3 and RecoilEngine now reference Project3 Deliveries, so the original repository set is no
-longer complete: HighBarV3#18 and RecoilEngine#3 are concrete new examples. Both default branches lack
-the lint. Their prepared callers reuse the maintained read-only hub workflow; they are neither installed
-nor required at measurement. This is an explicit #5195 remainder, not evidence of fleet completion.
-The table is a dated observation; refresh native source/reporting before declaring the rollout complete.
-No branch protection or ruleset was changed by this inventory. Not in the inventory because no pull request
-there references a Project 3 Delivery at the original measurement: FS.GG.Coordination.Authority and the two Sandbox repositories.
-Algorithms is the only repository where the lint is already a merge gate, and its standalone job is the reason
-the receiver exists: that copy carries its own pin to move by hand.
+**Coordination remains blocked.** #1118 is draft at `55a84e7b`, with its old receiver pin `31632a60`, and no caller is on
+its default branch. The reviewed Hub successor must be accepted first. The published/physically qualified v2 cross-repository
+owned-legacy supplier under #5269 must then support the legitimate same-PR/current-base update and exact native checkout/CI.
+Preserve all three Coordination reservations, SDK A/B evidence and original M1 operation/receipts; no local #5195 alias,
+new slot, policy change or unpublished-helper write is implied.
+
+**Remaining rollout obligations:**
+
+- Hub integration and actual successor execution must establish the resolved checkout input/output, actual SHA and rule digest.
+  Existing `@main` kit/receiver sources can remain, but source presence alone does not establish their new execution.
+- Templates (`f1ac83ac`) and Native.Qualification (`31632a60`) retain immutable old workflow pins. Their repository owners need
+  selected successor-pin delivery and native readback; no pin or caller was changed here.
+- Algorithms and RuneScape retain legacy standalone wrappers whose pinned rules equal the Hub digest `0c71b522…`.
+  Root selected **local canonical-receiver migrations** for both. The local Algorithms proposal uses a needs-based
+  compatibility gate to preserve required `closing-keywords` / App15368. The actual accepted Hub pin remains unresolved;
+  neither migration is adopted. Repository owners, reservations and existing policy remain unchanged.
+- Re-read all affected default branches, native execution and both required-state stores after adoption. Keep unavailable
+  policy/liveness evidence explicit and reconsider excluded repositories when a Delivery reference appears.
+
+This is the maintained 27-repository inventory and concrete remaining coverage scope. It does not close #5195, infer native
+acceptance from local review, or arm a context merely because it has reported.
