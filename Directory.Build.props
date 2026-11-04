@@ -664,7 +664,7 @@
          The same cut aligns the F# and host archive policy with the selected newest-50 retention.
          Source preparation only: published 0.114.5, canonical installed pins, original release
          journals and scheduled adoption remain unchanged until separately qualified publication. -->
-    <FsggCoherentSetVersion>0.116.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.116.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
