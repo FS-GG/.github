@@ -11,6 +11,9 @@ on:
       - 'scripts/requirements-learn-history.txt'
       - 'tests/learn-history/**'
       - 'scripts/learn-context-snapshot.py'
+      - 'scripts/learn-context-rater.py'
+      - 'tests/learn-context-rater/**'
+      - 'docs/coordination/2026-11-03-learn-context-rater-boundary-v1.md'
       - 'contracts/learn/context-snapshot-v1.schema.json'
       - 'tests/learn-context-snapshot/**'
       - 'docs/coordination/2026-11-03-learn-context-replay-protocol-v1.md'
@@ -35,6 +38,9 @@ on:
       - 'scripts/requirements-learn-history.txt'
       - 'tests/learn-history/**'
       - 'scripts/learn-context-snapshot.py'
+      - 'scripts/learn-context-rater.py'
+      - 'tests/learn-context-rater/**'
+      - 'docs/coordination/2026-11-03-learn-context-rater-boundary-v1.md'
       - 'contracts/learn/context-snapshot-v1.schema.json'
       - 'tests/learn-context-snapshot/**'
       - 'docs/coordination/2026-11-03-learn-context-replay-protocol-v1.md'
@@ -82,3 +88,5 @@ jobs:
       - run: python3 -m unittest discover -s tests/learn-classifier -p 'test_*.py'
       # Synthetic local Git/promisor fixtures and mocked reads; no native context audit or model calls.
       - run: python3 -m unittest discover -s tests/learn-context-snapshot -p 'test_*.py'
+      # Sealed synthetic payload/wire controls only; inference launch remains disabled.
+      - run: python3 -m unittest discover -s tests/learn-context-rater -p 'test_*.py'
