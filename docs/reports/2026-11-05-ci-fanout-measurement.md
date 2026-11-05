@@ -131,17 +131,35 @@ Preflight uses existing static checks, fixture suites and the existing concurren
 no custom state model is added. New measurement/wiring controls share the existing
 scheduled-engine-provisioning job, adding no hosted job. The local command is
 `python3 tests/workflow-selection/run.py`; it uses the pinned PyYAML provided by
-`setup-policy-python`, with no additional download. Twelve tests, 46 wiring mutations and three unsafe
-concurrency variants passed in 0.164 seconds end-to-end locally. Cold hosted setup, future maintenance
+`setup-policy-python`, with no additional download. Thirteen tests, 46 wiring mutations, two planted filter omissions and three unsafe
+concurrency variants passed in 0.264 seconds end-to-end locally. Cold hosted setup, future maintenance
 and realized savings remain unmeasured.
+
+The concurrency gate's own PR and push filters now include the previously omitted governed
+`v1-writer-census-advisory-selftest.yml`. The existing literal filters remain narrow. An independent
+control reads the actual 66-workflow governed inventory and checks both triggers; removing a known
+present path from either copy makes that control detect the omission.
+
+The [retained #5186 review](https://github.com/FS-GG/.github/pull/5186#issuecomment-6556885985)
+left F1 with this Delivery: consolidation had exempted all of `always-gates.yml` from the retired-flag
+rule. The rule's explanation stays in the existing checker docstring; workflow comments and diagnostic
+summaries no longer need the literal spelling. The whole-file exemption is removed. The fixture
+plants a live command at the actual combined-workflow filename and requires rejection; restoring the
+old exemption in an isolated broken checker makes the same planted command pass, proving that the
+control detects the earlier hole. No new exemption or parser is added.
+
+Changing `always-gates.yml` matches the existing signature-doc sweep classifier. Its final native
+mutation sweep remains part of CI demand; this source does not suppress it to obtain a smaller run.
 
 ## Verification and retained failures
 
 Prior component `d3a75149` passed closing-keywords 61 assertions, reusable-job-ids 19 and
 scheduled-engine-provisioning 29; those results are reused only where inputs are unchanged. The
 successor uniqueness fixture passed 26 assertions including eight event/field/skip mutations; its
-measurement/wiring suite passed 12 tests and 46 planted missing, masked, reordered or conditional
-fixture/job/gate variants. The kit suite reports
+measurement/wiring suite passed 13 tests and 46 planted missing, masked, reordered or conditional
+fixture/job/gate variants. The retired-flag fixture passed 18 assertions, including the planted
+combined-workflow command and old-exemption inversion; the real tree audit counted 80 mentions.
+The unchanged kit suite reports
 `270 passed, 0 failed`, then three further inversion controls, and
 `all 273 declared legs ran`.
 
@@ -159,7 +177,10 @@ required native gate remains mandatory; no settings or producer migration is mad
 
 The first full concurrency fixture attempt reached a local 180-second execution guard before completion;
 that result is budget-incomplete, not a source assertion failure. Its bounded retry passed all
-721 assertions on that component. The successor also passed all 721 assertions. Paths-coherence passed 190 fixture assertions and checked 126 matching trigger pairs,
+721 assertions on that component. Component `b9cd2a13` also passed all 721 assertions. The final prose/filter follow-up reuses those
+local controls only after parsing all 66 governed workflows and proving the modeled event, concurrency
+and job metadata fields unchanged, with identical checker/fixture bytes and a changed-policy
+opposite control. This does not replace final native coherent CI. Paths-coherence passed 190 fixture assertions and checked 126 matching trigger pairs,
 120 project subjects and 20 script surfaces; successor timeout validation audited 306 jobs; reusable-context
 validation preserved all 49 reusable workflow contracts; successor job-uniqueness graded 178 names and nine
 plain required contexts; test-selector passed 69 assertions. The first policy-inventory invocation
@@ -172,7 +193,12 @@ The cgroup readback retained `memory.max=2147483648`, `memory.swap.max=0` and
 independent review, not as original files at the overwritten paths. Current successor results were
 moved to a separate directory, and later outputs refuse overwrites. The gap remains explicit. The successor's first wiring-control attempt failed two missing-gate mutations
 in the kit arms because another different gate remained. The control was repaired to require both
-production arms; the successful expanded-mutation run does not erase that retained failure. Source review,
+production arms; the successful expanded-mutation run does not erase that retained failure. Full local shell lint with the verified pinned 0.11.0 binary exceeded the admitted 2 GiB memory cap:
+systemd recorded `oom-kill`, peak 2,147,483,648 bytes and launcher exit 143, with no successful receipt.
+The original manifest/log remain; later commands in that attempt were not run. A separate bounded
+projection using the same production extractor, pinned binary and diagnostic selectors passed all two
+changed shell files and 73 shell blocks from changed workflows. This is affected-source evidence,
+not a full-lint pass; full native lint remains mandatory. Current source review,
 final native required CI and candidate after-state remain pending. Delivery
 acceptance must retain that remainder. The reusable Atlas finding previously drafted as
 `github/ci-fanout-cost-is-runner-slots` was reverted from PR #5186 because Atlas packaging would
@@ -266,7 +292,7 @@ all other path-filter decisions remain Unknown. “Unfiltered” classifies the 
 | `pin-coherence.yml` | 22 | 0 / 22 | 0 | Unknown | Unknown | 16 paths | 0 / 0 / 0 / 22 |
 | `pipefail-assertions.yml` | 339 | 46 / 293 | 92 | 82 | 12.5 | not in current source | 0 / 0 / 0 / 339 |
 | `policy.yml` | 212 | 21 / 191 | 21 | 99 | 12.3 | 22 paths | 0 / 0 / 0 / 212 |
-| `pr-concurrency-coherence.yml` | 33 | 7 / 26 | 7 | 174 | 29.533 | 68 paths | 0 / 0 / 0 / 33 |
+| `pr-concurrency-coherence.yml` | 33 | 7 / 26 | 7 | 174 | 29.533 | 69 paths | 0 / 0 / 0 / 33 |
 | `pr-lane-admission.yml` | 6 | 0 / 6 | 0 | Unknown | Unknown | 3 paths | 0 / 0 / 0 / 6 |
 | `preset-repo-scope-coherence.yml` | 9 | 0 / 9 | 0 | Unknown | Unknown | 5 paths | 0 / 0 / 0 / 9 |
 | `preset-resolution.yml` | 7 | 0 / 7 | 0 | Unknown | Unknown | 4 paths | 0 / 0 / 0 / 7 |

@@ -158,6 +158,33 @@ class MeasurementTests(unittest.TestCase):
             edit = model.pr(7, "a" * 40, "pull_request", "edited")
             self.assertTrue(model.pending_replaced(workflow, bad, head, edit))
 
+    def test_concurrency_filters_cover_the_actual_governed_inventory(self):
+        spec = importlib.util.spec_from_file_location("concurrency", ROOT / "scripts/check-pr-concurrency.py")
+        model = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(model)
+        spec = importlib.util.spec_from_file_location("paths", ROOT / "scripts/check-paths-coherence.py")
+        paths = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(paths)
+        document = yaml.safe_load((ROOT / ".github/workflows/pr-concurrency-coherence.yml").read_text())
+        governed = [f".github/workflows/{name}.yml" for name in model.GOVERNED + model.PR_ONLY]
+        self.assertTrue(governed)
+        for path in governed:
+            self.assertTrue((ROOT / path).is_file(), path)
+
+        def missing(candidate):
+            events = candidate.get("on", candidate.get(True))
+            return {(event, path) for event in ("pull_request", "push") for path in governed
+                    if not paths.selects(path, events[event]["paths"])}
+
+        self.assertEqual(set(), missing(document))
+        # The same instrument must notice a removed, known-present subject in
+        # either trigger; a successful YAML parse alone cannot establish closure.
+        known = ".github/workflows/always-gates.yml"
+        for event in ("pull_request", "push"):
+            mutant = copy.deepcopy(document)
+            mutant.get("on", mutant.get(True))[event]["paths"].remove(known)
+            self.assertEqual({(event, known)}, missing(mutant))
+
     def test_absent_job_evidence_is_unknown(self):
         result = measurement.summarize([run()], {}, START, END)
         self.assertIsNone(result["observedRunnerMinutes"])

@@ -10,8 +10,8 @@
 # and thirteen, and the signature-doc mutation sweep still gets its own job, now only when its classifier
 # says the diff touches its subject.
 #
-# WHAT IS UNCHANGED. Every gate's steps are copied verbatim from its old workflow (the section headers
-# below carry each one's own rationale), including the one-named-step-per-exit-code verdict legs. Each
+# Every gate's steps were copied verbatim at consolidation, including the separate exit-code verdict
+# legs. The retired-flag rule prose now lives in its checker so this workflow needs no exemption. Each
 # gate still has NO `paths:` filter, for the reasons its section gives: the subject is the whole tree.
 # None of them was a required status check on main (check-required-contexts.py derives the required set
 # from the live protection, and none of these job names was in it), so no context moves.
@@ -83,14 +83,14 @@ jobs:
       # ================================================================================================
       # engine-flag-narrative (was .github/workflows/engine-flag-narrative.yml; job(s) fixture, no-live-flag)
       # ================================================================================================
-      # engine-flag-narrative — the retired `--engine` flag may survive only where it is HISTORY.
+      # engine-flag-narrative — the retired engine-selection flag may survive only where it is HISTORY.
       #
       # .github#917, epic #266 (the rule nothing asserts).
       #
-      # ADR-0040 finished the port: the engine BECAME the client, and `--engine` went with the choice it
+      # ADR-0040 finished the port: the engine BECAME the client, and its selection flag went with the choice it
       # existed to express. `Options.fs` does not parse it; `OptionsTests.fs` pins it as the specimen of an
       # unknown flag that must be NAMED and refused. Yet doc comments went on stating a present-tense
-      # consequence "under `--engine=fs`", describing a mode no worker can select.
+      # consequence tied to the retired selection flag, describing a mode no worker can select.
       #
       # THIS IS THE FOURTH HAND-REPAIR OF ONE CLASS — the narrative outlived the thing it described:
       #
@@ -147,7 +147,7 @@ jobs:
           {
             echo "### engine-flag-narrative: the retired flag is being described as live"
             echo
-            echo "A file names \`--engine\` as something a worker can select. **It cannot.**"
+            echo "A file names the retired selection flag as something a worker can select. **It cannot.**"
             echo "ADR-0040 finished the port — the engine became the client — and the flag went with"
             echo "the choice it expressed: \`Options.fs\` does not parse it, and \`OptionsTests.fs\`"
             echo "pins it as the specimen of an unknown flag that must be refused."
@@ -175,7 +175,7 @@ jobs:
           {
             echo "### engine-flag-narrative: no verdict"
             echo
-            echo "The root was unreadable, or the audit found **no mention of \`--engine\` anywhere**"
+            echo "The root was unreadable, or the audit found **no mention of the retired flag anywhere**"
             echo "— which means the walker or the pattern is broken, not that the tree is clean. The"
             echo "ADRs and the rejection test are built out of this flag."
             echo

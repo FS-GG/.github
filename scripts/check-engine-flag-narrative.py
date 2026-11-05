@@ -57,11 +57,14 @@ WHAT IS DELIBERATELY NOT THE BUG — the allowlist, and why each entry is there:
     the flag is refused stops existing, which is the one test standing between this gate and a flag
     that quietly comes back.
 
-  - this gate, its workflow, and its fixture — the three files that must NAME the forbidden string in
+  - this gate and its fixture — the two sources that must NAME the forbidden string in
     order to forbid it. The docstring you are reading quotes it; the finding message below quotes it;
-    the fixture feeds it in on purpose to prove the gate can still say NO. All three are the rule
+    the fixture feeds it in on purpose to prove the gate can still say NO. Both are the rule
     being STATED, not violated. This is the same carve-out `check-worker-id-attractor.py` makes for
     the counter-example in its own docstring.
+
+Workflow comments and summaries use the rule description without quoting the retired spelling.
+The combined always-gates workflow has no whole-file exemption; a live invocation there is a finding.
 
 The gate is matched by BASENAME, not by `__file__`, for the reason that gate learned: the fixture
 audits a COPY of the shipped tree, and a path-identity check would exempt the running gate while
@@ -126,8 +129,6 @@ ALLOWED_FILES = frozenset(
         # not fail open, it fails LOUD (the file stops being exempt and its two deliberate mentions
         # become findings), which is the right direction for an allow-list to fail in.
         "tests/FS.GG.Coord.Cli.Kernel.Tests/OptionsTests.fs",
-        # States the rule in its own summary prose (the gate's steps live in always-gates.yml since .github#5182).
-        ".github/workflows/always-gates.yml",
         # TIER FIVE — found by this gate, on the day it was written, in the tree #917 declared clean.
         # Two dated records of the port that retired the flag. Both are `Status: COMPLETE` manifests
         # whose mentions NARRATE the removal ("`--engine=bash` is gone *because there is no bash left
@@ -348,7 +349,7 @@ def main(argv: list[str]) -> int:
     print(
         f"ok: `--engine` appears only where it is history — {mentions} mention(s) audited across the "
         f"tree, all inside the allowlist (docs/adr/, the design record, the rejection test, and this "
-        f"gate's own three files)."
+        f"gate and its fixture)."
     )
     return OK
 
