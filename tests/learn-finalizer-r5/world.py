@@ -317,8 +317,9 @@ class World:
                 stop()
             return 0, '', ''
         if a[:3] == ['podman', 'pod', 'stop']:
-            for c in self.containers.values():
-                c['state'] = 'exited'
+            for name, c in self.containers.items():
+                if name in {f'{POD}-{role}' for role in (*ROLES, 'pg', 'infra')}:
+                    c['state'] = 'exited'
             return 0, '', ''
         if a[:3] == ['podman', 'pod', 'rm']:
             if 'pod_rm' in self.fail:

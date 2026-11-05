@@ -1381,6 +1381,8 @@ with tempfile.TemporaryDirectory() as tmp:
     w = world(tmp)
     foreign = f'{W.POD}-host-host'  # op id op-pod-1-host, role host
     w.add_container(foreign, role='host')
+    foreign_helper = f'learn-fin-{W.OPID}-host-pgcd'
+    w.add_container(foreign_helper)
     w.containers[foreign]['mounts'] = [{'Destination': '/in'}]
     w.secrets.append(f'{W.POD}-host-cred')
     foreign_unit = f'{W.POD}-host.service'
@@ -1388,7 +1390,7 @@ with tempfile.TemporaryDirectory() as tmp:
     w.extra_units += [f'{foreign_unit} loaded failed failed X', f'{own_fin} loaded active running X']
     r = go(w)
     check(r.rec['schema'] == 'learn-op-pod-success/1', 'N3: a role-suffixed different op does not affect own retirement')
-    check(foreign in w.containers and all(foreign not in c for c in r.calls if c[:2] == ['podman', 'inspect']), 'N3: different op is neither inspected nor removed by fixture retirement')
+    check(foreign in w.containers and foreign_helper in w.containers and w.containers[foreign]['state'] == 'running' and all(foreign not in c for c in r.calls if c[:2] == ['podman', 'inspect']), 'N3: different op and helper survive; foreign role is neither inspected nor stopped')
     check(not any(c[:3] == ['systemctl', '--user', 'reset-failed'] and c[-1] in (foreign_unit, own_fin) for c in r.calls), 'N3: neither foreign unit nor own active finalizer is reset')
     check(any(row.startswith(foreign_unit) for row in w.extra_units), 'N3: fake reset preserves the foreign failed unit')
 for dest, seen in [('/in', True), ('/in/child', True), ('/in/child/deep', True), ('/input', False), ('/inside', False), ('/in-other', False)]:
@@ -1430,4 +1432,11 @@ with tempfile.TemporaryDirectory() as tmp:
     w.at(14, lambda: setattr(w, 'show_state_fails', 3))
     r = go(w)
     check(r.rec['schema'] == 'learn-op-pod-success/1' and 'unitStateUnknown' not in r.rec, 'unreadable count resets after a readable poll; two runs of three are not six consecutive')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.at(6, lambda: open(os.path.join(w.home, '.local', 'state', 'learn-checkpoint', W.OPID, 'req-3'), 'w').write('{}'))
+    def custody_error(*a, **kw):
+        raise RuntimeError('injected custody failure')
+    r = go(w, patch={'archive_role': custody_error})
+    check(r.rec['schema'] == 'learn-op-retirement-failure/1' and r.rec['unservedCheckpointRequests'] == ['req-3'], 'N5: the exception path retains unserved requests with its original failure')
 print(f'learn-finalizer-r5: {n} assertions passed')
