@@ -225,6 +225,21 @@ class LocalAncestryAndClosureTests(FixtureTest):
         live = self.repo.change(linked, "edge absent")
         self.assertEqual(self.local("coherent-set", source, live)["closureChanged"], [])
 
+    def test_exists_function_case_tracks_the_condition_input(self) -> None:
+        project = "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
+        edge = "inputs/condition/flag.txt"
+        for name in ["Exists", "exists", "eXiStS", "eXiStS ", "exists\t"]:
+            with self.subTest(name=name):
+                self.repo.write(project, f'<Project><PropertyGroup Condition="{name}(\'../../inputs/condition/flag.txt\')"/></Project>')
+                source = self.repo.commit("condition edge")
+                live = self.repo.change(edge, source)
+                with self.assertRaisesRegex(closure.ClosureRefused, "release closure changed"):
+                    self.local("coherent-set", source, live)
+                self.repo.write(project, "<Project/>")
+                cut = self.repo.commit("cut condition edge")
+                outside = self.repo.change(edge, cut)
+                self.assertEqual(self.local("coherent-set", cut, outside)["closureChanged"], [])
+
     def test_xml_all_attributes_entities_comments_and_refusals(self) -> None:
         read = closure._project_attributes
         self.assertEqual(read("x", '<Project><Compile Include="one" Exclude="two" Update="three" Remove="four"/></Project>', staged=False),

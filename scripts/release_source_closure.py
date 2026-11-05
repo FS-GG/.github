@@ -112,7 +112,7 @@ _IMPORT = re.compile(r"^\s*(?:from\s+([A-Za-z_][\w]*)[\w.]*\s+import|import\s+([
 _WITH_NAME = re.compile(r"with_name\(\s*[\"']([A-Za-z0-9._-]+)[\"']\s*\)")
 _NON_PATH_ITEMS = frozenset({"packagereference", "packageversion", "globalpackagereference", "packagedownload",
                              "frameworkreference", "using", "internalsvisibleto", "assemblyattribute"})
-_EXISTS = re.compile(r"Exists\(\s*(['\"])(.*?)\1\s*\)")
+_EXISTS = re.compile(r"Exists\s*\(\s*(['\"])(.*?)\1\s*\)", re.I)
 _KIT_ROW = re.compile(r"^  - \{\s*id:\s*[A-Za-z0-9._-]+,\s*kind:\s*(skill|client|config),\s*source:\s*([A-Za-z0-9._/-]+)\s*(?:,\s*dest:\s*[A-Za-z0-9._/-]+\s*)?\}\s*(?:#.*)?$")
 _PROJECT_SUFFIXES = (".fsproj", ".csproj", ".props", ".targets")
 # Repository roots whose paths a reachable release script can turn into released or verified bytes.

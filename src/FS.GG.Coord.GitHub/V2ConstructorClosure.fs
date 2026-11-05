@@ -18,7 +18,7 @@ module V2ConstructorClosure =
           "Directory.Solution.props"; "Directory.Solution.targets"; "NuGet.config"; "nuget.config"; "NuGet.Config"
           ".gitattributes"; ".gitmodules"; ".editorconfig"; ".config/"; "dist/dotnet/" ]
 
-    let private exists = Regex("Exists\\(\\s*(['\"])(.*?)\\1\\s*\\)", RegexOptions.CultureInvariant)
+    let private exists = Regex("Exists\\s*\\(\\s*(['\"])(.*?)\\1\\s*\\)", RegexOptions.CultureInvariant ||| RegexOptions.IgnoreCase)
     let private nonPathItems =
         set [ "PackageReference"; "PackageVersion"; "GlobalPackageReference"; "PackageDownload"; "FrameworkReference"
               "Using"; "InternalsVisibleTo"; "AssemblyAttribute" ] |> Set.map (fun name -> name.ToUpperInvariant())

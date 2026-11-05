@@ -78,6 +78,10 @@ module V2ConstructorClosureTests =
         let decoded = deriveOf (baseTree |> Map.add file entities) |> ok
         Assert.True(covers decoded "src/FS.GG.Shared/A&B.fs")
         Assert.True(covers decoded "src/FS.GG.Shared/Exists.fs")
+        for name in [ "Exists"; "exists"; "eXiStS"; "eXiStS "; "exists\t" ] do
+            let condition = $"<Project><PropertyGroup Condition=\"{name}('../../inputs/condition/flag.txt')\"/></Project>"
+            Assert.True(covers (deriveOf (baseTree |> Map.add file condition) |> ok) "inputs/condition/flag.txt", name)
+            Assert.False(covers (deriveOf (baseTree |> Map.add file "<Project/>") |> ok) "inputs/condition/flag.txt")
         let comment = "<Project><!-- <Compile Include='../FS.GG.Shared/External.fs'/> --></Project>"
         Assert.False(covers (deriveOf (baseTree |> Map.add file comment) |> ok) linked)
 
