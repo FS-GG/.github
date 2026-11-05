@@ -110,7 +110,7 @@ mkdir -p "$WORK/combined-workflow-tier/.github/workflows"
 printf 'name: always-gates\njobs:\n  other-gate:\n    steps:\n      - run: fsgg-coord decide %s\n' "$FS_FLAG" \
   > "$WORK/combined-workflow-tier/.github/workflows/always-gates.yml"
 gate_on combined-workflow-tier
-if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q '.github/workflows/always-gates.yml:5:'; then
+if [ "$RC" = 1 ] && grep -q '.github/workflows/always-gates.yml:5:' <<<"$OUT"; then
   ok "a live command in the actual combined-workflow filename is a FINDING (#5182 F1)"
 else
   bad "always-gates.yml must not have a whole-file exemption (got rc=$RC)" "$OUT"
