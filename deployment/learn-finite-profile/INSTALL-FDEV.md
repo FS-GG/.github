@@ -56,7 +56,7 @@ Home install journal `home-learn-install-journal/1` is therefore already live on
 
 ## Files to install
 
-Pinned to `main` at `7cd6f84f82c7e3c6df5f860a90010783f733ef65` (the harness merge, #5204). Re-hash each file before you copy it, and refuse a
+Historical #5184 tuple, pinned to `main` at `7cd6f84f82c7e3c6df5f860a90010783f733ef65` (the harness merge, #5204). Re-hash each file before you copy it, and refuse a
 mismatch. The source path is `/srv/bulk/services/usr-local-libexec-fsgg-learn/`. The view path is `/usr/local/libexec/fsgg-learn/`. The last
 commit that changed each file is given so a reviewer can find the reviewed bytes.
 
@@ -74,6 +74,22 @@ commit that changed each file is given so a reviewer can find the reviewed bytes
 | `pod-image/coord-cli-tree.json` | `pod-image-r1/coord-cli-tree.json` | 0644 | `79267cd19b4fa78f9bad20416497ac7cda2d73ba17e8102307fe29410b255acb` | `18d2fb7ab3e7d7d75ee63a8c6556bf52846226c2` |
 | `pod-operator/learn-pod-operator-r2.py` | **not installed as merged** (see below) | | `78633c4a4da83d30191d1522df441b5c48ae9759a68dac832d7801cc95b16106` | `7cd6f84f82c7e3c6df5f860a90010783f733ef65` |
 
+### #5175 source update (not installed)
+
+The historical tuple above remains the #5184 source record. For #5175, use these two replacement source files together from immutable code commit
+[`78d1587489bb4c825dc55921167ec592ec49375a`](https://github.com/FS-GG/.github/commit/78d1587489bb4c825dc55921167ec592ec49375a), retained as an ancestor of this document update.
+All other repository file hashes in the historical table are unchanged. This is a **source-only, uninstalled** tuple: no install journal entry, installed adoption,
+image-pin admission or synthetic harness qualification is claimed by it. #5066 retains those operations and their receipts.
+
+| Repository file | sha256 at the immutable code commit |
+|---|---|
+| `finalizer/learn-finalizer-r5.py` | `ce1553e888e0a8cdcd378dbefc6b608b4617a5a76eb7a45f99a2a730373642c0` |
+| `pod-operator/learn-pod-operator-r2.py` | `61f1e5b9405fc3ef73dedf95ff51d4313ed9677f365a81972aed545cd08c9464` |
+
+The replacement operator's literal `finalizer_sha` equals the replacement finalizer hash. Its production `app_image` and `pg_image` remain empty;
+actual installation still requires the separately reviewed image-pin revision and Root's installation/readback route below. Re-hash both immutable source files
+and verify their binding before preparing that revision; do not combine either replacement with its historical counterpart.
+
 The context also needs these artifacts, which are not in this repository. The builder refuses any other bytes.
 
 | Context path under `pod-image-r1/` | sha256 | Where it comes from |
@@ -85,14 +101,14 @@ The context also needs these artifacts, which are not in this repository. The bu
 | `producer/FS.GG.Coord.Cli.0.113.0.nupkg` | `100f0879436d41df98aa0879aa8ea279dde3e39d3119733875744ac8e2f79789` | release `coherent-set/v0.113.0` of this repository |
 | `telemetry-host/FS.GG.Telemetry.Host.0.8.0.nupkg` | `44273495ed12083b0c9762818ca0ef5688418e6fbc46bde9f2565b400c5aba89` | release `telemetry-host/v0.8.0` of this repository |
 
-Two pins change after this document:
+Remaining pin work after the #5175 source update:
 
 - **The pod operator.** Pod operator r2 as merged has `app_image` and `pg_image` empty, so every real run refuses. Its pin-only revision
-  fills those two values with the Ids Root admits in step 7. It is a separate reviewed source PR whose diff against `78633c4a…` is those
+  fills those two values with the Ids Root admits in step 7. It is a separate reviewed source PR whose diff against the #5175 operator at `78d1587489bb4c825dc55921167ec592ec49375a` is those
   two values. Step 10 installs that revision at `learn-pod-operator-r2.py`, the path its `self` value and the harness name. The admission
   names the revision's own sha256.
-- **Finalizer r5.** Follow-up #5175 also changes the finalizer. Whichever of #5175 and its rebase merges last re-pins `finalizer_sha` in the
-  pod operator. Install the finalizer whose sha256 the installed pod operator pins, and nothing else.
+- **Finalizer r5.** The #5175 source update above already re-pins `finalizer_sha` in the same-source pod operator. Any later source revision must preserve
+  that binding. Install the finalizer whose sha256 the installed pod operator pins, and nothing else.
 
 ## The fdev install journal
 
