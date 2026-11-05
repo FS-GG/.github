@@ -43,7 +43,7 @@ Runs only as uid 30034, as the transient user unit `learn-fin-<id>.service`, sta
    fail (it does not stop the run).
 2. **Wait.** Anchors on the pod unit (30 s, else `failed-to-start`). Polls every 2 s. Samples the volume with `statvfs` every 5 s; **90% used triggers `budget`**. Serves checkpoint
    requests. Triggers when every role has `/out/<role>/.done`, at the soft deadline (1800 s, `time`), on the budget, or, if the unit ends first, takes the early path
-   (`unrecoverable`). A `systemctl show` that fails or prints no state is **unknown, not "ended"**: the poll is chained once (`unit-state-unknown`) and repeated; only after 5
+   (`unrecoverable`). A `systemctl show` that fails or prints no state is **unknown, not "ended"**: the poll is chained once (`unit-state-unknown`) and repeated; only after more than 5
    consecutive unreadable polls is the unit concluded to have ended, and that conclusion is recorded (`unitStateUnknown`). The pod unit's `ControlGroup` is read with up to 5 tries at the
    anchor (`podControlGroupReadTries`); if it never comes back as a path, the retirement checks ran on a guessed path and the run **cannot be a success**.
 3. **Archive.** `host`, `recv`, `feed` in turn: `podman pause`, the container identity sampled (cgroup contains the container id, process start time, `frozen 1`, state `paused`),
@@ -73,7 +73,7 @@ Runs only as uid 30034, as the transient user unit `learn-fin-<id>.service`, sta
 `learn-op-pod-success/1`, `learn-op-pod-killed-retired/1`, `learn-op-pod-unrecoverable/1`, `learn-op-pod-failed-to-start/1` and `learn-op-retirement-failure/1`. The last keeps the name
 the acknowledgement gate keys on, and the first four start with `learn-op-` as the claim tooling requires. Every record, whatever its schema **and whatever path wrote it, the exception path included** (the evidence is taken in a `try` that cannot lose the fields), carries `opId`,
 `runNonceSha256` (sha256 of the nonce), `finalizerSha256`, **`inputRead`** (the pod operator's `input-read` marker exists) and **`containersStartedWithInput`**: the pod's
-containers that were *started* with a mount at `/in`. It is a list, or **`null` when it cannot be determined**: the container census failed, an inspect failed, or the marker exists
+containers that were *started* with a mount at or under `/in`. It is a list, or **`null` when it cannot be determined**: the container census failed, an inspect failed, or the marker exists
 and no container remains to ask. The claim tooling treats `null` as "not empty", so a void is refused. **A census that succeeds and lists no container with the marker absent
 gives `[]`**: the pod operator creates the marker before it first reads or mounts the input (design section 4), so with no marker no container can have started with `/in`. That
 rule matters: without it a pod that never started, or whose containers were already gone, left a claim that could be neither voided nor superseded.
@@ -111,3 +111,5 @@ None of this runs against a real pod; the tests use fakes for podman, systemctl 
 - **`podman secret ls`** naming: the pod operator has to name per-run secrets `learn-pod-<id>-…` for the check to see them.
 - **The sealed snapshot is re-hashed in full** at retirement (about 200 KB). An extra empty directory in the snapshot is not detected; files, symlinks and special files are.
 - **A truncated pg_controldata output** is judged only by the cluster state line; the full output is retained by hash.
+
+Unserved `req-<n>` checkpoint names are recorded in `unservedCheckpointRequests` before the final record; retirement does not acknowledge them. A failed census records `null` and a diagnostic. Success also requires the pod unit’s observed `ExecMainStatus` to be exactly `0`; absent or nonzero status cannot establish success.
