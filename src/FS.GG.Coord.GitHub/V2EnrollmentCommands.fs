@@ -142,6 +142,12 @@ module V2EnrollmentCommands =
         info.RedirectStandardOutput <- true
         info.RedirectStandardError <- true
         info.UseShellExecute <- false
+        // Ambient Git selectors/configuration must not redirect the object reads or hide changes.
+        for key in info.Environment.Keys |> Seq.filter (fun key -> key.StartsWith("GIT_", StringComparison.Ordinal)) |> Seq.toArray do
+            info.Environment.Remove key |> ignore
+        info.Environment.["GIT_CONFIG_GLOBAL"] <- (if OperatingSystem.IsWindows() then "NUL" else "/dev/null")
+        info.Environment.["GIT_CONFIG_NOSYSTEM"] <- "1"
+        info.Environment.["GIT_NO_REPLACE_OBJECTS"] <- "1"
         info.Environment.["GIT_TERMINAL_PROMPT"] <- "0"
         try
             use proc = Diagnostics.Process.Start info
@@ -191,7 +197,7 @@ module V2EnrollmentCommands =
                         | Ok closure ->
                             let diff =
                                 gitCapture true repository
-                                    [ "-c"; "diff.renames=false"; "diff"; "--no-renames"; "--no-ext-diff"; "--no-textconv"; "--name-status"; "-z"; built; main; "--" ]
+                                    [ "-c"; "diff.renames=false"; "diff"; "--no-renames"; "--no-ext-diff"; "--no-textconv"; "--ignore-submodules=none"; "--name-status"; "-z"; built; main; "--" ]
                                     16777216
                             match V2ConstructorClosure.parseNameStatus diff with
                             | Error _ -> V2Preflight.NotObserved V2Preflight.Incomplete

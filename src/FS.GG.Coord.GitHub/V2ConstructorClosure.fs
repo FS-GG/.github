@@ -3,6 +3,8 @@ namespace FS.GG.Coord.GitHub
 module V2ConstructorClosure =
     open System
     open System.Text.RegularExpressions
+    open System.Xml
+    open System.Xml.Linq
 
     type Closure = { Paths: Set<string>; Prefixes: Set<string> }
 
@@ -16,14 +18,36 @@ module V2ConstructorClosure =
           "Directory.Solution.props"; "Directory.Solution.targets"; "NuGet.config"; "nuget.config"; "NuGet.Config"
           ".gitattributes"; ".gitmodules"; ".editorconfig"; ".config/"; "dist/dotnet/" ]
 
-    // Every path-bearing attribute on any element; item types whose Include names a package, namespace or assembly
-    // identity rather than a file are the only ones skipped (the same rule as scripts/release_source_closure.py).
-    let private projectAttribute =
-        Regex("<([A-Za-z_][\\w.]*)\\b[^>]*?\\b(?:Include|Project|Exclude|Update|Remove)=\"([^\"]+)\"", RegexOptions.CultureInvariant)
-    let private exists = Regex("Exists\\(\\s*'([^']+)'\\s*\\)", RegexOptions.CultureInvariant)
+    let private exists = Regex("Exists\\s*\\(\\s*(['\"])(.*?)\\1\\s*\\)", RegexOptions.CultureInvariant ||| RegexOptions.IgnoreCase)
     let private nonPathItems =
         set [ "PackageReference"; "PackageVersion"; "GlobalPackageReference"; "PackageDownload"; "FrameworkReference"
-              "Using"; "InternalsVisibleTo"; "AssemblyAttribute" ]
+              "Using"; "InternalsVisibleTo"; "AssemblyAttribute" ] |> Set.map (fun name -> name.ToUpperInvariant())
+    // Read actual XML attributes (including namespace-qualified MSBuild projects), never markup-like comments.
+    // Arbitrary commands cannot be bounded as paths. DTD/entity declarations are outside this contract.
+    let private projectAttributes (file: string) (text: string) =
+        try
+            let settings = XmlReaderSettings(DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null)
+            use input = new IO.StringReader(text)
+            use reader = XmlReader.Create(input, settings)
+            let document = XDocument.Load(reader)
+            let values = Collections.Generic.List<string>()
+            for element in document.Descendants() do
+                for attribute in element.Attributes() do
+                    let name = attribute.Name.LocalName.ToUpperInvariant()
+                    let tag = element.Name.LocalName.ToUpperInvariant()
+                    if attribute.Name.NamespaceName = "" then
+                        if tag = "EXEC" && name = "COMMAND" then
+                            invalidOp ("unsupported MSBuild path-bearing attribute: " + file + ": Exec.Command")
+                        if (not (nonPathItems.Contains tag) && List.contains name [ "INCLUDE"; "PROJECT"; "EXCLUDE"; "UPDATE"; "REMOVE" ])
+                           || (tag = "USINGTASK" && name = "ASSEMBLYFILE")
+                           || (tag = "READLINESFROMFILE" && name = "FILE") then
+                            values.Add attribute.Value
+                        for m in exists.Matches attribute.Value do values.Add m.Groups.[2].Value
+            Ok(List.ofSeq values)
+        with
+        | :? XmlException -> Error("constructor closure XML is malformed or unsupported: " + file)
+        | :? InvalidOperationException as error -> Error error.Message
+
     let private projectSuffixes = [ ".fsproj"; ".csproj"; ".props"; ".targets" ]
     let private isProjectFile (path: string) = projectSuffixes |> List.exists (fun suffix -> path.EndsWith(suffix, StringComparison.Ordinal))
     let private isProject (path: string) = path.EndsWith("proj", StringComparison.Ordinal)
@@ -118,19 +142,18 @@ module V2ConstructorClosure =
                             for ancestor in ancestors directory do
                                 for name in [ "Directory.Build.props"; "Directory.Build.targets"; "Directory.Packages.props" ] do
                                     pending.Push(if ancestor = "" then name else ancestor + "/" + name)
-                            let values =
-                                [ for m in projectAttribute.Matches text do
-                                    if not (nonPathItems.Contains m.Groups.[1].Value) then yield m.Groups.[2].Value
-                                  for m in exists.Matches text -> m.Groups.[1].Value ]
-                            for value in values do
-                                for raw in value.Split(';') do
-                                    match resolve item directory raw with
-                                    | Error message -> fail message
-                                    | Ok None -> ()
-                                    | Ok(Some path) ->
-                                        // Inside a project's own directory, which is already a prefix.
-                                        if not (isProject item && path.StartsWith(directory + "/", StringComparison.Ordinal) && not (isProjectFile path)) then
-                                            pending.Push path
+                            match projectAttributes item text with
+                            | Error message -> fail message
+                            | Ok values ->
+                                for value in values do
+                                    for raw in value.Split(';') do
+                                        match resolve item directory raw with
+                                        | Error message -> fail message
+                                        | Ok None -> ()
+                                        | Ok(Some path) ->
+                                            // Inside a project's own directory, which is already a prefix.
+                                            if not (isProject item && path.StartsWith(directory + "/", StringComparison.Ordinal) && not (isProjectFile path)) then
+                                                pending.Push path
         match failure with
         | Some message -> Error message
         | None -> Ok { Paths = Set.ofSeq paths; Prefixes = Set.ofSeq prefixes }
