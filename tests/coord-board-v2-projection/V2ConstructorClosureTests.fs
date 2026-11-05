@@ -58,6 +58,46 @@ module V2ConstructorClosureTests =
         Assert.False(covers (deriveOf cut |> ok) "src/FS.GG.Coord.Core/Types.fs")
 
     [<Fact>]
+    let ``XML paths survive quoting whitespace namespaces entities and all attributes`` () =
+        let file = "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
+        let linked = "src/FS.GG.Shared/External.fs"
+        let path = "../FS.GG.Shared/External.fs"
+        for tag, name in [ "Compile", "Include"; "Compile", "Exclude"; "Compile", "Update"; "Compile", "Remove"; "Import", "Project"
+                           "UsingTask", "AssemblyFile"; "ReadLinesFromFile", "File"; "compile", "Include"; "usingtask", "AssemblyFile" ] do
+            for quote in [ "'"; "\"" ] do
+                for spacing in [ "="; " = "; "\n=\t" ] do
+                    let xml = $"<Project xmlns='http://schemas.microsoft.com/developer/msbuild/2003'><{tag} Condition=\"2 > 1\" {name}{spacing}{quote}{path}{quote}/></Project>"
+                    let closure = deriveOf (baseTree |> Map.add file xml) |> ok
+                    Assert.True(covers closure linked, xml)
+                    Assert.False(covers (deriveOf (baseTree |> Map.add file "<Project/>") |> ok) linked)
+        let all = "<Project><Compile Include='../FS.GG.Shared/External.fs' Exclude='../FS.GG.Shared/Excluded.fs' Update='../FS.GG.Shared/Updated.fs' Remove='../FS.GG.Shared/Removed.fs'/></Project>"
+        let closure = deriveOf (baseTree |> Map.add file all) |> ok
+        for name in [ "External"; "Excluded"; "Updated"; "Removed" ] do
+            Assert.True(covers closure ($"src/FS.GG.Shared/{name}.fs"))
+        let entities = "<Project><Compile Include='../FS.GG.Shared/A&amp;B.fs' Condition=\"Exists(&quot;../FS.GG.Shared/Exists.fs&quot;)\"/></Project>"
+        let decoded = deriveOf (baseTree |> Map.add file entities) |> ok
+        Assert.True(covers decoded "src/FS.GG.Shared/A&B.fs")
+        Assert.True(covers decoded "src/FS.GG.Shared/Exists.fs")
+        for name in [ "Exists"; "exists"; "eXiStS"; "eXiStS "; "exists\t" ] do
+            let condition = $"<Project><PropertyGroup Condition=\"{name}('../../inputs/condition/flag.txt')\"/></Project>"
+            Assert.True(covers (deriveOf (baseTree |> Map.add file condition) |> ok) "inputs/condition/flag.txt", name)
+            Assert.False(covers (deriveOf (baseTree |> Map.add file "<Project/>") |> ok) "inputs/condition/flag.txt")
+        let comment = "<Project><!-- <Compile Include='../FS.GG.Shared/External.fs'/> --></Project>"
+        Assert.False(covers (deriveOf (baseTree |> Map.add file comment) |> ok) linked)
+
+    [<Fact>]
+    let ``malformed XML DTD and arbitrary commands refuse instead of shrinking the closure`` () =
+        let file = "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
+        for xml in [ "<Project><Compile Include='../FS.GG.Shared/External.fs'/></Wrong>"
+                     "<Project><Compile Include='../FS.GG.Shared/External.fs'/><"
+                     "<!DOCTYPE Project [<!ENTITY path '../FS.GG.Shared/External.fs'>]><Project><Compile Include='&path;'/></Project>"
+                     "<Project><Exec Command='python3 ../scripts/build.py'/></Project>"
+                     "<Project><eXeC Command='python3 ../scripts/build.py'/></Project>"
+                     "<!DOCTYPE Project SYSTEM 'http://127.0.0.1:1/unreachable'><Project/>"
+                     "<Project><Compile Include='one' Include='two'/></Project>" ] do
+            Assert.True(Result.isError (deriveOf (baseTree |> Map.add file xml)), xml)
+
+    [<Fact>]
     let ``an added file shadows only at the root or beside an exact closure path`` () =
         let closure = deriveOf baseTree |> ok
         // The linked file is exact, so a file added beside it could be picked up by a later glob or link.
@@ -104,6 +144,8 @@ module V2ConstructorClosureTests =
         info.RedirectStandardOutput <- true
         info.RedirectStandardError <- true
         info.UseShellExecute <- false
+        for key in info.Environment.Keys |> Seq.filter (fun key -> key.StartsWith("GIT_", StringComparison.Ordinal)) |> Seq.toArray do
+            info.Environment.Remove key |> ignore
         info.Environment.["GIT_CONFIG_GLOBAL"] <- "/dev/null"
         info.Environment.["GIT_CONFIG_NOSYSTEM"] <- "1"
         use proc = Process.Start info
@@ -193,6 +235,25 @@ module V2ConstructorClosureTests =
         fixture.Write [ "docs/readme.md", "later\n" ]
         let later = fixture.Commit "later"
         Assert.Equal(NotObserved Incomplete, V2EnrollmentCommands.observeConstructorContent fixture.Path unbounded later)
+
+    [<Fact>]
+    let ``constructor diff includes gitlinks despite local submodule ignore configuration`` () =
+        use fixture = new Fixture()
+        git fixture.Path [ "init"; "-q"; "-b"; "main" ] |> ignore
+        fixture.Write(baseTree |> Map.toList)
+        let first = fixture.Commit "first gitlink target"
+        let second = fixture.Commit "second gitlink target"
+        let path = "src/FS.GG.Coord.Core/native"
+        git fixture.Path [ "update-index"; "--add"; "--cacheinfo"; "160000," + first + "," + path ] |> ignore
+        git fixture.Path [ "commit"; "-q"; "-m"; "built with gitlink" ] |> ignore
+        let built = (git fixture.Path [ "rev-parse"; "HEAD" ]).Trim()
+        git fixture.Path [ "update-index"; "--cacheinfo"; "160000," + second + "," + path ] |> ignore
+        git fixture.Path [ "commit"; "-q"; "-m"; "moved gitlink" ] |> ignore
+        let main = (git fixture.Path [ "rev-parse"; "HEAD" ]).Trim()
+        git fixture.Path [ "config"; "diff.ignoreSubmodules"; "all" ] |> ignore
+        Assert.Equal("", git fixture.Path [ "diff"; "--name-only"; built; main ])
+        let content = V2EnrollmentCommands.observeConstructorContent fixture.Path built main |> observed
+        Assert.Equal(1, content.ChangedInsideClosure)
 
     [<Fact>]
     let ``self registration permits only the executing stable version and preserves every other manifest value`` () =
