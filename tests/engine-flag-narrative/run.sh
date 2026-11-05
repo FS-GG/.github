@@ -89,8 +89,8 @@ else
   bad "tier five should exit 1 and name runner.tf:1 — the gate has been narrowed to a touch-set (got rc=$RC)" "$OUT"
 fi
 
-# 3. #912's tier: a workflow. Its own gate workflow is allowlisted by exact path, so a DIFFERENT
-#    workflow must still red — an allowlist entry that leaked to the directory would re-open tier three.
+# 3. #912's tier: a workflow. No workflow is exempt; an exemption that leaked to
+#    the directory would re-open tier three.
 seed "$WORK/workflow-tier"
 mkdir -p "$WORK/workflow-tier/.github/workflows"
 printf 'name: x\njobs:\n  a:\n    steps:\n      - run: fsgg-coord decide %s\n' "$FS_FLAG" \
@@ -100,6 +100,40 @@ if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q '.github/workflows/release.yml:
   ok "a workflow other than the gate's own is a FINDING (#912's tier stays closed)"
 else
   bad "workflow tier should exit 1 and name release.yml:5 (got rc=$RC)" "$OUT"
+fi
+
+# 3b. #5182 F1: folding gates must not exempt the combined workflow's other live
+# commands. Use the exact shipped filename that the former whole-file exemption
+# admitted. The copied old-policy mutation proves this control detects that hole.
+seed "$WORK/combined-workflow-tier"
+mkdir -p "$WORK/combined-workflow-tier/.github/workflows"
+printf 'name: always-gates\njobs:\n  other-gate:\n    steps:\n      - run: fsgg-coord decide %s\n' "$FS_FLAG" \
+  > "$WORK/combined-workflow-tier/.github/workflows/always-gates.yml"
+gate_on combined-workflow-tier
+if [ "$RC" = 1 ] && grep -q '.github/workflows/always-gates.yml:5:' <<<"$OUT"; then
+  ok "a live command in the actual combined-workflow filename is a FINDING (#5182 F1)"
+else
+  bad "always-gates.yml must not have a whole-file exemption (got rc=$RC)" "$OUT"
+fi
+
+mkdir -p "$WORK/restored-exemption"
+python3 - "$GATE" "$WORK/restored-exemption/check-engine-flag-narrative.py" <<'PY'
+import sys
+source, target = sys.argv[1:]
+text = open(source, encoding="utf-8").read()
+anchor = "ALLOWED_FILES = frozenset(\n    (\n"
+assert text.count(anchor) == 1
+text = text.replace(anchor, anchor + '        ".github/workflows/always-gates.yml",\n', 1)
+open(target, "w", encoding="utf-8").write(text)
+PY
+set +e
+OUT="$(python3 "$WORK/restored-exemption/check-engine-flag-narrative.py" --root "$WORK/combined-workflow-tier" 2>&1)"
+RC=$?
+set -e
+if [ "$RC" = 0 ]; then
+  ok "INVERSION: restoring the former whole-file exemption greens the planted live command"
+else
+  bad "the F1 control did not reproduce the old-policy hole (got rc=$RC)" "$OUT"
 fi
 
 # 4. #866/#910's tier: docs/architecture.md. `docs/` at large is NOT allowlisted, and this is why —

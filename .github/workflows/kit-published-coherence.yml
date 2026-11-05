@@ -48,10 +48,10 @@ on:
     # #1597 AC2 forbids. YAML `paths:` cannot read another file. So the filter goes, `pr-arm` reads the
     # roster itself, and a PR touching no kit source exits 0 without reading the network.
     #
-    # It also makes both PR jobs REPORTABLE ON EVERY PULL REQUEST, which is the only shape a required
+    # It also makes the PR arm REPORTABLE ON EVERY PULL REQUEST, which is the only shape a required
     # context may have (.github#1508 / check-required-contexts): GitHub creates no check run at all for
     # a workflow its `paths:` filter excluded, so a path-filtered producer of a required context holds
-    # every other PR at "Expected — waiting for status to be reported" forever. Neither job is required
+    # every other PR at "Expected — waiting for status to be reported" forever. This job is not required
     # today; this simply stops the filter from being the reason it could never become one.
   push:
     branches: [main]
@@ -75,24 +75,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Offline. Proves the gate reds on drift and fails-closed on every unreadable-subject condition
-  # before we trust its green.
-  fixture:
-    name: fixture
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      # Was a bare `actions/setup-python`, on the grounds that the fixture was pure stdlib. The
-      # `pr-arm` legs (.github#1597) read `registry/repos.yml` — including the legs that prove a
-      # MALFORMED roster is a no-verdict rather than an empty kit-source set — so the fixture now needs
-      # the same pinned YAML dependency the live arms declare. Taking it from the shared action rather
-      # than a second hand-rolled step is what `check-policy-checker-inventory` asserts: an unpinned
-      # or hand-installed PyYAML is how a policy gate ends up depending on a runner-image accident.
-      - uses: ./.github/actions/setup-policy-python
-      - name: Run the kit-published-coherence fixture (no network)
-        run: bash tests/kit-published-coherence/run.sh
-
+  # Each arm runs the offline fixture before its real subject. A fixture failure
+  # still fails the job and prevents dependent checks, without another runner.
   # PR-only. The AUTHORING obligation, asked while it can still be met (.github#1597): if this diff
   # edits a `kit:` source declared in registry/repos.yml, FS.GG.Kit.csproj <Version> must already be
   # ahead of the newest published kit on nuget.org. Not a substitute for `published` below — that one
@@ -101,7 +85,6 @@ jobs:
     name: pr-arm
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: fixture
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
@@ -122,6 +105,9 @@ jobs:
       # pinned dependency rather than inheriting a runner-image accident (the #1469 review lesson that
       # made the `published` job deterministically red on a clean runner).
       - uses: ./.github/actions/setup-policy-python
+      - name: Run the kit-published-coherence fixture (no network)
+        id: fixture
+        run: bash tests/kit-published-coherence/run.sh
       - name: Does this PR edit the kit without getting ahead of the published one?
         run: |
           python scripts/check-kit-published-coherence.py --pr-arm \
@@ -143,7 +129,7 @@ jobs:
       # the first would otherwise mask the second for as long as it stands. It is NOT
       # `continue-on-error` — this step's own failure still reds the job.
       - name: Does this PR declare a post-merge obligation the merge itself performs?
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.fixture.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # The subject is READ from the PR, never handed in as a literal: a step that typed its own
@@ -178,9 +164,8 @@ jobs:
     name: published
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: fixture
     # The live read is about main's repos.lock + the feed, not about a PR's diff (see the header). On a
-    # PR the fixture above is the whole subject.
+    # PR the authoring arm is the subject.
     if: github.event_name != 'pull_request'
     # No token: the kit is read anonymously from public nuget.org (ADR-0039 — where receivers restore
     # it), so the gate needs no feed credential.
@@ -190,8 +175,11 @@ jobs:
       - uses: actions/checkout@v7
       # The live path invokes scripts/repos.sh validate before staging canonical. That validator reads
       # registry/repos.yml with yq or PyYAML; declare the pinned dependency rather than inheriting a
-      # runner-image accident. The fixture stays pure stdlib.
+      # runner-image accident. The fixture shares the same pinned dependency.
       - uses: ./.github/actions/setup-policy-python
+      - name: Run the kit-published-coherence fixture (no network)
+        id: fixture
+        run: bash tests/kit-published-coherence/run.sh
       - name: Is the newest published FS.GG.Kit coherent with canonical?
         run: python scripts/check-kit-published-coherence.py
 
@@ -222,11 +210,11 @@ jobs:
       # ruleset is still there and still doing its job, because a ruleset is itself a mutable setting
       # with no history in this repository.
       #
-      # `if: ${{ !cancelled() }}` so a red from the staleness step above does not ABORT this one.
+      # A failed fixture blocks this dependent step; a red from the staleness check does not.
       # The two subjects are independent — a stale kit and a moved tag are different defects with
       # different remedies — and a stale kit is exactly the state most likely to coincide with
       # someone doing tag surgery. Without this, the first red masks the second for as long as it
       # stands. It is NOT `continue-on-error`: this step's own failure still reds the job.
       - name: Do the release tags still resolve to the commits their packages were packed from?
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.fixture.outcome == 'success' }}
         run: python scripts/check-kit-published-coherence.py --tag-arm

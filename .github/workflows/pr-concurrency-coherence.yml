@@ -82,6 +82,7 @@ on:
       - ".github/workflows/touch-set-drift.yml"
       - ".github/workflows/touch-set-drift-selftest.yml"
       - ".github/workflows/usage-census-selftest.yml"
+      - ".github/workflows/v1-writer-census-advisory-selftest.yml"
       - ".github/workflows/work-programme.yml"
   push:
     branches: [main]
@@ -153,6 +154,7 @@ on:
       - ".github/workflows/touch-set-drift.yml"
       - ".github/workflows/touch-set-drift-selftest.yml"
       - ".github/workflows/usage-census-selftest.yml"
+      - ".github/workflows/v1-writer-census-advisory-selftest.yml"
       - ".github/workflows/work-programme.yml"
   workflow_dispatch:
 
