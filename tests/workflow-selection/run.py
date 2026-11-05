@@ -19,8 +19,7 @@ START, END = "2026-11-01T00:00:00Z", "2026-11-02T00:00:00Z"
 FOLDED = {
     "closing-keywords": {"declared-closes": "closing-keywords"},
     "kit-published-coherence": {"pr-arm": "kit-published-coherence", "published": "kit-published-coherence"},
-    "job-uniqueness-coherence": {"job-names-stable": "job-uniqueness"},
-    "reusable-job-id-coherence": {"job-ids-stable": "reusable-job-ids"},
+    "reusable-job-id-coherence": {"job-contexts": ("job-uniqueness", "reusable-job-ids")},
     "scheduled-engine-provisioning": {"provisioned": "scheduled-engine-provisioning"},
 }
 
@@ -31,18 +30,32 @@ def validate_fixture_boundary(document, expected):
     assert set(jobs) == set(expected), "fixture consolidation changed the check job names"
     events = document.get("on", document.get(True, {}))
     assert "workflow_call" not in events, "this consolidation must not remove a reusable job API"
-    for name, suite in expected.items():
+    for name, suites in expected.items():
         job = jobs[name]
         assert not job.get("continue-on-error"), "job masks fixture failure"
         steps = job["steps"]
-        fixtures = [i for i, step in enumerate(steps) if step.get("run") == f"bash tests/{suite}/run.sh"]
-        assert len(fixtures) == 1, "fixture missing or duplicated"
-        index = fixtures[0]
-        assert not steps[index].get("continue-on-error"), "fixture failure is masked"
-        assert "if" not in steps[index], "fixture can be omitted"
-        production = [i for i, step in enumerate(steps) if "scripts/check-" in step.get("run", "")]
-        assert production and index < min(production), "production runs before its fixture"
-        assert all(not steps[i].get("continue-on-error") for i in production), "production failure is masked"
+        for suite in (suites,) if isinstance(suites, str) else suites:
+            fixtures = [i for i, step in enumerate(steps) if step.get("run") == f"bash tests/{suite}/run.sh"]
+            assert len(fixtures) == 1, "fixture missing or duplicated"
+            index = fixtures[0]
+            assert not steps[index].get("continue-on-error"), "fixture failure is masked"
+            production = [i for i, step in enumerate(steps) if f"scripts/check-{suite}.py" in step.get("run", "")]
+            assert production and index < min(production), "production missing or runs before its fixture"
+            assert len(production) == (2 if suite == "kit-published-coherence" else 1), "one production arm is missing"
+            assert all(not steps[i].get("continue-on-error") for i in production), "production failure is masked"
+            if name == "job-contexts":
+                assert "if" not in job, "combined source verdict can be skipped"
+                fixture_guard = "${{ !cancelled() && steps.checkout.outcome == 'success' && steps.policy_python.outcome == 'success' }}"
+                assert steps[index].get("if") == fixture_guard, "fixture loses shared prerequisites or independence"
+                assert steps[0].get("id") == "checkout" and steps[0].get("uses") == "actions/checkout@v7", "checkout prerequisite is not bound"
+                assert steps[1].get("id") == "policy_python" and steps[1].get("uses") == "./.github/actions/setup-policy-python", "Python prerequisite is not bound"
+                gate = "uniqueness" if suite == "job-uniqueness" else "reusable"
+                guard = "${{ !cancelled() && steps." + gate + "_fixture.outcome == 'success' }}"
+                assert steps[index].get("id") == gate + "_fixture", "fixture result is not bound"
+                assert len(production) == 1 and steps[production[0]].get("id") == gate, "production result is not bound"
+                assert steps[production[0]].get("if") == guard, "production can be omitted or aborted by the independent gate"
+            else:
+                assert "if" not in steps[index], "fixture can be omitted"
 
 
 def run(identity=1, **extra):
@@ -77,8 +90,12 @@ class MeasurementTests(unittest.TestCase):
         probes = 0
         for workflow, expected in FOLDED.items():
             source = yaml.safe_load((ROOT / f".github/workflows/{workflow}.yml").read_text())
-            for name, suite in expected.items():
-                for defect in ("missing", "masked", "reordered", "conditional", "masked-job"):
+            for name, suites in expected.items():
+              for suite in (suites,) if isinstance(suites, str) else suites:
+                defects = ["missing", "masked", "reordered", "conditional", "masked-job", "missing-gate", "masked-gate"]
+                if name == "job-contexts":
+                    defects += ["missing-checkout-prerequisite", "missing-python-prerequisite"]
+                for defect in defects:
                     mutant = copy.deepcopy(source)
                     job = mutant["jobs"][name]
                     steps = job["steps"]
@@ -91,13 +108,55 @@ class MeasurementTests(unittest.TestCase):
                         steps.append(steps.pop(index))
                     elif defect == "conditional":
                         steps[index]["if"] = "false"
-                    else:
+                    elif defect == "masked-job":
                         job["continue-on-error"] = True
+                    elif defect == "missing-checkout-prerequisite":
+                        steps[index]["if"] = steps[index]["if"].replace(" && steps.checkout.outcome == 'success'", "")
+                    elif defect == "missing-python-prerequisite":
+                        steps[index]["if"] = steps[index]["if"].replace(" && steps.policy_python.outcome == 'success'", "")
+                    else:
+                        production = next(i for i, step in enumerate(steps) if f"scripts/check-{suite}.py" in step.get("run", ""))
+                        if defect == "missing-gate":
+                            steps.pop(production)
+                        else:
+                            steps[production]["continue-on-error"] = True
                     with self.subTest(workflow=workflow, job=name, defect=defect):
                         with self.assertRaises(AssertionError):
                             validate_fixture_boundary(mutant, expected)
                     probes += 1
-        self.assertEqual(30, probes)
+        self.assertEqual(46, probes)
+
+    def test_combined_events_preserve_running_and_pending_head_validation(self):
+        document = yaml.safe_load((ROOT / ".github/workflows/reusable-job-id-coherence.yml").read_text())
+        events = document.get("on", document.get(True))
+        self.assertEqual({"opened", "synchronize", "reopened", "edited", "labeled", "unlabeled"},
+                         set(events["pull_request"]["types"]))
+        self.assertEqual("Job contexts: unique names and stable reusable IDs", document["jobs"]["job-contexts"]["name"])
+        validate_fixture_boundary(document, FOLDED["reusable-job-id-coherence"])
+        spec = importlib.util.spec_from_file_location("concurrency", ROOT / "scripts/check-pr-concurrency.py")
+        model = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(model)
+        block, workflow = document["concurrency"], "reusable-job-id-coherence"
+        for action in ("opened", "synchronize", "reopened"):
+            original = model.pr(7, "a" * 40, "pull_request", action)
+            for metadata in ("edited", "labeled", "unlabeled"):
+                arriving = model.pr(7, "a" * 40, "pull_request", metadata)
+                self.assertEqual("none", model.displaced(workflow, block, original, arriving))
+                self.assertFalse(model.pending_replaced(workflow, block, original, arriving))
+            newer = model.pr(7, "b" * 40, "pull_request", "synchronize")
+            self.assertEqual("cancelled", model.displaced(workflow, block, original, newer))
+        # All three bad policies lose the original pending source validation;
+        # disabling cancellation alone does not protect a queued head run.
+        bad = copy.deepcopy(block)
+        bad["group"] = "reusable-job-id-coherence-${{ github.event.pull_request.number || github.run_id }}"
+        variants = [bad, dict(bad, **{"cancel-in-progress": False})]
+        bad = copy.deepcopy(block)
+        bad["group"] = bad["group"].replace('"reopened"]', '"reopened","edited","labeled","unlabeled"]')
+        variants.append(bad)
+        for bad in variants:
+            head = model.pr(7, "a" * 40, "pull_request", "opened")
+            edit = model.pr(7, "a" * 40, "pull_request", "edited")
+            self.assertTrue(model.pending_replaced(workflow, bad, head, edit))
 
     def test_absent_job_evidence_is_unknown(self):
         result = measurement.summarize([run()], {}, START, END)

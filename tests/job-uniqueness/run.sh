@@ -276,15 +276,15 @@ for jid, j in d["jobs"].items():
     assert isinstance(j.get("timeout-minutes"), int), f"job {jid} does not bound itself (#541)"
 PY
 }
-if shipped_shape "$REPO_ROOT/.github/workflows/job-uniqueness-coherence.yml"
-then ok "the shipped job-uniqueness-coherence.yml declares no invalid scope, bounds its jobs, diffs the merge-base, wires --required-context, and runs both the gate and this fixture"
-else bad "the shipped job-uniqueness-coherence.yml is not the shape this fixture asserts"
+if shipped_shape "$REPO_ROOT/.github/workflows/reusable-job-id-coherence.yml"
+then ok "the shipped reusable-job-id-coherence.yml declares no invalid scope, bounds its jobs, diffs the merge-base, wires --required-context, and runs both the gate and this fixture"
+else bad "the shipped reusable-job-id-coherence.yml is not the shape this fixture asserts"
 fi
 
 # Causal control for the assertions above: each mutation breaks exactly one of them and the shape check
 # must refuse it. Without this, a refactor that detaches the assertions from their `then` still reports
 # green (the defect the review of #5002 found: `merge-base` -> `merge-bas3` passed).
-WF="$REPO_ROOT/.github/workflows/job-uniqueness-coherence.yml"
+WF="$REPO_ROOT/.github/workflows/reusable-job-id-coherence.yml"
 sm=0; smbad=0
 while IFS="|" read -r label from to; do
   [ -n "$label" ] || continue
@@ -310,39 +310,49 @@ MUTANTS
 [ "$smbad" = 0 ] && [ "$sm" -gt 0 ] && ok "the section-8 shape assertions refuse each of $sm mutants (merge-base, gate, fixture, required context, permissions, timeout)"
 
 
-# .github#4730: the trigger list is derived from what the gate READS. It reads base.sha and head.sha and
-# nothing else from the event, so it must not subscribe to body/label edits (`edited`, `labeled`,
-# `unlabeled`), each of which would re-run it for no new information.
-if python3 - "$REPO_ROOT/.github/workflows/job-uniqueness-coherence.yml" <<'PY'
+# The combined workflow keeps reusable-ID body/label events. Uniqueness runs
+# on those events too in the same runner, so no newer skipped context can hide
+# the original source verdict. Its own production step still reads only SHAs.
+if python3 - "$REPO_ROOT/.github/workflows/reusable-job-id-coherence.yml" <<'PY'
 import re, sys, yaml
 path = sys.argv[1]
 text = open(path, encoding="utf-8").read()
 ALLOWED_FIELDS = {"github.event.pull_request.base.sha", "github.event.pull_request.head.sha"}
-WANTED_TYPES = ["opened", "reopened", "synchronize"]
+WANTED_TYPES = ["edited", "labeled", "opened", "reopened", "synchronize", "unlabeled"]
 
 def verdict(t):
-    """Return the list of reasons this workflow text is not the shape #4730 pinned (empty = clean)."""
+    """Check the actual uniqueness step inside the shared workflow."""
     out = []
     d = yaml.safe_load(t)
     on = d.get("on", d.get(True))
     types = sorted((on.get("pull_request") or {}).get("types") or [])
     if types != WANTED_TYPES:
         out.append(f"pull_request.types is {types}, want {WANTED_TYPES}")
-    code = "\n".join(l for l in t.splitlines() if not l.lstrip().startswith("#"))
+    job = d["jobs"].get("job-contexts", {})
+    if "if" in job:
+        out.append("the combined job can be skipped")
+    checks = [step for step in job.get("steps", []) if step.get("id") == "uniqueness"]
+    if len(checks) != 1:
+        return out + ["the actual uniqueness check is missing or duplicated"]
+    step = checks[0]
+    guard = "${{ !cancelled() && steps.uniqueness_fixture.outcome == 'success' }}"
+    if step.get("if") != guard:
+        out.append("the uniqueness check must run after its fixture on every supported event")
+    code = yaml.safe_dump(step)
     for field in sorted(set(re.findall(r"github\.event\.[A-Za-z0-9_.]+", code)) - ALLOWED_FIELDS):
         out.append(f"reads {field}, which is outside {sorted(ALLOWED_FIELDS)}")
     return out
 
 assert verdict(text) == [], f"the shipped workflow is not the pinned shape: {verdict(text)}"
 
-# Causal control: the pin must be able to say NO. Each mutant re-adds one trigger type, or one event
-# field read, and must be refused for that reason.
+# Causal control: neither a lost metadata event nor a hidden source check can pass.
 mutants = 0
-for extra in ("edited", "labeled", "unlabeled"):
-    m = text.replace("types: [opened, synchronize, reopened]", f"types: [opened, synchronize, reopened, {extra}]", 1)
-    assert m != text
-    v = verdict(m)
-    assert any(f"pull_request.types is" in r and extra in r for r in v), f"adding {extra!r} was not refused: {v}"
+for missing in ("edited", "labeled", "unlabeled"):
+    d = yaml.safe_load(text)
+    on = d.get("on", d.get(True))
+    on["pull_request"]["types"].remove(missing)
+    v = verdict(yaml.safe_dump(d))
+    assert any("pull_request.types is" in r for r in v), f"losing {missing!r} was not refused: {v}"
     mutants += 1
 for field in ("body", "title", "labels", "user.login"):
     m = text.replace("BASE_SHA: ${{ github.event.pull_request.base.sha }}",
@@ -351,10 +361,15 @@ for field in ("body", "title", "labels", "user.login"):
     v = verdict(m)
     assert any(f"reads github.event.pull_request.{field}" in r for r in v), f"reading {field!r} was not refused: {v}"
     mutants += 1
-print(f"trigger-pin control: shipped shape clean; {mutants} mutant(s) (3 re-added types, 4 event-field reads) each refused for the right reason")
+m = text.replace("if: ${{ !cancelled() && steps.uniqueness_fixture.outcome == 'success' }}",
+                 "if: ${{ github.event.action == 'opened' }}", 1)
+assert m != text
+assert any("every supported event" in reason for reason in verdict(m))
+mutants += 1
+print(f"trigger-pin control: all six events retained; {mutants} missing-event, event-field and skipped-check mutants refused")
 PY
-then ok "the shipped job-uniqueness-coherence.yml subscribes only to opened/synchronize/reopened and reads only base.sha/head.sha from the event; 7 mutants (re-added edited/labeled/unlabeled, reads of body/title/labels/user) are each refused"
-else bad "the job-uniqueness-coherence.yml trigger pin (#4730) does not hold, or cannot say NO"
+then ok "the combined workflow keeps all six events; the actual uniqueness step reads only SHA fields and cannot be omitted on metadata (8 causal mutants refused)"
+else bad "the combined uniqueness event/field boundary does not hold or cannot say NO"
 fi
 
 echo

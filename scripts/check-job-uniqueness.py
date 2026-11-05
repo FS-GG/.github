@@ -69,7 +69,7 @@ CURRENTLY requires, and this gate then asserts, UNCONDITIONALLY (not merely as a
 does not resolve to 2+ top-level producers at HEAD. This is deliberately NOT the absolute "no two jobs
 ever" gate rejected above — it only grades the small, explicit set the caller passes, so it stays green
 for every one of the 65 (70) accepted duplicates that is not required, and only reds if a name BOTH is
-required AND is ambiguous. The caller (`job-uniqueness-coherence.yml`) hardcodes today's required set,
+required AND is ambiguous. The combined caller (`reusable-job-id-coherence.yml`) hardcodes today's required set,
 because this repo's own CI cannot read its own branch protection live: `administration: read` is not a
 valid `permissions:` scope for a workflow's `GITHUB_TOKEN` (`check-reusable-job-ids.py`'s own docstring),
 and the org dispatch App is not installed on `.github` itself (`required-context-coherence.yml`: the

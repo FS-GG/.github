@@ -2,8 +2,9 @@
 
 [Delivery #5182](https://github.com/FS-GG/.github/issues/5182) remains open. The earlier
 [consolidation PR #5186](https://github.com/FS-GG/.github/pull/5186) reduced observed fan-out
-on two ordinary report-only PRs. This follow-up locally combines five remaining fixture/check
-pairs. Its native after-state, exact-head review, required CI and protected integration remain pending.
+on two ordinary report-only PRs. This follow-up combines five remaining fixture/check pairs and
+consolidates the two job-context workflows into one run and one job. Its native after-state, exact-head
+review, required CI and protected integration remain pending.
 
 ## Real PR observations
 
@@ -80,40 +81,67 @@ push count. Private raw pages and manifests remain with the Delivery owner; they
 
 ## Local follow-up and preflight
 
-The following workflows keep their existing production job names, scripts, verdict handling and
-event sets. Their fixtures run first in the same job; fixture failure still fails the job. The
-kit fixture runs in either its PR authoring arm or its non-PR published arm. Closing-keywords still
-runs its fixture on dispatch and restricts the production subject to PR events.
+Closing-keywords, kit-published-coherence and scheduled-engine-provisioning keep their existing
+production job names, scripts, verdict handling and event sets. Their fixtures run first in the
+same job. The kit fixture runs in either its PR authoring arm or its non-PR published arm.
+Closing-keywords still runs its fixture on dispatch and checks production subjects only on PR events.
 
-| Workflow | Preserved production job | Removed separate runner per matching event |
+The plain-name and reusable-ID coherence gates share the existing `reusable-job-id-coherence.yml`
+workflow and one explicitly named job, **Job contexts: unique names and stable reusable IDs**.
+This deliberately replaces the non-required `job-names-stable` and `job-ids-stable` contexts.
+Neither old workflow exposes `workflow_call`, and none of the ten native required contexts or
+producers moves. The obsolete uniqueness workflow is removed after reference closure; the preserved
+workflow unions both script/test filters and retains the existing whole-workflow-tree subject.
+
+Both real gates and both fixtures run on all six existing events: opened, synchronize, reopened,
+edited, labeled and unlabeled. The source check is never replaced by a newer metadata-skipped job.
+Each fixture requires successful checkout and Python setup. Each gate depends on its own fixture;
+explicit `!cancelled()` guards let the independent gate collect
+its verdict after another gate fails. Any fixture or gate failure still fails the combined job.
+
+The existing concurrency block is unchanged. Head actions use the PR number; metadata events use
+separate run IDs. Existing policy-model controls bind to the actual YAML and prove that all nine
+head/metadata action pairs preserve both running and pending head validation, while a newer head
+supersedes its predecessor. Three deliberately unsafe variants lose the pending original: dropping
+the head-action guard, admitting metadata into the head-action list, and using an unguarded PR key
+with cancellation disabled. Cancellation disabled alone does not protect a pending run.
+
+| Workflows before this follow-up | Resulting job | Fewer runner jobs when all listed workflows match |
 |---|---|---:|
 | `closing-keywords.yml` | `declared-closes` | 1 |
 | `kit-published-coherence.yml` | `pr-arm` / `published` | 1 |
-| `job-uniqueness-coherence.yml` | `job-names-stable` | 1 |
-| `reusable-job-id-coherence.yml` | `job-ids-stable` | 1 |
+| Plain-name and reusable-ID coherence | `Job contexts: unique names and stable reusable IDs` | 3 |
 | `scheduled-engine-provisioning.yml` | `provisioned` | 1 |
 
-This predicts two fewer runner jobs for an ordinary report-only batch; it does not predict fewer
-workflow runs. Workflow-edit batches matching all five predict five fewer runner jobs. These are
-static predictions until a real candidate PR runs. Paths and timeout workflows are deliberately
-left intact: their `workflow_call` interface exposes the fixture job, so deleting it would change
-public check-context APIs. The current engine workflow already gates its expensive engine job on
-impact; this follow-up claims no further engine reduction. Broad skill filters remain a possible
-later slice, with `skill-quality.yml` owned by a separate frozen source change.
+This predicts two fewer runner jobs for an ordinary report-only batch. A head event matching all
+five original workflows predicts one fewer workflow run and six fewer runner jobs. A metadata
+event keeps one combined runner and adds the short uniqueness check inside that runner. These are
+static predictions until a real candidate PR runs. Observed week populations include 172 heads with
+both old coherence workflows and two with only reusable-ID runs; head grouping is not a per-push
+savings calculation.
 
-Preflight uses existing static coherence checks and the existing behavioral fixture suites. A custom
-state model is deferred: these changes co-locate a linear fixture/check sequence, and a new model's
-setup and maintenance have no demonstrated incremental benefit. New offline measurement/wiring
-controls run within the existing scheduled-engine-provisioning job, with no new hosted job. Their
-local warm end-to-end execution measured 0.098 seconds for 11 tests, including 30 deliberately broken
-wiring variants. The local command is `python3 tests/workflow-selection/run.py`; it uses the pinned
-PyYAML already provided by `setup-policy-python`, with no additional download. Cold hosted setup, future maintenance and realized savings remain unmeasured.
+Paths and timeout workflows remain intact: their `workflow_call` interface exposes the fixture job,
+so deleting it would change public APIs. The current engine workflow already gates its expensive
+engine job on impact; this follow-up claims no further engine reduction. Broader skill/docs filter
+obligations remain with this Delivery. A broad filter cannot be narrowed merely because its runs are
+small: the retirement checker scans all docs for stage restatements, for example. `skill-quality.yml`
+is separately owned by another frozen source change.
+
+Preflight uses existing static checks, fixture suites and the existing concurrency policy model;
+no custom state model is added. New measurement/wiring controls share the existing
+scheduled-engine-provisioning job, adding no hosted job. The local command is
+`python3 tests/workflow-selection/run.py`; it uses the pinned PyYAML provided by
+`setup-policy-python`, with no additional download. Twelve tests, 46 wiring mutations and three unsafe
+concurrency variants passed in 0.164 seconds end-to-end locally. Cold hosted setup, future maintenance
+and realized savings remain unmeasured.
 
 ## Verification and retained failures
 
-Owner checks on the local candidate: closing-keywords 61 assertions; job-uniqueness 26;
-reusable-job-ids 19; scheduled-engine-provisioning 29; measurement/wiring 11 tests and 30 planted
-missing, masked, reordered or conditional fixture/job variants. The kit suite reports
+Prior component `d3a75149` passed closing-keywords 61 assertions, reusable-job-ids 19 and
+scheduled-engine-provisioning 29; those results are reused only where inputs are unchanged. The
+successor uniqueness fixture passed 26 assertions including eight event/field/skip mutations; its
+measurement/wiring suite passed 12 tests and 46 planted missing, masked, reordered or conditional
+fixture/job/gate variants. The kit suite reports
 `270 passed, 0 failed`, then three further inversion controls, and
 `all 273 declared legs ran`.
 
@@ -126,20 +154,25 @@ Live classic branch protection and effective rules were read before validation. 
 protected-source `check-required-contexts.py` outputs are byte-identical: nine contexts are proved
 producible, with inherited exit 3 for the tenth, `board-linkage`, whose job condition the validator
 cannot prove universal. This is an inherited static Unknown, not a passing required-context check.
-None of the five edited workflows produces one of the ten native required contexts. The actual
+None of the removed or edited workflows produces one of the ten native required contexts. The actual
 required native gate remains mandatory; no settings or producer migration is made here.
 
 The first full concurrency fixture attempt reached a local 180-second execution guard before completion;
 that result is budget-incomplete, not a source assertion failure. Its bounded retry passed all
-721 assertions. Paths-coherence passed 190 fixture assertions and checked 126 matching trigger pairs,
-120 project subjects and 20 script surfaces; timeout validation audited 307 jobs; reusable-context
-validation preserved all 49 reusable workflow contracts; job-uniqueness graded 179 names and nine
+721 assertions on that component. The successor also passed all 721 assertions. Paths-coherence passed 190 fixture assertions and checked 126 matching trigger pairs,
+120 project subjects and 20 script surfaces; successor timeout validation audited 306 jobs; reusable-context
+validation preserved all 49 reusable workflow contracts; successor job-uniqueness graded 178 names and nine
 plain required contexts; test-selector passed 69 assertions. The first policy-inventory invocation
 used a nonexistent guessed script name (exit 2); its correction uses the existing `policy-runner.py inventory`
-entry point, which passed for 22 large checkers and 77 pinned workflow bootstraps. All six policy
+entry point, which passed for 22 large checkers and 76 pinned workflow bootstraps. All six policy
 subjects passed; prose citations checked 698 live documents, 61 local citations and 504 section citations.
 The cgroup readback retained `memory.max=2147483648`, `memory.swap.max=0` and
-`cpu.max=200000 100000`. Source review,
+`cpu.max=200000 100000`. A successor scratch-runner path error overwrote earlier local
+`coherence-*` logs; those first results survive in the original tool transcript and the historical
+independent review, not as original files at the overwritten paths. Current successor results were
+moved to a separate directory, and later outputs refuse overwrites. The gap remains explicit. The successor's first wiring-control attempt failed two missing-gate mutations
+in the kit arms because another different gate remained. The control was repaired to require both
+production arms; the successful expanded-mutation run does not erase that retained failure. Source review,
 final native required CI and candidate after-state remain pending. Delivery
 acceptance must retain that remainder. The reusable Atlas finding previously drafted as
 `github/ci-fanout-cost-is-runner-slots` was reverted from PR #5186 because Atlas packaging would
@@ -203,7 +236,7 @@ all other path-filter decisions remain Unknown. “Unfiltered” classifies the 
 | `harness-identity.yml` | 277 | 32 / 245 | 64 | 84.5 | 8.467 | 3 paths | 0 / 0 / 0 / 277 |
 | `host-protected-artifact-custody.yml` | 1 | 0 / 1 | 0 | Unknown | Unknown | 3 paths | 0 / 0 / 0 / 1 |
 | `ignored-author-coherence.yml` | 172 | 21 / 151 | 21 | 81.5 | 18.233 | 5 paths | 0 / 0 / 0 / 172 |
-| `job-uniqueness-coherence.yml` | 221 | 24 / 197 | 48 | 87 | 18.4 | 3 paths | 0 / 0 / 0 / 221 |
+| `job-uniqueness-coherence.yml` | 221 | 24 / 197 | 48 | 87 | 18.4 | not in current source | 0 / 0 / 0 / 221 |
 | `kit-auto-publish-selftest.yml` | 34 | 0 / 34 | 0 | Unknown | Unknown | 8 paths | 0 / 0 / 0 / 34 |
 | `kit-bump-shape.yml` | 24 | 0 / 24 | 0 | Unknown | Unknown | 7 paths | 0 / 0 / 0 / 24 |
 | `kit-package-selftest.yml` | 25 | 0 / 25 | 0 | Unknown | Unknown | 7 paths | 0 / 0 / 0 / 25 |
@@ -258,7 +291,7 @@ all other path-filter decisions remain Unknown. “Unfiltered” classifies the 
 | `required-context-coherence-selftest.yml` | 16 | 0 / 16 | 0 | Unknown | Unknown | 5 paths | 0 / 0 / 0 / 16 |
 | `rest-budget-preflight-selftest.yml` | 3 | 0 / 3 | 0 | Unknown | Unknown | 4 paths | 0 / 0 / 0 / 3 |
 | `retirement-order-coherence.yml` | 324 | 34 / 290 | 68 | 82 | 28.867 | 7 paths | 2 / 0 / 0 / 322 |
-| `reusable-job-id-coherence.yml` | 299 | 39 / 260 | 78 | 95.5 | 24.517 | 3 paths | 0 / 0 / 0 / 299 |
+| `reusable-job-id-coherence.yml` | 299 | 39 / 260 | 78 | 95.5 | 24.517 | 5 paths | 0 / 0 / 0 / 299 |
 | `routine-eligibility-selftest.yml` | 23 | 2 / 21 | 2 | 56 | 0.483 | 9 paths | 0 / 0 / 0 / 23 |
 | `routine-eligibility.yml` | 778 | 2 / 776 | 2 | 220 | 0.2 | unfiltered | 0 / 0 / 778 / 0 |
 | `scheduled-engine-provisioning.yml` | 124 | 26 / 98 | 52 | 101 | 17.883 | 4 paths | 0 / 0 / 0 / 124 |

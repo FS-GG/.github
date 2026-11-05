@@ -26,6 +26,12 @@
 # sequenced — land the receivers' protection change first. So this offers the same explicit opt-out
 # as architecture-map.yml: breaking a contract becomes a decision somebody made, rather than an
 # omission nobody noticed.
+# Two non-reusable source gates share this job (#5182). Both fixtures and both
+# real checks execute on every supported head, body and label event. The old
+# job-names-stable/job-ids-stable contexts were not required; one explicit
+# combined context replaces them. No workflow_call interface is changed.
+# Keep metadata runs in their existing run-id group: they must never cancel or
+# replace a running OR pending head-validation run.
 name: reusable-job-id-coherence
 
 on:
@@ -35,6 +41,8 @@ on:
       - ".github/workflows/**"
       - "scripts/check-reusable-job-ids.py"
       - "tests/reusable-job-ids/**"
+      - "scripts/check-job-uniqueness.py"
+      - "tests/job-uniqueness/**"
 
 permissions:
   contents: read
@@ -50,20 +58,106 @@ concurrency:
 
 jobs:
   # Offline, and first: prove the gate can still say NO before believing it when it says yes.
-  job-ids-stable:
+  job-contexts:
+    name: "Job contexts: unique names and stable reusable IDs"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        id: checkout
         with:
           fetch-depth: 0     # the merge-base must be reachable
       - uses: ./.github/actions/setup-policy-python
+        id: policy_python
+
+      - name: Run the job-uniqueness fixture (no network)
+        id: uniqueness_fixture
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.policy_python.outcome == 'success' }}
+        run: bash tests/job-uniqueness/run.sh
+
+      - name: Assert no top-level job name became newly ambiguous, and no required one already is
+        id: uniqueness
+        if: ${{ !cancelled() && steps.uniqueness_fixture.outcome == 'success' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Compare against the MERGE-BASE, not the base-branch tip: the change set must be this
+          # PR's own, independent of how far main has moved since the branch forked (#375, the same
+          # reason reusable-job-id-coherence.yml does this).
+          base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          rc=0
+          # Retain the former uniqueness workflow's explicit plain-context tripwires.
+          # Live required-context validation remains separate; this source list is not a native read.
+          # `contract-coherence / coherence` is nested, so the plain-job gate cannot grade it.
+          out="$(python scripts/check-job-uniqueness.py --root . --base "$base" \
+                   --required-context projection \
+                   --required-context roster-closure \
+                   --required-context drift \
+                   --required-context reconcile \
+                   --required-context claim-generation 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320).
+      - name: 'OK: no top-level job name became newly ambiguous'
+        if: ${{ !cancelled() && steps.uniqueness_fixture.outcome == 'success' && steps.uniqueness.outputs.rc == '0' }}
+        run: |
+          echo "job-uniqueness-coherence: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a check-run name is ambiguous — newly, or an already-required one'
+        if: ${{ !cancelled() && steps.uniqueness_fixture.outcome == 'success' && steps.uniqueness.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### job-uniqueness-coherence: a check-run name is ambiguous"
+            echo
+            echo "GitHub names a plain job's check run after its \`name:\` if it has one, else its job"
+            echo "id — with NO workflow-file prefix. Branch protection's required-status-check matching"
+            echo "is purely string-based, so if this name is ever REQUIRED, any job that resolves to it"
+            echo "satisfies the requirement, regardless of which one actually ran. This is the exact"
+            echo "\`.github#2354\` defect: three jobs sharing the bare id \`reconcile\`."
+            echo
+            echo "THE JOB LOG SAYS WHICH OF TWO SHAPES THIS IS — they read almost identically but are"
+            echo "different repairs. (a) 'now produced by ... that did not all resolve to it at the"
+            echo "merge-base' is a NEW regression THIS PR introduced. (b) 'the REQUIRED status check ...'"
+            echo "(.github#2447) is an ALREADY-required context that is ALREADY ambiguous today — live,"
+            echo "not merely a future risk, regardless of what this PR touched."
+            echo
+            echo "Give every job but one an unambiguous job-level \`name:\`, as PR #2371 did for"
+            echo "\`architecture-map.yml\` and \`feed-autofix.yml\`. See the job log for which name and"
+            echo "which files."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=job-uniqueness-coherence: a check-run name is ambiguous::A top-level job's check-run name is either newly ambiguous, or an already-required context is already ambiguous. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): a file a human must fix'
+        if: ${{ !cancelled() && steps.uniqueness_fixture.outcome == 'success' && steps.uniqueness.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### job-uniqueness-coherence: no verdict"
+            echo
+            echo "A workflow would not parse, the merge-base could not be read, or this repo has no"
+            echo "top-level job at HEAD at all — and examining nothing is a failure to audit, not a"
+            echo "clean audit. Retrying will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=job-uniqueness-coherence: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && steps.uniqueness_fixture.outcome == 'success' && !contains(fromJSON('["0","1","3"]'), steps.uniqueness.outputs.rc) }}
+        run: |
+          echo "::error title=job-uniqueness-coherence: inconclusive::check-job-uniqueness.py exited ${{ steps.uniqueness.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
 
       - name: Run the reusable-job-ids fixture (no network)
+        id: reusable_fixture
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.policy_python.outcome == 'success' }}
         run: bash tests/reusable-job-ids/run.sh
 
       - name: Assert no reusable workflow lost a context name it used to publish
-        id: check
+        id: reusable
+        if: ${{ !cancelled() && steps.reusable_fixture.outcome == 'success' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -81,12 +175,12 @@ jobs:
       # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the
       # contract; nothing here greps the gate's prose.
       - name: 'OK: every published context name survives'
-        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        if: ${{ !cancelled() && steps.reusable_fixture.outcome == 'success' && steps.reusable.outputs.rc == '0' }}
         run: |
           echo "reusable-job-id-coherence: OK" >> "$GITHUB_STEP_SUMMARY"
 
       - name: 'FINDING: a reusable workflow lost a context name — this breaks its callers'
-        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        if: ${{ !cancelled() && steps.reusable_fixture.outcome == 'success' && steps.reusable.outputs.rc == '1' }}
         env:
           # Env-passed, never interpolated into the run body — the org's uniform anti-injection
           # pattern (cf. architecture-map.yml, feed-coherence.yml).
@@ -132,7 +226,7 @@ jobs:
           exit 1
 
       - name: 'NO VERDICT (permanent): a file a human must fix'
-        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        if: ${{ !cancelled() && steps.reusable_fixture.outcome == 'success' && steps.reusable.outputs.rc == '3' }}
         run: |
           {
             echo "### reusable-job-id-coherence: no verdict"
@@ -145,7 +239,7 @@ jobs:
           exit 1
 
       - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
-        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        if: ${{ !cancelled() && steps.reusable_fixture.outcome == 'success' && !contains(fromJSON('["0","1","3"]'), steps.reusable.outputs.rc) }}
         run: |
-          echo "::error title=reusable-job-id-coherence: inconclusive::check-reusable-job-ids.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          echo "::error title=reusable-job-id-coherence: inconclusive::check-reusable-job-ids.py exited ${{ steps.reusable.outputs.rc }}, which this workflow does not classify. Treating as a failure."
           exit 1
