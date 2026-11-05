@@ -74,24 +74,17 @@ concurrency:
 
 jobs:
   # Offline, and first: prove the gate can still say NO before believing it when it says yes.
-  fixture:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-policy-python
-      - name: Run the job-uniqueness fixture (no network)
-        run: bash tests/job-uniqueness/run.sh
-
   job-names-stable:
     runs-on: ubuntu-latest
-    needs: fixture
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0     # the merge-base must be reachable
       - uses: ./.github/actions/setup-policy-python
+
+      - name: Run the job-uniqueness fixture (no network)
+        run: bash tests/job-uniqueness/run.sh
 
       - name: Assert no top-level job name became newly ambiguous, and no required one already is
         id: check
