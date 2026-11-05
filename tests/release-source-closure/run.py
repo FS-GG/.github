@@ -203,6 +203,86 @@ class LocalAncestryAndClosureTests(FixtureTest):
         "added file in a release data directory": "registry/new.yml",
     }
 
+    def test_xml_attribute_forms_and_non_include_paths_are_causal(self) -> None:
+        project = "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
+        linked = "src/Shared/External.fs"
+        # Real Git histories ensure each edge makes its external input a release blocker.
+        for tag, name in [("Compile", "Include"), ("Compile", "Exclude"), ("Compile", "Update"),
+                          ("Compile", "Remove"), ("Import", "Project"),
+                          ("UsingTask", "AssemblyFile"), ("ReadLinesFromFile", "File"),
+                          ("compile", "Include"), ("usingtask", "AssemblyFile")]:
+            for quote in ["'", '"']:
+                for spacing in ["=", " = ", "\n=\t"]:
+                    with self.subTest(tag=tag, name=name, quote=quote, spacing=spacing):
+                        self.repo.write(project, f'<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'
+                                        f'<{tag} Condition="2 > 1" {name}{spacing}{quote}../Shared/External.fs{quote}/></Project>')
+                        source = self.repo.commit("XML edge")
+                        live = self.repo.change(linked, source)
+                        with self.assertRaisesRegex(closure.ClosureRefused, "release closure changed"):
+                            self.local("coherent-set", source, live)
+        self.repo.write(project, "<Project/>")
+        source = self.repo.commit("cut edge")
+        live = self.repo.change(linked, "edge absent")
+        self.assertEqual(self.local("coherent-set", source, live)["closureChanged"], [])
+
+    def test_exists_function_case_tracks_the_condition_input(self) -> None:
+        project = "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
+        edge = "inputs/condition/flag.txt"
+        for name in ["Exists", "exists", "eXiStS", "eXiStS ", "exists\t"]:
+            with self.subTest(name=name):
+                self.repo.write(project, f'<Project><PropertyGroup Condition="{name}(\'../../inputs/condition/flag.txt\')"/></Project>')
+                source = self.repo.commit("condition edge")
+                live = self.repo.change(edge, source)
+                with self.assertRaisesRegex(closure.ClosureRefused, "release closure changed"):
+                    self.local("coherent-set", source, live)
+                self.repo.write(project, "<Project/>")
+                cut = self.repo.commit("cut condition edge")
+                outside = self.repo.change(edge, cut)
+                self.assertEqual(self.local("coherent-set", cut, outside)["closureChanged"], [])
+
+    def test_xml_all_attributes_entities_comments_and_refusals(self) -> None:
+        read = closure._project_attributes
+        self.assertEqual(read("x", '<Project><Compile Include="one" Exclude="two" Update="three" Remove="four"/></Project>', staged=False),
+                         ["one", "two", "three", "four"])
+        self.assertEqual(read("x", '<Project><Compile Include="A&amp;B" Condition="Exists(&quot;found&quot;)"/></Project>', staged=False),
+                         ["A&B", "found"])
+        self.assertEqual(read("x", "<Project><!-- <Exec Command='bad'/> --></Project>", staged=False), [])
+        for text in ["<Project><Compile Include='path'/></Wrong>", "<Project><Compile Include='path'/><",
+                     "<Project><Compile Include='one' Include='two'/></Project>",
+                     "<!DOCTYPE Project [<!ENTITY p 'path'>]><Project><Compile Include='&p;'/></Project>",
+                     "<Project><Exec Command='python3 other.py'/></Project>",
+                     "<Project><eXeC Command='python3 other.py'/></Project>",
+                     "<!DOCTYPE Project SYSTEM 'http://127.0.0.1:1/unreachable'><Project/>"]:
+            with self.subTest(text=text), self.assertRaises(closure.ClosureRefused):
+                read("x", text, staged=False)
+        for (project, command), script in closure._STAGING_COMMANDS.items():
+            import xml.sax.saxutils
+            command_xml = f'<Project><Exec Command={xml.sax.saxutils.quoteattr(command)}/></Project>'
+            self.assertEqual(read(project, command_xml, staged=True), [script])
+            for bad_project, bad_xml, staged in [(project, command_xml, False), ("other", command_xml, True),
+                                                  (project, command_xml.replace("stage-", "changed-"), True),
+                                                  (project, command_xml.replace("/>", " WorkingDirectory='elsewhere'/>"), True)]:
+                with self.assertRaises(closure.ClosureRefused):
+                    read(bad_project, bad_xml, staged=staged)
+
+    def test_git_environment_cannot_redirect_objects_or_hide_gitlinks(self) -> None:
+        path = "src/FS.GG.Coord.Core/native"
+        first = self.repo.base
+        second = self.repo.commit("second gitlink target")
+        self.repo.git("update-index", "--add", "--cacheinfo", f"160000,{first},{path}")
+        self.repo.git("commit", "-q", "-m", "built gitlink")
+        source = self.repo.git("rev-parse", "HEAD")
+        self.repo.git("update-index", "--cacheinfo", f"160000,{second},{path}")
+        self.repo.git("commit", "-q", "-m", "moved gitlink")
+        live = self.repo.git("rev-parse", "HEAD")
+        self.repo.git("config", "diff.ignoreSubmodules", "all")
+        self.assertEqual(self.repo.git("diff", "--name-only", source, live), "")
+        with mock.patch.dict(os.environ, {"GIT_DIR": "/absent", "GIT_WORK_TREE": "/absent", "GIT_CONFIG_COUNT": "1",
+                                          "GIT_CONFIG_KEY_0": "diff.ignoreSubmodules", "GIT_CONFIG_VALUE_0": "all"}):
+            with self.assertRaisesRegex(closure.ClosureRefused, "release closure changed"):
+                self.local("coherent-set", source, live)
+            self.assertEqual(self.local("coherent-set", source, source)["changed"], 0)
+
     def test_main_moved_outside_the_closure_is_accepted(self) -> None:
         for path in self.OUTSIDE:
             with self.subTest(path=path):

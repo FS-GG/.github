@@ -38,11 +38,13 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 import pathlib
 import posixpath
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SELF = "scripts/release_source_closure.py"
@@ -108,12 +110,9 @@ _PATH_TOKEN = re.compile(r"(?<![\w$./-])((?:%s)/[A-Za-z0-9._/@+-]*[A-Za-z0-9_/-]
 _DOT_SLASH = re.compile(r"(?<![\w.])\./")
 _IMPORT = re.compile(r"^\s*(?:from\s+([A-Za-z_][\w]*)[\w.]*\s+import|import\s+([A-Za-z_][\w]*(?:\s*,\s*[A-Za-z_][\w]*)*))", re.M)
 _WITH_NAME = re.compile(r"with_name\(\s*[\"']([A-Za-z0-9._-]+)[\"']\s*\)")
-# Every path-bearing attribute on any element; item types whose Include names a package,
-# namespace or assembly identity rather than a file are the only ones skipped.
-_PROJECT_ATTR = re.compile(r"<([A-Za-z_][\w.]*)\b[^>]*?\b(?:Include|Project|Exclude|Update|Remove)=\"([^\"]+)\"")
-_NON_PATH_ITEMS = frozenset({"PackageReference", "PackageVersion", "GlobalPackageReference", "PackageDownload",
-                             "FrameworkReference", "Using", "InternalsVisibleTo", "AssemblyAttribute"})
-_EXISTS = re.compile(r"Exists\(\s*'([^']+)'\s*\)")
+_NON_PATH_ITEMS = frozenset({"packagereference", "packageversion", "globalpackagereference", "packagedownload",
+                             "frameworkreference", "using", "internalsvisibleto", "assemblyattribute"})
+_EXISTS = re.compile(r"Exists\s*\(\s*(['\"])(.*?)\1\s*\)", re.I)
 _KIT_ROW = re.compile(r"^  - \{\s*id:\s*[A-Za-z0-9._-]+,\s*kind:\s*(skill|client|config),\s*source:\s*([A-Za-z0-9._/-]+)\s*(?:,\s*dest:\s*[A-Za-z0-9._/-]+\s*)?\}\s*(?:#.*)?$")
 _PROJECT_SUFFIXES = (".fsproj", ".csproj", ".props", ".targets")
 # Repository roots whose paths a reachable release script can turn into released or verified bytes.
@@ -130,6 +129,53 @@ def _require(ok: bool, detail: str) -> None:
         raise ClosureRefused(detail)
 
 
+def _git_environment() -> dict[str, str]:
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1", GIT_NO_REPLACE_OBJECTS="1",
+               GIT_TERMINAL_PROMPT="0")
+    return env
+
+
+class _ProjectXML(ET.TreeBuilder):
+    def doctype(self, name, pubid, system):
+        raise ClosureRefused("MSBuild DTD declarations are unsupported")
+
+
+# These exact staging commands have their dynamic input trees derived by the staged route below.
+# Bind the declaring project, full decoded command and script path; any edit/extra shell operator refuses.
+_STAGING_COMMANDS = {
+    ("src/FS.GG.Kit/FS.GG.Kit.csproj", 'bash "$(MSBuildProjectDirectory)/stage-kit.sh" "$(KitStagingDir)"'):
+        "$(MSBuildProjectDirectory)/stage-kit.sh",
+    ("src/FS.GG.Drivers/FS.GG.Drivers.csproj", 'python3 "$(MSBuildProjectDirectory)/stage-drivers.py" "$(DriversStagingDir)"'):
+        "$(MSBuildProjectDirectory)/stage-drivers.py",
+}
+
+
+def _project_attributes(project: str, text: str, *, staged: bool) -> list[str]:
+    try:
+        document = ET.fromstring(text, parser=ET.XMLParser(target=_ProjectXML()))
+    except ET.ParseError as error:
+        raise ClosureRefused(f"release closure XML is malformed: {project}") from error
+    values = []
+    for element in document.iter():
+        tag = element.tag.rsplit("}", 1)[-1].lower()
+        for name, value in element.attrib.items():
+            if name.startswith("{"):
+                continue
+            name = name.lower()
+            if tag == "exec" and name == "command":
+                script = _STAGING_COMMANDS.get((project, value)) if staged else None
+                _require(script is not None, f"unsupported MSBuild path-bearing attribute: {project}: Exec.Command")
+                _require(all(attribute.lower() in {"command", "condition"} for attribute in element.attrib),
+                         f"unsupported MSBuild staging command attributes: {project}")
+                values.append(script)
+            if (tag not in _NON_PATH_ITEMS and name in {"include", "project", "exclude", "update", "remove"}
+                    or (tag, name) in {("usingtask", "assemblyfile"), ("readlinesfromfile", "file")}):
+                values.append(value)
+            values.extend(match[1] for match in _EXISTS.findall(value))
+    return values
+
+
 class GitTree:
     """Read one exact commit's tracked files from local Git objects (never the worktree)."""
 
@@ -144,7 +190,7 @@ class GitTree:
     def _git(self, *args: str) -> bytes:
         try:
             return subprocess.run(["git", "-C", str(self.root), *args], check=True,
-                                  capture_output=True, timeout=120).stdout
+                                  capture_output=True, timeout=120, env=_git_environment()).stdout
         except (OSError, subprocess.SubprocessError) as error:
             raise ClosureRefused(f"closure Git read failed: {' '.join(args[:2])}") from error
 
@@ -310,8 +356,7 @@ def derive(route: str, tree: GitTree) -> Closure:
             for ancestor in _ancestors(directory):
                 for name in ("Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props"):
                     pending.append((posixpath.join(ancestor, name) if ancestor else name, "release"))
-            values = [value for element, value in _PROJECT_ATTR.findall(text) if element not in _NON_PATH_ITEMS]
-            for value in values + _EXISTS.findall(text):
+            for value in _project_attributes(item, text, staged=spec["staged"]):
                 for raw in value.split(";"):
                     resolved = _project_path(item, directory, raw.strip())
                     if resolved is not None:
@@ -426,10 +471,11 @@ def verify_local(route: str, source: str, live: str, *, root: pathlib.Path | Non
     if source == live:
         return {"route": route, "source": source, "liveMain": live, "changed": 0, "closureChanged": []}
     ancestry = subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", source, live],
-                              capture_output=True, timeout=120)
+                              capture_output=True, timeout=120, env=_git_environment())
     _require(ancestry.returncode != 1, "pinned source is not an ancestor of live main")
     _require(ancestry.returncode == 0, "pinned source ancestry is unreadable")
-    raw = tree._git("diff", "--name-status", "--no-renames", "-z", source, live).decode("utf-8").split("\0")
+    raw = tree._git("diff", "--name-status", "--no-renames", "--no-ext-diff", "--no-textconv",
+                    "--ignore-submodules=none", "-z", source, live, "--").decode("utf-8").split("\0")
     rows = list(zip(raw[0::2], raw[1::2]))
     _require(len(raw) % 2 == 1 and raw[-1] == "" and all(status and name for status, name in rows),
              "release closure diff is malformed")
@@ -493,9 +539,9 @@ def _fetch_live_main(root: pathlib.Path) -> str:
     ref = "refs/fsgg/release-closure/live-main"
     try:
         subprocess.run(["git", "-C", str(root), "fetch", "--no-tags", "--quiet", "origin", f"+refs/heads/main:{ref}"],
-                       check=True, capture_output=True, timeout=300)
+                       check=True, capture_output=True, timeout=300, env=_git_environment())
         live = subprocess.run(["git", "-C", str(root), "rev-parse", "--verify", f"{ref}^{{commit}}"],
-                              check=True, capture_output=True, timeout=60).stdout.decode().strip()
+                              check=True, capture_output=True, timeout=60, env=_git_environment()).stdout.decode().strip()
     except (OSError, subprocess.SubprocessError) as error:
         raise ClosureRefused("live main could not be fetched") from error
     _require(bool(SHA.fullmatch(live)), "live main SHA is malformed")
