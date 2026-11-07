@@ -631,13 +631,13 @@ retire_case(lambda w: w.fail.add('cg_populated'), 'volumeOk', 'a process in the 
 r_ = retire_case(lambda w: w.fail.add('unit_failed'), 'unitsClean', 'a pod unit that the stop left failed is clean once reset-failed has cleared it', expect=True, schema='learn-op-pod-success/1')
 check(r_.rec['retirement']['unitStatesBeforeReset'] == {'learn-pod-op-pod-1.service': 'failed'} and r_.rec['retirement']['unitStates'] == {'learn-pod-op-pod-1.service': 'inactive'}, 'the failed state before the reset is recorded, and the unit reads inactive after it')
 retire_case(lambda w: w.fail.update({'unit_failed', 'reset_stuck'}), 'unitsClean', 'a pod unit that STAYS failed after reset-failed (the next op\'s sweep would refuse it)', expect=False)
-retire_case(lambda w: w.extra_units.append(f'learn-pod-{W.OPID}-x.service loaded failed failed X'), 'unitsClean', 'another failed unit of this op is cleared by the reset', expect=True, schema='learn-op-pod-success/1')
-retire_case(lambda w: (w.extra_units.append(f'learn-pod-{W.OPID}-x.service loaded failed failed X'), w.fail.add('reset_stuck')), 'unitsClean', 'another failed unit that the reset does not clear', expect=False)
+retire_case(lambda w: w.extra_units.append(f'learn-pod-{W.OPID}-x.service loaded failed failed X'), 'unitsClean', 'another hyphen-suffixed ID is outside this op retirement', expect=True, schema='learn-op-pod-success/1')
+retire_case(lambda w: (w.extra_units.append(f'learn-pod-{W.OPID}-x.service loaded failed failed X'), w.fail.add('reset_stuck')), 'unitsClean', 'another ID sharing the prefix is excluded even when reset cannot clear it', expect=True, schema='learn-op-pod-success/1')
 retire_case(lambda w: w.fail.add('units'), 'unitsClean', 'a failing unit census', expect=False)
 retire_case(lambda w: w.fail.add('units_before_reset'), 'unitsClean', 'a unit census that fails only BEFORE the reset', expect=False)
 retire_case(lambda w: w.fail.add('units_after_reset'), 'unitsClean', 'a unit census that fails only AFTER the reset (the state to trust)', expect=False)
-retire_case(lambda w: w.extra_units.append(f'learn-pod-{W.OPID}-x.service loaded activating start X'), 'unitsClean', 'another unit of this op still activating', expect=False)
-retire_case(lambda w: w.extra_units.append(f'learn-fin-{W.OPID}-y.service loaded deactivating stop Y'), 'unitsClean', 'a finalizer-side unit of this op still deactivating', expect=False)
+retire_case(lambda w: w.extra_units.append(f'learn-pod-{W.OPID}-x.service loaded activating start X'), 'unitsClean', 'a different hyphen-suffixed op unit is excluded', expect=True, schema='learn-op-pod-success/1')
+retire_case(lambda w: w.extra_units.append(f'learn-fin-{W.OPID}-y.service loaded deactivating stop Y'), 'unitsClean', 'a different hyphen-suffixed finalizer unit is excluded', expect=True, schema='learn-op-pod-success/1')
 retire_case(lambda w: w.extra_units.append('learn-pod-other.service loaded active running X'), 'unitsClean', 'another op\'s active unit is not this op\'s concern', expect=True, schema='learn-op-pod-success/1')
 retire_case(lambda w: setattr(w, 'mounted', False), 'volume.mountPoint', 'a volume that is not a mount point', expect=False)
 retire_case(lambda w: setattr(w.vol, 'f_blocks', (2 << 30) // 4096), 'volume.withinCap', 'a volume larger than 1 GiB (the host filesystem, not the loop image)', expect=False)
@@ -1376,4 +1376,67 @@ with tempfile.TemporaryDirectory() as tmp:
     check(any('roles' in x for x in P2.ack_problems(raw, 1, open(os.path.join(r.ck, 'req-1'), 'rb').read())), 'r2 refuses the real ack when a role was not running (rejected:identity): why r2 checkpoints only with all three running')
 check(F.OK_REASONS == {'host': ('ok', 'signalled'), 'recv': ('ok', 'signalled'), 'feed': ('ok',)} and P2.PLAN['generations']['feed-replay']['service'] is None
       and P2.PLAN['actions'][-2:] == [['stop', 'host'], ['stop', 'recv']], 'r2 ends host and recv with TERM (signalled) and feed by itself (ok): the reasons this finalizer accepts')
+# #5175: real producer-name boundaries, input mount descendants, late requests and unit exit status.
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    foreign = f'{W.POD}-host-host'  # op id op-pod-1-host, role host
+    w.add_container(foreign, role='host')
+    foreign_helper = f'learn-fin-{W.OPID}-host-pgcd'
+    w.add_container(foreign_helper)
+    w.containers[foreign]['mounts'] = [{'Destination': '/in'}]
+    w.secrets.append(f'{W.POD}-host-cred')
+    foreign_unit = f'{W.POD}-host.service'
+    own_fin = f'learn-fin-{W.OPID}.service'
+    w.extra_units += [f'{foreign_unit} loaded failed failed X', f'{own_fin} loaded active running X']
+    r = go(w)
+    check(r.rec['schema'] == 'learn-op-pod-success/1', 'N3: a role-suffixed different op does not affect own retirement')
+    check(foreign in w.containers and foreign_helper in w.containers and w.containers[foreign]['state'] == 'running' and all(foreign not in c for c in r.calls if c[:2] == ['podman', 'inspect']), 'N3: different op and helper survive; foreign role is neither inspected nor stopped')
+    check(not any(c[:3] == ['systemctl', '--user', 'reset-failed'] and c[-1] in (foreign_unit, own_fin) for c in r.calls), 'N3: neither foreign unit nor own active finalizer is reset')
+    check(any(row.startswith(foreign_unit) for row in w.extra_units), 'N3: fake reset preserves the foreign failed unit')
+for dest, seen in [('/in', True), ('/in/child', True), ('/in/child/deep', True), ('/input', False), ('/inside', False), ('/in-other', False)]:
+    with tempfile.TemporaryDirectory() as tmp:
+        w = world(tmp)
+        name = f'{W.POD}-feed'
+        w.containers[name]['mounts'] = [{'Destination': dest}]
+        r = go(w)
+        check((name in r.rec['containersStartedWithInput']) == seen, f'N4: mount boundary {dest}')
+for value in ['0', '1', '143', '', 'garbage']:
+    with tempfile.TemporaryDirectory() as tmp:
+        w = world(tmp); w.unit_exit = value
+        r = go(w)
+        check((r.rec['schema'] == 'learn-op-pod-success/1') == (value == '0') and r.rec['opUnit']['ExecMainStatus'] == value, f'unit exit status {value!r} is required and recorded')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    def late(c):
+        ck = os.path.join(w.home, '.local', 'state', 'learn-checkpoint', W.OPID)
+        for n_ in (1, 3, 9):
+            open(os.path.join(ck, f'req-{n_}'), 'w').write('{}')
+        open(os.path.join(ck, 'req-nope'), 'w').write('{}')
+    w.pause_hook = late  # requests arrive after the wait loop has triggered
+    r = go(w)
+    check(r.rec['unservedCheckpointRequests'] == ['req-1', 'req-3', 'req-9'], 'N5: late, gapped and over-limit request names retained without reading bodies')
+    check(not any(n_.startswith('ack-') for n_ in os.listdir(r.ck)), 'N5: retirement never acknowledges late requests')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.at(6, lambda: open(os.path.join(w.home, '.local', 'state', 'learn-checkpoint', W.OPID, 'req-1'), 'w').write('{"n":1,"label":"served"}'))
+    r = go(w)
+    check(r.rec['unservedCheckpointRequests'] == [] and os.path.exists(os.path.join(r.ck, 'ack-1')), 'N5 control: a served request is not reported as unserved')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp, activate_at=None)
+    w.at(6, lambda: open(os.path.join(w.home, '.local', 'state', 'learn-checkpoint', W.OPID, 'req-2'), 'w').write('{}'))
+    r = go(w)
+    check(r.rec['unservedCheckpointRequests'] == ['req-2'], 'N5: the failed-to-start early path also records an unserved request')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.at(4, lambda: setattr(w, 'show_state_fails', 3))
+    w.at(14, lambda: setattr(w, 'show_state_fails', 3))
+    r = go(w)
+    check(r.rec['schema'] == 'learn-op-pod-success/1' and 'unitStateUnknown' not in r.rec, 'unreadable count resets after a readable poll; two runs of three are not six consecutive')
+with tempfile.TemporaryDirectory() as tmp:
+    w = world(tmp)
+    w.at(6, lambda: open(os.path.join(w.home, '.local', 'state', 'learn-checkpoint', W.OPID, 'req-3'), 'w').write('{}'))
+    def custody_error(*a, **kw):
+        raise RuntimeError('injected custody failure')
+    r = go(w, patch={'archive_role': custody_error})
+    check(r.rec['schema'] == 'learn-op-retirement-failure/1' and r.rec['unservedCheckpointRequests'] == ['req-3'], 'N5: the exception path retains unserved requests with its original failure')
 print(f'learn-finalizer-r5: {n} assertions passed')

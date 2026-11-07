@@ -722,13 +722,25 @@ def process_checkpoints(done, state):
     return done
 
 
+def note_unserved_checkpoints():
+    """Record request names left without an acknowledgement; never serve a late request during retirement."""
+    try:
+        names = os.listdir(CKDIR)
+        REC['unservedCheckpointRequests'] = sorted(n for n in names if re.fullmatch(r'req-[1-9][0-9]*', n)
+                                                     and not os.path.lexists(f"{CKDIR}/ack-{n[4:]}"))
+    except OSError as e:
+        REC['unservedCheckpointRequests'] = None
+        REC['checkpointRequestNote'] = f'census unavailable: {type(e).__name__}'
+
+
 # ---------------- what the pod did with the input, from the containers before they are removed ----------------
 def inputs_evidence():
-    """inputRead: the pod operator's marker exists. containersStartedWithInput: names of the pod's containers that were STARTED with a mount at /in; None when
+    """inputRead: the pod operator's marker exists. containersStartedWithInput: names of the pod's containers that were STARTED with a mount at or under /in; None when
     it cannot be determined (the claim tooling treats None as 'not empty', so a void is refused): the census failed, an inspect failed, or the marker exists and no
     container remains to ask."""
     out = {'inputRead': os.path.lexists(MARKER), 'containersStartedWithInput': None}
-    rc, names, _ = run(['podman', 'ps', '-a', '--filter', f'name=^{POD}-', '--format', '{{.Names}}'], 15)
+    # Exact producer role suffixes: an op id may itself extend another id with a hyphen.
+    rc, names, _ = run(['podman', 'ps', '-a', '--filter', f'name=^{POD}-(host|recv|feed|pg|infra)$', '--format', '{{.Names}}'], 15)
     if rc != 0:
         return out
     ctrs = sorted(names.split())
@@ -750,7 +762,7 @@ def inputs_evidence():
         except ValueError:
             ok = False
             continue
-        if '/in' in dests and not started_at.startswith('0001-01-01'):
+        if any(isinstance(d, str) and (d == '/in' or d.startswith('/in/')) for d in dests) and not started_at.startswith('0001-01-01'):
             started.append(ctr)
     out['containersStartedWithInput'] = started if ok else None
     return out
@@ -812,8 +824,8 @@ def retirement(cg_rel, snapshot_start, extra=None):
     r = dict(extra or {})
     rc, pods, _ = run(['podman', 'pod', 'ps', '-a', '--filter', f'name=^{POD}$', '--format', '{{.Name}}'], 15)
     r['podGone'] = rc == 0 and pods.strip() == ''
-    rc1, cs, _ = run(['podman', 'ps', '-a', '--filter', f'name=^{POD}-', '--format', '{{.Names}}'], 15)
-    rc2, cs2, _ = run(['podman', 'ps', '-a', '--filter', f'name=^learn-fin-{OPID}-', '--format', '{{.Names}}'], 15)
+    rc1, cs, _ = run(['podman', 'ps', '-a', '--filter', f'name=^{POD}-(host|recv|feed|pg|infra)$', '--format', '{{.Names}}'], 15)
+    rc2, cs2, _ = run(['podman', 'ps', '-a', '--filter', f'name=^learn-fin-{OPID}-pgcd$', '--format', '{{.Names}}'], 15)
     r['containersGone'] = rc1 == 0 and rc2 == 0 and cs.strip() == '' and cs2.strip() == ''
     unit_cg = (CFG['cgroot'] + cg_rel) if cg_rel.startswith('/') else f"{CFG['cgroot']}/user.slice/user-30034.slice/user@30034.service/app.slice/{OPU}"
     r['podCgroupPath'], r['podCgroupFromSystemd'] = unit_cg, cg_rel.startswith('/')
@@ -829,7 +841,7 @@ def retirement(cg_rel, snapshot_start, extra=None):
     def op_units():
         rc_, rows_, _ = run(['systemctl', '--user', 'list-units', '--all', '--no-legend', '--plain', 'learn-pod-*', 'learn-fin-*'], 30)
         units = [l.replace('●', ' ').split() for l in rows_.splitlines()]
-        return rc_, [x for x in units if len(x) >= 4 and (x[0] == OPU or x[0].startswith((f'{POD}-', f'learn-fin-{OPID}-')))]      # the finalizer's own unit is not listed by these names
+        return rc_, [x for x in units if len(x) >= 4 and x[0] == OPU]      # the finalizer's own unit is not listed by these names
     rc, mine = op_units()
     r['unitStatesBeforeReset'] = {x[0]: x[2] for x in mine}
     r['resetFailedRc'] = [run(['systemctl', '--user', 'reset-failed', u], 10)[0] for u in sorted({OPU, *[x[0] for x in mine]})]
@@ -837,7 +849,7 @@ def retirement(cg_rel, snapshot_start, extra=None):
     r['unitStates'] = {x[0]: x[2] for x in mine2}
     r['unitsClean'] = rc == 0 and rc2 == 0 and all(x[2] == 'inactive' for x in mine2)
     rc, sec, _ = run(['podman', 'secret', 'ls', '--format', '{{.Name}}'], 15)
-    r['secretsGone'] = rc == 0 and not any(n.startswith(f'{POD}-') for n in sec.split())
+    r['secretsGone'] = rc == 0 and f'{POD}-cred' not in sec.split()
     r['credentialTmpfsGone'] = not os.path.lexists(CRED)
     if VOLUME_STATE['samples'] == 0:
         volume_sample()                                    # a path that never reached the polling loop still reads the volume once
@@ -911,6 +923,7 @@ def early_finish(kind, schema_retired, cg_rel):
     REC['opUnit'] = show(OPU, 'ActiveState', 'Result')
     block, retired = retirement(cg_rel, STATE.get('snap0'), {'earlyPath': kind})
     REC['retirement'] = block
+    note_unserved_checkpoints()
     finish(schema_retired if retired else SCHEMA_RETIREMENT_FAILURE)
 
 
@@ -1026,10 +1039,11 @@ def flow():
     for c in cks:
         for role, v in c['roles'].items():
             copy_evidence(f"{CUST}/checkpoints/{c['n']}/extract-{role}", f"checkpoints/{c['n']}/{role}", v['extracted'])
+    note_unserved_checkpoints()
     if late: REC['custodyNote'] = 'custody completed after the 31:30 deadline; partial/late'; finish(SCHEMA_RETIREMENT_FAILURE)
     if not retired: finish(SCHEMA_RETIREMENT_FAILURE)
     ok = (all(r_['outcomeOk'] and r_.get('unpauseRc', 0) == 0 for r_ in roles.values()) and pg['ok'] and REC['oom'] == 'no' and not REC['deadline'] and trigger == 'done'
-          and REC['admission']['ok'] and block['podCgroupFromSystemd'] and REC['containersStartedWithInput'] is not None and not block['volume']['budgetHit']
+          and fin.get('ExecMainStatus') == '0' and REC['admission']['ok'] and block['podCgroupFromSystemd'] and REC['containersStartedWithInput'] is not None and not block['volume']['budgetHit']
           and all(c['roles'] and all(v['custody'].get('verdict') == 'accepted' and v.get('unpauseRc') == 0 for v in c['roles'].values()) for c in cks))      # a failed checkpoint has no roles
     finish(SCHEMA_OK if ok else SCHEMA_KILLED)
 
@@ -1051,6 +1065,7 @@ def main(argv=None, environ=None, euid=None, **over):
         if 'retirement' not in REC:
             try: REC['retirement'], _ = retirement(STATE.get('cg_rel') or '', STATE.get('snap0'), {'earlyPath': 'exception'})
             except Exception as e2: REC['retirement'] = {'earlyPath': 'exception', 'error': type(e2).__name__}
+        note_unserved_checkpoints()
         finish(SCHEMA_RETIREMENT_FAILURE)
 
 

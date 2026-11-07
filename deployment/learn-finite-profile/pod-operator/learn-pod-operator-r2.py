@@ -314,7 +314,7 @@ PROD = {
     'slice': '/sys/fs/cgroup/user.slice/user-30034.slice',
     'meminfo': '/proc/meminfo',
     'fin': '/usr/local/libexec/fsgg-learn/learn-finalizer-r5.py',
-    'finalizer_sha': 'c1de5c03598e6f1e315de7f5d55ce394f35b0880991c28467410420a042556d7',    # finalizer r5 with the #5184 synthetic-input declaration
+    'finalizer_sha': 'ce1553e888e0a8cdcd378dbefc6b608b4617a5a76eb7a45f99a2a730373642c0',    # finalizer r5 with #5184 synthetic inputs and #5175 hardening
     'app_image': None,              # learn-pod-app:r1 config Id: admitted after the build (INSTALL-FDEV step 7); None refuses
     'pg_image': None,               # postgres:18.6 local config Id: admitted after the pull by index digest PG_INDEX_DIGEST; None refuses
     'self': '/usr/local/libexec/fsgg-learn/learn-pod-operator-r2.py',

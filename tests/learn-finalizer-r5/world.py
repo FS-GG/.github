@@ -1,6 +1,6 @@
 # A fake pod world for the finalizer r5 tests: podman, systemctl, journalctl, a fake /proc and cgroup tree, a loop volume, a claim and a sealed snapshot,
 # and a fake clock whose sleep() advances time and fires scheduled events. Nothing here starts a container or touches the real system.
-import hashlib, json, os, shutil, stat, subprocess, sys, tarfile, io
+import hashlib, json, os, re, shutil, stat, subprocess, sys, tarfile, io
 
 OPID = 'op-pod-1'
 IDENT = 'ab' * 32
@@ -57,6 +57,7 @@ class World:
             os.makedirs(os.path.join(st, d), exist_ok=True)
         os.makedirs(os.path.join(self.volroot, f'{OPID}.mnt'))
         self.events, self.calls = [], []
+        self.unit_exit = '0'
         self.unit_state, self.unit_result, self.enter_us, self.exec_pid = 'inactive', 'success', 0, '4242'
         self.cg_unit = f'/user.slice/user-30034.slice/user@30034.service/app.slice/{OPU}'
         os.makedirs(self.cg + self.cg_unit)
@@ -220,7 +221,7 @@ class World:
     def settle(self):
         """what stopping and removing the pod does to the world"""
         self.pod_exists = False
-        for name in [n for n in self.containers if n.startswith(POD + '-')]:
+        for name in [n for n in self.containers if n in {f'{POD}-{role}' for role in (*ROLES, 'pg', 'infra')}]:
             c = self.containers[name]
             if c['state'] != 'exited':
                 c['state'] = 'exited'
@@ -256,7 +257,7 @@ class World:
                 self.cg_read_fails -= 1
                 return 0, 'ControlGroup=\n', ''
             props = {'ActiveEnterTimestampMonotonic': str(self.enter_us), 'ActiveState': self.unit_state, 'ExecMainPID': self.exec_pid, 'ControlGroup': self.cg_unit,
-                     'Result': self.unit_result, 'ExecMainStatus': '0'}
+                     'Result': self.unit_result, 'ExecMainStatus': self.unit_exit}
             return 0, ''.join(f'{p[2:]}={props.get(p[2:], "")}\n' for p in a[4:]), ''
         if a[:3] == ['systemctl', '--user', 'list-units']:
             self.unit_census = getattr(self, 'unit_census', 0) + 1
@@ -316,8 +317,9 @@ class World:
                 stop()
             return 0, '', ''
         if a[:3] == ['podman', 'pod', 'stop']:
-            for c in self.containers.values():
-                c['state'] = 'exited'
+            for name, c in self.containers.items():
+                if name in {f'{POD}-{role}' for role in (*ROLES, 'pg', 'infra')}:
+                    c['state'] = 'exited'
             return 0, '', ''
         if a[:3] == ['podman', 'pod', 'rm']:
             if 'pod_rm' in self.fail:
@@ -332,8 +334,8 @@ class World:
             if 'ps' in self.fail:
                 return 1, '', 'x'
             pref = a[a.index('--filter') + 1].split('=^', 1)[1]
-            names = [n for n in self.containers if n.startswith(pref)]
-            if pref == f'learn-fin-{OPID}-' and self.leave_pgcd:
+            names = [n for n in self.containers if re.search('^' + pref, n)]
+            if re.search('^' + pref, f'learn-fin-{OPID}-pgcd') and self.leave_pgcd:
                 names.append(f'learn-fin-{OPID}-pgcd')
             return 0, ''.join(n + '\n' for n in names), ''
         if a[:3] == ['podman', 'secret', 'ls']:
